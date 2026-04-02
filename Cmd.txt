@@ -1,0 +1,6 @@
+cd avote\frontend
+npm run dev
+
+
+cd avote\backend
+npm start

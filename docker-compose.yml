@@ -1,0 +1,11 @@
+services:
+  db:
+    image: postgres:15
+    container_name: avote_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: avote
+    ports:
+      - "5432:5432"

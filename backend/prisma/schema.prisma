@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  LIVE
+  PAUSED
+  ENDED
+  ARCHIVED
+}
+
+enum PollStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  CLOSED
+  ARCHIVED
+}
+
+enum PollType {
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+  YES_NO
+  RATING
+  RANKING
+  OPEN_TEXT
+  WORD_CLOUD
+  QUIZ
+}
+
+enum LiveState {
+  WAITING
+  VOTING
+  RESULTS
+  PAUSED
+  FINISHED
+}
+
+/** Affichage écran de projection (indépendant de l’ouverture du vote) */
+enum DisplayState {
+  QUESTION
+  RESULTS
+  BLACK
+  WAITING
+}
+
+/** Vote ouvert ou fermé sur le sondage actif */
+enum VoteState {
+  OPEN
+  CLOSED
+}
+
+model Event {
+  id           String      @id @default(cuid())
+  title        String
+  /** Texte optionnel régie + salle /join */
+  description  String?
+  /** URL ou chemin absolu /uploads/… (logo salle) */
+  logoUrl      String?
+  /** Image de fond salle /join */
+  backgroundUrl String?
+  /** Accent hex (#RRGGBB) */
+  primaryColor String?
+  /** dark | light | auto — thème base salle /join */
+  themeMode    String?
+  /** low | medium | strong — opacité overlay sur image de fond */
+  backgroundOverlayStrength String?
+  /** Fond uni (#RRGGBB) pour la salle /join lorsqu’aucune image de fond */
+  roomBackgroundColor String?
+  slug         String      @unique
+  status       EventStatus @default(DRAFT)
+  liveState    LiveState   @default(WAITING)
+  /** Affichage écran salle : question / résultats / noir / attente */
+  displayState DisplayState @default(WAITING)
+  /** Participants peuvent voter (indépendant de displayState) */
+  voteState    VoteState    @default(CLOSED)
+  /** Révélation automatique des résultats après fermeture du vote (délai en secondes) */
+  autoReveal             Boolean   @default(false)
+  autoRevealDelaySec     Int       @default(5)
+  /** Quand défini, projection / public : compte à rebours jusqu’à passage display RESULTS */
+  autoRevealShowResultsAt DateTime?
+  activePollId String?
+  /** Chrono question (V1 informatif, piloté par la régie) */
+  questionTimerTotalSec        Int?
+  questionTimerAccumulatedSec  Int       @default(0)
+  questionTimerStartedAt       DateTime?
+  questionTimerIsPaused        Boolean   @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  polls Poll[]
+}
+
+model Poll {
+  id        String     @id @default(cuid())
+  eventId   String
+  title     String
+  question  String
+  type      PollType
+  status    PollStatus @default(DRAFT)
+  order     Int        @default(0)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  event   Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  options PollOption[]
+  votes   Vote[]
+}
+
+model PollOption {
+  id       String  @id @default(cuid())
+  pollId   String
+  label    String
+  order    Int     @default(0)
+  imageUrl String?
+
+  poll  Poll   @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes Vote[]
+}
+
+model Vote {
+  id             String   @id @default(cuid())
+  pollId         String
+  optionId       String
+  voterSessionId String
+  createdAt      DateTime @default(now())
+
+  poll   Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@index([pollId])
+  @@index([optionId])
+  @@index([pollId, voterSessionId])
+}
