@@ -99,7 +99,14 @@ const uploadMiddleware = multer({
 }).single("file");
 
 const app = express();
-const PORT = 4000;
+
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  process.env.CLIENT_URL,
+].filter(Boolean);
+
+const PORT = process.env.PORT || 4000;
 
 /**
  * Ancien champ liveState dérivé pour compat (chrono, clients legacy).
@@ -617,7 +624,8 @@ async function passerAuSondageSuivant(eventId) {
 
 app.use(
   cors({
-    origin: ["http://localhost:3000", "http://127.0.0.1:3000"],
+    origin: allowedOrigins,
+    credentials: true,
   }),
 );
 app.use(express.json({ limit: "1mb" }));
@@ -1877,8 +1885,9 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:3000", "http://127.0.0.1:3000"],
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
+    credentials: true,
   },
 });
 
