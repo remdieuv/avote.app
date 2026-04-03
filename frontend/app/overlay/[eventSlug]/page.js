@@ -3,12 +3,13 @@
 import { Suspense, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { OverlayProjection } from "@/components/OverlayProjection";
+import { API_URL } from "@/lib/config";
 
 function OverlayBody({ eventSlug }) {
   const getPollUrl = useMemo(() => {
     return () => {
-      if (!eventSlug) return "https://avoteapp-production.up.railway.app/p/__invalid__";
-      return `https://avoteapp-production.up.railway.app/p/${encodeURIComponent(eventSlug)}`;
+      if (!eventSlug) return `${API_URL}/p/__invalid__`;
+      return `${API_URL}/p/${encodeURIComponent(eventSlug)}`;
     };
   }, [eventSlug]);
 

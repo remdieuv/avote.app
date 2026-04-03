@@ -12,9 +12,7 @@ import {
   joinRoomOverlayAlpha,
   resolveJoinRoomIsDark,
 } from "@/lib/joinRoomVisual";
-
-const API_ORIGIN = "https://avoteapp-production.up.railway.app";
-const SOCKET_URL = API_ORIGIN;
+import { API_URL, SOCKET_URL } from "@/lib/config";
 
 /** @param {Record<string, unknown> | null | undefined} tm */
 function chronoRestantSecondes(tm) {
@@ -160,7 +158,7 @@ export function JoinLiveHub({ slug }) {
 
   const fetchMeta = useCallback(async () => {
     const res = await fetch(
-      `${API_ORIGIN}/events/slug/${encodeURIComponent(slug)}`,
+      `${API_URL}/events/slug/${encodeURIComponent(slug)}`,
       { cache: "no-store" },
     );
     if (res.status === 404) {

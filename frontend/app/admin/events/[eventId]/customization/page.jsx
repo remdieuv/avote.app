@@ -9,8 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-
-const API = "https://avoteapp-production.up.railway.app";
+import { API_URL } from "@/lib/config";
 
 const card = {
   background: "#fff",
@@ -164,7 +163,7 @@ export default function EventCustomizationPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await fetch(`${API}/events/${eventId}`, { cache: "no-store" });
+      const res = await fetch(`${API_URL}/events/${eventId}`, { cache: "no-store" });
       if (res.status === 404) {
         setLoadError("Événement introuvable.");
         return;
@@ -246,7 +245,7 @@ export default function EventCustomizationPage() {
       const fd = new FormData();
       fd.append("file", file);
       const res = await fetch(
-        `${API}/events/${eventId}/customization/upload?kind=${encodeURIComponent(kind)}`,
+        `${API_URL}/events/${eventId}/customization/upload?kind=${encodeURIComponent(kind)}`,
         { method: "POST", body: fd },
       );
       const body = await res.json().catch(() => ({}));
@@ -289,7 +288,7 @@ export default function EventCustomizationPage() {
         backgroundOverlayStrength: backgroundOverlayStrength || null,
       };
       const res = await fetch(
-        `${API}/events/${eventId}/customization`,
+        `${API_URL}/events/${eventId}/customization`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },

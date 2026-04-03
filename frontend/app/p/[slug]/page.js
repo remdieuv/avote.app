@@ -3,6 +3,7 @@
 import { Suspense, useMemo } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { PollExperience } from "@/components/PollExperience";
+import { API_URL } from "@/lib/config";
 
 function PublicPollBody({ slug }) {
   const searchParams = useSearchParams();
@@ -13,8 +14,8 @@ function PublicPollBody({ slug }) {
 
   const getPollUrl = useMemo(() => {
     return () => {
-      if (!slug) return "https://avoteapp-production.up.railway.app/p/__invalid__";
-      const base = `https://avoteapp-production.up.railway.app/p/${encodeURIComponent(slug)}`;
+      if (!slug) return `${API_URL}/p/__invalid__`;
+      const base = `${API_URL}/p/${encodeURIComponent(slug)}`;
       if (pollParam) {
         return `${base}?poll=${encodeURIComponent(pollParam)}`;
       }

@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useParams } from "next/navigation";
 import { PollExperience } from "@/components/PollExperience";
+import { API_URL } from "@/lib/config";
 
 export default function PollPage() {
   const params = useParams();
@@ -11,8 +12,8 @@ export default function PollPage() {
 
   const getPollUrl = useMemo(() => {
     return () => {
-      if (!pollId) return "https://avoteapp-production.up.railway.app/polls/__invalid__";
-      return `https://avoteapp-production.up.railway.app/polls/${pollId}`;
+      if (!pollId) return `${API_URL}/polls/__invalid__`;
+      return `${API_URL}/polls/${pollId}`;
     };
   }, [pollId]);
 

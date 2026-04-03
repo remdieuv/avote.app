@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { API_URL } from "@/lib/config";
 import { loadStoredMyEvents } from "@/lib/myEventsStorage";
-
-const API = "https://avoteapp-production.up.railway.app";
 
 function formatEventDate(iso, fallbackLabel) {
   if (!iso) return fallbackLabel ?? "—";
@@ -58,7 +57,7 @@ export default function AdminEventsPage() {
     setLoading(true);
     setFetchError(null);
     try {
-      const res = await fetch(`${API}/events`);
+      const res = await fetch(`${API_URL}/events`);
       if (!res.ok) {
         throw new Error(`Erreur ${res.status}`);
       }

@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { API_URL } from "@/lib/config";
 import { rememberMyEvent } from "@/lib/myEventsStorage";
 
-const API_BASE = "https://avoteapp-production.up.railway.app/polls";
+const API_BASE = `${API_URL}/polls`;
 
 const inputStyle = {
   width: "100%",

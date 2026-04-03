@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { QrAccesVoteEcran } from "@/components/QrAccesVoteEcran";
 import { ScreenProjection } from "@/components/ScreenProjection";
+import { API_URL } from "@/lib/config";
 
 export default function ProjectionSallePage() {
   const params = useParams();
@@ -13,8 +14,8 @@ export default function ProjectionSallePage() {
 
   const getPollUrl = useMemo(() => {
     return () => {
-      if (!slug) return "https://avoteapp-production.up.railway.app/p/__invalid__";
-      return `https://avoteapp-production.up.railway.app/p/${encodeURIComponent(slug)}`;
+      if (!slug) return `${API_URL}/p/__invalid__`;
+      return `${API_URL}/p/${encodeURIComponent(slug)}`;
     };
   }, [slug]);
 

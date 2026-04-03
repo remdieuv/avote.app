@@ -24,10 +24,9 @@ import {
   estPollNotation,
   optionsNotationOrdonnees,
 } from "@/lib/notationPoll";
+import { API_URL, SOCKET_URL } from "@/lib/config";
 
-const API_ORIGIN = "https://avoteapp-production.up.railway.app";
-const API_POLLS = `${API_ORIGIN}/polls`;
-const SOCKET_URL = API_ORIGIN;
+const API_POLLS = `${API_URL}/polls`;
 
 /** @param {number | null | undefined} x */
 function formatNotationMoyenneUneDecimale(x) {
@@ -245,7 +244,7 @@ export function PollExperience({
 
     try {
       const res = await fetch(
-        `${API_ORIGIN}/events/slug/${encodeURIComponent(slugToFetch)}`,
+        `${API_URL}/events/slug/${encodeURIComponent(slugToFetch)}`,
         { cache: "no-store" },
       );
 

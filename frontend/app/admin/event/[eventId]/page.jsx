@@ -11,9 +11,7 @@ import {
   formatCountdownVerbose,
 } from "@/lib/chronoFormat";
 import { AjouterQuestionLiveModal } from "@/components/AjouterQuestionLiveModal";
-
-const API = "https://avoteapp-production.up.railway.app";
-const SOCKET = API;
+import { API_URL as API, SOCKET_URL as SOCKET } from "@/lib/config";
 
 const STATE_LABELS = {
   waiting: "EN ATTENTE",

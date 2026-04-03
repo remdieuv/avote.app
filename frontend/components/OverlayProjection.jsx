@@ -12,9 +12,7 @@ import { useSearchParams } from "next/navigation";
 import { io } from "socket.io-client";
 import { QRCodeSVG } from "qrcode.react";
 import { formatCountdownVerbose } from "@/lib/chronoFormat";
-
-const API_ORIGIN = "https://avoteapp-production.up.railway.app";
-const SOCKET_URL = API_ORIGIN;
+import { API_URL, SOCKET_URL } from "@/lib/config";
 
 const FADE_MS = 260;
 
@@ -314,7 +312,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
       if (!slugPublic) return;
       try {
         const res = await fetch(
-          `${API_ORIGIN}/events/slug/${encodeURIComponent(slugPublic)}`,
+          `${API_URL}/events/slug/${encodeURIComponent(slugPublic)}`,
           { cache: "no-store" },
         );
         if (res.status === 404) {

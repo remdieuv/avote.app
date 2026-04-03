@@ -12,9 +12,7 @@ import { io } from "socket.io-client";
 import { ScreenAutoRevealWait } from "./ScreenAutoRevealWait";
 import { ScreenQuestion } from "./ScreenQuestion";
 import { ScreenResults } from "./ScreenResults";
-
-const API_ORIGIN = "https://avoteapp-production.up.railway.app";
-const SOCKET_URL = API_ORIGIN;
+import { API_URL, SOCKET_URL } from "@/lib/config";
 
 function libelleSceneAttente(scene) {
   switch (scene) {
@@ -171,7 +169,7 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
       if (!slugPublic) return;
       try {
         const res = await fetch(
-          `${API_ORIGIN}/events/slug/${encodeURIComponent(slugPublic)}`,
+          `${API_URL}/events/slug/${encodeURIComponent(slugPublic)}`,
           { cache: "no-store" },
         );
         if (res.status === 404) {
