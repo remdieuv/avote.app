@@ -288,6 +288,8 @@ function PollCard({
   busy,
   liveState,
   activePollId,
+  /** État vote événement (open | closed) — le sondage peut être ACTIVE sans vote ouvert */
+  voteState,
   onOpen,
   onCloseRegie,
   onResults,
@@ -296,13 +298,13 @@ function PollCard({
 }) {
   const badge = badgeStyle(poll.status);
   const scene = String(liveState || "").toLowerCase();
-  const voteEnCoursSurCeSondage =
+  const voteOuvertSurCeSondage =
     String(activePollId || "") === String(poll.id) &&
-    poll.status === "ACTIVE";
+    String(voteState || "").toLowerCase().trim() === "open";
   const disableLancer =
     busy ||
     poll.status === "ARCHIVED" ||
-    voteEnCoursSurCeSondage;
+    voteOuvertSurCeSondage;
   const disableStop = busy || poll.status !== "ACTIVE";
   const disableResultats = busy;
 
@@ -314,7 +316,7 @@ function PollCard({
         onClick={() => onOpen(poll.id)}
         style={btnLancerVote(disableLancer)}
         title={
-          voteEnCoursSurCeSondage
+          voteOuvertSurCeSondage
             ? "Le vote est déjà lancé sur ce sondage."
             : undefined
         }
@@ -3515,10 +3517,11 @@ export default function RegieEventPage() {
     (p) => p.id === eventData.activePollId,
   );
 
-  const voteStateUi = eventData?.voteState
-    ? String(eventData.voteState).toLowerCase()
-    : liveState === "voting"
-      ? "open"
+  /** Ne jamais déduire « open » depuis liveState : lecture seule du champ API (+ défaut fermé si absent). */
+  const rawVoteState = eventData?.voteState;
+  const voteStateUi =
+    rawVoteState != null && String(rawVoteState).trim() !== ""
+      ? String(rawVoteState).toLowerCase().trim()
       : "closed";
   const displayStateUi = eventData?.displayState
     ? String(eventData.displayState).toLowerCase()
@@ -3733,6 +3736,7 @@ export default function RegieEventPage() {
             busy={busy}
             liveState={liveState}
             activePollId={eventData?.activePollId}
+            voteState={voteStateUi}
             desktop={desktop}
             onOpen={(id) => postAction(`/polls/${id}/open`)}
             onCloseRegie={(id) => postAction(`/polls/${id}/close`)}

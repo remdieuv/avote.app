@@ -389,12 +389,32 @@ async function emitPollUpdated(io, pollId) {
   }
 }
 
+/**
+ * Anciens événements : liveState VOTING alors que le vote est fermé et l’affichage en attente.
+ * Aligne la base et l’objet `event` en mémoire (évite régie / socket incohérents).
+ * @param {{ id: string; liveState: string; voteState: string; displayState: string }} event
+ */
+async function repairStaleVotingLiveState(event) {
+  if (
+    String(event.voteState).toUpperCase() === "CLOSED" &&
+    String(event.displayState).toUpperCase() === "WAITING" &&
+    String(event.liveState).toUpperCase() === "VOTING"
+  ) {
+    await prisma.event.update({
+      where: { id: event.id },
+      data: { liveState: "WAITING" },
+    });
+    event.liveState = "WAITING";
+  }
+}
+
 /** @param {import("socket.io").Server} io */
 async function emitEventLiveUpdated(io, eventId) {
   const event = await prisma.event.findUnique({
     where: { id: eventId },
   });
   if (!event) return;
+  await repairStaleVotingLiveState(event);
 
   let pollJson = null;
   if (event.activePollId) {
@@ -678,6 +698,7 @@ app.get("/events/slug/:slug", async (req, res) => {
 
     await fermerVoteSiChronoEpuise(io, event.id);
     const eventApres = await prisma.event.findUnique({ where: { id: event.id } });
+    if (eventApres) await repairStaleVotingLiveState(eventApres);
 
     let activePollQuestion = null;
     if (eventApres.activePollId) {
@@ -771,6 +792,7 @@ app.get("/events/:eventId", async (req, res) => {
     if (!event) {
       return res.status(404).json({ error: "Événement introuvable." });
     }
+    await repairStaleVotingLiveState(event);
     return res.json({
       id: event.id,
       title: event.title,
@@ -1663,7 +1685,10 @@ app.post("/polls", async (req, res) => {
             slug,
             description: descriptionInit,
             status: "PUBLISHED",
-            liveState: "VOTING",
+            /** Régie : premier sondage sélectionné, vote fermé jusqu’à « Lancer le vote » */
+            liveState: "WAITING",
+            voteState: "CLOSED",
+            displayState: "WAITING",
           },
         });
 
@@ -1758,7 +1783,10 @@ app.post("/polls", async (req, res) => {
         slug,
         description: descriptionInit,
         status: "PUBLISHED",
-        liveState: "VOTING",
+        /** Régie : sondage actif affichable, vote fermé jusqu’à POST /polls/:id/open */
+        liveState: "WAITING",
+        voteState: "CLOSED",
+        displayState: "WAITING",
       },
     });
 
