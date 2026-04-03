@@ -13,7 +13,7 @@ import {
   resolveJoinRoomIsDark,
 } from "@/lib/joinRoomVisual";
 
-const API_ORIGIN = "http://localhost:4000";
+const API_ORIGIN = "https://avoteapp-production.up.railway.app";
 const SOCKET_URL = API_ORIGIN;
 
 /** @param {Record<string, unknown> | null | undefined} tm */

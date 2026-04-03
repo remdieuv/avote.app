@@ -13,8 +13,8 @@ function PublicPollBody({ slug }) {
 
   const getPollUrl = useMemo(() => {
     return () => {
-      if (!slug) return "http://localhost:4000/p/__invalid__";
-      const base = `http://localhost:4000/p/${encodeURIComponent(slug)}`;
+      if (!slug) return "https://avoteapp-production.up.railway.app/p/__invalid__";
+      const base = `https://avoteapp-production.up.railway.app/p/${encodeURIComponent(slug)}`;
       if (pollParam) {
         return `${base}?poll=${encodeURIComponent(pollParam)}`;
       }

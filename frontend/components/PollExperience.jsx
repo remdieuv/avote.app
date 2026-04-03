@@ -25,7 +25,7 @@ import {
   optionsNotationOrdonnees,
 } from "@/lib/notationPoll";
 
-const API_ORIGIN = "http://localhost:4000";
+const API_ORIGIN = "https://avoteapp-production.up.railway.app";
 const API_POLLS = `${API_ORIGIN}/polls`;
 const SOCKET_URL = API_ORIGIN;
 

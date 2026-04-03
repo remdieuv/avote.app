@@ -11,8 +11,8 @@ export default function PollPage() {
 
   const getPollUrl = useMemo(() => {
     return () => {
-      if (!pollId) return "http://localhost:4000/polls/__invalid__";
-      return `http://localhost:4000/polls/${pollId}`;
+      if (!pollId) return "https://avoteapp-production.up.railway.app/polls/__invalid__";
+      return `https://avoteapp-production.up.railway.app/polls/${pollId}`;
     };
   }, [pollId]);
 

@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 
-const API = "http://localhost:4000";
+const API = "https://avoteapp-production.up.railway.app";
 
 const card = {
   background: "#fff",

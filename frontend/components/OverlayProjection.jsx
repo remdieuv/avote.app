@@ -13,7 +13,7 @@ import { io } from "socket.io-client";
 import { QRCodeSVG } from "qrcode.react";
 import { formatCountdownVerbose } from "@/lib/chronoFormat";
 
-const API_ORIGIN = "http://localhost:4000";
+const API_ORIGIN = "https://avoteapp-production.up.railway.app";
 const SOCKET_URL = API_ORIGIN;
 
 const FADE_MS = 260;

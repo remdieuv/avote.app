@@ -13,7 +13,7 @@ import { ScreenAutoRevealWait } from "./ScreenAutoRevealWait";
 import { ScreenQuestion } from "./ScreenQuestion";
 import { ScreenResults } from "./ScreenResults";
 
-const API_ORIGIN = "http://localhost:4000";
+const API_ORIGIN = "https://avoteapp-production.up.railway.app";
 const SOCKET_URL = API_ORIGIN;
 
 function libelleSceneAttente(scene) {

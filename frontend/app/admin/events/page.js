@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { loadStoredMyEvents } from "@/lib/myEventsStorage";
 
-const API = "http://localhost:4000";
+const API = "https://avoteapp-production.up.railway.app";
 
 function formatEventDate(iso, fallbackLabel) {
   if (!iso) return fallbackLabel ?? "—";

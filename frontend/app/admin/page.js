@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { rememberMyEvent } from "@/lib/myEventsStorage";
 
-const API_BASE = "http://localhost:4000/polls";
+const API_BASE = "https://avoteapp-production.up.railway.app/polls";
 
 const inputStyle = {
   width: "100%",

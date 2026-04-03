@@ -12,7 +12,7 @@ import {
 } from "@/lib/chronoFormat";
 import { AjouterQuestionLiveModal } from "@/components/AjouterQuestionLiveModal";
 
-const API = "http://localhost:4000";
+const API = "https://avoteapp-production.up.railway.app";
 const SOCKET = API;
 
 const STATE_LABELS = {

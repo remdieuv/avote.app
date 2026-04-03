@@ -7,8 +7,8 @@ import { OverlayProjection } from "@/components/OverlayProjection";
 function OverlayBody({ eventSlug }) {
   const getPollUrl = useMemo(() => {
     return () => {
-      if (!eventSlug) return "http://localhost:4000/p/__invalid__";
-      return `http://localhost:4000/p/${encodeURIComponent(eventSlug)}`;
+      if (!eventSlug) return "https://avoteapp-production.up.railway.app/p/__invalid__";
+      return `https://avoteapp-production.up.railway.app/p/${encodeURIComponent(eventSlug)}`;
     };
   }, [eventSlug]);
 

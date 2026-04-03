@@ -13,8 +13,8 @@ export default function ProjectionSallePage() {
 
   const getPollUrl = useMemo(() => {
     return () => {
-      if (!slug) return "http://localhost:4000/p/__invalid__";
-      return `http://localhost:4000/p/${encodeURIComponent(slug)}`;
+      if (!slug) return "https://avoteapp-production.up.railway.app/p/__invalid__";
+      return `https://avoteapp-production.up.railway.app/p/${encodeURIComponent(slug)}`;
     };
   }, [slug]);
 
