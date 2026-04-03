@@ -2044,47 +2044,51 @@ io.on("connection", (socket) => {
   });
 });
 
-server.listen(PORT, () => {
+const ENABLE_TIMERS = process.env.ENABLE_TIMERS === "true";
+
+server.listen(PORT, "0.0.0.0", () => {
   console.log(`API Avote sur http://localhost:${PORT}`);
   console.log(`Socket.io sur le même port (${PORT})`);
   console.log(
     `Chrono question : durée max ${QUESTION_TIMER_SEC_MAX} s (${Math.floor(QUESTION_TIMER_SEC_MAX / 86400)} j)`,
   );
 
-  setInterval(async () => {
-    try {
-      const candidats = await prisma.event.findMany({
-        where: {
-          questionTimerTotalSec: { not: null },
-          voteState: "OPEN",
-          activePollId: { not: null },
-        },
-        select: { id: true },
-        take: 100,
-      });
-      for (const row of candidats) {
-        await fermerVoteSiChronoEpuise(io, row.id);
+  if (ENABLE_TIMERS) {
+    setInterval(async () => {
+      try {
+        const candidats = await prisma.event.findMany({
+          where: {
+            questionTimerTotalSec: { not: null },
+            voteState: "OPEN",
+            activePollId: { not: null },
+          },
+          select: { id: true },
+          take: 100,
+        });
+        for (const row of candidats) {
+          await fermerVoteSiChronoEpuise(io, row.id);
+        }
+      } catch (err) {
+        console.error("scan chrono auto-close", err);
       }
-    } catch (err) {
-      console.error("scan chrono auto-close", err);
-    }
-  }, 2000);
+    }, 2000);
 
-  setInterval(async () => {
-    try {
-      const due = await prisma.event.findMany({
-        where: {
-          autoRevealShowResultsAt: { lte: new Date() },
-          voteState: "CLOSED",
-        },
-        select: { id: true },
-        take: 20,
-      });
-      for (const row of due) {
-        await appliquerAutoRevealResultats(io, row.id);
+    setInterval(async () => {
+      try {
+        const due = await prisma.event.findMany({
+          where: {
+            autoRevealShowResultsAt: { lte: new Date() },
+            voteState: "CLOSED",
+          },
+          select: { id: true },
+          take: 20,
+        });
+        for (const row of due) {
+          await appliquerAutoRevealResultats(io, row.id);
+        }
+      } catch (err) {
+        console.error("scan auto-reveal", err);
       }
-    } catch (err) {
-      console.error("scan auto-reveal", err);
-    }
-  }, 1000);
+    }, 1000);
+  }
 });
