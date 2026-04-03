@@ -14,17 +14,42 @@ import { ScreenQuestion } from "./ScreenQuestion";
 import { ScreenResults } from "./ScreenResults";
 import { API_URL, SOCKET_URL } from "@/lib/config";
 
-function libelleSceneAttente(scene) {
-  switch (scene) {
-    case "waiting":
-      return "Préparez-vous, la prochaine question arrive";
-    case "finished":
-      return "Merci pour votre participation";
-    case "paused":
-      return "Pause — reprise bientôt";
-    default:
-      return "";
+/**
+ * Texte plein écran /screen (attente, fin de chrono, entre deux séquences).
+ * @param {{
+ *   liveScene: string | null;
+ *   displayState: string;
+ *   voteState: string | null;
+ *   autoReveal?: boolean;
+ *   autoRevealShowResultsAt?: string | null;
+ * }} p
+ */
+function libelleAttenteGrandEcran(p) {
+  const ls = String(p.liveScene ?? "").toLowerCase();
+  const ds = String(p.displayState ?? "").toLowerCase();
+  const vs = String(p.voteState ?? "").toLowerCase();
+
+  if (ls === "finished") return "Merci pour votre participation";
+  if (ls === "paused" || ds === "black") return "Pause — reprise bientôt";
+
+  const ar = p.autoReveal === true;
+  const arIso = p.autoRevealShowResultsAt;
+  if (
+    ar &&
+    typeof arIso === "string" &&
+    new Date(arIso).getTime() > Date.now() - 800
+  ) {
+    return "Vote terminé — les résultats s’affichent dans un instant.";
   }
+
+  if (ds === "waiting" && vs === "closed") {
+    return "Merci pour vos votes — le direct continue.";
+  }
+  if (ds === "waiting" && vs === "open") {
+    return "En attente — le direct reprend tout de suite.";
+  }
+
+  return "Préparez-vous, la prochaine question arrive";
 }
 
 /** @param {Record<string, unknown> | null | undefined} tm */
@@ -131,6 +156,14 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
   const [modeAutoProjection, setModeAutoProjection] = useState(false);
   /** Branding salle (GET /events/slug + socket event:customization_updated) */
   const [roomCustomization, setRoomCustomization] = useState(null);
+  /** Vote / auto-reveal événement quand le JSON poll n’est pas affiché (socket, meta slug). */
+  const [eventVoteState, setEventVoteState] = useState(
+    /** @type {string | null} */ (null),
+  );
+  const [eventAutoReveal, setEventAutoReveal] = useState(false);
+  const [eventAutoRevealAt, setEventAutoRevealAt] = useState(
+    /** @type {string | null} */ (null),
+  );
 
   const evenementInvalideRef = useRef(false);
   const loadPollAbortRef = useRef(null);
@@ -161,6 +194,21 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
       themeMode: meta.themeMode ?? null,
       backgroundOverlayStrength: meta.backgroundOverlayStrength ?? null,
     });
+    if (typeof meta.voteState === "string" && meta.voteState.trim()) {
+      setEventVoteState(meta.voteState.toLowerCase());
+    }
+    if (typeof meta.autoReveal === "boolean") {
+      setEventAutoReveal(meta.autoReveal);
+    }
+    if (meta.autoRevealShowResultsAt != null) {
+      setEventAutoRevealAt(
+        typeof meta.autoRevealShowResultsAt === "string"
+          ? meta.autoRevealShowResultsAt
+          : null,
+      );
+    } else {
+      setEventAutoRevealAt(null);
+    }
   }, []);
 
   const fetchEventSlugMeta = useCallback(
@@ -179,6 +227,9 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
           }
           setEventId(null);
           setRoomCustomization(null);
+          setEventVoteState(null);
+          setEventAutoReveal(false);
+          setEventAutoRevealAt(null);
           return;
         }
         if (!res.ok) {
@@ -269,6 +320,21 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
           setEventId(data.eventId);
         }
         setPoll(data);
+        if (typeof data.eventVoteState === "string" && data.eventVoteState.trim()) {
+          setEventVoteState(data.eventVoteState.toLowerCase());
+        }
+        if (typeof data.autoReveal === "boolean") {
+          setEventAutoReveal(data.autoReveal);
+        }
+        if (data.autoRevealShowResultsAt != null) {
+          setEventAutoRevealAt(
+            typeof data.autoRevealShowResultsAt === "string"
+              ? data.autoRevealShowResultsAt
+              : null,
+          );
+        } else {
+          setEventAutoRevealAt(null);
+        }
         setInfoMessage(null);
       } catch (e) {
         if (e?.name === "AbortError") {
@@ -310,13 +376,40 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
 
   const ds = displayState ?? deriveDisplayFromLive(liveScene);
 
+  const voteStatePourAttente = useMemo(() => {
+    const p = poll?.eventVoteState;
+    if (typeof p === "string" && p.trim()) return p.toLowerCase();
+    if (typeof eventVoteState === "string" && eventVoteState.trim()) {
+      return eventVoteState.toLowerCase();
+    }
+    /** Si l’API / socket omet eventVoteState, le statut du sondage suffit après fin de chrono (CLOSED). */
+    const st = poll?.status;
+    if (typeof st === "string") {
+      const u = st.toUpperCase();
+      if (u === "CLOSED") return "closed";
+      if (u === "ACTIVE") return "open";
+    }
+    return null;
+  }, [poll?.eventVoteState, poll?.status, eventVoteState]);
+
+  const autoRevealUntilIso = useMemo(() => {
+    if (poll && typeof poll.autoRevealShowResultsAt === "string") {
+      return poll.autoRevealShowResultsAt;
+    }
+    if (!poll && eventAutoReveal && typeof eventAutoRevealAt === "string") {
+      return eventAutoRevealAt;
+    }
+    return null;
+  }, [poll, poll?.autoRevealShowResultsAt, eventAutoReveal, eventAutoRevealAt]);
+
+  const autoRevealPourMessage = Boolean(poll ? poll.autoReveal : eventAutoReveal);
+
   const enAttenteAutoReveal =
-    !!poll &&
     ds !== "black" &&
-    String(poll?.eventVoteState ?? "").toLowerCase() === "closed" &&
     ds !== "results" &&
-    typeof poll?.autoRevealShowResultsAt === "string" &&
-    new Date(poll.autoRevealShowResultsAt).getTime() > Date.now() - 800;
+    String(voteStatePourAttente ?? "").toLowerCase() === "closed" &&
+    typeof autoRevealUntilIso === "string" &&
+    new Date(autoRevealUntilIso).getTime() > Date.now() - 800;
 
   useEffect(() => {
     if (!enAttenteAutoReveal) return;
@@ -448,6 +541,22 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
       loadPollAbortRef.current?.abort();
       setLoading(false);
 
+      if (typeof payload.voteState === "string" && payload.voteState.trim()) {
+        setEventVoteState(payload.voteState.toLowerCase());
+      }
+      if (typeof payload.autoReveal === "boolean") {
+        setEventAutoReveal(payload.autoReveal);
+      }
+      if (payload.autoRevealShowResultsAt != null) {
+        setEventAutoRevealAt(
+          typeof payload.autoRevealShowResultsAt === "string"
+            ? payload.autoRevealShowResultsAt
+            : null,
+        );
+      } else {
+        setEventAutoRevealAt(null);
+      }
+
       setLiveScene(payload.liveState ?? null);
       if (typeof payload.displayState === "string") {
         setDisplayState(payload.displayState.toLowerCase());
@@ -467,7 +576,19 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
         setInfoMessage(null);
       } else {
         setPoll(null);
-        setInfoMessage(libelleSceneAttente(payload.liveState ?? "") || null);
+        const dsPayload =
+          typeof payload.displayState === "string"
+            ? payload.displayState.toLowerCase()
+            : deriveDisplayFromLive(payload.liveState);
+        setInfoMessage(
+          libelleAttenteGrandEcran({
+            liveScene: payload.liveState ?? null,
+            displayState: dsPayload,
+            voteState: payload.voteState ?? null,
+            autoReveal: payload.autoReveal,
+            autoRevealShowResultsAt: payload.autoRevealShowResultsAt ?? null,
+          }) || null,
+        );
       }
     }
 
@@ -487,6 +608,21 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
       }
       if (typeof data.eventDisplayState === "string") {
         setDisplayState(data.eventDisplayState.toLowerCase());
+      }
+      if (typeof data.eventVoteState === "string" && data.eventVoteState.trim()) {
+        setEventVoteState(data.eventVoteState.toLowerCase());
+      }
+      if (typeof data.autoReveal === "boolean") {
+        setEventAutoReveal(data.autoReveal);
+      }
+      if (data.autoRevealShowResultsAt != null) {
+        setEventAutoRevealAt(
+          typeof data.autoRevealShowResultsAt === "string"
+            ? data.autoRevealShowResultsAt
+            : null,
+        );
+      } else {
+        setEventAutoRevealAt(null);
       }
     }
 
@@ -698,6 +834,21 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
     );
   }
 
+  if (enAttenteAutoReveal) {
+    const shellAuto = {
+      ...shell,
+      borderTop: "5px solid #14b8a6",
+    };
+    return wrapOut(
+      false,
+      <ScreenAutoRevealWait
+        shell={shellAuto}
+        untilIso={autoRevealUntilIso}
+        chronoTick={chronoTick}
+      />,
+    );
+  }
+
   /** États plein écran sans poll actif */
   if (
     !poll &&
@@ -706,9 +857,13 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
       liveScene === "paused" ||
       ds === "black")
   ) {
-    const text = libelleSceneAttente(
-      liveScene === "finished" ? "finished" : ds === "black" ? "paused" : "waiting",
-    );
+    const text = libelleAttenteGrandEcran({
+      liveScene: liveScene === "finished" ? "finished" : ds === "black" ? "paused" : "waiting",
+      displayState: ds,
+      voteState: voteStatePourAttente,
+      autoReveal: autoRevealPourMessage,
+      autoRevealShowResultsAt: autoRevealUntilIso,
+    });
     return wrapOut(
       ds === "black",
       <main
@@ -744,21 +899,6 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
     );
   }
 
-  if (enAttenteAutoReveal) {
-    const shellAuto = {
-      ...shell,
-      borderTop: "5px solid #14b8a6",
-    };
-    return wrapOut(
-      false,
-      <ScreenAutoRevealWait
-        shell={shellAuto}
-        untilIso={poll.autoRevealShowResultsAt}
-        chronoTick={chronoTick}
-      />,
-    );
-  }
-
   if (ds === "waiting" && liveScene !== "finished") {
     return wrapOut(
       ds === "black",
@@ -778,7 +918,13 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
             margin: "0 auto",
           }}
         >
-          {libelleSceneAttente("waiting")}
+          {libelleAttenteGrandEcran({
+            liveScene,
+            displayState: ds,
+            voteState: voteStatePourAttente,
+            autoReveal: autoRevealPourMessage,
+            autoRevealShowResultsAt: autoRevealUntilIso,
+          })}
         </p>
       </main>,
     );
@@ -801,7 +947,13 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
             lineHeight: 1.2,
           }}
         >
-          {libelleSceneAttente("finished")}
+          {libelleAttenteGrandEcran({
+            liveScene,
+            displayState: ds,
+            voteState: voteStatePourAttente,
+            autoReveal: autoRevealPourMessage,
+            autoRevealShowResultsAt: autoRevealUntilIso,
+          })}
         </p>
       </main>,
     );
@@ -824,7 +976,13 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
             color: "#94a3b8",
           }}
         >
-          {libelleSceneAttente("paused")}
+          {libelleAttenteGrandEcran({
+            liveScene,
+            displayState: ds,
+            voteState: voteStatePourAttente,
+            autoReveal: autoRevealPourMessage,
+            autoRevealShowResultsAt: autoRevealUntilIso,
+          })}
         </p>
       </main>,
     );
