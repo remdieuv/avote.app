@@ -1,6 +1,9 @@
 "use client";
 
 import { Suspense, useMemo } from "react";
+
+/** Évite une page /p servie depuis un cache statique avec une ancienne version du bundle. */
+export const dynamic = "force-dynamic";
 import { useParams, useSearchParams } from "next/navigation";
 import { PollExperience } from "@/components/PollExperience";
 import { API_URL } from "@/lib/config";
