@@ -32,7 +32,14 @@ import {
   deriveDisplayStateFromLive,
   getLiveStateLabel,
   getLiveStatePresentation,
+  getLiveStateTone,
 } from "@/lib/liveStateUx";
+import {
+  buildJoinPollCardSurfaces,
+  getLiveStateVisualTokens,
+  mergeCardBorderWithAccent,
+  stateBadgeTypography,
+} from "@/lib/liveStateVisual";
 
 const API_POLLS = `${API_URL}/polls`;
 
@@ -958,6 +965,12 @@ export function PollExperience({
     [pollUxCtx],
   );
 
+  const pollUxTone = getLiveStateTone(pollUxPres.ux);
+  const pollVisualTokens = useMemo(
+    () => getLiveStateVisualTokens(pollUxTone, "poll"),
+    [pollUxTone],
+  );
+
   const isDark = resolveJoinRoomIsDark(roomThemeMode, prefersDark);
   const accent = useMemo(
     () => joinRoomAccent(roomPrimaryColor),
@@ -978,9 +991,63 @@ export function PollExperience({
       }),
     [roomBackgroundUrl, roomSolidBackgroundColor, isDark, palette.fg],
   );
+  const pollPanelSurfaces = useMemo(
+    () =>
+      buildJoinPollCardSurfaces({
+        palette,
+        isDark,
+        accent,
+        tokens: pollVisualTokens,
+      }),
+    [palette, isDark, accent, pollVisualTokens],
+  );
+
   const panelStyle = useMemo(
-    () => glassPanelStyle({ palette, isDark, textAlign: "left" }),
-    [palette, isDark],
+    () => ({
+      ...glassPanelStyle({ palette, isDark, textAlign: "left" }),
+      border: pollPanelSurfaces.border,
+      background: pollPanelSurfaces.background,
+      boxShadow: pollPanelSurfaces.boxShadow,
+    }),
+    [palette, isDark, pollPanelSurfaces],
+  );
+
+  const pollCtaGradient = useMemo(
+    () =>
+      `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 40%, ${isDark ? "#1e1b4b" : "#c7d2fe"}))`,
+    [accent, isDark],
+  );
+
+  const pollBadgeEtat = useMemo(
+    () => ({
+      ...stateBadgeTypography(pollVisualTokens),
+      fontSize: "0.82rem",
+    }),
+    [pollVisualTokens],
+  );
+
+  const resultsLook =
+    pollUxPres.ux === LIVE_UX_STATE.RESULTS ||
+    (!voteOuvert && affichageResultatsPublic);
+
+  const resultsCardTokens = useMemo(
+    () =>
+      getLiveStateVisualTokens(
+        resultsLook ? getLiveStateTone(LIVE_UX_STATE.RESULTS) : pollUxTone,
+        "poll",
+      ),
+    [resultsLook, pollUxTone],
+  );
+
+  const resultsBlockSurfaces = useMemo(
+    () =>
+      buildJoinPollCardSurfaces({
+        palette,
+        isDark,
+        accent,
+        tokens: resultsCardTokens,
+      }),
+    [palette, isDark, accent, resultsCardTokens],
   );
 
   return (
@@ -1227,12 +1294,17 @@ export function PollExperience({
                 style={{
                   margin: 0,
                   padding: "0.55rem 0.85rem",
-                  background: `color-mix(in srgb, ${accent} 22%, transparent)`,
+                  background: `color-mix(in srgb, ${accent} ${14 + pollVisualTokens.borderAccentMixPct * 0.28}%, transparent)`,
                   borderRadius: "10px",
-                  border: `1px solid color-mix(in srgb, ${accent} 38%, transparent)`,
+                  border: mergeCardBorderWithAccent(
+                    palette.cardBorder,
+                    accent,
+                    Math.min(52, 26 + pollVisualTokens.borderAccentMixPct * 0.55),
+                  ),
                   color: isDark ? palette.fg : palette.fg2,
-                  fontSize: "0.9rem",
-                  fontWeight: 600,
+                  ...pollBadgeEtat,
+                  textTransform: "none",
+                  letterSpacing: "0.04em",
                 }}
               >
                 {getLiveStateLabel(LIVE_UX_STATE.VOTING)}
@@ -1306,18 +1378,33 @@ export function PollExperience({
 
           <section
             style={{
-              border: `1px solid ${palette.cardBorder}`,
+              border: voteOuvert
+                ? mergeCardBorderWithAccent(
+                    palette.cardBorder,
+                    accent,
+                    Math.min(48, 18 + pollVisualTokens.borderAccentMixPct * 0.65),
+                  )
+                : `1px solid ${palette.cardBorder}`,
               borderRadius: "16px",
               padding: "1.25rem 1.35rem",
               marginBottom: "1rem",
-              background: isDark
-                ? "rgba(15, 23, 42, 0.4)"
-                : "rgba(255,255,255,0.55)",
+              background: voteOuvert
+                ? isDark
+                  ? `color-mix(in srgb, ${accent} ${4 + pollVisualTokens.cardAccentTintPct * 0.9}%, rgba(15, 23, 42, 0.4))`
+                  : `color-mix(in srgb, ${accent} ${2.5 + pollVisualTokens.cardAccentTintPct * 0.55}%, rgba(255,255,255,0.55))`
+                : isDark
+                  ? "rgba(15, 23, 42, 0.4)"
+                  : "rgba(255,255,255,0.55)",
+              boxShadow: voteOuvert
+                ? isDark
+                  ? `0 ${Math.round(12 * pollVisualTokens.shadowScale)}px ${Math.round(28 * pollVisualTokens.shadowScale)}px rgba(0,0,0,${0.22 + pollVisualTokens.shadowScale * 0.04})`
+                  : `0 ${Math.round(10 * pollVisualTokens.shadowScale)}px ${Math.round(24 * pollVisualTokens.shadowScale)}px rgba(15,23,42,${0.06 + pollVisualTokens.shadowScale * 0.02})`
+                : undefined,
             }}
           >
             <h2
               style={{
-                fontSize: "clamp(1.2rem, 4vw, 1.55rem)",
+                fontSize: `clamp(${1.2 * (voteOuvert ? pollVisualTokens.titleClampMul : 1)}rem, 4vw, ${1.55 * (voteOuvert ? pollVisualTokens.titleClampMul : 1)}rem)`,
                 fontWeight: 800,
                 margin: "0 0 0.5rem 0",
                 color: palette.fg,
@@ -1478,10 +1565,14 @@ export function PollExperience({
                       gap: "0.65rem",
                       padding: "0.85rem 1rem",
                       borderRadius: "14px",
-                      border: `1px solid ${palette.cardBorder}`,
+                      border: mergeCardBorderWithAccent(
+                        palette.cardBorder,
+                        accent,
+                        Math.min(42, 12 + pollVisualTokens.borderAccentMixPct * 0.5),
+                      ),
                       background: isDark
-                        ? "rgba(15, 23, 42, 0.35)"
-                        : "rgba(255,255,255,0.65)",
+                        ? `color-mix(in srgb, ${accent} ${2.5 + pollVisualTokens.cardAccentTintPct * 0.5}%, rgba(15, 23, 42, 0.35))`
+                        : `color-mix(in srgb, ${accent} ${1.5 + pollVisualTokens.cardAccentTintPct * 0.35}%, rgba(255,255,255,0.65))`,
                       boxSizing: "border-box",
                     }}
                   >
@@ -1542,8 +1633,8 @@ export function PollExperience({
                   style={{
                     width: "100%",
                     maxWidth: "22rem",
-                    padding: "1.05rem 1.4rem",
-                    fontSize: "clamp(1rem, 3.5vw, 1.1rem)",
+                    padding: `${1.05 * pollVisualTokens.ctaScale}rem ${1.4 * pollVisualTokens.ctaScale}rem`,
+                    fontSize: `clamp(${1 * pollVisualTokens.ctaScale}rem, 3.5vw, ${1.1 * pollVisualTokens.ctaScale}rem)`,
                     borderRadius: "14px",
                     border: "none",
                     background:
@@ -1551,17 +1642,17 @@ export function PollExperience({
                         ? isDark
                           ? "rgba(148, 163, 184, 0.35)"
                           : "#94a3b8"
-                        : `linear-gradient(135deg, ${accent}, #6366f1)`,
+                        : pollCtaGradient,
                     color: "#fff",
                     cursor:
                       votesBloques || !hasSelectionValide
                         ? "not-allowed"
                         : "pointer",
-                    fontWeight: 700,
+                    fontWeight: 800,
                     boxShadow:
                       votesBloques || !hasSelectionValide
                         ? "none"
-                        : "0 8px 28px rgba(0, 0, 0, 0.22)",
+                        : `0 ${Math.round(8 * pollVisualTokens.shadowScale)}px ${Math.round(30 * pollVisualTokens.shadowScale)}px rgba(0, 0, 0, ${isDark ? 0.3 : 0.2})`,
                   }}
                 >
                   {voteSubmitting ? "Envoi…" : "Valider mon vote"}
@@ -1577,22 +1668,18 @@ export function PollExperience({
                 marginTop: voteOuvert ? 0 : "0.5rem",
                 padding: "1.25rem 1.35rem",
                 borderRadius: "16px",
-                border: `1px solid ${palette.cardBorder}`,
-                background: isDark
-                  ? "rgba(15, 23, 42, 0.5)"
-                  : "rgba(255,255,255,0.75)",
-                boxShadow: isDark
-                  ? "0 16px 40px rgba(0, 0, 0, 0.25)"
-                  : "0 12px 32px rgba(15, 23, 42, 0.08)",
+                border: resultsBlockSurfaces.border,
+                background: resultsBlockSurfaces.background,
+                boxShadow: resultsBlockSurfaces.boxShadow,
                 backdropFilter: "blur(10px)",
               }}
             >
               <h3
                 style={{
-                  fontSize: "1.05rem",
+                  fontSize: `clamp(${1 * resultsCardTokens.titleClampMul}rem, 2.8vw, ${1.12 * resultsCardTokens.titleClampMul}rem)`,
                   margin: "0 0 0.35rem 0",
                   color: palette.fg,
-                  fontWeight: 800,
+                  fontWeight: resultsCardTokens.stateBadgeWeight,
                   letterSpacing: "-0.02em",
                 }}
               >

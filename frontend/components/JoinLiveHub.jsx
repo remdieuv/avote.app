@@ -20,7 +20,13 @@ import {
   LIVE_UX_BODY_JOIN_WAITING,
   LIVE_UX_SUBTITLE_REVEAL_PENDING,
   getLiveStatePresentation,
+  getLiveStateTone,
 } from "@/lib/liveStateUx";
+import {
+  buildJoinPollCardSurfaces,
+  getLiveStateVisualTokens,
+  stateBadgeTypography,
+} from "@/lib/liveStateVisual";
 
 /** @param {Record<string, unknown> | null | undefined} tm */
 function chronoRestantSecondes(tm) {
@@ -36,14 +42,16 @@ function chronoRestantSecondes(tm) {
   return Math.max(0, tm.totalSec - acc - seg);
 }
 
-function AttenteAnimee() {
+/**
+ * @param {{ accent: string; pulseAllowed: boolean }} props
+ */
+function AttenteAnimee({ accent, pulseAllowed }) {
+  const barGrad = `linear-gradient(90deg, transparent, color-mix(in srgb, ${accent} 80%, white), transparent)`;
+  const track = `color-mix(in srgb, ${accent} 14%, rgba(148, 163, 184, 0.22))`;
+  const dotColor = `color-mix(in srgb, ${accent} 38%, #94a3b8)`;
   return (
     <>
       <style>{`
-        @keyframes join-hub-pulse {
-          0%, 100% { opacity: 0.35; transform: scale(0.96); }
-          50% { opacity: 1; transform: scale(1); }
-        }
         @keyframes join-hub-bar {
           0% { transform: translateX(-100%); }
           100% { transform: translateX(100%); }
@@ -68,7 +76,7 @@ function AttenteAnimee() {
             width: "min(12rem, 70vw)",
             height: "4px",
             borderRadius: "999px",
-            background: "rgba(148, 163, 184, 0.25)",
+            background: track,
             overflow: "hidden",
           }}
         >
@@ -77,8 +85,11 @@ function AttenteAnimee() {
               width: "40%",
               height: "100%",
               borderRadius: "999px",
-              background: "linear-gradient(90deg, transparent, #38bdf8, transparent)",
-              animation: "join-hub-bar 1.8s ease-in-out infinite",
+              background: barGrad,
+              animation: pulseAllowed
+                ? "join-hub-bar 1.85s ease-in-out infinite"
+                : "none",
+              opacity: pulseAllowed ? 1 : 0.45,
             }}
           />
         </div>
@@ -88,7 +99,7 @@ function AttenteAnimee() {
             gap: "0.35rem",
             fontSize: "2rem",
             fontWeight: 800,
-            color: "#94a3b8",
+            color: dotColor,
             letterSpacing: "0.02em",
           }}
         >
@@ -96,8 +107,11 @@ function AttenteAnimee() {
             <span
               key={i}
               style={{
-                animation: "join-hub-dot 1.2s ease-in-out infinite",
-                animationDelay: `${i * 0.18}s`,
+                animation: pulseAllowed
+                  ? "join-hub-dot 1.25s ease-in-out infinite"
+                  : "none",
+                animationDelay: pulseAllowed ? `${i * 0.18}s` : undefined,
+                opacity: pulseAllowed ? undefined : 0.35,
               }}
             >
               ·
@@ -548,6 +562,27 @@ export function JoinLiveHub({ slug }) {
     [isDark, accent],
   );
 
+  const joinCardTone = useMemo(() => {
+    if (loading || error || !eventId) return "neutral";
+    return getLiveStateTone(joinPres.ux);
+  }, [loading, error, eventId, joinPres.ux]);
+
+  const joinVisualTokens = useMemo(
+    () => getLiveStateVisualTokens(joinCardTone, "join"),
+    [joinCardTone],
+  );
+
+  const joinCardSurfaces = useMemo(
+    () =>
+      buildJoinPollCardSurfaces({
+        palette,
+        isDark,
+        accent,
+        tokens: joinVisualTokens,
+      }),
+    [palette, isDark, accent, joinVisualTokens],
+  );
+
   const overlayAlpha = joinRoomOverlayAlpha(effectiveOverlayStrength);
 
   const shell = useMemo(
@@ -581,15 +616,28 @@ export function JoinLiveHub({ slug }) {
       maxWidth: "min(36rem, 100%)",
       padding: "clamp(1.35rem, 4vw, 2.35rem) clamp(1.1rem, 4vw, 2rem)",
       borderRadius: "20px",
-      border: `1px solid ${palette.cardBorder}`,
-      background: palette.cardBg,
-      boxShadow: isDark
-        ? "0 24px 48px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255,255,255,0.06)"
-        : "0 20px 40px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255,255,255,0.9)",
+      border: joinCardSurfaces.border,
+      background: joinCardSurfaces.background,
+      boxShadow: joinCardSurfaces.boxShadow,
       textAlign: "center",
       boxSizing: "border-box",
     }),
-    [palette, isDark],
+    [joinCardSurfaces],
+  );
+
+  const joinBadgeEtat = useMemo(
+    () => ({
+      ...stateBadgeTypography(joinVisualTokens),
+      fontSize: "0.75rem",
+      color: accent,
+    }),
+    [joinVisualTokens, accent],
+  );
+
+  const joinCtaGradient = useMemo(
+    () =>
+      `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 40%, ${isDark ? "#1e1b4b" : "#c7d2fe"}))`,
+    [accent, isDark],
   );
 
   const piedEncouragement =
@@ -604,8 +652,8 @@ export function JoinLiveHub({ slug }) {
           <p
             style={{
               margin: 0,
-              fontSize: "clamp(1.15rem, 4vw, 1.5rem)",
-              fontWeight: 700,
+              fontSize: `clamp(${1.12 * joinVisualTokens.titleClampMul}rem, ${3.8 * joinVisualTokens.titleClampMul}vw, ${1.48 * joinVisualTokens.titleClampMul}rem)`,
+              fontWeight: joinVisualTokens.stateBadgeWeight,
               lineHeight: 1.45,
               color: palette.fg2,
             }}
@@ -628,18 +676,7 @@ export function JoinLiveHub({ slug }) {
       corps =
         secondesAvantResultats != null ? (
           <>
-            <p
-              style={{
-                margin: 0,
-                fontSize: "0.75rem",
-                fontWeight: 800,
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
-                color: accent,
-              }}
-            >
-              {joinPres.title}
-            </p>
+            <p style={{ margin: 0, ...joinBadgeEtat }}>{joinPres.title}</p>
             <p
               style={{
                 margin: "0.65rem 0 0 0",
@@ -667,18 +704,7 @@ export function JoinLiveHub({ slug }) {
           </>
         ) : (
           <>
-            <p
-              style={{
-                margin: 0,
-                fontSize: "0.75rem",
-                fontWeight: 800,
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
-                color: accent,
-              }}
-            >
-              {joinPres.title}
-            </p>
+            <p style={{ margin: 0, ...joinBadgeEtat }}>{joinPres.title}</p>
             <p
               style={{
                 margin: "0.75rem 0 0 0",
@@ -690,29 +716,21 @@ export function JoinLiveHub({ slug }) {
               {joinPres.subtitle ?? LIVE_UX_SUBTITLE_REVEAL_PENDING}
             </p>
             <div style={{ marginTop: "1.25rem" }}>
-              <AttenteAnimee />
+              <AttenteAnimee
+                accent={accent}
+                pulseAllowed={joinVisualTokens.pulseAllowed}
+              />
             </div>
           </>
         );
     } else if (scene === "voting") {
       corps = (
         <>
-          <p
-            style={{
-              margin: 0,
-              fontSize: "0.75rem",
-              fontWeight: 800,
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              color: accent,
-            }}
-          >
-            {joinPres.title}
-          </p>
+          <p style={{ margin: 0, ...joinBadgeEtat }}>{joinPres.title}</p>
           <h2
             style={{
               margin: "0.65rem 0 0 0",
-              fontSize: "clamp(1.2rem, 4.2vw, 1.65rem)",
+              fontSize: `clamp(${1.2 * joinVisualTokens.titleClampMul}rem, ${4.2 * joinVisualTokens.titleClampMul}vw, ${1.65 * joinVisualTokens.titleClampMul}rem)`,
               fontWeight: 800,
               lineHeight: 1.35,
               letterSpacing: "-0.02em",
@@ -761,15 +779,15 @@ export function JoinLiveHub({ slug }) {
               width: "100%",
               maxWidth: "20rem",
               alignSelf: "center",
-              padding: "1.05rem 1.4rem",
-              fontSize: "clamp(1.05rem, 3.5vw, 1.15rem)",
-              fontWeight: 700,
+              padding: `${1.05 * joinVisualTokens.ctaScale}rem ${1.4 * joinVisualTokens.ctaScale}rem`,
+              fontSize: `clamp(${1.05 * joinVisualTokens.ctaScale}rem, 3.5vw, ${1.15 * joinVisualTokens.ctaScale}rem)`,
+              fontWeight: 800,
               border: "none",
               borderRadius: "14px",
-              background: `linear-gradient(135deg, ${accent}, #6366f1)`,
+              background: joinCtaGradient,
               color: "#fff",
               cursor: "pointer",
-              boxShadow: "0 8px 28px rgba(0, 0, 0, 0.22)",
+              boxShadow: `0 ${Math.round(8 * joinVisualTokens.shadowScale)}px ${Math.round(30 * joinVisualTokens.shadowScale)}px rgba(0, 0, 0, ${isDark ? 0.32 : 0.18})`,
             }}
           >
             Participer au vote
@@ -786,11 +804,8 @@ export function JoinLiveHub({ slug }) {
           <p
             style={{
               margin: 0,
-              fontSize: "0.75rem",
-              fontWeight: 800,
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              color: "#fde68a",
+              ...joinBadgeEtat,
+              color: `color-mix(in srgb, ${accent} 72%, ${palette.fg})`,
             }}
           >
             {joinPres.title}
@@ -798,7 +813,7 @@ export function JoinLiveHub({ slug }) {
           <h2
             style={{
               margin: "0.75rem 0 0 0",
-              fontSize: "clamp(1.15rem, 4vw, 1.55rem)",
+              fontSize: `clamp(${1.15 * joinVisualTokens.titleClampMul}rem, ${4 * joinVisualTokens.titleClampMul}vw, ${1.55 * joinVisualTokens.titleClampMul}rem)`,
               fontWeight: 800,
               lineHeight: 1.35,
               letterSpacing: "-0.02em",
@@ -850,7 +865,10 @@ export function JoinLiveHub({ slug }) {
             {LIVE_UX_BODY_JOIN_AFTER_RESULTS}
           </p>
           <div style={{ marginTop: "1.35rem" }}>
-            <AttenteAnimee />
+            <AttenteAnimee
+              accent={accent}
+              pulseAllowed={joinVisualTokens.pulseAllowed}
+            />
           </div>
         </>
       );
@@ -860,9 +878,10 @@ export function JoinLiveHub({ slug }) {
           <p
             style={{
               margin: 0,
-              fontSize: "clamp(1.35rem, 5vw, 2rem)",
-              fontWeight: 800,
-              color: "#fbbf24",
+              fontSize: `clamp(${1.2 * joinVisualTokens.titleClampMul}rem, ${4.2 * joinVisualTokens.titleClampMul}vw, ${1.75 * joinVisualTokens.titleClampMul}rem)`,
+              fontWeight: joinVisualTokens.stateBadgeWeight,
+              color: palette.muted2,
+              letterSpacing: "-0.02em",
             }}
           >
             {joinPres.title}
@@ -878,7 +897,10 @@ export function JoinLiveHub({ slug }) {
             {LIVE_UX_BODY_JOIN_PAUSED}
           </p>
           <div style={{ marginTop: "1.35rem" }}>
-            <AttenteAnimee />
+            <AttenteAnimee
+              accent={accent}
+              pulseAllowed={joinVisualTokens.pulseAllowed}
+            />
           </div>
         </>
       );
@@ -888,8 +910,8 @@ export function JoinLiveHub({ slug }) {
           <p
             style={{
               margin: 0,
-              fontSize: "clamp(1.45rem, 5.5vw, 2.35rem)",
-              fontWeight: 800,
+              fontSize: `clamp(${1.45 * joinVisualTokens.titleClampMul}rem, ${5.5 * joinVisualTokens.titleClampMul}vw, ${2.35 * joinVisualTokens.titleClampMul}rem)`,
+              fontWeight: joinVisualTokens.stateBadgeWeight,
               lineHeight: 1.25,
               color: palette.fg2,
             }}
@@ -911,7 +933,10 @@ export function JoinLiveHub({ slug }) {
             {LIVE_UX_BODY_JOIN_WAITING}
           </p>
           <div style={{ marginTop: "1.5rem" }}>
-            <AttenteAnimee />
+            <AttenteAnimee
+              accent={accent}
+              pulseAllowed={joinVisualTokens.pulseAllowed}
+            />
           </div>
         </>
       );

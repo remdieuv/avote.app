@@ -16,7 +16,14 @@ import { API_URL, SOCKET_URL } from "@/lib/config";
 import {
   LIVE_UX_DETAIL_SCREEN_WAITING_SLUG,
   getLiveStatePresentation,
+  getLiveStateTone,
 } from "@/lib/liveStateUx";
+import {
+  getLiveStateVisualTokens,
+  screenShellTopBorderStyle,
+  screenStateSubtitleOpacity,
+  screenStateTitleFontSizeClamp,
+} from "@/lib/liveStateVisual";
 
 /** @param {Record<string, unknown> | null | undefined} tm */
 function chronoRestantSecondes(tm) {
@@ -404,14 +411,62 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
     [projectionUxCtx],
   );
 
-  const screenStateSubStyle = {
-    margin: "clamp(0.75rem, 2vw, 1.25rem) auto 0",
-    fontSize: "clamp(1rem, 2.5vw, 1.35rem)",
-    fontWeight: 500,
-    lineHeight: 1.4,
-    maxWidth: "36ch",
-    color: "#94a3b8",
-  };
+  const screenTone = getLiveStateTone(projectionPres.ux);
+  const screenTok = useMemo(
+    () => getLiveStateVisualTokens(screenTone, "screen"),
+    [screenTone],
+  );
+
+  const screenStateSubStyle = useMemo(
+    () => ({
+      margin: "clamp(0.75rem, 2vw, 1.25rem) auto 0",
+      fontSize: `clamp(${1 * screenTok.titleClampMul}rem, ${2.5 * screenTok.titleClampMul}vw, ${1.35 * screenTok.titleClampMul}rem)`,
+      fontWeight: screenTone === "highlight" ? 600 : 500,
+      lineHeight: 1.4,
+      maxWidth: "36ch",
+      color: `rgba(226, 232, 240, ${screenStateSubtitleOpacity(screenTone)})`,
+    }),
+    [screenTok, screenTone],
+  );
+
+  const screenTitleStyle = useMemo(
+    () => ({
+      ...screenStateTitleFontSizeClamp(screenTok),
+      fontWeight:
+        screenTone === "soft"
+          ? 600
+          : screenTone === "dynamic" || screenTone === "highlight"
+            ? 800
+            : 700,
+      lineHeight: 1.2,
+      maxWidth: "22ch",
+      margin: "0 auto",
+      color:
+        screenTone === "highlight"
+          ? "#f8fafc"
+          : screenTone === "soft"
+            ? "#94a3b8"
+            : "#e2e8f0",
+    }),
+    [screenTok, screenTone],
+  );
+
+  const screenTitleStyleLarge = useMemo(
+    () => ({
+      ...screenStateTitleFontSizeClamp(screenTok),
+      fontWeight:
+        screenTone === "soft"
+          ? 600
+          : screenTone === "dynamic" || screenTone === "highlight"
+            ? 800
+            : 700,
+      lineHeight: 1.25,
+      maxWidth: "28ch",
+      margin: "0 auto",
+      color: "#cbd5e1",
+    }),
+    [screenTok, screenTone],
+  );
 
   const enAttenteAutoReveal =
     ds !== "black" &&
@@ -733,13 +788,13 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
       display: "flex",
       flexDirection: "column",
       alignItems: "stretch",
-      borderTop: `5px solid ${roomTopAccent}`,
+      ...screenShellTopBorderStyle(roomTopAccent, screenTok),
       overflow: "hidden",
       position: "relative",
       zIndex: 1,
-      transition: "border-color 0.35s ease",
+      transition: "border-color 0.35s ease, border-width 0.35s ease",
     }),
-    [roomTopAccent],
+    [roomTopAccent, screenTok],
   );
 
   const ambientBg = useMemo(() => {
@@ -825,18 +880,7 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
           textAlign: "center",
         }}
       >
-        <p
-          style={{
-            fontSize: "clamp(2rem, 6vw, 4rem)",
-            fontWeight: 700,
-            lineHeight: 1.25,
-            maxWidth: "28ch",
-            margin: "0 auto",
-            color: "#cbd5e1",
-          }}
-        >
-          {projectionPres.title}
-        </p>
+        <p style={screenTitleStyleLarge}>{projectionPres.title}</p>
         {projectionPres.subtitle ? (
           <p style={screenStateSubStyle}>{projectionPres.subtitle}</p>
         ) : (
@@ -849,9 +893,10 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
   }
 
   if (enAttenteAutoReveal) {
+    const autoAccent = `color-mix(in srgb, #14b8a6 50%, ${roomTopAccent})`;
     const shellAuto = {
       ...shell,
-      borderTop: "5px solid #14b8a6",
+      ...screenShellTopBorderStyle(autoAccent, screenTok),
     };
     return wrapOut(
       false,
@@ -880,17 +925,7 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
           textAlign: "center",
         }}
       >
-        <p
-          style={{
-            fontSize: "clamp(2rem, 7vw, 5rem)",
-            fontWeight: 700,
-            lineHeight: 1.2,
-            maxWidth: "22ch",
-            margin: "0 auto",
-          }}
-        >
-          {projectionPres.title}
-        </p>
+        <p style={screenTitleStyle}>{projectionPres.title}</p>
         {projectionPres.subtitle ? (
           <p style={screenStateSubStyle}>{projectionPres.subtitle}</p>
         ) : null}
@@ -908,18 +943,7 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
           textAlign: "center",
         }}
       >
-        <p
-          style={{
-            fontSize: "clamp(2rem, 7vw, 5rem)",
-            fontWeight: 700,
-            lineHeight: 1.2,
-            maxWidth: "22ch",
-            margin: "0 auto",
-            color: "#cbd5e1",
-          }}
-        >
-          {projectionPres.title}
-        </p>
+        <p style={screenTitleStyle}>{projectionPres.title}</p>
         {projectionPres.subtitle ? (
           <p style={screenStateSubStyle}>{projectionPres.subtitle}</p>
         ) : null}
@@ -937,17 +961,7 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
           textAlign: "center",
         }}
       >
-        <p
-          style={{
-            fontSize: "clamp(2rem, 7vw, 5rem)",
-            fontWeight: 700,
-            lineHeight: 1.2,
-            maxWidth: "22ch",
-            margin: "0 auto",
-          }}
-        >
-          {projectionPres.title}
-        </p>
+        <p style={screenTitleStyle}>{projectionPres.title}</p>
         {projectionPres.subtitle ? (
           <p style={screenStateSubStyle}>{projectionPres.subtitle}</p>
         ) : null}
@@ -965,15 +979,7 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
           textAlign: "center",
         }}
       >
-        <p
-          style={{
-            fontSize: "clamp(2rem, 7vw, 5rem)",
-            fontWeight: 700,
-            lineHeight: 1.2,
-          }}
-        >
-          {projectionPres.title}
-        </p>
+        <p style={screenTitleStyle}>{projectionPres.title}</p>
         {projectionPres.subtitle ? (
           <p style={screenStateSubStyle}>{projectionPres.subtitle}</p>
         ) : null}
@@ -991,15 +997,7 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
           textAlign: "center",
         }}
       >
-        <p
-          style={{
-            fontSize: "clamp(2rem, 6vw, 4rem)",
-            fontWeight: 600,
-            color: "#94a3b8",
-          }}
-        >
-          {projectionPres.title}
-        </p>
+        <p style={screenTitleStyle}>{projectionPres.title}</p>
         {projectionPres.subtitle ? (
           <p style={screenStateSubStyle}>{projectionPres.subtitle}</p>
         ) : null}
@@ -1010,7 +1008,10 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
   if (poll && ds === "results" && qToRPhase === "fadeQ") {
     const shellVote = {
       ...shell,
-      borderTop: `5px solid ${accentEcranLive("voting")}`,
+      ...screenShellTopBorderStyle(
+        roomTopAccent,
+        getLiveStateVisualTokens("dynamic", "screen"),
+      ),
     };
     return wrapOut(
       ds === "black",

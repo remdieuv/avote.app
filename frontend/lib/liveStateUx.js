@@ -17,7 +17,7 @@ const LABELS = {
   WAITING: "La prochaine question arrive",
   VOTING: "Vote en cours",
   CLOSED: "Vote terminé",
-  RESULTS: "Résultats en cours",
+  RESULTS: "Résultats",
   PAUSED: "Pause en cours",
   FINISHED: "Événement terminé",
 };
