@@ -171,6 +171,16 @@ export const LIVE_UX_BODY_JOIN_AFTER_RESULTS =
 /** Sous-texte /join : pause. */
 export const LIVE_UX_BODY_JOIN_PAUSED = "La reprise du direct est imminente.";
 
+/**
+ * Pilule /screen lorsque l’affichage = résultats (barres ou notation).
+ * Tant que `eventVoteState` est ouvert, les totaux peuvent bouger (« en direct ») ;
+ * une fois le vote fermé, le libellé ne doit plus suggérer un décompte en cours.
+ * @param {boolean} voteOuvertResultats
+ */
+export function getScreenResultsPillLabel(voteOuvertResultats) {
+  return voteOuvertResultats ? "Résultats en direct" : "Résultat final";
+}
+
 /** @param {Parameters<typeof resolveLiveUxState>[0] & { autoReveal?: boolean; autoRevealShowResultsAt?: string | null }} ctx */
 export function getLiveStatePresentation(ctx) {
   const ux = resolveLiveUxState(ctx);

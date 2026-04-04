@@ -10,6 +10,7 @@ import {
   LIVE_UX_BODY_RESULTS_VOTES_OPEN,
   LIVE_UX_STATE,
   getLiveStateLabel,
+  getScreenResultsPillLabel,
 } from "@/lib/liveStateUx";
 
 const RESULTATS_TOP_N = 8;
@@ -204,9 +205,21 @@ function ScreenResultsNotation({
               border: pill.border,
             }}
           >
-            {getLiveStateLabel(LIVE_UX_STATE.RESULTS)}
+            {getScreenResultsPillLabel(voteOuvertResultats)}
           </span>
-          {ligneChrono}
+          {voteOuvertResultats ? (
+            ligneChrono
+          ) : (
+            <span
+              style={{
+                fontSize: "clamp(0.8rem, 1.55vw, 0.95rem)",
+                fontWeight: 600,
+                color: "#64748b",
+              }}
+            >
+              {getLiveStateLabel(LIVE_UX_STATE.CLOSED)}
+            </span>
+          )}
         </div>
 
         <h1
@@ -584,9 +597,7 @@ function ScreenResultsChoixClassiques({
               opacity: 0.95,
             }}
           >
-            {voteOuvertResultats
-              ? "Résultats en direct"
-              : "Résultat final"}
+            {getScreenResultsPillLabel(voteOuvertResultats)}
           </span>
 
           {voteOuvertResultats ? (
