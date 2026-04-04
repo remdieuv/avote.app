@@ -25,6 +25,14 @@ import {
   optionsNotationOrdonnees,
 } from "@/lib/notationPoll";
 import { API_URL, SOCKET_URL } from "@/lib/config";
+import {
+  LIVE_UX_BODY_POLL_NO_POLL_SLUG,
+  LIVE_UX_BODY_POLL_WAITING,
+  LIVE_UX_STATE,
+  deriveDisplayStateFromLive,
+  getLiveStateLabel,
+  getLiveStatePresentation,
+} from "@/lib/liveStateUx";
 
 const API_POLLS = `${API_URL}/polls`;
 
@@ -40,24 +48,6 @@ function formatNotationMoyenneUneDecimale(x) {
 /** @param {string} pollId */
 function cleVotePourPoll(pollId) {
   return `avote_voted_poll_${pollId}`;
-}
-
-/** @param {string} scene */
-function libelleScene(scene) {
-  switch (scene) {
-    case "waiting":
-      return "En attente du direct — le contenu apparaîtra dès que l’organisateur l’aura lancé.";
-    case "finished":
-      return "Événement terminé. Merci d’avoir participé.";
-    case "paused":
-      return "En pause côté régie.";
-    case "results":
-      return "Résultats";
-    case "voting":
-      return "Vote ouvert";
-    default:
-      return "";
-  }
 }
 
 /**
@@ -103,7 +93,7 @@ function CarteVoteTermineAttenteResultats({ accent, isDark }) {
             letterSpacing: "-0.02em",
           }}
         >
-          Vote terminé
+          {getLiveStateLabel(LIVE_UX_STATE.CLOSED)}
         </h3>
         <p
           style={{
@@ -186,7 +176,10 @@ export function PollExperience({
   const [poll, setPoll] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [infoMessage, setInfoMessage] = useState(null);
+  const [pollFetch404Slug, setPollFetch404Slug] = useState(false);
+  const [activePollIdFromSlug, setActivePollIdFromSlug] = useState(
+    /** @type {string | null} */ (null),
+  );
   /** voting | results | waiting | finished | paused | null */
   const [liveScene, setLiveScene] = useState(null);
   const [eventId, setEventId] = useState(null);
@@ -253,6 +246,7 @@ export function PollExperience({
           evenementInvalideRef.current = true;
           setError("Événement introuvable.");
           setEventId(null);
+          setActivePollIdFromSlug(null);
         }
         return;
       }
@@ -262,6 +256,11 @@ export function PollExperience({
       }
       const meta = await res.json();
       setEventId(meta.id);
+      if (typeof meta.activePollId === "string" && meta.activePollId.trim()) {
+        setActivePollIdFromSlug(meta.activePollId.trim());
+      } else {
+        setActivePollIdFromSlug(null);
+      }
       setLiveScene(meta.liveState ?? null);
       setEventVoteStateUi(
         typeof meta.voteState === "string"
@@ -364,7 +363,7 @@ export function PollExperience({
         signal = ac.signal;
 
         setError(null);
-        setInfoMessage(null);
+        setPollFetch404Slug(false);
         setLoading(true);
       }
 
@@ -383,9 +382,7 @@ export function PollExperience({
           }
           if (slugPublic) {
             setError(null);
-            setInfoMessage(
-              "Aucun sondage à l’écran pour l’instant — la régie contrôle le direct.",
-            );
+            setPollFetch404Slug(true);
           } else {
             setError("Ce sondage n’existe pas ou n’est plus actif.");
           }
@@ -423,7 +420,7 @@ export function PollExperience({
           setPoll(data);
           setVoteError(null);
         }
-        setInfoMessage(null);
+        setPollFetch404Slug(false);
       } catch (e) {
         if (e?.name === "AbortError") {
           return;
@@ -544,13 +541,21 @@ export function PollExperience({
         if (typeof pv === "string") setEventVoteStateUi(pv.toLowerCase());
         if (typeof pd === "string") setEventDisplayStateUi(pd.toLowerCase());
         setError(null);
-        setInfoMessage(null);
+        setPollFetch404Slug(false);
+        if (payload.activePollId != null && String(payload.activePollId).trim()) {
+          setActivePollIdFromSlug(String(payload.activePollId).trim());
+        } else if (payload.poll?.id) {
+          setActivePollIdFromSlug(String(payload.poll.id));
+        }
       } else {
         const ls = String(payload.liveState ?? "").toLowerCase();
         if (ls === "waiting") {
-          setInfoMessage(null);
+          setPollFetch404Slug(false);
+        }
+        if (payload.activePollId != null && String(payload.activePollId).trim()) {
+          setActivePollIdFromSlug(String(payload.activePollId).trim());
         } else {
-          setInfoMessage(libelleScene(payload.liveState ?? "") || null);
+          setActivePollIdFromSlug(null);
         }
         /** Ne pas vider le poll : le socket peut omettre poll alors que GET /p/:slug le renvoie encore (vote fermé). */
         if (slugPublic) {
@@ -894,19 +899,64 @@ export function PollExperience({
     );
   }, [poll?.autoReveal, poll?.autoRevealShowResultsAt, autoRevealUiTick]);
 
-  const titreBlocResultats =
-    voteFerme &&
-    affichageResultatsPublic &&
-    Boolean(poll?.autoReveal)
-      ? "Résultats finaux du vote"
-      : "Résultats en direct";
-
   /** Même intent que attenteProjectionResultats, mais quand le socket a vidé le poll avant refetch */
   const sansPollMaisVoteFermeSansResultatsSalle =
     !poll &&
     slugPublic &&
     String(eventVoteStateUi || "").toLowerCase() === "closed" &&
     String(eventDisplayStateUi || "").toLowerCase() !== "results";
+
+  const displayStateForUx = useMemo(() => {
+    if (
+      poll &&
+      typeof poll.eventDisplayState === "string" &&
+      poll.eventDisplayState.trim()
+    ) {
+      return poll.eventDisplayState.toLowerCase();
+    }
+    if (typeof eventDisplayStateUi === "string" && eventDisplayStateUi.trim()) {
+      return eventDisplayStateUi.toLowerCase();
+    }
+    return deriveDisplayStateFromLive(liveScene);
+  }, [poll, eventDisplayStateUi, liveScene]);
+
+  const voteStateForUx = useMemo(() => {
+    if (
+      poll &&
+      typeof poll.eventVoteState === "string" &&
+      poll.eventVoteState.trim()
+    ) {
+      return poll.eventVoteState.toLowerCase();
+    }
+    return eventVoteStateUi;
+  }, [poll, eventVoteStateUi]);
+
+  const pollUxCtx = useMemo(
+    () => ({
+      liveScene,
+      displayState: displayStateForUx,
+      voteState: voteStateForUx,
+      pollStatus: poll?.status ?? null,
+      hasActivePoll: Boolean(poll?.id ?? activePollIdFromSlug),
+      autoReveal: Boolean(poll?.autoReveal),
+      autoRevealShowResultsAt: poll?.autoRevealShowResultsAt ?? null,
+    }),
+    [
+      liveScene,
+      displayStateForUx,
+      voteStateForUx,
+      poll?.id,
+      poll?.status,
+      poll?.autoReveal,
+      poll?.autoRevealShowResultsAt,
+      activePollIdFromSlug,
+    ],
+  );
+
+  const pollUxPres = useMemo(
+    () => getLiveStatePresentation(pollUxCtx),
+    [pollUxCtx],
+  );
 
   const isDark = resolveJoinRoomIsDark(roomThemeMode, prefersDark);
   const accent = useMemo(
@@ -1097,7 +1147,7 @@ export function PollExperience({
         !poll &&
         (sansPollMaisVoteFermeSansResultatsSalle ||
           String(liveScene || "").toLowerCase() === "waiting" ||
-          infoMessage) && (
+          pollFetch404Slug) && (
           <div
             style={{
               marginBottom: "1.25rem",
@@ -1123,7 +1173,8 @@ export function PollExperience({
                 accent={accent}
                 isDark={isDark}
               />
-            ) : String(liveScene || "").toLowerCase() === "waiting" ? (
+            ) : String(liveScene || "").toLowerCase() === "waiting" ||
+              pollFetch404Slug ? (
               <>
                 <h2
                   style={{
@@ -1134,15 +1185,13 @@ export function PollExperience({
                     letterSpacing: "-0.02em",
                   }}
                 >
-                  En attente du direct
+                  {pollUxPres.title}
                 </h2>
-                <p style={{ margin: "0 0 0.65rem 0", lineHeight: 1.55 }}>
-                  <strong>Rien ne fonctionne mal</strong> : vous êtes sur la
-                  bonne page pour cet événement. Pour l’instant, la salle est en
-                  pause ou entre deux moments — le vote et les résultats sont
-                  lancés depuis le poste de régie (celui qui pilote le grand
-                  écran).
-                </p>
+                {pollFetch404Slug ? (
+                  <p style={{ margin: "0 0 0.65rem 0", lineHeight: 1.55 }}>
+                    {LIVE_UX_BODY_POLL_NO_POLL_SLUG}
+                  </p>
+                ) : null}
                 <p
                   style={{
                     margin: 0,
@@ -1151,15 +1200,22 @@ export function PollExperience({
                     lineHeight: 1.5,
                   }}
                 >
-                  Dès que l’organisateur ouvrira le vote ou affichera une
-                  question, le formulaire ou les résultats apparaîtront ici
-                  automatiquement. Vous pouvez garder cet onglet ouvert ;
-                  inutile d’actualiser en continu.
+                  {LIVE_UX_BODY_POLL_WAITING}
                 </p>
+                {pollUxPres.subtitle ? (
+                  <p
+                    style={{
+                      margin: "0.65rem 0 0 0",
+                      fontSize: "0.9rem",
+                      color: palette.muted,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {pollUxPres.subtitle}
+                  </p>
+                ) : null}
               </>
-            ) : (
-              <p style={{ margin: 0, lineHeight: 1.55 }}>{infoMessage}</p>
-            )}
+            ) : null}
           </div>
         )}
 
@@ -1179,7 +1235,7 @@ export function PollExperience({
                   fontWeight: 600,
                 }}
               >
-                {libelleScene("voting")}
+                {getLiveStateLabel(LIVE_UX_STATE.VOTING)}
               </p>
               {chronoVoteActif ? (
                 <p
@@ -1540,7 +1596,7 @@ export function PollExperience({
                   letterSpacing: "-0.02em",
                 }}
               >
-                {titreBlocResultats}
+                {getLiveStateLabel(LIVE_UX_STATE.RESULTS)}
               </h3>
               {voteOuvert && affichageResultatsPublic ? (
                 <p

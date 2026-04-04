@@ -13,44 +13,10 @@ import { ScreenAutoRevealWait } from "./ScreenAutoRevealWait";
 import { ScreenQuestion } from "./ScreenQuestion";
 import { ScreenResults } from "./ScreenResults";
 import { API_URL, SOCKET_URL } from "@/lib/config";
-
-/**
- * Texte plein écran /screen (attente, fin de chrono, entre deux séquences).
- * @param {{
- *   liveScene: string | null;
- *   displayState: string;
- *   voteState: string | null;
- *   autoReveal?: boolean;
- *   autoRevealShowResultsAt?: string | null;
- * }} p
- */
-function libelleAttenteGrandEcran(p) {
-  const ls = String(p.liveScene ?? "").toLowerCase();
-  const ds = String(p.displayState ?? "").toLowerCase();
-  const vs = String(p.voteState ?? "").toLowerCase();
-
-  if (ls === "finished") return "Merci pour votre participation";
-  if (ls === "paused" || ds === "black") return "Pause — reprise bientôt";
-
-  const ar = p.autoReveal === true;
-  const arIso = p.autoRevealShowResultsAt;
-  if (
-    ar &&
-    typeof arIso === "string" &&
-    new Date(arIso).getTime() > Date.now() - 800
-  ) {
-    return "Vote terminé — les résultats s’affichent dans un instant.";
-  }
-
-  if (ds === "waiting" && vs === "closed") {
-    return "Merci pour vos votes — le direct continue.";
-  }
-  if (ds === "waiting" && vs === "open") {
-    return "En attente — le direct reprend tout de suite.";
-  }
-
-  return "Préparez-vous, la prochaine question arrive";
-}
+import {
+  LIVE_UX_DETAIL_SCREEN_WAITING_SLUG,
+  getLiveStatePresentation,
+} from "@/lib/liveStateUx";
 
 /** @param {Record<string, unknown> | null | undefined} tm */
 function chronoRestantSecondes(tm) {
@@ -144,7 +110,11 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
   const [poll, setPoll] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [infoMessage, setInfoMessage] = useState(null);
+  /** GET /p/:slug → 404 alors que le slug événement est valide (contenu pas encore servi). */
+  const [noPollFromHttp404, setNoPollFromHttp404] = useState(false);
+  const [eventActivePollId, setEventActivePollId] = useState(
+    /** @type {string | null} */ (null),
+  );
   const [liveScene, setLiveScene] = useState(null);
   /** question | results | black | waiting — prioritaire sur liveScene legacy */
   const [displayState, setDisplayState] = useState(null);
@@ -209,6 +179,11 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
     } else {
       setEventAutoRevealAt(null);
     }
+    if (typeof meta.activePollId === "string" && meta.activePollId.trim()) {
+      setEventActivePollId(meta.activePollId.trim());
+    } else {
+      setEventActivePollId(null);
+    }
   }, []);
 
   const fetchEventSlugMeta = useCallback(
@@ -230,6 +205,7 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
           setEventVoteState(null);
           setEventAutoReveal(false);
           setEventAutoRevealAt(null);
+          setEventActivePollId(null);
           return;
         }
         if (!res.ok) {
@@ -270,7 +246,7 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
         signal = ac.signal;
 
         setError(null);
-        setInfoMessage(null);
+        setNoPollFromHttp404(false);
         setLoading(true);
       }
 
@@ -289,9 +265,7 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
           }
           if (slugPublic) {
             setError(null);
-            setInfoMessage(
-              "En attente du direct — la régie affichera la prochaine question.",
-            );
+            setNoPollFromHttp404(true);
           } else {
             setError("Ce sondage n’existe pas ou n’est plus actif.");
           }
@@ -335,7 +309,7 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
         } else {
           setEventAutoRevealAt(null);
         }
-        setInfoMessage(null);
+        setNoPollFromHttp404(false);
       } catch (e) {
         if (e?.name === "AbortError") {
           return;
@@ -402,7 +376,42 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
     return null;
   }, [poll, poll?.autoRevealShowResultsAt, eventAutoReveal, eventAutoRevealAt]);
 
-  const autoRevealPourMessage = Boolean(poll ? poll.autoReveal : eventAutoReveal);
+  const projectionUxCtx = useMemo(
+    () => ({
+      liveScene,
+      displayState: ds,
+      voteState: voteStatePourAttente,
+      pollStatus: poll?.status ?? null,
+      hasActivePoll: Boolean(poll?.id ?? eventActivePollId),
+      autoReveal: poll ? Boolean(poll.autoReveal) : eventAutoReveal,
+      autoRevealShowResultsAt: autoRevealUntilIso,
+    }),
+    [
+      liveScene,
+      ds,
+      voteStatePourAttente,
+      poll?.id,
+      poll?.status,
+      poll?.autoReveal,
+      eventActivePollId,
+      eventAutoReveal,
+      autoRevealUntilIso,
+    ],
+  );
+
+  const projectionPres = useMemo(
+    () => getLiveStatePresentation(projectionUxCtx),
+    [projectionUxCtx],
+  );
+
+  const screenStateSubStyle = {
+    margin: "clamp(0.75rem, 2vw, 1.25rem) auto 0",
+    fontSize: "clamp(1rem, 2.5vw, 1.35rem)",
+    fontWeight: 500,
+    lineHeight: 1.4,
+    maxWidth: "36ch",
+    color: "#94a3b8",
+  };
 
   const enAttenteAutoReveal =
     ds !== "black" &&
@@ -573,22 +582,20 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
           setDisplayState(payload.poll.eventDisplayState.toLowerCase());
         }
         setError(null);
-        setInfoMessage(null);
+        setNoPollFromHttp404(false);
+        if (payload.activePollId != null && String(payload.activePollId).trim()) {
+          setEventActivePollId(String(payload.activePollId).trim());
+        } else if (payload.poll?.id) {
+          setEventActivePollId(String(payload.poll.id));
+        }
       } else {
         setPoll(null);
-        const dsPayload =
-          typeof payload.displayState === "string"
-            ? payload.displayState.toLowerCase()
-            : deriveDisplayFromLive(payload.liveState);
-        setInfoMessage(
-          libelleAttenteGrandEcran({
-            liveScene: payload.liveState ?? null,
-            displayState: dsPayload,
-            voteState: payload.voteState ?? null,
-            autoReveal: payload.autoReveal,
-            autoRevealShowResultsAt: payload.autoRevealShowResultsAt ?? null,
-          }) || null,
-        );
+        setNoPollFromHttp404(false);
+        if (payload.activePollId != null && String(payload.activePollId).trim()) {
+          setEventActivePollId(String(payload.activePollId).trim());
+        } else {
+          setEventActivePollId(null);
+        }
       }
     }
 
@@ -808,7 +815,7 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
     );
   }
 
-  if (!poll && infoMessage) {
+  if (!poll && noPollFromHttp404) {
     return wrapOut(
       ds === "black",
       <main
@@ -828,8 +835,15 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
             color: "#cbd5e1",
           }}
         >
-          {infoMessage}
+          {projectionPres.title}
         </p>
+        {projectionPres.subtitle ? (
+          <p style={screenStateSubStyle}>{projectionPres.subtitle}</p>
+        ) : (
+          <p style={screenStateSubStyle}>
+            {LIVE_UX_DETAIL_SCREEN_WAITING_SLUG}
+          </p>
+        )}
       </main>,
     );
   }
@@ -857,13 +871,6 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
       liveScene === "paused" ||
       ds === "black")
   ) {
-    const text = libelleAttenteGrandEcran({
-      liveScene: liveScene === "finished" ? "finished" : ds === "black" ? "paused" : "waiting",
-      displayState: ds,
-      voteState: voteStatePourAttente,
-      autoReveal: autoRevealPourMessage,
-      autoRevealShowResultsAt: autoRevealUntilIso,
-    });
     return wrapOut(
       ds === "black",
       <main
@@ -878,12 +885,15 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
             fontSize: "clamp(2rem, 7vw, 5rem)",
             fontWeight: 700,
             lineHeight: 1.2,
-            maxWidth: "20ch",
+            maxWidth: "22ch",
             margin: "0 auto",
           }}
         >
-          {text || "…"}
+          {projectionPres.title}
         </p>
+        {projectionPres.subtitle ? (
+          <p style={screenStateSubStyle}>{projectionPres.subtitle}</p>
+        ) : null}
       </main>,
     );
   }
@@ -891,10 +901,28 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
   if (!poll) {
     return wrapOut(
       ds === "black",
-      <main style={{ ...shell, justifyContent: "center", textAlign: "center" }}>
-        <p style={{ fontSize: "clamp(1.5rem, 4vw, 2.5rem)", color: "#94a3b8" }}>
-          Aucun contenu à afficher pour l’instant.
+      <main
+        style={{
+          ...shell,
+          justifyContent: "center",
+          textAlign: "center",
+        }}
+      >
+        <p
+          style={{
+            fontSize: "clamp(2rem, 7vw, 5rem)",
+            fontWeight: 700,
+            lineHeight: 1.2,
+            maxWidth: "22ch",
+            margin: "0 auto",
+            color: "#cbd5e1",
+          }}
+        >
+          {projectionPres.title}
         </p>
+        {projectionPres.subtitle ? (
+          <p style={screenStateSubStyle}>{projectionPres.subtitle}</p>
+        ) : null}
       </main>,
     );
   }
@@ -918,14 +946,11 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
             margin: "0 auto",
           }}
         >
-          {libelleAttenteGrandEcran({
-            liveScene,
-            displayState: ds,
-            voteState: voteStatePourAttente,
-            autoReveal: autoRevealPourMessage,
-            autoRevealShowResultsAt: autoRevealUntilIso,
-          })}
+          {projectionPres.title}
         </p>
+        {projectionPres.subtitle ? (
+          <p style={screenStateSubStyle}>{projectionPres.subtitle}</p>
+        ) : null}
       </main>,
     );
   }
@@ -947,14 +972,11 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
             lineHeight: 1.2,
           }}
         >
-          {libelleAttenteGrandEcran({
-            liveScene,
-            displayState: ds,
-            voteState: voteStatePourAttente,
-            autoReveal: autoRevealPourMessage,
-            autoRevealShowResultsAt: autoRevealUntilIso,
-          })}
+          {projectionPres.title}
         </p>
+        {projectionPres.subtitle ? (
+          <p style={screenStateSubStyle}>{projectionPres.subtitle}</p>
+        ) : null}
       </main>,
     );
   }
@@ -976,14 +998,11 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
             color: "#94a3b8",
           }}
         >
-          {libelleAttenteGrandEcran({
-            liveScene,
-            displayState: ds,
-            voteState: voteStatePourAttente,
-            autoReveal: autoRevealPourMessage,
-            autoRevealShowResultsAt: autoRevealUntilIso,
-          })}
+          {projectionPres.title}
         </p>
+        {projectionPres.subtitle ? (
+          <p style={screenStateSubStyle}>{projectionPres.subtitle}</p>
+        ) : null}
       </main>,
     );
   }

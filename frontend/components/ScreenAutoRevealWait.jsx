@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { LIVE_UX_STATE, getLiveStateLabel } from "@/lib/liveStateUx";
 
 /**
  * Attente auto-reveal : vote terminé, résultats annoncés avec compte à rebours.
@@ -15,6 +16,7 @@ export function ScreenAutoRevealWait({ shell, untilIso, chronoTick }) {
     void chronoTick;
     const t = new Date(untilIso).getTime();
     if (Number.isNaN(t)) return 0;
+    /* eslint-disable-next-line react-hooks/purity -- décompte temps réel (chronoTick chaque seconde) */
     return Math.max(0, Math.ceil((t - Date.now()) / 1000));
   }, [untilIso, chronoTick]);
 
@@ -39,7 +41,7 @@ export function ScreenAutoRevealWait({ shell, untilIso, chronoTick }) {
           color: "#5eead4",
         }}
       >
-        Vote terminé
+        {getLiveStateLabel(LIVE_UX_STATE.CLOSED)}
       </p>
       <h1
         style={{
@@ -72,7 +74,7 @@ export function ScreenAutoRevealWait({ shell, untilIso, chronoTick }) {
           maxWidth: "36ch",
         }}
       >
-        Le direct affichera les résultats automatiquement.
+        Les résultats arrivent dans quelques secondes.
       </p>
     </main>
   );

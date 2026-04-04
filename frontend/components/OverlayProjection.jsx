@@ -13,6 +13,11 @@ import { io } from "socket.io-client";
 import { QRCodeSVG } from "qrcode.react";
 import { formatCountdownVerbose } from "@/lib/chronoFormat";
 import { API_URL, SOCKET_URL } from "@/lib/config";
+import {
+  LIVE_UX_DETAIL_SCREEN_WAITING_SLUG,
+  LIVE_UX_STATE,
+  getLiveStateLabel,
+} from "@/lib/liveStateUx";
 
 const FADE_MS = 260;
 
@@ -243,7 +248,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
   const [poll, setPoll] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [infoMessage, setInfoMessage] = useState(null);
+  const [overlayNoPoll404, setOverlayNoPoll404] = useState(false);
   const [liveScene, setLiveScene] = useState(null);
   const [displayState, setDisplayState] = useState(null);
   const [eventId, setEventId] = useState(null);
@@ -362,7 +367,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
         signal = ac.signal;
 
         setError(null);
-        setInfoMessage(null);
+        setOverlayNoPoll404(false);
         setLoading(true);
       }
 
@@ -381,9 +386,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
           }
           if (slugPublic) {
             setError(null);
-            setInfoMessage(
-              "En attente du direct — la régie affichera la prochaine question.",
-            );
+            setOverlayNoPoll404(true);
           } else {
             setError("Sondage introuvable.");
           }
@@ -412,7 +415,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
           setEventId(data.eventId);
         }
         setPoll(data);
-        setInfoMessage(null);
+        setOverlayNoPoll404(false);
       } catch (e) {
         if (e?.name === "AbortError") {
           return;
@@ -539,10 +542,10 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
           setDisplayState(payload.poll.eventDisplayState.toLowerCase());
         }
         setError(null);
-        setInfoMessage(null);
+        setOverlayNoPoll404(false);
       } else {
         setPoll(null);
-        setInfoMessage(null);
+        setOverlayNoPoll404(false);
       }
     }
 
@@ -815,13 +818,25 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
     );
   }
 
-  if (!poll && infoMessage) {
+  if (!poll && overlayNoPoll404) {
     return (
       <main style={shell}>
         {wrapGlass(
-          <p style={{ margin: 0, fontSize: v.muted, color: th.textMuted }}>
-            {infoMessage}
-          </p>,
+          <>
+            <p
+              style={{
+                margin: "0 0 0.5rem 0",
+                fontSize: v.questionRem,
+                fontWeight: 700,
+                color: th.text,
+              }}
+            >
+              {getLiveStateLabel(LIVE_UX_STATE.WAITING)}
+            </p>
+            <p style={{ margin: 0, fontSize: v.muted, color: th.textMuted }}>
+              {LIVE_UX_DETAIL_SCREEN_WAITING_SLUG}
+            </p>
+          </>,
         )}
       </main>
     );
@@ -868,7 +883,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
                 color: th.teal,
               }}
             >
-              Vote terminé
+              {getLiveStateLabel(LIVE_UX_STATE.CLOSED)}
             </p>
             <p
               style={{

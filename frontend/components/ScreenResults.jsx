@@ -6,6 +6,11 @@ import {
   estPollNotation,
   optionsNotationOrdonnees,
 } from "@/lib/notationPoll";
+import {
+  LIVE_UX_BODY_RESULTS_VOTES_OPEN,
+  LIVE_UX_STATE,
+  getLiveStateLabel,
+} from "@/lib/liveStateUx";
 
 const RESULTATS_TOP_N = 8;
 
@@ -45,28 +50,24 @@ function preparerLignesResultats(triDesc) {
 }
 
 const PILL_LIVE = {
-  label: "Résultats en direct",
   bg: "rgba(59, 130, 246, 0.22)",
   color: "#93c5fd",
   border: "1px solid rgba(59, 130, 246, 0.5)",
 };
 
 const PILL_FINAL = {
-  label: "Résultat final",
   bg: "rgba(100, 116, 139, 0.28)",
   color: "#cbd5e1",
   border: "1px solid rgba(148, 163, 184, 0.45)",
 };
 
 const PILL_NOTATION_LIVE = {
-  label: "Notation · direct",
   bg: "rgba(6, 182, 212, 0.18)",
   color: "#5eead4",
   border: "1px solid rgba(34, 211, 238, 0.45)",
 };
 
 const PILL_NOTATION_FINAL = {
-  label: "Notation",
   bg: "rgba(100, 116, 139, 0.28)",
   color: "#cbd5e1",
   border: "1px solid rgba(148, 163, 184, 0.45)",
@@ -203,7 +204,7 @@ function ScreenResultsNotation({
               border: pill.border,
             }}
           >
-            {pill.label}
+            {getLiveStateLabel(LIVE_UX_STATE.RESULTS)}
           </span>
           {ligneChrono}
         </div>
@@ -605,7 +606,7 @@ function ScreenResultsChoixClassiques({
                 color: "#64748b",
               }}
             >
-              Vote terminé
+              {getLiveStateLabel(LIVE_UX_STATE.CLOSED)}
             </span>
           )}
         </div>
@@ -633,7 +634,7 @@ function ScreenResultsChoixClassiques({
               color: "#64748b",
             }}
           >
-            Les votes continuent en direct
+            {LIVE_UX_BODY_RESULTS_VOTES_OPEN}
           </p>
         ) : null}
       </header>

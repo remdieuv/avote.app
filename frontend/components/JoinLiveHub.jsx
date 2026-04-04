@@ -13,6 +13,14 @@ import {
   resolveJoinRoomIsDark,
 } from "@/lib/joinRoomVisual";
 import { API_URL, SOCKET_URL } from "@/lib/config";
+import {
+  LIVE_UX_BODY_FINISHED_MERCI,
+  LIVE_UX_BODY_JOIN_AFTER_RESULTS,
+  LIVE_UX_BODY_JOIN_PAUSED,
+  LIVE_UX_BODY_JOIN_WAITING,
+  LIVE_UX_SUBTITLE_REVEAL_PENDING,
+  getLiveStatePresentation,
+} from "@/lib/liveStateUx";
 
 /** @param {Record<string, unknown> | null | undefined} tm */
 function chronoRestantSecondes(tm) {
@@ -470,6 +478,31 @@ export function JoinLiveHub({ slug }) {
     return Math.max(0, Math.ceil((t - Date.now()) / 1000));
   }, [autoRevealShowResultsAt, chronoTick]);
 
+  const joinUxContext = useMemo(
+    () => ({
+      liveScene: scene,
+      displayState: ds,
+      voteState: vs,
+      pollStatus: null,
+      hasActivePoll: Boolean(activePollId),
+      autoReveal: enAttenteRevealAuto,
+      autoRevealShowResultsAt,
+    }),
+    [
+      scene,
+      ds,
+      vs,
+      activePollId,
+      enAttenteRevealAuto,
+      autoRevealShowResultsAt,
+    ],
+  );
+
+  const joinPres = useMemo(
+    () => getLiveStatePresentation(joinUxContext),
+    [joinUxContext],
+  );
+
   const votePath = `/p/${encodeURIComponent(slug)}`;
 
   function participer() {
@@ -559,17 +592,8 @@ export function JoinLiveHub({ slug }) {
     [palette, isDark],
   );
 
-  let piedEncouragement =
-    "Restez connectés — le direct continue.";
-  if (scene === "results") {
-    piedEncouragement = "Préparez-vous à voter pour la suite.";
-  } else if (enAttenteRevealAuto) {
-    piedEncouragement = "Les résultats s’affichent aussi sur grand écran.";
-  } else if (scene === "voting") {
-    piedEncouragement = "Touchez le bouton lorsque vous êtes prêt à voter.";
-  } else if (scene === "paused") {
-    piedEncouragement = "La reprise du direct est imminente.";
-  }
+  const piedEncouragement =
+    scene === "finished" ? null : "Gardez cette page ouverte.";
 
   let corps = null;
 
@@ -586,7 +610,7 @@ export function JoinLiveHub({ slug }) {
               color: palette.fg2,
             }}
           >
-            Événement terminé
+            {joinPres.title}
           </p>
           <p
             style={{
@@ -596,7 +620,7 @@ export function JoinLiveHub({ slug }) {
               lineHeight: 1.5,
             }}
           >
-            Merci d’avoir participé.
+            {LIVE_UX_BODY_FINISHED_MERCI}
           </p>
         </>
       );
@@ -614,7 +638,7 @@ export function JoinLiveHub({ slug }) {
                 color: accent,
               }}
             >
-              Vote terminé
+              {joinPres.title}
             </p>
             <p
               style={{
@@ -653,7 +677,7 @@ export function JoinLiveHub({ slug }) {
                 color: accent,
               }}
             >
-              Vote terminé
+              {joinPres.title}
             </p>
             <p
               style={{
@@ -663,7 +687,7 @@ export function JoinLiveHub({ slug }) {
                 color: palette.muted2,
               }}
             >
-              Résultats dans quelques instants
+              {joinPres.subtitle ?? LIVE_UX_SUBTITLE_REVEAL_PENDING}
             </p>
             <div style={{ marginTop: "1.25rem" }}>
               <AttenteAnimee />
@@ -673,9 +697,21 @@ export function JoinLiveHub({ slug }) {
     } else if (scene === "voting") {
       corps = (
         <>
-          <h2
+          <p
             style={{
               margin: 0,
+              fontSize: "0.75rem",
+              fontWeight: 800,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: accent,
+            }}
+          >
+            {joinPres.title}
+          </p>
+          <h2
+            style={{
+              margin: "0.65rem 0 0 0",
               fontSize: "clamp(1.2rem, 4.2vw, 1.65rem)",
               fontWeight: 800,
               lineHeight: 1.35,
@@ -683,7 +719,7 @@ export function JoinLiveHub({ slug }) {
               color: palette.fg,
             }}
           >
-            {activePollQuestion || "Vote ouvert"}
+            {activePollQuestion || "—"}
           </h2>
           {chronoVoteActif && secondesChronoQuestion != null ? (
             <>
@@ -757,7 +793,7 @@ export function JoinLiveHub({ slug }) {
               color: "#fde68a",
             }}
           >
-            Vote terminé
+            {joinPres.title}
           </p>
           <h2
             style={{
@@ -769,7 +805,7 @@ export function JoinLiveHub({ slug }) {
               color: palette.fg,
             }}
           >
-            {activePollQuestion || "Dernier sondage"}
+            {activePollQuestion || "—"}
           </h2>
           <div style={{ marginTop: "1rem" }}>
             {resultHref ? (
@@ -811,7 +847,7 @@ export function JoinLiveHub({ slug }) {
               marginRight: "auto",
             }}
           >
-            Préparez-vous pour la prochaine question…
+            {LIVE_UX_BODY_JOIN_AFTER_RESULTS}
           </p>
           <div style={{ marginTop: "1.35rem" }}>
             <AttenteAnimee />
@@ -829,7 +865,7 @@ export function JoinLiveHub({ slug }) {
               color: "#fbbf24",
             }}
           >
-            Pause
+            {joinPres.title}
           </p>
           <p
             style={{
@@ -839,7 +875,7 @@ export function JoinLiveHub({ slug }) {
               lineHeight: 1.5,
             }}
           >
-            Le direct reprend bientôt.
+            {LIVE_UX_BODY_JOIN_PAUSED}
           </p>
           <div style={{ marginTop: "1.35rem" }}>
             <AttenteAnimee />
@@ -858,7 +894,7 @@ export function JoinLiveHub({ slug }) {
               color: palette.fg2,
             }}
           >
-            Prochaine question bientôt
+            {joinPres.title}
           </p>
           <p
             style={{
@@ -872,7 +908,7 @@ export function JoinLiveHub({ slug }) {
               marginRight: "auto",
             }}
           >
-            La régie prépare la suite du live.
+            {LIVE_UX_BODY_JOIN_WAITING}
           </p>
           <div style={{ marginTop: "1.5rem" }}>
             <AttenteAnimee />
