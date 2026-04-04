@@ -70,9 +70,11 @@ export function EventDashboardCard({ event, featured, formatDate }) {
           : "#fff",
         boxShadow: featured
           ? "0 14px 44px rgba(37, 99, 235, 0.1), 0 4px 14px rgba(15, 23, 42, 0.06)"
-          : "0 2px 10px rgba(15, 23, 42, 0.05)",
+          : "0 2px 8px rgba(15, 23, 42, 0.06)",
         boxSizing: "border-box",
         minHeight: 0,
+        width: "100%",
+        maxWidth: "100%",
         transition:
           "transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease",
       }}
@@ -288,11 +290,13 @@ export function EventDashboardCard({ event, featured, formatDate }) {
       </div>
 
       <style>{`
-        .avote-event-card:hover {
-          transform: translateY(-2px);
-          box-shadow: ${featured
-            ? "0 18px 52px rgba(37, 99, 235, 0.14), 0 8px 22px rgba(15, 23, 42, 0.08)"
-            : "0 8px 28px rgba(15, 23, 42, 0.09)"};
+        @media (min-width: 768px) and (hover: hover) {
+          .avote-event-card:hover {
+            transform: translateY(-2px);
+            box-shadow: ${featured
+              ? "0 18px 52px rgba(37, 99, 235, 0.14), 0 8px 22px rgba(15, 23, 42, 0.08)"
+              : "0 10px 32px rgba(15, 23, 42, 0.1), 0 4px 12px rgba(15, 23, 42, 0.06)"};
+          }
         }
         @media (max-width: 520px) {
           .avote-event-card-secondary-grid {
