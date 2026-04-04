@@ -12,6 +12,7 @@ import {
   joinRoomOverlayAlpha,
   resolveJoinRoomIsDark,
 } from "@/lib/joinRoomVisual";
+import { resolveApiAssetUrlNullable } from "@/lib/assetUrl";
 import { API_URL, SOCKET_URL } from "@/lib/config";
 import {
   LIVE_UX_BODY_FINISHED_MERCI,
@@ -286,9 +287,17 @@ export function JoinLiveHub({ slug }) {
       typeof rd === "string" && rd.trim() ? rd.trim() : null,
     );
     const lu = data.logoUrl;
-    setLogoUrl(typeof lu === "string" && lu.trim() ? lu.trim() : null);
+    setLogoUrl(
+      typeof lu === "string" && lu.trim()
+        ? resolveApiAssetUrlNullable(lu.trim())
+        : null,
+    );
     const bu = data.backgroundUrl;
-    setBackgroundUrl(typeof bu === "string" && bu.trim() ? bu.trim() : null);
+    setBackgroundUrl(
+      typeof bu === "string" && bu.trim()
+        ? resolveApiAssetUrlNullable(bu.trim())
+        : null,
+    );
     const pc = data.primaryColor;
     setPrimaryColor(
       typeof pc === "string" && /^#[0-9A-Fa-f]{6}$/.test(pc.trim())
@@ -347,13 +356,13 @@ export function JoinLiveHub({ slug }) {
           p.logoUrl === undefined || p.logoUrl === ""
             ? null
             : typeof p.logoUrl === "string"
-              ? p.logoUrl
+              ? resolveApiAssetUrlNullable(p.logoUrl)
               : null,
         backgroundUrl:
           p.backgroundUrl === undefined || p.backgroundUrl === ""
             ? null
             : typeof p.backgroundUrl === "string"
-              ? p.backgroundUrl
+              ? resolveApiAssetUrlNullable(p.backgroundUrl)
               : null,
         primaryColor:
           p.primaryColor === undefined || p.primaryColor === ""

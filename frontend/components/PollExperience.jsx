@@ -24,6 +24,7 @@ import {
   estPollNotation,
   optionsNotationOrdonnees,
 } from "@/lib/notationPoll";
+import { resolveApiAssetUrlNullable } from "@/lib/assetUrl";
 import { API_URL, SOCKET_URL } from "@/lib/config";
 import {
   LIVE_UX_BODY_POLL_NO_POLL_SLUG,
@@ -290,10 +291,16 @@ export function PollExperience({
         typeof rd === "string" && rd.trim() ? rd.trim() : null,
       );
       const lu = meta.logoUrl;
-      setRoomLogoUrl(typeof lu === "string" && lu.trim() ? lu.trim() : null);
+      setRoomLogoUrl(
+        typeof lu === "string" && lu.trim()
+          ? resolveApiAssetUrlNullable(lu.trim())
+          : null,
+      );
       const bu = meta.backgroundUrl;
       setRoomBackgroundUrl(
-        typeof bu === "string" && bu.trim() ? bu.trim() : null,
+        typeof bu === "string" && bu.trim()
+          ? resolveApiAssetUrlNullable(bu.trim())
+          : null,
       );
       const pc = meta.primaryColor;
       setRoomPrimaryColor(

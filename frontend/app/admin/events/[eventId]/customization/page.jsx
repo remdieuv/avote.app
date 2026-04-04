@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { resolveApiAssetUrl } from "@/lib/assetUrl";
 import { API_URL } from "@/lib/config";
 
 const card = {
@@ -85,9 +86,12 @@ export default function EventCustomizationPage() {
     () => ({
       description:
         description.trim() === "" ? null : description.trim().slice(0, 2000),
-      logoUrl: logoUrl.trim() === "" ? null : logoUrl.trim(),
+      logoUrl:
+        logoUrl.trim() === "" ? null : resolveApiAssetUrl(logoUrl.trim()),
       backgroundUrl:
-        backgroundUrl.trim() === "" ? null : backgroundUrl.trim(),
+        backgroundUrl.trim() === ""
+          ? null
+          : resolveApiAssetUrl(backgroundUrl.trim()),
       primaryColor:
         primaryColor.trim() !== "" &&
         /^#[0-9A-Fa-f]{6}$/.test(primaryColor.trim())
@@ -182,8 +186,8 @@ export default function EventCustomizationPage() {
       const rbc = data.roomBackgroundColor;
 
       setDescription(desc);
-      setLogoUrl(typeof lu === "string" ? lu : "");
-      setBackgroundUrl(typeof bu === "string" ? bu : "");
+      setLogoUrl(typeof lu === "string" ? resolveApiAssetUrl(lu) : "");
+      setBackgroundUrl(typeof bu === "string" ? resolveApiAssetUrl(bu) : "");
       setPrimaryColor(
         typeof pc === "string" && /^#[0-9A-Fa-f]{6}$/.test(pc)
           ? pc
@@ -207,8 +211,8 @@ export default function EventCustomizationPage() {
 
       setBaseline({
         description: desc,
-        logoUrl: typeof lu === "string" ? lu : "",
-        backgroundUrl: typeof bu === "string" ? bu : "",
+        logoUrl: typeof lu === "string" ? resolveApiAssetUrl(lu) : "",
+        backgroundUrl: typeof bu === "string" ? resolveApiAssetUrl(bu) : "",
         primaryColor:
           typeof pc === "string" && /^#[0-9A-Fa-f]{6}$/.test(pc)
             ? pc
@@ -255,8 +259,8 @@ export default function EventCustomizationPage() {
       if (typeof body.url !== "string") {
         throw new Error("Réponse serveur invalide.");
       }
-      if (kind === "logo") setLogoUrl(body.url);
-      else setBackgroundUrl(body.url);
+      if (kind === "logo") setLogoUrl(resolveApiAssetUrl(body.url));
+      else setBackgroundUrl(resolveApiAssetUrl(body.url));
     } catch (e) {
       setSaveError(e.message || "Échec de l’envoi du fichier.");
     } finally {

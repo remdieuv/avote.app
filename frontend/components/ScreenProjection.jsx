@@ -12,6 +12,7 @@ import { io } from "socket.io-client";
 import { ScreenAutoRevealWait } from "./ScreenAutoRevealWait";
 import { ScreenQuestion } from "./ScreenQuestion";
 import { ScreenResults } from "./ScreenResults";
+import { resolveApiAssetUrlNullable } from "@/lib/assetUrl";
 import { API_URL, SOCKET_URL } from "@/lib/config";
 import {
   LIVE_UX_DETAIL_SCREEN_WAITING_SLUG,
@@ -165,8 +166,8 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
     );
     setRoomCustomization({
       description: meta.description ?? null,
-      logoUrl: meta.logoUrl ?? null,
-      backgroundUrl: meta.backgroundUrl ?? null,
+      logoUrl: resolveApiAssetUrlNullable(meta.logoUrl),
+      backgroundUrl: resolveApiAssetUrlNullable(meta.backgroundUrl),
       primaryColor: meta.primaryColor ?? null,
       themeMode: meta.themeMode ?? null,
       backgroundOverlayStrength: meta.backgroundOverlayStrength ?? null,
