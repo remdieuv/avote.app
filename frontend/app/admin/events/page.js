@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { EventDashboardCard } from "@/components/admin/EventDashboardCard";
 import { API_URL } from "@/lib/config";
 import { loadStoredMyEvents } from "@/lib/myEventsStorage";
+import { sortEventsForDashboard } from "@/lib/adminEventsDashboard";
 
 function formatEventDate(iso, fallbackLabel) {
   if (!iso) return fallbackLabel ?? "—";
@@ -17,35 +19,24 @@ function formatEventDate(iso, fallbackLabel) {
   }
 }
 
-const btn = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "0.6rem 1rem",
-  fontSize: "0.875rem",
-  fontWeight: 600,
-  borderRadius: "10px",
-  textDecoration: "none",
-  border: "1px solid transparent",
-  boxSizing: "border-box",
-  textAlign: "center",
-};
-
-const btnPrimary = {
-  ...btn,
-  background: "linear-gradient(180deg, #2563eb, #1d4ed8)",
-  color: "#fff",
-  borderColor: "#1e40af",
-  boxShadow: "0 2px 8px rgba(37, 99, 235, 0.35)",
-};
-
-const btnSecondary = {
-  ...btn,
-  background: "#fff",
-  color: "#334155",
-  borderColor: "#cbd5e1",
-  fontWeight: 600,
-};
+/** @param {Record<string, unknown>} e */
+function normalizeEventRow(e) {
+  return {
+    id: String(e.id ?? ""),
+    title: typeof e.title === "string" ? e.title : "—",
+    slug: typeof e.slug === "string" ? e.slug : "",
+    createdAt: typeof e.createdAt === "string" ? e.createdAt : undefined,
+    liveState:
+      typeof e.liveState === "string" && e.liveState.trim()
+        ? String(e.liveState).toLowerCase()
+        : "waiting",
+    pollCount: typeof e.pollCount === "number" ? e.pollCount : 0,
+    voteCount: typeof e.voteCount === "number" ? e.voteCount : 0,
+    participantCount:
+      typeof e.participantCount === "number" ? e.participantCount : 0,
+    _localOnly: Boolean(e._localOnly),
+  };
+}
 
 export default function AdminEventsPage() {
   const [rows, setRows] = useState([]);
@@ -64,18 +55,20 @@ export default function AdminEventsPage() {
       const data = await res.json();
       const list = Array.isArray(data) ? data : [];
       if (list.length > 0) {
-        setRows(list);
+        setRows(list.map(normalizeEventRow));
         setFromLocalFallback(false);
       } else {
         const stored = loadStoredMyEvents();
         setRows(
-          stored.map((x) => ({
-            id: x.id,
-            title: x.title,
-            slug: x.slug,
-            createdAt: x.savedAt,
-            _localOnly: true,
-          })),
+          stored.map((x) =>
+            normalizeEventRow({
+              id: x.id,
+              title: x.title,
+              slug: x.slug,
+              createdAt: x.savedAt,
+              _localOnly: true,
+            }),
+          ),
         );
         setFromLocalFallback(true);
       }
@@ -83,13 +76,15 @@ export default function AdminEventsPage() {
       setFetchError(e.message || "Impossible de charger les événements.");
       const stored = loadStoredMyEvents();
       setRows(
-        stored.map((x) => ({
-          id: x.id,
-          title: x.title,
-          slug: x.slug,
-          createdAt: x.savedAt,
-          _localOnly: true,
-        })),
+        stored.map((x) =>
+          normalizeEventRow({
+            id: x.id,
+            title: x.title,
+            slug: x.slug,
+            createdAt: x.savedAt,
+            _localOnly: true,
+          }),
+        ),
       );
       setFromLocalFallback(true);
     } finally {
@@ -98,18 +93,24 @@ export default function AdminEventsPage() {
   }, []);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
+
+  const sorted = useMemo(() => sortEventsForDashboard(rows), [rows]);
+  const featuredId = sorted[0]?.id ?? null;
 
   return (
     <main
       style={{
-        padding: "1.25rem 1.25rem 2.5rem",
-        maxWidth: "640px",
+        minHeight: "100vh",
+        padding: "clamp(1rem, 3vw, 1.75rem) clamp(1rem, 4vw, 2rem) 3rem",
+        maxWidth: "min(1180px, 100%)",
         margin: "0 auto",
-        fontFamily: "system-ui, sans-serif",
+        fontFamily:
+          'system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif',
         lineHeight: 1.5,
         boxSizing: "border-box",
+        background: "linear-gradient(180deg, #f1f5f9 0%, #f8fafc 32%, #fff 100%)",
       }}
     >
       <div
@@ -118,170 +119,184 @@ export default function AdminEventsPage() {
           flexWrap: "wrap",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: "0.75rem",
-          marginBottom: "1.5rem",
+          gap: "0.75rem 1rem",
+          marginBottom: "1.75rem",
         }}
       >
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.65rem 1rem", alignItems: "center" }}>
-          <Link href="/admin" style={{ fontSize: "0.9rem", color: "#64748b", textDecoration: "none" }}>
-            ← Créer un événement
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.65rem 1.25rem", alignItems: "center" }}>
+          <Link
+            href="/admin"
+            style={{ fontSize: "0.88rem", color: "#64748b", textDecoration: "none", fontWeight: 600 }}
+          >
+            ← Tableau de bord
           </Link>
-          <Link href="/" style={{ fontSize: "0.9rem", color: "#64748b", textDecoration: "none" }}>
+          <Link href="/" style={{ fontSize: "0.88rem", color: "#64748b", textDecoration: "none", fontWeight: 500 }}>
             Accueil
           </Link>
         </div>
-        <span style={{ fontWeight: 800, fontSize: "1.05rem", color: "#1e293b" }}>Avote</span>
+        <span style={{ fontWeight: 800, fontSize: "0.95rem", color: "#0f172a", letterSpacing: "-0.03em" }}>
+          Avote
+        </span>
       </div>
 
-      <h1 style={{ fontSize: "1.4rem", margin: "0 0 0.35rem", fontWeight: 800 }}>Mes événements</h1>
-      <p style={{ color: "#64748b", margin: "0 0 1.5rem", fontSize: "0.95rem" }}>
-        Lancez votre événement depuis la régie : liens salle participants, écran et
-        overlay y sont regroupés.
-      </p>
+      <header
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.85rem",
+          marginBottom: "2rem",
+        }}
+        className="admin-events-page-header"
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h1
+            style={{
+              fontSize: "clamp(1.45rem, 3.2vw, 1.85rem)",
+              margin: "0 0 0.4rem",
+              fontWeight: 800,
+              color: "#0f172a",
+              letterSpacing: "-0.03em",
+            }}
+          >
+            Mes événements
+          </h1>
+          <p style={{ color: "#64748b", margin: 0, fontSize: "0.95rem", maxWidth: "42rem" }}>
+            Pilotez le live : régie, salle participants et projection sur un même tableau.
+          </p>
+        </div>
+        <Link
+          href="/admin"
+          className="admin-events-create-cta"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            alignSelf: "flex-start",
+            padding: "0.65rem 1.2rem",
+            fontSize: "0.9rem",
+            fontWeight: 700,
+            borderRadius: "10px",
+            textDecoration: "none",
+            border: "1px solid #1e40af",
+            background: "linear-gradient(180deg, #2563eb, #1d4ed8)",
+            color: "#fff",
+            boxShadow: "0 4px 16px rgba(37, 99, 235, 0.28)",
+            boxSizing: "border-box",
+            whiteSpace: "nowrap",
+          }}
+        >
+          + Créer un événement
+        </Link>
+      </header>
 
-      {fetchError && (
+      {fetchError ? (
         <p
           style={{
-            margin: "0 0 1rem",
-            padding: "0.65rem 0.85rem",
-            borderRadius: "8px",
+            margin: "0 0 1.15rem",
+            padding: "0.7rem 0.95rem",
+            borderRadius: "10px",
             background: "#fff7ed",
             border: "1px solid #fed7aa",
             color: "#9a3412",
-            fontSize: "0.9rem",
+            fontSize: "0.88rem",
+            fontWeight: 500,
           }}
           role="alert"
         >
-          {fetchError} — affichage des événements enregistrés sur cet appareil le cas échéant.
+          {fetchError} — affichage des événements enregistrés sur cet appareil le cas
+          échéant.
         </p>
-      )}
+      ) : null}
 
-      {fromLocalFallback && rows.length > 0 && (
+      {fromLocalFallback && sorted.length > 0 ? (
         <p
           style={{
-            margin: "0 0 1rem",
-            fontSize: "0.85rem",
+            margin: "0 0 1.15rem",
+            fontSize: "0.82rem",
             color: "#7c3aed",
             fontWeight: 600,
           }}
         >
-          Source : appareil (aucun événement renvoyé par le serveur ou API indisponible).
+          Source : appareil (serveur vide ou API indisponible).
         </p>
-      )}
+      ) : null}
 
-      {loading && <p style={{ color: "#64748b" }}>Chargement…</p>}
+      {loading ? (
+        <p style={{ color: "#64748b", fontWeight: 500 }}>Chargement…</p>
+      ) : null}
 
-      {!loading && rows.length === 0 && (
+      {!loading && sorted.length === 0 ? (
         <div
           style={{
-            padding: "1.5rem",
-            borderRadius: "12px",
-            border: "1px dashed #cbd5e1",
-            background: "#f8fafc",
+            padding: "clamp(2rem, 5vw, 3rem) 1.5rem",
+            borderRadius: "16px",
+            border: "1px solid #e2e8f0",
+            background: "#fff",
             textAlign: "center",
-            color: "#64748b",
+            boxShadow: "0 4px 24px rgba(15, 23, 42, 0.06)",
           }}
         >
-          <p style={{ margin: "0 0 1rem" }}>Aucun événement pour l’instant.</p>
+          <p style={{ margin: "0 0 0.5rem", fontSize: "1.05rem", fontWeight: 700, color: "#0f172a" }}>
+            Aucun événement pour le moment
+          </p>
+          <p style={{ margin: "0 0 1.5rem", color: "#64748b", fontSize: "0.92rem" }}>
+            Créez un événement pour accéder à la régie, à la salle et à l’écran.
+          </p>
           <Link
             href="/admin"
             style={{
-              ...btn,
-              background: "#7c3aed",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "0.65rem 1.35rem",
+              fontSize: "0.9rem",
+              fontWeight: 700,
+              borderRadius: "10px",
+              textDecoration: "none",
+              border: "1px solid #1e40af",
+              background: "linear-gradient(180deg, #2563eb, #1d4ed8)",
               color: "#fff",
-              borderColor: "#6d28d9",
+              boxShadow: "0 4px 16px rgba(37, 99, 235, 0.28)",
             }}
           >
-            Créer un événement
+            Créer mon premier événement
           </Link>
         </div>
-      )}
+      ) : null}
 
-      {!loading &&
-        rows.length > 0 &&
-        rows.map((ev) => (
-          <article
-            key={ev.id}
-            style={{
-              marginBottom: "1rem",
-              padding: "1.15rem 1.25rem",
-              borderRadius: "12px",
-              border: "1px solid #e2e8f0",
-              background: "#fff",
-              boxShadow: "0 1px 3px rgba(15, 23, 42, 0.06)",
-            }}
-          >
-            <h2 style={{ fontSize: "1.05rem", margin: "0 0 0.35rem", fontWeight: 700, color: "#0f172a" }}>
-              {ev.title}
-            </h2>
-            <p style={{ margin: "0 0 1rem", fontSize: "0.88rem", color: "#64748b" }}>
-              {formatEventDate(
-                ev.createdAt,
-                ev._localOnly ? "Date locale" : null,
-              )}
-              {ev._localOnly ? (
-                <span style={{ display: "block", marginTop: "0.25rem", fontSize: "0.78rem", color: "#94a3b8" }}>
-                  Enregistré sur cet appareil
-                </span>
-              ) : null}
-            </p>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.65rem",
-              }}
-              className="admin-events-actions"
-            >
-              <Link
-                href={`/admin/event/${ev.id}`}
-                style={{
-                  ...btnPrimary,
-                  width: "100%",
-                }}
-              >
-                Lancer mon événement
-              </Link>
-              {ev._localOnly ? (
-                <span
-                  title="Créez l’événement sur le serveur pour personnaliser la salle."
-                  style={{
-                    ...btnSecondary,
-                    width: "100%",
-                    opacity: 0.55,
-                    cursor: "not-allowed",
-                    background: "#f8fafc",
-                  }}
-                >
-                  Personnaliser ma salle
-                </span>
-              ) : (
-                <Link
-                  href={`/admin/events/${ev.id}/customization`}
-                  style={{
-                    ...btnSecondary,
-                    width: "100%",
-                  }}
-                >
-                  Personnaliser ma salle
-                </Link>
-              )}
-            </div>
-          </article>
-        ))}
+      {!loading && sorted.length > 0 ? (
+        <div
+          className="admin-events-grid"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr",
+            gap: "1.15rem",
+          }}
+        >
+          {sorted.map((ev) => (
+            <EventDashboardCard
+              key={ev.id}
+              event={ev}
+              featured={ev.id === featuredId}
+              formatDate={formatEventDate}
+            />
+          ))}
+        </div>
+      ) : null}
 
       <style>{`
-        @media (min-width: 480px) {
-          .admin-events-actions {
+        @media (min-width: 720px) {
+          .admin-events-page-header {
             flex-direction: row;
             flex-wrap: wrap;
-            align-items: stretch;
+            align-items: flex-start;
+            justify-content: space-between;
           }
-          .admin-events-actions a,
-          .admin-events-actions span {
-            flex: 1 1 calc(50% - 0.35rem);
-            min-width: 200px;
-            width: auto !important;
+          .admin-events-create-cta {
+            align-self: center;
+          }
+          .admin-events-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
           }
         }
       `}</style>

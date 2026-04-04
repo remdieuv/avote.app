@@ -655,26 +655,79 @@ app.get("/", (_req, res) => {
   res.type("text/plain").send("API Avote OK");
 });
 
+/**
+ * Liste admin : live + compteurs (questions, votes, participants distincts).
+ * @returns {Promise<Array<{
+ *   id: string;
+ *   title: string;
+ *   slug: string;
+ *   createdAt: string;
+ *   liveState: string;
+ *   pollCount: number;
+ *   voteCount: number;
+ *   participantCount: number;
+ * }>>}
+ */
+async function listEventsForAdmin() {
+  const events = await prisma.event.findMany({
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      createdAt: true,
+      liveState: true,
+      polls: { select: { id: true } },
+    },
+  });
+
+  const pollIds = events.flatMap((e) => e.polls.map((p) => p.id));
+  /** @type {Map<string, number>} */
+  const votesByEventId = new Map();
+  /** @type {Map<string, Set<string>>} */
+  const participantsByEventId = new Map();
+  for (const e of events) {
+    votesByEventId.set(e.id, 0);
+    participantsByEventId.set(e.id, new Set());
+  }
+
+  if (pollIds.length > 0) {
+    const voteRows = await prisma.vote.findMany({
+      where: { pollId: { in: pollIds } },
+      select: { pollId: true, voterSessionId: true },
+    });
+    /** @type {Map<string, string>} */
+    const pollToEvent = new Map();
+    for (const ev of events) {
+      for (const p of ev.polls) {
+        pollToEvent.set(p.id, ev.id);
+      }
+    }
+    for (const v of voteRows) {
+      const eid = pollToEvent.get(v.pollId);
+      if (!eid) continue;
+      votesByEventId.set(eid, (votesByEventId.get(eid) || 0) + 1);
+      participantsByEventId.get(eid)?.add(v.voterSessionId);
+    }
+  }
+
+  return events.map((e) => ({
+    id: e.id,
+    title: e.title,
+    slug: e.slug,
+    createdAt: e.createdAt.toISOString(),
+    liveState: String(e.liveState).toLowerCase(),
+    pollCount: e.polls.length,
+    voteCount: votesByEventId.get(e.id) || 0,
+    participantCount: participantsByEventId.get(e.id)?.size || 0,
+  }));
+}
+
 /** Liste des événements (admin / « Mes événements ») */
 app.get("/events", async (_req, res) => {
   try {
-    const rows = await prisma.event.findMany({
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        title: true,
-        slug: true,
-        createdAt: true,
-      },
-    });
-    return res.json(
-      rows.map((e) => ({
-        id: e.id,
-        title: e.title,
-        slug: e.slug,
-        createdAt: e.createdAt.toISOString(),
-      })),
-    );
+    const list = await listEventsForAdmin();
+    return res.json(list);
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Erreur serveur." });
