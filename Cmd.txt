@@ -7,3 +7,8 @@ npm start
 
 
 https://avote-app.vercel.app/
+
+
+git add .
+git commit -m "fix stale voting state and launch button logic"
+git push
