@@ -212,7 +212,6 @@ export function PollExperience({
 
   /** Identité salle /join (continuité visuelle sur /p) */
   const [eventTitleFromApi, setEventTitleFromApi] = useState(null);
-  const [roomDescription, setRoomDescription] = useState(null);
   const [roomLogoUrl, setRoomLogoUrl] = useState(null);
   const [roomBackgroundUrl, setRoomBackgroundUrl] = useState(null);
   const [roomPrimaryColor, setRoomPrimaryColor] = useState(null);
@@ -285,10 +284,6 @@ export function PollExperience({
         typeof meta.title === "string" && meta.title.trim()
           ? meta.title.trim()
           : null,
-      );
-      const rd = meta.description;
-      setRoomDescription(
-        typeof rd === "string" && rd.trim() ? rd.trim() : null,
       );
       const lu = meta.logoUrl;
       setRoomLogoUrl(
@@ -1152,19 +1147,6 @@ export function PollExperience({
               {eventTitleFromApi ?? titrePage}
             </h1>
           </div>
-          {roomDescription ? (
-            <p
-              style={{
-                margin: "0.45rem 0 0 0",
-                fontSize: "0.82rem",
-                color: palette.muted,
-                lineHeight: 1.45,
-                maxWidth: "40rem",
-              }}
-            >
-              {roomDescription}
-            </p>
-          ) : null}
           <p
             style={{
               margin: "0.45rem 0 0 0",
