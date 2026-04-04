@@ -2,10 +2,19 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AdminEventsToolbar } from "@/components/admin/AdminEventsToolbar";
 import { EventDashboardCard } from "@/components/admin/EventDashboardCard";
 import { API_URL } from "@/lib/config";
+import {
+  EVENT_SORT_OPTIONS,
+  EVENT_STATUS_FILTERS,
+  filterEventsBySearch,
+  filterEventsByStatus,
+  sortEventsByMode,
+  SORT_ACTIVE_FIRST,
+  EVENT_STATUS_FILTER_ALL,
+} from "@/lib/adminEventsFilters";
 import { loadStoredMyEvents } from "@/lib/myEventsStorage";
-import { sortEventsForDashboard } from "@/lib/adminEventsDashboard";
 
 function formatEventDate(iso, fallbackLabel) {
   if (!iso) return fallbackLabel ?? "—";
@@ -54,6 +63,9 @@ export default function AdminEventsPage() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
   const [fromLocalFallback, setFromLocalFallback] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState(EVENT_STATUS_FILTER_ALL);
+  const [sortMode, setSortMode] = useState(SORT_ACTIVE_FIRST);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -107,18 +119,23 @@ export default function AdminEventsPage() {
     void load();
   }, [load]);
 
-  const sorted = useMemo(() => sortEventsForDashboard(rows), [rows]);
+  const filteredSorted = useMemo(() => {
+    let list = filterEventsBySearch(rows, searchQuery);
+    list = filterEventsByStatus(list, statusFilter);
+    return sortEventsByMode(list, sortMode);
+  }, [rows, searchQuery, statusFilter, sortMode]);
+
   const { featuredId, orderedEvents } = useMemo(() => {
-    const fid = pickFeaturedEventId(sorted);
-    if (!fid || !sorted.length) {
-      return { featuredId: fid, orderedEvents: sorted };
+    const fid = pickFeaturedEventId(filteredSorted);
+    if (!fid || !filteredSorted.length) {
+      return { featuredId: fid, orderedEvents: filteredSorted };
     }
-    const hit = sorted.find((e) => e.id === fid);
+    const hit = filteredSorted.find((e) => e.id === fid);
     const ordered = hit
-      ? [hit, ...sorted.filter((e) => e.id !== fid)]
-      : sorted;
+      ? [hit, ...filteredSorted.filter((e) => e.id !== fid)]
+      : filteredSorted;
     return { featuredId: fid, orderedEvents: ordered };
-  }, [sorted]);
+  }, [filteredSorted]);
 
   return (
     <main
@@ -169,54 +186,21 @@ export default function AdminEventsPage() {
           </span>
         </div>
 
-        <header
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "0.85rem",
-            marginBottom: "1.75rem",
-          }}
-          className="admin-events-page-header"
-        >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h1
-              style={{
-                fontSize: "clamp(1.45rem, 3.2vw, 1.85rem)",
-                margin: "0 0 0.4rem",
-                fontWeight: 800,
-                color: "#0f172a",
-                letterSpacing: "-0.03em",
-              }}
-            >
-              Mes événements
-            </h1>
-            <p style={{ color: "#64748b", margin: 0, fontSize: "0.95rem", maxWidth: "42rem" }}>
-              Pilotez le live : régie, salle participants et projection sur un même tableau.
-            </p>
-          </div>
-          <Link
-            href="/admin"
-            className="admin-events-create-cta"
+        <header style={{ marginBottom: "1.5rem" }}>
+          <h1
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              alignSelf: "flex-start",
-              padding: "0.65rem 1.2rem",
-              fontSize: "0.9rem",
-              fontWeight: 700,
-              borderRadius: "10px",
-              textDecoration: "none",
-              border: "1px solid #1e40af",
-              background: "linear-gradient(180deg, #2563eb, #1d4ed8)",
-              color: "#fff",
-              boxShadow: "0 4px 16px rgba(37, 99, 235, 0.28)",
-              boxSizing: "border-box",
-              whiteSpace: "nowrap",
+              fontSize: "clamp(1.45rem, 3.2vw, 1.85rem)",
+              margin: "0 0 0.4rem",
+              fontWeight: 800,
+              color: "#0f172a",
+              letterSpacing: "-0.03em",
             }}
           >
-            + Créer un événement
-          </Link>
+            Mes événements
+          </h1>
+          <p style={{ color: "#64748b", margin: 0, fontSize: "0.95rem", maxWidth: "42rem" }}>
+            Pilotez le live : régie, salle participants et projection sur un même tableau.
+          </p>
         </header>
 
         {fetchError ? (
@@ -238,7 +222,7 @@ export default function AdminEventsPage() {
           </p>
         ) : null}
 
-        {fromLocalFallback && sorted.length > 0 ? (
+        {fromLocalFallback && rows.length > 0 ? (
           <p
             style={{
               margin: "0 0 1.15rem",
@@ -255,7 +239,7 @@ export default function AdminEventsPage() {
           <p style={{ color: "#64748b", fontWeight: 500, margin: "0 0 1rem" }}>Chargement…</p>
         ) : null}
 
-        {!loading && sorted.length === 0 ? (
+        {!loading && rows.length === 0 ? (
           <div
             style={{
               padding: "clamp(2rem, 5vw, 3rem) 1.5rem",
@@ -294,6 +278,51 @@ export default function AdminEventsPage() {
           </div>
         ) : null}
 
+        {!loading && rows.length > 0 ? (
+          <>
+            <AdminEventsToolbar
+              searchValue={searchQuery}
+              onSearchChange={setSearchQuery}
+              statusValue={statusFilter}
+              onStatusChange={setStatusFilter}
+              sortValue={sortMode}
+              onSortChange={setSortMode}
+              statusOptions={EVENT_STATUS_FILTERS}
+              sortOptions={EVENT_SORT_OPTIONS}
+            />
+            <p
+              style={{
+                margin: "0 0 1rem",
+                fontSize: "0.88rem",
+                fontWeight: 600,
+                color: "#64748b",
+              }}
+            >
+              {filteredSorted.length === 1
+                ? "1 événement"
+                : `${filteredSorted.length} événements`}
+            </p>
+          </>
+        ) : null}
+
+        {!loading && rows.length > 0 && filteredSorted.length === 0 ? (
+          <div
+            style={{
+              padding: "clamp(1.75rem, 4vw, 2.5rem) 1.25rem",
+              borderRadius: "14px",
+              border: "1px solid #e2e8f0",
+              background: "#fff",
+              textAlign: "center",
+              boxShadow: "0 2px 12px rgba(15, 23, 42, 0.05)",
+              marginBottom: "1rem",
+            }}
+          >
+            <p style={{ margin: 0, fontSize: "0.95rem", fontWeight: 600, color: "#475569" }}>
+              Aucun événement ne correspond à votre recherche
+            </p>
+          </div>
+        ) : null}
+
         {!loading && orderedEvents.length > 0 ? (
           <div className="admin-events-grid">
             {orderedEvents.map((ev) => (
@@ -324,15 +353,6 @@ export default function AdminEventsPage() {
           width: 100%;
         }
         @media (min-width: 768px) {
-          .admin-events-page-header {
-            flex-direction: row;
-            flex-wrap: wrap;
-            align-items: flex-start;
-            justify-content: space-between;
-          }
-          .admin-events-create-cta {
-            align-self: center;
-          }
           .admin-events-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
