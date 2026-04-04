@@ -2035,120 +2035,16 @@ const btnGhost = {
 
 const REGIE_PREVIEW_JOIN_LS_PREFIX = "avote_regie_preview_join_";
 
-/** Badge dynamique : rendu approximatif côté participant (/join). */
-function badgeApercuSalleJoin({
-  liveState,
-  voteState,
-  displayState,
-  autoRevealShowResultsAt,
-}) {
-  const ls = String(liveState || "").toLowerCase();
-  const vs = String(voteState || "").toLowerCase();
-  const ds = String(displayState || "").toLowerCase();
-  const revealPending =
-    typeof autoRevealShowResultsAt === "string" &&
-    vs === "closed" &&
-    ds !== "results" &&
-    new Date(autoRevealShowResultsAt).getTime() > Date.now() - 500;
-  if (revealPending) {
-    return {
-      label: "Révélation résultats",
-      bg: "#ccfbf1",
-      color: "#115e59",
-      border: "#5eead4",
-    };
-  }
-  if (ls === "finished") {
-    return {
-      label: "Événement terminé",
-      bg: "#f1f5f9",
-      color: "#475569",
-      border: "#cbd5e1",
-    };
-  }
-  if (ls === "paused") {
-    return {
-      label: "Pause",
-      bg: "#fef3c7",
-      color: "#92400e",
-      border: "#fcd34d",
-    };
-  }
-  if (ds === "results") {
-    return {
-      label: "Résultats en cours",
-      bg: "#fef9c3",
-      color: "#854d0e",
-      border: "#fde047",
-    };
-  }
-  if (ds === "question") {
-    if (vs === "closed") {
-      return {
-        label: "Vote terminé",
-        bg: "#ffedd5",
-        color: "#9a3412",
-        border: "#fdba74",
-      };
-    }
-    return {
-      label: "Question affichée",
-      bg: "#dcfce7",
-      color: "#14532d",
-      border: "#86efac",
-    };
-  }
-  if (ls === "voting" || vs === "open") {
-    return {
-      label: "Question affichée",
-      bg: "#dcfce7",
-      color: "#14532d",
-      border: "#86efac",
-    };
-  }
-  if (ls === "results") {
-    return {
-      label: "Résultats en cours",
-      bg: "#fef9c3",
-      color: "#854d0e",
-      border: "#fde047",
-    };
-  }
-  return {
-    label: "En attente",
-    bg: "#e0e7ff",
-    color: "#3730a3",
-    border: "#a5b4fc",
-  };
-}
-
 /**
  * @param {{
  *   slug: string;
+ *   eventId: string | null;
  *   layout: "beside" | "below" | "drawer";
- *   liveState?: string | null;
- *   voteState?: string | null;
- *   displayState?: string | null;
- *   autoRevealShowResultsAt?: string | null;
  *   onHide?: () => void;
  * }} props
  */
-function RegiePublicPreviewPanel({
-  slug,
-  layout,
-  liveState,
-  voteState,
-  displayState,
-  autoRevealShowResultsAt,
-  onHide,
-}) {
+function RegiePublicPreviewPanel({ slug, eventId, layout, onHide }) {
   const [iframeError, setIframeError] = useState(false);
-  const badge = badgeApercuSalleJoin({
-    liveState,
-    voteState,
-    displayState,
-    autoRevealShowResultsAt,
-  });
   const joinPath = `/join/${encodeURIComponent(slug)}`;
 
   const shell =
@@ -2220,22 +2116,24 @@ function RegiePublicPreviewPanel({
             Vue participant en direct
           </p>
         </div>
-        <span
-          style={{
-            fontSize: "0.62rem",
-            fontWeight: 700,
-            letterSpacing: "0.04em",
-            textTransform: "uppercase",
-            padding: "0.2rem 0.45rem",
-            borderRadius: "6px",
-            background: badge.bg,
-            color: badge.color,
-            border: `1px solid ${badge.border}`,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {badge.label}
-        </span>
+        {eventId ? (
+          <Link
+            href={`/admin/events/${encodeURIComponent(eventId)}/customization`}
+            style={{
+              fontSize: "0.72rem",
+              fontWeight: 700,
+              padding: "0.35rem 0.65rem",
+              borderRadius: "8px",
+              border: "1px solid #c7d2fe",
+              background: "#eef2ff",
+              color: "#3730a3",
+              textDecoration: "none",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Personnalisation de la salle
+          </Link>
+        ) : null}
       </div>
       <div
         style={{
@@ -3102,15 +3000,7 @@ function RegieSidebarDrawer({
 /**
  * Plein écran mobile : aperçu /join (iframe), temps réel inchangé.
  */
-function RegiePreviewJoinDrawerMobile({
-  open,
-  onClose,
-  slug,
-  liveState,
-  voteState,
-  displayState,
-  autoRevealShowResultsAt,
-}) {
+function RegiePreviewJoinDrawerMobile({ open, onClose, slug, eventId }) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => {
@@ -3157,11 +3047,8 @@ function RegiePreviewJoinDrawerMobile({
         <RegiePublicPreviewPanel
           key={slug}
           slug={slug}
+          eventId={eventId}
           layout="drawer"
-          liveState={liveState}
-          voteState={voteState}
-          displayState={displayState}
-          autoRevealShowResultsAt={autoRevealShowResultsAt}
           onHide={onClose}
         />
       </div>
@@ -4528,13 +4415,8 @@ export default function RegieEventPage() {
                 <RegiePublicPreviewPanel
                   key={eventData.slug}
                   slug={eventData.slug}
+                  eventId={eventId}
                   layout={desktopSplitWide ? "beside" : "below"}
-                  liveState={liveState}
-                  voteState={voteStateUi}
-                  displayState={displayStateUi}
-                  autoRevealShowResultsAt={
-                    eventData.autoRevealShowResultsAt ?? null
-                  }
                   onHide={() => persistPreviewJoinOpen(false)}
                 />
               ) : null}
@@ -4557,12 +4439,7 @@ export default function RegieEventPage() {
               open={mobileJoinPreviewOpen}
               onClose={() => setMobileJoinPreviewOpen(false)}
               slug={eventData.slug}
-              liveState={liveState}
-              voteState={voteStateUi}
-              displayState={displayStateUi}
-              autoRevealShowResultsAt={
-                eventData.autoRevealShowResultsAt ?? null
-              }
+              eventId={eventId}
             />
           ) : null}
         </div>
