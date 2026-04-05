@@ -14,6 +14,7 @@ import {
   SORT_ACTIVE_FIRST,
   EVENT_STATUS_FILTER_ALL,
 } from "@/lib/adminEventsFilters";
+import { adminEventsListBadgeKey } from "@/lib/adminEventsDashboard";
 import { loadStoredMyEvents } from "@/lib/myEventsStorage";
 
 function formatEventDate(iso, fallbackLabel) {
@@ -28,15 +29,16 @@ function formatEventDate(iso, fallbackLabel) {
   }
 }
 
-/** Premier VOTING, sinon premier WAITING, sinon premier de la liste. */
+/** En direct → lecture → en attente → sinon premier. */
 function pickFeaturedEventId(events) {
   if (!events.length) return null;
-  const ls = (e) => String(e.liveState || "").toLowerCase();
-  const voting = events.find((e) => ls(e) === "voting");
-  if (voting) return voting.id;
-  const waiting = events.find((e) => ls(e) === "waiting");
-  if (waiting) return waiting.id;
-  return events[0].id;
+  const by = (key) => events.find((e) => adminEventsListBadgeKey(e) === key);
+  return (
+    by("voting")?.id ??
+    by("lecture")?.id ??
+    by("waiting")?.id ??
+    events[0].id
+  );
 }
 
 /** @param {Record<string, unknown>} e */
@@ -54,6 +56,14 @@ function normalizeEventRow(e) {
     voteCount: typeof e.voteCount === "number" ? e.voteCount : 0,
     participantCount:
       typeof e.participantCount === "number" ? e.participantCount : 0,
+    voteState:
+      typeof e.voteState === "string" && e.voteState.trim()
+        ? String(e.voteState).toLowerCase()
+        : "",
+    displayState:
+      typeof e.displayState === "string" && e.displayState.trim()
+        ? String(e.displayState).toLowerCase()
+        : "",
     _localOnly: Boolean(e._localOnly),
   };
 }

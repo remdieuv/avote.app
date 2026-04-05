@@ -1,4 +1,7 @@
-import { sortEventsForDashboard } from "./adminEventsDashboard";
+import {
+  adminEventsListBadgeKey,
+  sortEventsForDashboard,
+} from "./adminEventsDashboard";
 
 export const EVENT_STATUS_FILTER_ALL = "all";
 
@@ -6,6 +9,7 @@ export const EVENT_STATUS_FILTER_ALL = "all";
 export const EVENT_STATUS_FILTERS = [
   { value: EVENT_STATUS_FILTER_ALL, label: "Tous" },
   { value: "voting", label: "En direct" },
+  { value: "lecture", label: "Lecture" },
   { value: "waiting", label: "En attente" },
   { value: "results", label: "Résultats" },
   { value: "paused", label: "Pause" },
@@ -40,14 +44,12 @@ export function filterEventsBySearch(events, rawQuery) {
 }
 
 /**
- * @param {Array<{ liveState?: string }>} events
+ * @param {Array<{ liveState?: string; displayState?: string; voteState?: string; _localOnly?: boolean }>} events
  * @param {string} status
  */
 export function filterEventsByStatus(events, status) {
   if (!status || status === EVENT_STATUS_FILTER_ALL) return [...events];
-  return events.filter(
-    (e) => String(e.liveState || "").toLowerCase() === status,
-  );
+  return events.filter((e) => adminEventsListBadgeKey(e) === status);
 }
 
 /**

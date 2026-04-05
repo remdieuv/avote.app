@@ -663,6 +663,8 @@ app.get("/", (_req, res) => {
  *   slug: string;
  *   createdAt: string;
  *   liveState: string;
+ *   voteState: string;
+ *   displayState: string;
  *   pollCount: number;
  *   voteCount: number;
  *   participantCount: number;
@@ -677,6 +679,8 @@ async function listEventsForAdmin() {
       slug: true,
       createdAt: true,
       liveState: true,
+      voteState: true,
+      displayState: true,
       polls: { select: { id: true } },
     },
   });
@@ -717,6 +721,8 @@ async function listEventsForAdmin() {
     slug: e.slug,
     createdAt: e.createdAt.toISOString(),
     liveState: String(e.liveState).toLowerCase(),
+    voteState: String(e.voteState).toLowerCase(),
+    displayState: String(e.displayState).toLowerCase(),
     pollCount: e.polls.length,
     voteCount: votesByEventId.get(e.id) || 0,
     participantCount: participantsByEventId.get(e.id)?.size || 0,

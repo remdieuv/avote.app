@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { liveStateBadgeProps } from "@/lib/adminEventsDashboard";
+import { adminEventsListBadgeProps } from "@/lib/adminEventsDashboard";
 
 /**
  * @param {{
@@ -9,6 +9,8 @@ import { liveStateBadgeProps } from "@/lib/adminEventsDashboard";
  *     slug: string;
  *     createdAt?: string;
  *     liveState?: string;
+ *     displayState?: string;
+ *     voteState?: string;
  *     pollCount?: number;
  *     voteCount?: number;
  *     participantCount?: number;
@@ -20,9 +22,7 @@ import { liveStateBadgeProps } from "@/lib/adminEventsDashboard";
  */
 export function EventDashboardCard({ event, featured, formatDate }) {
   const ev = event;
-  const badge = liveStateBadgeProps(
-    ev._localOnly ? "waiting" : ev.liveState,
-  );
+  const badge = adminEventsListBadgeProps(ev);
   if (ev._localOnly) {
     badge.label = "Brouillon local";
   }

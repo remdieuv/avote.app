@@ -1,25 +1,80 @@
+const SORT_TIER = {
+  voting: 100,
+  lecture: 85,
+  waiting: 80,
+  results: 60,
+  paused: 40,
+  finished: 20,
+};
+
 /**
- * Tri dashboard admin : en direct → en attente → autres (par date décroissante).
- * @param {Array<{ liveState?: string; createdAt?: string }>} events
+ * Clé liste admin (badge + filtre + tri), alignée sur la régie : lecture = question + vote fermé.
+ * @param {{ liveState?: string; displayState?: string; voteState?: string; _localOnly?: boolean }} e
+ */
+export function adminEventsListBadgeKey(e) {
+  if (e._localOnly) return "waiting";
+  const ls = String(e.liveState || "").toLowerCase();
+  const ds = String(e.displayState || "").toLowerCase();
+  const vs = String(e.voteState || "").toLowerCase();
+
+  if (ls === "finished") return "finished";
+  if (ls === "paused" || ds === "black") return "paused";
+  if (ds === "results") return "results";
+  if (ds === "question" && vs === "open") return "voting";
+  if (ds === "question" && vs === "closed") return "lecture";
+  if (ls === "voting") return "voting";
+  if (ls === "results") return "results";
+  if (ls === "paused") return "paused";
+  return "waiting";
+}
+
+/** @param {{ liveState?: string; displayState?: string; voteState?: string; _localOnly?: boolean }} e */
+export function adminEventSortTier(e) {
+  const k = adminEventsListBadgeKey(e);
+  return SORT_TIER[k] ?? 10;
+}
+
+/**
+ * Tri dashboard admin : en direct → lecture → en attente → … (par date décroissante).
+ * @param {Array<{ liveState?: string; displayState?: string; voteState?: string; createdAt?: string; _localOnly?: boolean }>} events
  */
 export function sortEventsForDashboard(events) {
-  const priority = (ls) => {
-    const s = String(ls || "").toLowerCase();
-    if (s === "voting") return 100;
-    if (s === "waiting") return 80;
-    if (s === "results") return 60;
-    if (s === "paused") return 40;
-    if (s === "finished") return 20;
-    return 10;
-  };
   return [...events].sort((a, b) => {
-    const pa = priority(a.liveState);
-    const pb = priority(b.liveState);
+    const pa = adminEventSortTier(a);
+    const pb = adminEventSortTier(b);
     if (pb !== pa) return pb - pa;
     const ta = new Date(a.createdAt || 0).getTime();
     const tb = new Date(b.createdAt || 0).getTime();
     return tb - ta;
   });
+}
+
+/**
+ * Badge carte liste admin (inclut Lecture).
+ * @param {{ liveState?: string; displayState?: string; voteState?: string; _localOnly?: boolean }} e
+ */
+export function adminEventsListBadgeProps(e) {
+  const key = adminEventsListBadgeKey(e);
+  const lecture = {
+    label: "Lecture",
+    bg: "rgba(99, 102, 241, 0.12)",
+    color: "#3730a3",
+    border: "rgba(99, 102, 241, 0.35)",
+  };
+  if (key === "lecture") return lecture;
+  return liveStateBadgeProps(
+    key === "voting"
+      ? "voting"
+      : key === "waiting"
+        ? "waiting"
+        : key === "results"
+          ? "results"
+          : key === "paused"
+            ? "paused"
+            : key === "finished"
+              ? "finished"
+              : String(e.liveState || ""),
+  );
 }
 
 /** @param {string | undefined} liveState */
