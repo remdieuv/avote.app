@@ -1,8 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
+import { AdminAccountBar } from "./AdminAccountBar";
+import { AdminUserContext } from "./AdminUserContext";
 
 /**
  * Protège toutes les routes sous `/admin` : session obligatoire.
@@ -10,6 +12,7 @@ import { adminFetch, apiBaseBrowser } from "@/lib/config";
 export function AdminAuthShell({ children }) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
+  const [user, setUser] = useState(/** @type {{ id: string; email: string } | null} */ (null));
 
   useEffect(() => {
     let cancelled = false;
@@ -22,7 +25,18 @@ export function AdminAuthShell({ children }) {
       try {
         const res = await adminFetch(`${apiBaseBrowser()}/auth/me`);
         if (cancelled) return;
-        if (res.ok) {
+        if (!res.ok) {
+          router.replace(`/login?next=${encodeURIComponent(path)}`);
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        const u = data?.user;
+        if (
+          u &&
+          typeof u.id === "string" &&
+          typeof u.email === "string"
+        ) {
+          setUser({ id: u.id, email: u.email });
           setReady(true);
           return;
         }
@@ -39,7 +53,18 @@ export function AdminAuthShell({ children }) {
     };
   }, [router]);
 
-  if (!ready) {
+  const logout = useCallback(async () => {
+    try {
+      await adminFetch(`${apiBaseBrowser()}/auth/logout`, { method: "POST" });
+    } catch {
+      /* cookie cleared best-effort */
+    }
+    router.replace("/login");
+  }, [router]);
+
+  const ctx = useMemo(() => ({ user, logout }), [user, logout]);
+
+  if (!ready || !user) {
     return (
       <div
         style={{
@@ -57,5 +82,19 @@ export function AdminAuthShell({ children }) {
     );
   }
 
-  return children;
+  return (
+    <AdminUserContext.Provider value={ctx}>
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          width: "100%",
+        }}
+      >
+        <AdminAccountBar />
+        <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
+      </div>
+    </AdminUserContext.Provider>
+  );
 }
