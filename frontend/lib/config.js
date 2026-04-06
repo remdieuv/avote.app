@@ -19,11 +19,12 @@ function apiBaseBrowser() {
   if (b && typeof b === "string" && b.trim() !== "") {
     return b.replace(/\/$/, "");
   }
-  /* Dev : même origine que Next (rewrite → backend) pour que le cookie httpOnly soit envoyé. */
-  if (process.env.NODE_ENV === "development") {
-    return "/api/backend";
-  }
-  return RAW_API_URL;
+  /**
+   * Par défaut : proxy Next (`app/api/backend/...` ou rewrite) pour cookies same-origin.
+   * Évite le 404 si NEXT_PUBLIC_API_URL pointe par erreur vers le front ou en `next start`
+   * sans URL absolue vers Express.
+   */
+  return "/api/backend";
 }
 
 /** Envoie les cookies de session vers l’API (même site ou proxy). */
