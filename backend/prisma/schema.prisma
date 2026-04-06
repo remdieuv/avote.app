@@ -77,8 +77,8 @@ model User {
 
 model Event {
   id           String      @id @default(cuid())
-  userId       String
-  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String?
+  user         User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
   title        String
   /** Texte optionnel régie + salle /join */
   description  String?
