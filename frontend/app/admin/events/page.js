@@ -14,7 +14,7 @@ import {
   SORT_ACTIVE_FIRST,
   EVENT_STATUS_FILTER_ALL,
 } from "@/lib/adminEventsFilters";
-import { adminEventsListBadgeKey } from "@/lib/adminEventsDashboard";
+import { getEventUxState } from "@/lib/eventUxState";
 import { loadStoredMyEvents } from "@/lib/myEventsStorage";
 
 function formatEventDate(iso, fallbackLabel) {
@@ -32,7 +32,7 @@ function formatEventDate(iso, fallbackLabel) {
 /** En direct → lecture → en attente → sinon premier. */
 function pickFeaturedEventId(events) {
   if (!events.length) return null;
-  const by = (key) => events.find((e) => adminEventsListBadgeKey(e) === key);
+  const by = (key) => events.find((e) => getEventUxState(e).key === key);
   return (
     by("voting")?.id ??
     by("lecture")?.id ??

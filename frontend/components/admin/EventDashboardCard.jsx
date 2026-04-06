@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { adminEventsListBadgeProps } from "@/lib/adminEventsDashboard";
+import { getEventUxState } from "@/lib/eventUxState";
 
 /**
  * @param {{
@@ -22,10 +22,8 @@ import { adminEventsListBadgeProps } from "@/lib/adminEventsDashboard";
  */
 export function EventDashboardCard({ event, featured, formatDate }) {
   const ev = event;
-  const badge = adminEventsListBadgeProps(ev);
-  if (ev._localOnly) {
-    badge.label = "Brouillon local";
-  }
+  const ux = getEventUxState(ev);
+  const badge = { label: ux.label, ...ux.color };
 
   const pc =
     typeof ev.pollCount === "number" && !Number.isNaN(ev.pollCount)

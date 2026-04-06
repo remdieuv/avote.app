@@ -1,7 +1,5 @@
-import {
-  adminEventsListBadgeKey,
-  sortEventsForDashboard,
-} from "./adminEventsDashboard";
+import { getEventUxState } from "./eventUxState";
+import { sortEventsForDashboard } from "./adminEventsDashboard";
 
 export const EVENT_STATUS_FILTER_ALL = "all";
 
@@ -49,7 +47,7 @@ export function filterEventsBySearch(events, rawQuery) {
  */
 export function filterEventsByStatus(events, status) {
   if (!status || status === EVENT_STATUS_FILTER_ALL) return [...events];
-  return events.filter((e) => adminEventsListBadgeKey(e) === status);
+  return events.filter((e) => getEventUxState(e).key === status);
 }
 
 /**

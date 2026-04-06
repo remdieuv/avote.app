@@ -12,14 +12,12 @@ import {
 } from "@/lib/chronoFormat";
 import { AjouterQuestionLiveModal } from "@/components/AjouterQuestionLiveModal";
 import { API_URL as API, SOCKET_URL as SOCKET } from "@/lib/config";
-
-const STATE_LABELS = {
-  waiting: "EN ATTENTE",
-  voting: "VOTE EN COURS",
-  results: "RÉSULTATS À L’ÉCRAN",
-  paused: "PAUSE",
-  finished: "ÉVÉNEMENT TERMINÉ",
-};
+import {
+  getEventUxPanelStyles,
+  getEventUxSceneBadge,
+  getEventUxSceneBadgeFromKey,
+  getEventUxState,
+} from "@/lib/eventUxState";
 
 const VOTE_STATE_LABELS = {
   open: "Vote ouvert",
@@ -29,7 +27,7 @@ const VOTE_STATE_LABELS = {
 const DISPLAY_STATE_LABELS = {
   question: "Question (réponses à l’écran)",
   results: "Résultats (barres)",
-  black: "Écran noir",
+  black: "Pause",
   waiting:
     "Attente — la salle ne voit rien. Relancez la projection : « Afficher la question » ou « Afficher les résultats en direct ».",
 };
@@ -57,118 +55,12 @@ function deriveRegieDisplayFallback(live) {
   return "waiting";
 }
 
-/**
- * Textes pilotage basés sur vote + affichage (sans modifier l’API).
- * @param {string} voteStateUi
- * @param {string} displayStateUi
- * @param {string} liveState
- */
-function deriveRegiePilotagePresentation(voteStateUi, displayStateUi, liveState) {
-  const vs = String(voteStateUi || "").toLowerCase();
-  const ds = String(displayStateUi || "").toLowerCase();
-  const ls = String(liveState || "").toLowerCase();
-
-  const badgeLecture = {
-    label: "LECTURE",
-    bg: "#e0e7ff",
-    color: "#3730a3",
-    border: "#a5b4fc",
-  };
-  const badgeAttente = {
-    label: "ATTENTE",
-    bg: "#f3f4f6",
-    color: "#4b5563",
-    border: "#d1d5db",
-  };
-
-  if (ls === "finished") {
-    return {
-      headline: STATE_LABELS.finished,
-      tag: "FINISHED",
-      panelKind: "finished",
-      badge: {
-        label: "FIN",
-        bg: "#f3f4f6",
-        color: "#4b5563",
-        border: "#e5e7eb",
-      },
-    };
-  }
-  if (ls === "paused" || ds === "black") {
-    return {
-      headline: "Écran noir — la salle ne voit pas le contenu",
-      tag: "PAUSED",
-      panelKind: "paused",
-      badge: {
-        label: "NOIR",
-        bg: "#fef9c3",
-        color: "#854d0e",
-        border: "#fde047",
-      },
-    };
-  }
-  if (ds === "results") {
-    return {
-      headline:
-        vs === "open"
-          ? "Résultats à l’écran — vote encore ouvert"
-          : "Résultats à l’écran — vote fermé",
-      tag: vs === "open" ? "RESULTS · LIVE" : "RESULTS",
-      panelKind: "results",
-      badge: {
-        label: "RÉSULTATS",
-        bg: "#dbeafe",
-        color: "#1e40af",
-        border: "#93c5fd",
-      },
-    };
-  }
-  if (ds === "question") {
-    if (vs === "open") {
-      return {
-        headline: "Vote ouvert — question affichée aux participants",
-        tag: "VOTING",
-        panelKind: "voting",
-        badge: {
-          label: "VOTE",
-          bg: "#dcfce7",
-          color: "#166534",
-          border: "#86efac",
-        },
-      };
-    }
-    return {
-      headline:
-        "Question affichée — vote fermé (récap ou préparation)",
-      tag: "LECTURE",
-      panelKind: "waiting",
-      badge: badgeLecture,
-    };
-  }
-  /**
-   * displayState WAITING (ex. après « Revenir au direct ») : plus d’écran noir,
-   * mais pas encore de scène QUESTION/RESULTS — le vote peut rester OPEN.
-   */
-  if (vs === "open") {
-    return {
-      headline:
-        "Direct repris — vote ouvert : projetez la question ou les résultats",
-      tag: "ATTENTE · VOTE OUVERT",
-      panelKind: "waiting",
-      badge: {
-        label: "SCÈNE ?",
-        bg: "#dbeafe",
-        color: "#1e40af",
-        border: "#93c5fd",
-      },
-    };
-  }
-  return {
-    headline: "Avant le direct ou entre deux séquences",
-    tag: ls === "—" || !ls ? "WAITING" : String(liveState).toUpperCase(),
-    panelKind: "waiting",
-    badge: badgeAttente,
-  };
+/** Normalise la valeur affichée côté UI avant getEventUxState. */
+function normalizeRegieLiveStateForUx(raw) {
+  if (raw == null) return undefined;
+  const s = String(raw).trim();
+  if (s === "" || s === "—") return undefined;
+  return s;
 }
 
 /** ≥1024px : dashboard 3 colonnes (équivalent lg) */
@@ -193,63 +85,6 @@ const CARD = {
   padding: "1rem",
   boxSizing: "border-box",
 };
-
-/** Couleurs d’état live : VOTING vert, RESULTS bleu, WAITING gris */
-function liveStatePanelStyles(liveState) {
-  const s = String(liveState || "").toLowerCase();
-  if (s === "voting") {
-    return {
-      background: "linear-gradient(180deg, #ecfdf5 0%, #f0fdf4 100%)",
-      border: "1px solid #86efac",
-      accent: "#16a34a",
-      pillBg: "#dcfce7",
-      pillColor: "#166534",
-    };
-  }
-  if (s === "results") {
-    return {
-      background: "linear-gradient(180deg, #eff6ff 0%, #f8fafc 100%)",
-      border: "1px solid #93c5fd",
-      accent: "#2563eb",
-      pillBg: "#dbeafe",
-      pillColor: "#1e40af",
-    };
-  }
-  if (s === "waiting" || s === "—" || !s) {
-    return {
-      background: "linear-gradient(180deg, #f9fafb 0%, #f3f4f6 100%)",
-      border: "1px solid #d1d5db",
-      accent: "#6b7280",
-      pillBg: "#e5e7eb",
-      pillColor: "#374151",
-    };
-  }
-  if (s === "paused") {
-    return {
-      background: "linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%)",
-      border: "1px solid #fcd34d",
-      accent: "#d97706",
-      pillBg: "#fde68a",
-      pillColor: "#92400e",
-    };
-  }
-  if (s === "finished") {
-    return {
-      background: "linear-gradient(180deg, #f9fafb 0%, #f3f4f6 100%)",
-      border: "1px solid #d1d5db",
-      accent: "#4b5563",
-      pillBg: "#e5e7eb",
-      pillColor: "#1f2937",
-    };
-  }
-  return {
-    background: "#f9fafb",
-    border: "1px solid #e5e7eb",
-    accent: "#6b7280",
-    pillBg: "#e5e7eb",
-    pillColor: "#374151",
-  };
-}
 
 function chronoRestantAffiche(tm, tick) {
   void tick;
@@ -706,49 +541,6 @@ function btnDanger(disabled) {
 function lienDiffusionAbsolu(path) {
   if (typeof window === "undefined") return "";
   return `${window.location.origin}${path}`;
-}
-
-/** Badge compact LIVE / VOTE / RÉSULTATS selon la scène. */
-function regieLiveSceneBadge(liveState) {
-  const s = String(liveState || "").toLowerCase();
-  if (s === "voting") {
-    return {
-      label: "VOTE",
-      bg: "#dcfce7",
-      color: "#166534",
-      border: "#86efac",
-    };
-  }
-  if (s === "results") {
-    return {
-      label: "RÉSULTATS",
-      bg: "#dbeafe",
-      color: "#1e40af",
-      border: "#93c5fd",
-    };
-  }
-  if (s === "paused") {
-    return {
-      label: "PAUSE",
-      bg: "#fef9c3",
-      color: "#854d0e",
-      border: "#fde047",
-    };
-  }
-  if (s === "finished") {
-    return {
-      label: "FIN",
-      bg: "#f3f4f6",
-      color: "#4b5563",
-      border: "#e5e7eb",
-    };
-  }
-  return {
-    label: "LIVE",
-    bg: "#ffedd5",
-    color: "#9a3412",
-    border: "#fdba74",
-  };
 }
 
 /**
@@ -1334,7 +1126,9 @@ function PanneauQrParticipant({
   }
 
   const qrSize = rail ? 252 : 196;
-  const badge = sceneBadge ?? regieLiveSceneBadge(liveState);
+  const badge =
+    sceneBadge ??
+    getEventUxSceneBadge({ liveState: normalizeRegieLiveStateForUx(liveState) });
 
   const wrap = {
     ...CARD,
@@ -2436,7 +2230,9 @@ function RegieSidebarInner({
   const [savingDesc, setSavingDesc] = useState(false);
   const [descError, setDescError] = useState(null);
 
-  const badge = sceneBadge ?? regieLiveSceneBadge(liveState);
+  const badge =
+    sceneBadge ??
+    getEventUxSceneBadge({ liveState: normalizeRegieLiveStateForUx(liveState) });
   const secondary = {
     fontSize: "0.78rem",
     color: "#64748b",
@@ -3414,16 +3210,20 @@ export default function RegieEventPage() {
     ? String(eventData.displayState).toLowerCase()
     : deriveRegieDisplayFallback(liveState);
 
-  const pilotagePresentation = useMemo(
+  const ux = useMemo(
     () =>
-      deriveRegiePilotagePresentation(voteStateUi, displayStateUi, liveState),
-    [voteStateUi, displayStateUi, liveState],
+      getEventUxState({
+        liveState: normalizeRegieLiveStateForUx(liveState),
+        displayState: displayStateUi,
+        voteState: voteStateUi,
+      }),
+    [liveState, displayStateUi, voteStateUi],
   );
 
-  const stateLabel = pilotagePresentation.headline;
-  const statePanel = liveStatePanelStyles(pilotagePresentation.panelKind);
-  const sceneBadge = pilotagePresentation.badge;
-  const pilotageTag = pilotagePresentation.tag;
+  const stateLabel = ux.label;
+  const statePanel = getEventUxPanelStyles(ux.key);
+  const sceneBadge = getEventUxSceneBadgeFromKey(ux.key);
+  const pilotageTag = ux.label;
 
   const voteLabel =
     VOTE_STATE_LABELS[voteStateUi] ?? String(voteStateUi).toUpperCase();
