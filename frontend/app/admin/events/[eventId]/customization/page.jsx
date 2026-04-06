@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import { resolveApiAssetUrl } from "@/lib/assetUrl";
-import { API_URL } from "@/lib/config";
+import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
 const card = {
   background: "#fff",
@@ -167,7 +167,9 @@ export default function EventCustomizationPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await fetch(`${API_URL}/events/${eventId}`, { cache: "no-store" });
+      const res = await adminFetch(`${apiBaseBrowser()}/events/${eventId}`, {
+        cache: "no-store",
+      });
       if (res.status === 404) {
         setLoadError("Événement introuvable.");
         return;
@@ -248,8 +250,8 @@ export default function EventCustomizationPage() {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch(
-        `${API_URL}/events/${eventId}/customization/upload?kind=${encodeURIComponent(kind)}`,
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/events/${eventId}/customization/upload?kind=${encodeURIComponent(kind)}`,
         { method: "POST", body: fd },
       );
       const body = await res.json().catch(() => ({}));
@@ -291,8 +293,8 @@ export default function EventCustomizationPage() {
         themeMode: themeMode || null,
         backgroundOverlayStrength: backgroundOverlayStrength || null,
       };
-      const res = await fetch(
-        `${API_URL}/events/${eventId}/customization`,
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/events/${eventId}/customization`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },

@@ -58,8 +58,27 @@ enum VoteState {
   CLOSED
 }
 
+enum AuthProvider {
+  CREDENTIALS
+  GOOGLE
+}
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  /** Null si compte Google-only (mot de passe non utilisé). */
+  passwordHash String?
+  provider     AuthProvider @default(CREDENTIALS)
+  googleId     String?      @unique
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  events       Event[]
+}
+
 model Event {
   id           String      @id @default(cuid())
+  userId       String
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   title        String
   /** Texte optionnel régie + salle /join */
   description  String?
@@ -97,6 +116,8 @@ model Event {
   updatedAt    DateTime    @updatedAt
 
   polls Poll[]
+
+  @@index([userId])
 }
 
 model Poll {

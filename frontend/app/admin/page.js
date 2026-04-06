@@ -3,10 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { API_URL } from "@/lib/config";
+import { adminFetch, apiBaseBrowser } from "@/lib/config";
 import { rememberMyEvent } from "@/lib/myEventsStorage";
-
-const API_BASE = `${API_URL}/polls`;
 
 const inputStyle = {
   width: "100%",
@@ -209,7 +207,7 @@ export default function AdminPage() {
     };
 
     try {
-      const res = await fetch(API_BASE, {
+      const res = await adminFetch(`${apiBaseBrowser()}/polls`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

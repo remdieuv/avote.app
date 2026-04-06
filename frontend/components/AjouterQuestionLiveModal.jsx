@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { adminFetch } from "@/lib/config";
 
 /**
  * @param {{
@@ -76,7 +77,7 @@ export function AjouterQuestionLiveModal({
       setSubmitting(true);
       setErreur(null);
       try {
-        const res = await fetch(
+        const res = await adminFetch(
           `${apiBase}/events/${encodeURIComponent(eventId)}/polls/live`,
           {
             method: "POST",

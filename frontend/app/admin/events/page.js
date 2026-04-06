@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminEventsToolbar } from "@/components/admin/AdminEventsToolbar";
 import { EventDashboardCard } from "@/components/admin/EventDashboardCard";
-import { API_URL } from "@/lib/config";
+import { adminFetch, apiBaseBrowser } from "@/lib/config";
 import {
   EVENT_SORT_OPTIONS,
   EVENT_STATUS_FILTERS,
@@ -15,7 +15,6 @@ import {
   EVENT_STATUS_FILTER_ALL,
 } from "@/lib/adminEventsFilters";
 import { getEventUxState } from "@/lib/eventUxState";
-import { loadStoredMyEvents } from "@/lib/myEventsStorage";
 
 function formatEventDate(iso, fallbackLabel) {
   if (!iso) return fallbackLabel ?? "—";
@@ -72,7 +71,6 @@ export default function AdminEventsPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
-  const [fromLocalFallback, setFromLocalFallback] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState(EVENT_STATUS_FILTER_ALL);
   const [sortMode, setSortMode] = useState(SORT_ACTIVE_FIRST);
@@ -81,45 +79,21 @@ export default function AdminEventsPage() {
     setLoading(true);
     setFetchError(null);
     try {
-      const res = await fetch(`${API_URL}/events`);
+      const res = await adminFetch(`${apiBaseBrowser()}/events`);
+      if (res.status === 401) {
+        setRows([]);
+        setFetchError("Session expirée ou non connecté. Rechargez la page ou reconnectez-vous.");
+        return;
+      }
       if (!res.ok) {
         throw new Error(`Erreur ${res.status}`);
       }
       const data = await res.json();
       const list = Array.isArray(data) ? data : [];
-      if (list.length > 0) {
-        setRows(list.map(normalizeEventRow));
-        setFromLocalFallback(false);
-      } else {
-        const stored = loadStoredMyEvents();
-        setRows(
-          stored.map((x) =>
-            normalizeEventRow({
-              id: x.id,
-              title: x.title,
-              slug: x.slug,
-              createdAt: x.savedAt,
-              _localOnly: true,
-            }),
-          ),
-        );
-        setFromLocalFallback(true);
-      }
+      setRows(list.map(normalizeEventRow));
     } catch (e) {
       setFetchError(e.message || "Impossible de charger les événements.");
-      const stored = loadStoredMyEvents();
-      setRows(
-        stored.map((x) =>
-          normalizeEventRow({
-            id: x.id,
-            title: x.title,
-            slug: x.slug,
-            createdAt: x.savedAt,
-            _localOnly: true,
-          }),
-        ),
-      );
-      setFromLocalFallback(true);
+      setRows([]);
     } finally {
       setLoading(false);
     }
@@ -227,21 +201,7 @@ export default function AdminEventsPage() {
             }}
             role="alert"
           >
-            {fetchError} — affichage des événements enregistrés sur cet appareil le cas
-            échéant.
-          </p>
-        ) : null}
-
-        {fromLocalFallback && rows.length > 0 ? (
-          <p
-            style={{
-              margin: "0 0 1.15rem",
-              fontSize: "0.82rem",
-              color: "#7c3aed",
-              fontWeight: 600,
-            }}
-          >
-            Source : appareil (serveur vide ou API indisponible).
+            {fetchError}
           </p>
         ) : null}
 

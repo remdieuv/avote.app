@@ -11,7 +11,7 @@ import {
   formatCountdownVerbose,
 } from "@/lib/chronoFormat";
 import { AjouterQuestionLiveModal } from "@/components/AjouterQuestionLiveModal";
-import { API_URL as API, SOCKET_URL as SOCKET } from "@/lib/config";
+import { adminFetch, apiBaseBrowser, SOCKET_URL as SOCKET } from "@/lib/config";
 import {
   getEventUxPanelStyles,
   getEventUxSceneBadge,
@@ -2066,8 +2066,8 @@ function RegieAutoRevealCard({
     setBusy(true);
     setErr(null);
     try {
-      const res = await fetch(
-        `${API}/events/${eventId}/auto-reveal-settings`,
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/events/${eventId}/auto-reveal-settings`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -2255,7 +2255,7 @@ function RegieSidebarInner({
     setDescError(null);
     try {
       const trimmed = draftDesc.trim();
-      const res = await fetch(`${API}/events/${eventId}`, {
+      const res = await adminFetch(`${apiBaseBrowser()}/events/${eventId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2907,7 +2907,7 @@ export default function RegieEventPage() {
       setLoading(true);
     }
     try {
-      const res = await fetch(`${API}/events/${eventId}`, {
+      const res = await adminFetch(`${apiBaseBrowser()}/events/${eventId}`, {
         cache: "no-store",
         signal: ac.signal,
       });
@@ -3136,7 +3136,9 @@ export default function RegieEventPage() {
     setBusy(true);
     setActionError(null);
     try {
-      const res = await fetch(`${API}${path}`, { method: "POST" });
+      const res = await adminFetch(`${apiBaseBrowser()}${path}`, {
+        method: "POST",
+      });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(body.error || `Erreur ${res.status}`);
@@ -3155,11 +3157,14 @@ export default function RegieEventPage() {
     setBusy(true);
     setActionError(null);
     try {
-      const res = await fetch(`${API}/events/${eventId}/question-timer`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/events/${eventId}/question-timer`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
       const out = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(out.error || `Erreur ${res.status}`);
@@ -3282,13 +3287,15 @@ export default function RegieEventPage() {
       }
       try {
         if (cur === "waiting") {
-          await fetch(`${API}/polls/${pid}/display-question`, {
+          await adminFetch(`${apiBaseBrowser()}/polls/${pid}/display-question`, {
             method: "POST",
           });
         } else if (cur === "question") {
-          await fetch(`${API}/polls/${pid}/show-results`, { method: "POST" });
+          await adminFetch(`${apiBaseBrowser()}/polls/${pid}/show-results`, {
+            method: "POST",
+          });
         } else if (cur === "results") {
-          await fetch(`${API}/polls/${pid}/display-question`, {
+          await adminFetch(`${apiBaseBrowser()}/polls/${pid}/display-question`, {
             method: "POST",
           });
         }
@@ -3796,7 +3803,7 @@ export default function RegieEventPage() {
         <AjouterQuestionLiveModal
           open={addQuestionModalOpen}
           onClose={() => setAddQuestionModalOpen(false)}
-          apiBase={API}
+          apiBase={apiBaseBrowser()}
           eventId={eventId}
           onSuccess={handleQuestionLiveAdded}
         />

@@ -7,7 +7,18 @@ const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
 const { Server } = require("socket.io");
+const cookieParser = require("cookie-parser");
 const { prisma } = require("./lib/prisma");
+const {
+  hashPassword,
+  verifyPassword,
+  signToken,
+  verifyToken,
+  readTokenFromRequest,
+  setAuthCookie,
+  clearAuthCookie,
+} = require("./lib/auth");
+const { assertEventOwnedBy, assertPollOwnedBy } = require("./lib/eventAccess");
 
 /** Origine publique de l’API (URLs absolues assets /join). */
 const PUBLIC_API_ORIGIN = (
@@ -99,6 +110,7 @@ const uploadMiddleware = multer({
 }).single("file");
 
 const app = express();
+app.set("trust proxy", 1);
 
 const allowedOrigins = [
   "http://localhost:3000",
@@ -648,11 +660,126 @@ app.use(
     credentials: true,
   }),
 );
+app.use(cookieParser());
 app.use(express.json({ limit: "1mb" }));
+
+function requireAuth(req, res, next) {
+  const token = readTokenFromRequest(req);
+  const payload = verifyToken(token);
+  if (!payload) {
+    return res.status(401).json({ error: "Non authentifié." });
+  }
+  req.userId = payload.sub;
+  req.userEmail = payload.email;
+  next();
+}
 app.use("/uploads", express.static(UPLOAD_ROOT));
 
 app.get("/", (_req, res) => {
   res.type("text/plain").send("API Avote OK");
+});
+
+app.get("/auth/google", (_req, res) => {
+  res.status(501).json({
+    error:
+      "Connexion Google : à configurer côté serveur. Utilisez e-mail / mot de passe.",
+  });
+});
+
+app.post("/auth/register", async (req, res) => {
+  try {
+    const body = req.body ?? {};
+    const emailRaw =
+      typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    const pass = typeof body.password === "string" ? body.password : "";
+    if (!emailRaw || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) {
+      return res.status(400).json({ error: "E-mail invalide." });
+    }
+    if (pass.length < 8) {
+      return res
+        .status(400)
+        .json({ error: "Mot de passe : au moins 8 caractères." });
+    }
+    const exists = await prisma.user.findUnique({
+      where: { email: emailRaw },
+      select: { id: true },
+    });
+    if (exists) {
+      return res
+        .status(409)
+        .json({ error: "Un compte existe déjà avec cet e-mail." });
+    }
+    const passwordHash = await hashPassword(pass);
+    const user = await prisma.user.create({
+      data: {
+        email: emailRaw,
+        passwordHash,
+        provider: "CREDENTIALS",
+      },
+      select: { id: true, email: true },
+    });
+    const token = signToken(user.id, user.email);
+    setAuthCookie(res, token);
+    return res.status(201).json({ user, token });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Inscription impossible." });
+  }
+});
+
+app.post("/auth/login", async (req, res) => {
+  try {
+    const body = req.body ?? {};
+    const emailRaw =
+      typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    const pass = typeof body.password === "string" ? body.password : "";
+    if (!emailRaw || !pass) {
+      return res.status(400).json({ error: "E-mail et mot de passe requis." });
+    }
+    const user = await prisma.user.findUnique({
+      where: { email: emailRaw },
+      select: { id: true, email: true, passwordHash: true },
+    });
+    if (!user || !(await verifyPassword(pass, user.passwordHash))) {
+      return res.status(401).json({ error: "E-mail ou mot de passe incorrect." });
+    }
+    const token = signToken(user.id, user.email);
+    setAuthCookie(res, token);
+    return res.json({
+      user: { id: user.id, email: user.email },
+      token,
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Connexion impossible." });
+  }
+});
+
+app.post("/auth/logout", (_req, res) => {
+  clearAuthCookie(res);
+  return res.json({ ok: true });
+});
+
+app.get("/auth/me", async (req, res) => {
+  try {
+    const token = readTokenFromRequest(req);
+    const payload = verifyToken(token);
+    if (!payload) {
+      return res.status(401).json({ error: "Non authentifié." });
+    }
+    const user = await prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { id: true, email: true },
+    });
+    if (!user) {
+      clearAuthCookie(res);
+      return res.status(401).json({ error: "Compte introuvable." });
+    }
+    return res.json({ user });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
 });
 
 /**
@@ -670,8 +797,9 @@ app.get("/", (_req, res) => {
  *   participantCount: number;
  * }>>}
  */
-async function listEventsForAdmin() {
+async function listEventsForAdmin(userId) {
   const events = await prisma.event.findMany({
+    where: { userId },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -730,9 +858,9 @@ async function listEventsForAdmin() {
 }
 
 /** Liste des événements (admin / « Mes événements ») */
-app.get("/events", async (_req, res) => {
+app.get("/events", requireAuth, async (req, res) => {
   try {
-    const list = await listEventsForAdmin();
+    const list = await listEventsForAdmin(req.userId);
     return res.json(list);
   } catch (e) {
     console.error(e);
@@ -825,15 +953,12 @@ app.get("/events/slug/:slug", async (req, res) => {
 });
 
 /** Détail événement + sondages triés (régie admin) */
-app.get("/events/:eventId", async (req, res) => {
+app.get("/events/:eventId", requireAuth, async (req, res) => {
   try {
     const { eventId } = req.params;
-    const eventExists = await prisma.event.findUnique({
-      where: { id: eventId },
-      select: { id: true },
-    });
-    if (!eventExists) {
-      return res.status(404).json({ error: "Événement introuvable." });
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
     }
     await fermerVoteSiChronoEpuise(io, eventId);
 
@@ -884,9 +1009,13 @@ app.get("/events/:eventId", async (req, res) => {
 });
 
 /** Mise à jour champ description (régie / admin) */
-app.patch("/events/:eventId", async (req, res) => {
+app.patch("/events/:eventId", requireAuth, async (req, res) => {
   try {
     const { eventId } = req.params;
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
     const body = req.body ?? {};
     if (!Object.prototype.hasOwnProperty.call(body, "description")) {
       return res
@@ -904,13 +1033,6 @@ app.patch("/events/:eventId", async (req, res) => {
       return res
         .status(400)
         .json({ error: "description doit être une chaîne ou null." });
-    }
-    const exists = await prisma.event.findUnique({
-      where: { id: eventId },
-      select: { id: true },
-    });
-    if (!exists) {
-      return res.status(404).json({ error: "Événement introuvable." });
     }
     const event = await prisma.event.update({
       where: { id: eventId },
@@ -944,17 +1066,14 @@ function normalizeAssetUrlInput(raw) {
   return undefined;
 }
 
-app.patch("/events/:eventId/customization", async (req, res) => {
+app.patch("/events/:eventId/customization", requireAuth, async (req, res) => {
   try {
     const { eventId } = req.params;
-    const body = req.body ?? {};
-    const exists = await prisma.event.findUnique({
-      where: { id: eventId },
-      select: { id: true },
-    });
-    if (!exists) {
-      return res.status(404).json({ error: "Événement introuvable." });
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
     }
+    const body = req.body ?? {};
 
     /** @type {Record<string, unknown>} */
     const data = {};
@@ -1082,15 +1201,12 @@ app.patch("/events/:eventId/customization", async (req, res) => {
   }
 });
 
-app.post("/events/:eventId/customization/upload", async (req, res) => {
+app.post("/events/:eventId/customization/upload", requireAuth, async (req, res) => {
   try {
     const { eventId } = req.params;
-    const exists = await prisma.event.findUnique({
-      where: { id: eventId },
-      select: { id: true },
-    });
-    if (!exists) {
-      return res.status(404).json({ error: "Événement introuvable." });
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
     }
     const kindRaw = String(req.query.kind || "").toLowerCase();
     if (kindRaw !== "logo" && kindRaw !== "background") {
@@ -1124,7 +1240,7 @@ app.post("/events/:eventId/customization/upload", async (req, res) => {
 });
 
 /** Chrono question (auto-fermeture du vote quand remainingSec atteint 0) */
-app.post("/events/:eventId/question-timer", async (req, res) => {
+app.post("/events/:eventId/question-timer", requireAuth, async (req, res) => {
   const { eventId } = req.params;
   const body = req.body ?? {};
   const action =
@@ -1132,6 +1248,10 @@ app.post("/events/:eventId/question-timer", async (req, res) => {
   const totalSecBrut = body.totalSec;
 
   try {
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
     const event = await prisma.event.findUnique({ where: { id: eventId } });
     if (!event) {
       return res.status(404).json({ error: "Événement introuvable." });
@@ -1270,8 +1390,12 @@ app.get("/p/:slug", async (req, res) => {
  * Régie : créer un sondage à la volée (file ou lancement immédiat).
  * Corpo : { question, type?: SINGLE_CHOICE|MULTIPLE_CHOICE, options: string[], launchNow?: boolean }
  */
-app.post("/events/:eventId/polls/live", async (req, res) => {
+app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
   const { eventId } = req.params;
+  const owned = await assertEventOwnedBy(eventId, req.userId);
+  if (!owned.ok) {
+    return res.status(owned.status).json({ error: "Événement introuvable." });
+  }
   const body = req.body ?? {};
   const questionBrute =
     typeof body.question === "string" ? body.question.trim() : "";
@@ -1300,14 +1424,6 @@ app.post("/events/:eventId/polls/live", async (req, res) => {
   }
 
   try {
-    const eventExists = await prisma.event.findUnique({
-      where: { id: eventId },
-      select: { id: true },
-    });
-    if (!eventExists) {
-      return res.status(404).json({ error: "Événement introuvable." });
-    }
-
     const agg = await prisma.poll.aggregate({
       where: { eventId },
       _max: { order: true },
@@ -1371,9 +1487,13 @@ app.post("/events/:eventId/polls/live", async (req, res) => {
   }
 });
 
-app.post("/events/:eventId/next-poll", async (req, res) => {
+app.post("/events/:eventId/next-poll", requireAuth, async (req, res) => {
   const { eventId } = req.params;
   try {
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
     const result = await passerAuSondageSuivant(eventId);
     if (!result.ok) {
       return res.status(result.code || 404).json({ error: result.message });
@@ -1386,9 +1506,13 @@ app.post("/events/:eventId/next-poll", async (req, res) => {
   }
 });
 
-app.post("/polls/:pollId/open", async (req, res) => {
+app.post("/polls/:pollId/open", requireAuth, async (req, res) => {
   const { pollId } = req.params;
   try {
+    const pOwn = await assertPollOwnedBy(pollId, req.userId);
+    if (!pOwn.ok) {
+      return res.status(pOwn.status).json({ error: "Sondage introuvable." });
+    }
     const poll = await prisma.poll.findUnique({
       where: { id: pollId },
       include: { event: true },
@@ -1443,9 +1567,13 @@ app.post("/polls/:pollId/open", async (req, res) => {
   }
 });
 
-app.post("/polls/:pollId/close", async (req, res) => {
+app.post("/polls/:pollId/close", requireAuth, async (req, res) => {
   const { pollId } = req.params;
   try {
+    const pOwn = await assertPollOwnedBy(pollId, req.userId);
+    if (!pOwn.ok) {
+      return res.status(pOwn.status).json({ error: "Sondage introuvable." });
+    }
     const poll = await prisma.poll.findUnique({
       where: { id: pollId },
       include: { event: true },
@@ -1521,9 +1649,13 @@ app.post("/polls/:pollId/close", async (req, res) => {
   }
 });
 
-app.post("/polls/:pollId/show-results", async (req, res) => {
+app.post("/polls/:pollId/show-results", requireAuth, async (req, res) => {
   const { pollId } = req.params;
   try {
+    const pOwn = await assertPollOwnedBy(pollId, req.userId);
+    if (!pOwn.ok) {
+      return res.status(pOwn.status).json({ error: "Sondage introuvable." });
+    }
     const poll = await prisma.poll.findUnique({
       where: { id: pollId },
       include: { event: true },
@@ -1557,9 +1689,13 @@ app.post("/polls/:pollId/show-results", async (req, res) => {
 });
 
 /** Affichage écran : revenir à la question (ne rouvre pas le vote) */
-app.post("/polls/:pollId/display-question", async (req, res) => {
+app.post("/polls/:pollId/display-question", requireAuth, async (req, res) => {
   const { pollId } = req.params;
   try {
+    const pOwn = await assertPollOwnedBy(pollId, req.userId);
+    if (!pOwn.ok) {
+      return res.status(pOwn.status).json({ error: "Sondage introuvable." });
+    }
     const poll = await prisma.poll.findUnique({
       where: { id: pollId },
       include: { event: true },
@@ -1593,9 +1729,10 @@ app.post("/polls/:pollId/display-question", async (req, res) => {
   }
 });
 
-app.get("/polls", async (_req, res) => {
+app.get("/polls", requireAuth, async (req, res) => {
   try {
     const polls = await prisma.poll.findMany({
+      where: { event: { userId: req.userId } },
       orderBy: { createdAt: "desc" },
       include: {
         event: true,
@@ -1677,8 +1814,9 @@ function extraireDescriptionCreation(body) {
   return t === "" ? null : t.slice(0, 2000);
 }
 
-app.post("/polls", async (req, res) => {
+app.post("/polls", requireAuth, async (req, res) => {
   try {
+    const userId = req.userId;
     const body = req.body ?? {};
 
     /** --- Mode multi-questions : tableau `polls` (ou `questions`) non vide --- */
@@ -1740,6 +1878,7 @@ app.post("/polls", async (req, res) => {
       const firstPollId = await prisma.$transaction(async (tx) => {
         const event = await tx.event.create({
           data: {
+            userId,
             title: eventTitle,
             slug,
             description: descriptionInit,
@@ -1838,6 +1977,7 @@ app.post("/polls", async (req, res) => {
 
     const event = await prisma.event.create({
       data: {
+        userId,
         title: titleTrim,
         slug,
         description: descriptionInit,
@@ -1979,9 +2119,13 @@ const io = new Server(server, {
 });
 
 /** Réglages régie : auto-reveal (persisté sur l’événement). */
-app.patch("/events/:eventId/auto-reveal-settings", async (req, res) => {
+app.patch("/events/:eventId/auto-reveal-settings", requireAuth, async (req, res) => {
   try {
     const { eventId } = req.params;
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
     const body = req.body ?? {};
     const data = /** @type {Record<string, unknown>} */ ({});
     if (typeof body.autoReveal === "boolean") {
@@ -1998,13 +2142,6 @@ app.patch("/events/:eventId/auto-reveal-settings", async (req, res) => {
         error:
           "Corps attendu : { autoReveal?: boolean, autoRevealDelaySec?: 3 | 5 | 10 }.",
       });
-    }
-    const exists = await prisma.event.findUnique({
-      where: { id: eventId },
-      select: { id: true },
-    });
-    if (!exists) {
-      return res.status(404).json({ error: "Événement introuvable." });
     }
     await annulationAutoRevealProgrammee(eventId);
     const updated = await prisma.event.update({
