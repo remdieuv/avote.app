@@ -1,5 +1,9 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { getEventUxState } from "@/lib/eventUxState";
+import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 
 /**
  * @param {{
@@ -24,6 +28,33 @@ export function EventDashboardCard({ event, featured, formatDate }) {
   const ev = event;
   const ux = getEventUxState(ev);
   const badge = { label: ux.label, ...ux.color };
+  const reducedMotion = usePrefersReducedMotion();
+  const prevUxKeyRef = useRef(
+    /** @type {string | undefined} */ (undefined),
+  );
+  const [badgeStatusEnter, setBadgeStatusEnter] = useState(false);
+  const [cardStatusFlash, setCardStatusFlash] = useState(false);
+
+  const isLiveUx = ux.key === "voting";
+
+  useEffect(() => {
+    const prev = prevUxKeyRef.current;
+    const changed = prev !== undefined && prev !== ux.key;
+    prevUxKeyRef.current = ux.key;
+    if (!changed) return undefined;
+    if (reducedMotion) return undefined;
+    setBadgeStatusEnter(true);
+    const tBadge = window.setTimeout(() => setBadgeStatusEnter(false), 420);
+    let tFlash;
+    if (featured) {
+      setCardStatusFlash(true);
+      tFlash = window.setTimeout(() => setCardStatusFlash(false), 680);
+    }
+    return () => {
+      clearTimeout(tBadge);
+      if (tFlash) clearTimeout(tFlash);
+    };
+  }, [ux.key, featured, reducedMotion]);
 
   const pc =
     typeof ev.pollCount === "number" && !Number.isNaN(ev.pollCount)
@@ -51,32 +82,24 @@ export function EventDashboardCard({ event, featured, formatDate }) {
   }
   const metaLine = metaParts.join(" · ");
 
+  const cardClass = [
+    "avote-event-card",
+    featured && (isLiveUx ? "avote-event-card--featured-live" : "avote-event-card--featured"),
+    cardStatusFlash && "avote-event-card--flash",
+    reducedMotion && "avote-event-card--reduced-motion",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const badgeClass = [
+    "avote-event-badge",
+    badgeStatusEnter && !reducedMotion && "avote-event-badge--enter",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <article
-      className="avote-event-card"
-      style={{
-        position: "relative",
-        display: "flex",
-        flexDirection: "column",
-        padding: "1.25rem 1.35rem",
-        borderRadius: "14px",
-        border: featured
-          ? "1px solid color-mix(in srgb, #2563eb 38%, #e2e8f0)"
-          : "1px solid #e8ecf1",
-        background: featured
-          ? "linear-gradient(165deg, rgba(239, 246, 255, 0.72) 0%, #ffffff 38%)"
-          : "#fff",
-        boxShadow: featured
-          ? "0 14px 44px rgba(37, 99, 235, 0.1), 0 4px 14px rgba(15, 23, 42, 0.06)"
-          : "0 2px 8px rgba(15, 23, 42, 0.06)",
-        boxSizing: "border-box",
-        minHeight: 0,
-        width: "100%",
-        maxWidth: "100%",
-        transition:
-          "transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease",
-      }}
-    >
+    <article className={cardClass}>
       <div
         style={{
           display: "flex",
@@ -102,6 +125,7 @@ export function EventDashboardCard({ event, featured, formatDate }) {
           {ev.title}
         </h2>
         <span
+          className={badgeClass}
           style={{
             flexShrink: 0,
             fontSize: "0.68rem",
@@ -115,6 +139,16 @@ export function EventDashboardCard({ event, featured, formatDate }) {
             border: `1px solid ${badge.border}`,
           }}
         >
+          {isLiveUx ? (
+            <span
+              className={
+                reducedMotion
+                  ? "avote-event-badge-live-dot avote-event-badge-live-dot--static"
+                  : "avote-event-badge-live-dot"
+              }
+              aria-hidden
+            />
+          ) : null}
           {badge.label}
         </span>
       </div>
@@ -288,17 +322,151 @@ export function EventDashboardCard({ event, featured, formatDate }) {
       </div>
 
       <style>{`
+        .avote-event-card {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          padding: 1.25rem 1.35rem;
+          border-radius: 14px;
+          border: 1px solid #e8ecf1;
+          background: #fff;
+          box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+          box-sizing: border-box;
+          min-height: 0;
+          width: 100%;
+          max-width: 100%;
+          transition:
+            transform 0.2s ease-out,
+            box-shadow 0.2s ease-out,
+            border-color 0.22s ease-out,
+            background 0.22s ease-out;
+        }
+        .avote-event-card--featured {
+          border: 1px solid color-mix(in srgb, #2563eb 38%, #e2e8f0);
+          background: linear-gradient(165deg, rgba(239, 246, 255, 0.72) 0%, #ffffff 38%);
+          box-shadow:
+            0 14px 44px rgba(37, 99, 235, 0.1),
+            0 4px 14px rgba(15, 23, 42, 0.06);
+        }
+        .avote-event-card--featured-live {
+          border: 1px solid color-mix(in srgb, #16a34a 40%, #e2e8f0);
+          background: linear-gradient(165deg, rgba(240, 253, 244, 0.78) 0%, #ffffff 42%);
+          box-shadow:
+            0 14px 40px rgba(22, 163, 74, 0.14),
+            0 4px 16px rgba(15, 23, 42, 0.07);
+          transform: scale(1.005);
+        }
+        .avote-event-card--flash.avote-event-card--featured,
+        .avote-event-card--flash.avote-event-card--featured-live {
+          border-color: color-mix(in srgb, #22c55e 55%, #e2e8f0);
+          box-shadow:
+            0 16px 48px rgba(22, 163, 74, 0.16),
+            0 6px 18px rgba(15, 23, 42, 0.08);
+        }
+        .avote-event-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.35rem;
+          transition:
+            background-color 0.22s ease-out,
+            border-color 0.22s ease-out,
+            color 0.22s ease-out,
+            transform 0.22s ease-out,
+            opacity 0.22s ease-out;
+        }
+        .avote-event-badge--enter {
+          animation: avoteBadgeStatusIn 0.42s ease-out 1;
+        }
+        @keyframes avoteBadgeStatusIn {
+          from {
+            opacity: 0.92;
+            transform: scale(0.97);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        .avote-event-badge-live-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #16a34a;
+          flex-shrink: 0;
+          animation: avoteLiveDotPulse 2.6s ease-in-out infinite;
+        }
+        .avote-event-badge-live-dot--static {
+          animation: none;
+          opacity: 0.9;
+        }
+        @keyframes avoteLiveDotPulse {
+          0%,
+          100% {
+            opacity: 0.78;
+            transform: scale(1);
+          }
+          50% {
+            opacity: 1;
+            transform: scale(1.1);
+          }
+        }
         @media (min-width: 768px) and (hover: hover) {
           .avote-event-card:hover {
             transform: translateY(-2px);
-            box-shadow: ${featured
-              ? "0 18px 52px rgba(37, 99, 235, 0.14), 0 8px 22px rgba(15, 23, 42, 0.08)"
-              : "0 10px 32px rgba(15, 23, 42, 0.1), 0 4px 12px rgba(15, 23, 42, 0.06)"};
+            box-shadow:
+              0 10px 32px rgba(15, 23, 42, 0.1),
+              0 4px 12px rgba(15, 23, 42, 0.06);
+          }
+          .avote-event-card--featured:hover {
+            transform: translateY(-2px);
+            box-shadow:
+              0 18px 52px rgba(37, 99, 235, 0.14),
+              0 8px 22px rgba(15, 23, 42, 0.08);
+          }
+          .avote-event-card--featured-live:hover {
+            transform: translateY(-2px) scale(1.005);
+            box-shadow:
+              0 20px 52px rgba(22, 163, 74, 0.16),
+              0 8px 22px rgba(15, 23, 42, 0.08);
           }
         }
         @media (max-width: 520px) {
           .avote-event-card-secondary-grid {
             grid-template-columns: 1fr;
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .avote-event-card,
+          .avote-event-badge {
+            transition-duration: 0.05s;
+          }
+          .avote-event-badge--enter {
+            animation: none;
+          }
+          .avote-event-badge-live-dot {
+            animation: none;
+          }
+          .avote-event-card--featured-live {
+            transform: none;
+          }
+          @media (min-width: 768px) and (hover: hover) {
+            .avote-event-card--featured-live:hover {
+              transform: translateY(-2px);
+            }
+          }
+        }
+        .avote-event-card--reduced-motion.avote-event-card--featured-live {
+          transform: none;
+        }
+        .avote-event-card--reduced-motion .avote-event-badge--enter {
+          animation: none;
+        }
+        .avote-event-card--reduced-motion .avote-event-badge-live-dot {
+          animation: none;
+        }
+        @media (min-width: 768px) and (hover: hover) {
+          .avote-event-card--reduced-motion.avote-event-card--featured-live:hover {
+            transform: translateY(-2px);
           }
         }
       `}</style>
