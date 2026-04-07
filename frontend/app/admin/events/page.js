@@ -16,6 +16,8 @@ import {
 } from "@/lib/adminEventsFilters";
 import { getEventUxState } from "@/lib/eventUxState";
 
+const LEADS_LAST_SEEN_LS_PREFIX = "avote_leads_seen_at_";
+
 function formatEventDate(iso, fallbackLabel) {
   if (!iso) return fallbackLabel ?? "—";
   try {
@@ -69,6 +71,7 @@ function normalizeEventRow(e) {
 
 export default function AdminEventsPage() {
   const [rows, setRows] = useState([]);
+  const [newLeadCounts, setNewLeadCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -102,6 +105,44 @@ export default function AdminEventsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!rows.length) {
+      setNewLeadCounts({});
+      return;
+    }
+    let cancelled = false;
+    const run = async () => {
+      const next = {};
+      for (const ev of rows) {
+        const eventId = String(ev.id || "");
+        if (!eventId) continue;
+        try {
+          const seenRaw = window.localStorage.getItem(
+            LEADS_LAST_SEEN_LS_PREFIX + eventId,
+          );
+          const seenMs = Number(seenRaw || "0");
+          const res = await adminFetch(`${apiBaseBrowser()}/events/${eventId}/leads`);
+          const body = await res.json().catch(() => []);
+          if (!res.ok || !Array.isArray(body)) continue;
+          next[eventId] = body.filter((x) => {
+            const ts = Date.parse(String(x?.createdAt || ""));
+            return Number.isFinite(ts) && ts > seenMs;
+          }).length;
+        } catch {
+          /* ignore */
+        }
+      }
+      if (!cancelled) setNewLeadCounts(next);
+    };
+    void run();
+    const id = window.setInterval(() => void run(), 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [rows]);
 
   const filteredSorted = useMemo(() => {
     let list = filterEventsBySearch(rows, searchQuery);
@@ -308,6 +349,7 @@ export default function AdminEventsPage() {
                 <EventDashboardCard
                   event={ev}
                   featured={ev.id === featuredId}
+                  newLeadCount={newLeadCounts[ev.id] || 0}
                   formatDate={formatEventDate}
                 />
               </div>

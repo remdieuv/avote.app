@@ -21,10 +21,16 @@ import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
  *     _localOnly?: boolean;
  *   };
  *   featured?: boolean;
+ *   newLeadCount?: number;
  *   formatDate: (iso: string | undefined, fallback?: string | null) => string;
  * }} props
  */
-export function EventDashboardCard({ event, featured, formatDate }) {
+export function EventDashboardCard({
+  event,
+  featured,
+  newLeadCount = 0,
+  formatDate,
+}) {
   const ev = event;
   const ux = getEventUxState(ev);
   const badge = { label: ux.label, ...ux.color };
@@ -343,6 +349,30 @@ export function EventDashboardCard({ event, featured, formatDate }) {
               }}
             >
               Leads
+              {newLeadCount > 0 ? (
+                <span
+                  style={{
+                    marginLeft: "0.35rem",
+                    display: "inline-flex",
+                    minWidth: "1.1rem",
+                    height: "1.1rem",
+                    borderRadius: "999px",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "0 0.3rem",
+                    background: "#dcfce7",
+                    border: "1px solid #86efac",
+                    color: "#166534",
+                    fontSize: "0.66rem",
+                    fontWeight: 800,
+                    lineHeight: 1,
+                  }}
+                  aria-label={`${newLeadCount} nouveaux leads`}
+                  title={`${newLeadCount} nouveaux leads`}
+                >
+                  {newLeadCount > 99 ? "99+" : newLeadCount}
+                </span>
+              ) : null}
             </Link>
           </div>
         )}
