@@ -746,18 +746,26 @@ export function PollExperience({
   }, [showBlocResultatsEnDirect, pollId, resultsVoteSignature]);
 
   const resultsAnchorRef = useRef(null);
+  const leadFormAnchorRef = useRef(null);
   const prevMerciRef = useRef(false);
   useEffect(() => {
     if (merciPourVote && !prevMerciRef.current) {
       requestAnimationFrame(() => {
-        resultsAnchorRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
+        if (showLeadForm) {
+          leadFormAnchorRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+        } else {
+          resultsAnchorRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        }
       });
     }
     prevMerciRef.current = merciPourVote;
-  }, [merciPourVote]);
+  }, [merciPourVote, showLeadForm]);
 
   const isMultipleChoice = poll?.type === "MULTIPLE_CHOICE";
 
@@ -832,6 +840,8 @@ export function PollExperience({
         throw new Error(errBody.error || `Erreur ${res.status}`);
       }
 
+      const pollAfterVote = await res.json().catch(() => null);
+
       try {
         if (typeof window !== "undefined") {
           window.localStorage.setItem(cleVotePourPoll(pollId), "true");
@@ -842,9 +852,9 @@ export function PollExperience({
 
       await loadPoll({ silent: true });
       const leadTriggered =
-        Boolean(poll?.leadEnabled) &&
-        typeof poll?.leadTriggerOptionId === "string" &&
-        optionIds.includes(poll.leadTriggerOptionId);
+        Boolean(pollAfterVote?.leadEnabled) &&
+        typeof pollAfterVote?.leadTriggerOptionId === "string" &&
+        optionIds.includes(pollAfterVote.leadTriggerOptionId);
       flushSync(() => {
         setSelectedOptionId(null);
         setSelectedOptionIds([]);
@@ -891,6 +901,14 @@ export function PollExperience({
       if (!res.ok) throw new Error(body.error || `Erreur ${res.status}`);
       setLeadSuccess(true);
       setShowLeadForm(false);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          resultsAnchorRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        });
+      });
     } catch (e) {
       setLeadError(e?.message || "Lead non enregistré.");
     } finally {
@@ -1513,6 +1531,7 @@ export function PollExperience({
               </p>
               {showLeadForm ? (
                 <div
+                  ref={leadFormAnchorRef}
                   style={{
                     marginBottom: "1rem",
                     padding: "0.9rem",
