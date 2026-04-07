@@ -20,8 +20,11 @@ export function AjouterQuestionLiveModal({
   onSuccess,
 }) {
   const [question, setQuestion] = useState("");
-  const [pollType, setPollType] = useState(/** @type {"SINGLE_CHOICE"|"MULTIPLE_CHOICE"} */ ("SINGLE_CHOICE"));
+  const [pollType, setPollType] = useState(
+    /** @type {"SINGLE_CHOICE"|"MULTIPLE_CHOICE"|"LEAD"} */ ("SINGLE_CHOICE"),
+  );
   const [reponses, setReponses] = useState(["", ""]);
+  const [leadTriggerOrder, setLeadTriggerOrder] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [erreur, setErreur] = useState(/** @type {string | null} */ (null));
 
@@ -30,6 +33,7 @@ export function AjouterQuestionLiveModal({
     setQuestion("");
     setPollType("SINGLE_CHOICE");
     setReponses(["", ""]);
+    setLeadTriggerOrder(0);
     setErreur(null);
   }, [open, eventId]);
 
@@ -86,6 +90,8 @@ export function AjouterQuestionLiveModal({
               question: q,
               type: pollType,
               options: opts,
+                leadTriggerOrder:
+                  pollType === "LEAD" ? Number(leadTriggerOrder ?? 0) : 0,
               launchNow,
             }),
           },
@@ -106,7 +112,16 @@ export function AjouterQuestionLiveModal({
         setSubmitting(false);
       }
     },
-    [eventId, apiBase, question, reponses, pollType, onSuccess, onClose],
+    [
+      eventId,
+      apiBase,
+      question,
+      reponses,
+      pollType,
+      leadTriggerOrder,
+      onSuccess,
+      onClose,
+    ],
   );
 
   if (!open) return null;
@@ -247,7 +262,83 @@ export function AjouterQuestionLiveModal({
             />
             Choix multiple
           </label>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.35rem",
+              fontSize: "0.86rem",
+              cursor: submitting ? "not-allowed" : "pointer",
+            }}
+          >
+            <input
+              type="radio"
+              name="pollTypeAjout"
+              checked={pollType === "LEAD"}
+              disabled={submitting}
+              onChange={() => {
+                setPollType("LEAD");
+                setLeadTriggerOrder(0);
+              }}
+            />
+            Lead (Oui/Non + formulaire)
+          </label>
         </div>
+        {pollType === "LEAD" ? (
+          <div
+            style={{
+              margin: "0 0 0.85rem 0",
+              padding: "0.55rem 0.65rem",
+              borderRadius: "8px",
+              border: "1px solid #e2e8f0",
+              background: "#f8fafc",
+            }}
+          >
+            <label
+              style={{
+                display: "block",
+                fontSize: "0.74rem",
+                fontWeight: 700,
+                color: "#475569",
+                marginBottom: "0.35rem",
+              }}
+            >
+              Déclencheur du formulaire
+            </label>
+            <select
+              value={Math.max(0, Number(leadTriggerOrder ?? 0))}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                setLeadTriggerOrder(Number.isFinite(n) && n >= 0 ? n : 0);
+              }}
+              disabled={submitting}
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "0.42rem 0.5rem",
+                borderRadius: "7px",
+                border: "1px solid #cbd5e1",
+                fontSize: "0.84rem",
+                background: "#fff",
+              }}
+            >
+              {reponses.map((r, idx) => (
+                <option key={`lead-trigger-${idx}`} value={idx}>
+                  {`Option ${idx + 1}${r.trim() ? ` - ${r.trim()}` : ""}`}
+                </option>
+              ))}
+            </select>
+            <p
+              style={{
+                margin: "0.35rem 0 0 0",
+                fontSize: "0.72rem",
+                color: "#64748b",
+              }}
+            >
+              Le formulaire s’ouvre après un vote sur cette option.
+            </p>
+          </div>
+        ) : null}
 
         <p
           style={{

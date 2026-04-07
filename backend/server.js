@@ -1390,7 +1390,7 @@ app.get("/p/:slug", async (req, res) => {
 
 /**
  * Régie : créer un sondage à la volée (file ou lancement immédiat).
- * Corpo : { question, type?: SINGLE_CHOICE|MULTIPLE_CHOICE, options: string[], launchNow?: boolean }
+ * Corpo : { question, type?: SINGLE_CHOICE|MULTIPLE_CHOICE|LEAD, options: string[], leadTriggerOrder?: number, launchNow?: boolean }
  */
 app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
   const { eventId } = req.params;
@@ -1412,8 +1412,17 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
       .json({ error: "question requise (1 à 2000 caractères)." });
   }
 
-  const pollType =
-    typeBrut === "MULTIPLE_CHOICE" ? "MULTIPLE_CHOICE" : "SINGLE_CHOICE";
+  const pollTypeParsed =
+    typeBrut === "LEAD"
+      ? "LEAD"
+      : typeBrut === "MULTIPLE_CHOICE"
+        ? "MULTIPLE_CHOICE"
+        : "SINGLE_CHOICE";
+  const pollType = pollTypeParsed === "LEAD" ? "SINGLE_CHOICE" : pollTypeParsed;
+  const leadTriggerOrder = normalizeLeadTriggerOrder(
+    body.leadTriggerOrder,
+    optionsBrutes.length,
+  );
 
   const labels = optionsBrutes
     .map((x) => (typeof x === "string" ? x.trim() : ""))
@@ -1436,19 +1445,30 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
         ? `${questionBrute.slice(0, 117)}…`
         : questionBrute;
 
-    const created = await prisma.poll.create({
+    let created = await prisma.poll.create({
       data: {
         eventId,
         title: titreCourt,
         question: questionBrute,
         type: pollType,
+        leadEnabled: pollTypeParsed === "LEAD",
         status: "CLOSED",
         order: nextOrder,
         options: {
           create: labels.map((label, order) => ({ label, order })),
         },
       },
+      include: { options: { orderBy: { order: "asc" } } },
     });
+
+    if (pollTypeParsed === "LEAD") {
+      const trigger = created.options[leadTriggerOrder] ?? created.options[0] ?? null;
+      created = await prisma.poll.update({
+        where: { id: created.id },
+        data: { leadTriggerOptionId: trigger?.id ?? null },
+        include: { options: { orderBy: { order: "asc" } } },
+      });
+    }
 
     if (launchNow) {
       await annulationAutoRevealProgrammee(eventId);
