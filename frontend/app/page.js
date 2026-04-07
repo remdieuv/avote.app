@@ -445,63 +445,59 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Pensé pour le live */}
+        {/* Pensé pour le live — version premium */}
         <section id="live" style={sectionY}>
-          <div
-            style={{
-              borderRadius: "20px",
-              border: "1px solid #ddd6fe",
-              background: "linear-gradient(160deg, #faf5ff 0%, #fff 55%)",
-              padding: "clamp(2rem, 5vw, 3rem)",
-            }}
-          >
-            <h2
-              style={{
-                fontSize: "clamp(1.25rem, 3vw, 1.5rem)",
-                fontWeight: 800,
-                textAlign: "center",
-                margin: "0 0 2rem",
-                color: "#4c1d95",
-                letterSpacing: "-0.02em",
-              }}
-            >
-              Pensé pour le live
-            </h2>
-            <ul
-              style={{
-                listStyle: "none",
-                padding: 0,
-                margin: 0,
-                display: "grid",
-                gap: "1.25rem",
-                maxWidth: "520px",
-                marginLeft: "auto",
-                marginRight: "auto",
-              }}
-            >
+          <div className="live-premium-wrap">
+            <div className="live-premium-head">
+              <p className="live-eyebrow">Fiabilité produit</p>
+              <h2 className="live-title">Pensé pour le live</h2>
+              <p className="live-subtitle">
+                Une base robuste pour animer sans friction, du vote participant
+                à l’affichage en salle.
+              </p>
+            </div>
+
+            <div className="live-grid">
               {[
-                { icon: "⚡", text: "Mise à jour en temps réel" },
-                { icon: "🔗", text: "Synchronisation régie / participants / écran" },
-                { icon: "✨", text: "Aucune installation" },
-              ].map((item) => (
-                <li
-                  key={item.text}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.9rem",
-                    fontSize: "1.02rem",
-                    fontWeight: 600,
-                    color: "#334155",
-                  }}
-                >
-                  <span style={{ fontSize: "1.4rem" }} aria-hidden>
-                    {item.icon}
-                  </span>
-                  {item.text}
-                </li>
+                {
+                  icon: "⚡",
+                  title: "Mise à jour en temps réel",
+                  micro: "Temps réel natif",
+                },
+                {
+                  icon: "🔗",
+                  title: "Synchronisation régie / participants / écran",
+                  micro: "Synchronisation continue",
+                },
+                {
+                  icon: "✨",
+                  title: "Aucune installation",
+                  micro: "Accès direct via lien",
+                },
+              ].map((item, idx) => (
+                <article key={item.title} className="live-card">
+                  <div className="live-card-top">
+                    <span className="live-icon" aria-hidden>
+                      {item.icon}
+                    </span>
+                    <span className="live-badge">
+                      {idx === 0 ? "Live" : idx === 1 ? "Sync" : "Simple"}
+                    </span>
+                  </div>
+                  <h3 className="live-card-title">{item.title}</h3>
+                  <div className="live-mini" aria-hidden>
+                    {idx === 0 ? (
+                      <span className="live-pulse" />
+                    ) : idx === 1 ? (
+                      <span className="live-links" />
+                    ) : (
+                      <span className="live-check" />
+                    )}
+                  </div>
+                  <p className="live-card-micro">{item.micro}</p>
+                </article>
               ))}
-            </ul>
+            </div>
           </div>
         </section>
 
@@ -840,6 +836,158 @@ export default function HomePage() {
           }
           .how-card {
             z-index: 1;
+          }
+        }
+        .live-premium-wrap {
+          position: relative;
+          border-radius: 24px;
+          border: 1px solid #ddd6fe;
+          background:
+            radial-gradient(900px 260px at 50% -10%, rgba(124, 58, 237, 0.12), transparent 62%),
+            linear-gradient(160deg, #faf5ff 0%, #ffffff 52%, #f8fafc 100%);
+          padding: clamp(1.45rem, 3.8vw, 2.3rem);
+          box-shadow: 0 22px 48px rgba(76, 29, 149, 0.08);
+        }
+        .live-premium-head {
+          text-align: center;
+          max-width: 640px;
+          margin: 0 auto;
+        }
+        .live-eyebrow {
+          margin: 0 0 0.45rem;
+          font-size: 0.72rem;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: #7c3aed;
+        }
+        .live-title {
+          margin: 0;
+          font-size: clamp(1.35rem, 3.2vw, 1.85rem);
+          font-weight: 800;
+          letter-spacing: -0.03em;
+          line-height: 1.15;
+          color: #4c1d95;
+        }
+        .live-subtitle {
+          margin: 0.75rem auto 0;
+          max-width: 44ch;
+          font-size: clamp(0.9rem, 2.2vw, 1rem);
+          color: #64748b;
+        }
+        .live-grid {
+          margin-top: clamp(1.2rem, 3.4vw, 1.8rem);
+          display: grid;
+          gap: 0.95rem;
+          grid-template-columns: 1fr;
+        }
+        .live-card {
+          border-radius: 18px;
+          border: 1px solid #e9d5ff;
+          background: rgba(255, 255, 255, 0.9);
+          box-shadow:
+            0 10px 28px rgba(15, 23, 42, 0.06),
+            inset 0 1px 0 rgba(255, 255, 255, 0.95);
+          padding: clamp(1rem, 2.4vw, 1.2rem);
+          min-height: 172px;
+          display: flex;
+          flex-direction: column;
+          transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+        }
+        .live-card:hover {
+          transform: translateY(-3px);
+          border-color: #c4b5fd;
+          box-shadow:
+            0 18px 40px rgba(91, 33, 182, 0.14),
+            inset 0 1px 0 rgba(255, 255, 255, 0.95);
+        }
+        .live-card-top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 0.72rem;
+        }
+        .live-icon {
+          width: 2.2rem;
+          height: 2.2rem;
+          border-radius: 11px;
+          display: grid;
+          place-items: center;
+          border: 1px solid #ddd6fe;
+          background: #faf5ff;
+          font-size: 1.06rem;
+        }
+        .live-badge {
+          font-size: 0.7rem;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          padding: 0.16rem 0.48rem;
+          border-radius: 999px;
+          border: 1px solid #c4b5fd;
+          background: #f5f3ff;
+          color: #6d28d9;
+        }
+        .live-card-title {
+          margin: 0;
+          font-size: 1rem;
+          line-height: 1.34;
+          font-weight: 750;
+          color: #1f2937;
+        }
+        .live-mini {
+          margin-top: 0.8rem;
+          border-radius: 10px;
+          border: 1px solid #ede9fe;
+          background: #f8fafc;
+          min-height: 34px;
+          display: flex;
+          align-items: center;
+          padding: 0.45rem 0.6rem;
+        }
+        .live-pulse,
+        .live-links,
+        .live-check {
+          display: block;
+          width: 100%;
+          height: 8px;
+          border-radius: 999px;
+          background: linear-gradient(90deg, #a78bfa 0%, #7c3aed 100%);
+        }
+        .live-pulse {
+          width: 68%;
+          box-shadow: 0 0 0 4px rgba(167, 139, 250, 0.22);
+        }
+        .live-links {
+          width: 84%;
+          background:
+            linear-gradient(90deg, #a78bfa 0 30%, transparent 30% 36%, #8b5cf6 36% 64%, transparent 64% 70%, #7c3aed 70% 100%);
+        }
+        .live-check {
+          width: 46%;
+          background: linear-gradient(90deg, #7c3aed 0%, #4f46e5 100%);
+          position: relative;
+        }
+        .live-check::after {
+          content: "✓";
+          position: absolute;
+          right: -1.35rem;
+          top: -0.48rem;
+          font-size: 0.92rem;
+          color: #7c3aed;
+          font-weight: 800;
+        }
+        .live-card-micro {
+          margin: auto 0 0;
+          padding-top: 0.72rem;
+          font-size: 0.73rem;
+          font-weight: 600;
+          color: #7c3aed;
+        }
+        @media (min-width: 820px) {
+          .live-grid {
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.05rem;
           }
         }
         @media (min-width: 640px) {
