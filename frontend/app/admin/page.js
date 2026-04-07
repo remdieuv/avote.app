@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { EventLivePreview } from "@/components/admin/EventLivePreview";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 import { rememberMyEvent } from "@/lib/myEventsStorage";
 
@@ -564,6 +565,14 @@ export default function AdminPage() {
                   <li>{multipleQuestions} en choix multiple</li>
                   <li>{leadQuestions} lead(s)</li>
                 </ul>
+              </section>
+
+              <section className="admin-side-card">
+                <EventLivePreview
+                  title={eventTitle}
+                  questions={questions}
+                  activeQuestionIndex={0}
+                />
               </section>
 
               <section className="admin-side-card">
