@@ -248,505 +248,665 @@ export default function AdminPage() {
     }
   }
 
+  const totalQuestions = questions.length;
+  const totalOptions = questions.reduce((sum, q) => sum + q.options.length, 0);
+  const leadQuestions = questions.filter((q) => q.type === "LEAD").length;
+  const multipleQuestions = questions.filter(
+    (q) => q.type === "MULTIPLE_CHOICE",
+  ).length;
+  const singleQuestions = totalQuestions - leadQuestions - multipleQuestions;
+  const eventTitlePreview = eventTitle.trim() || "Titre de l’événement";
+
   return (
-    <main
-      style={{
-        padding: "2rem",
-        maxWidth: "720px",
-        margin: "0 auto",
-        fontFamily: "system-ui, sans-serif",
-        lineHeight: 1.5,
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: "0.75rem",
-          marginBottom: "1.25rem",
-        }}
-      >
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.65rem 1rem", alignItems: "center" }}>
-          <Link
-            href="/"
-            style={{
-              fontSize: "0.9rem",
-              color: "#64748b",
-              textDecoration: "none",
-            }}
-          >
-            ← Accueil
-          </Link>
-          <Link
-            href="/admin/events"
-            style={{
-              fontSize: "0.9rem",
-              color: "#7c3aed",
-              fontWeight: 600,
-              textDecoration: "none",
-            }}
-          >
-            Mes événements
-          </Link>
+    <main className="admin-create-page">
+      <div className="admin-create-shell">
+        <header className="admin-create-topbar">
+          <div className="admin-create-links">
+            <Link href="/" className="admin-create-link-muted">
+              ← Accueil
+            </Link>
+            <Link href="/admin/events" className="admin-create-link-accent">
+              Mes événements
+            </Link>
+          </div>
+          <span className="admin-create-brand">Avote</span>
+        </header>
+
+        <div className="admin-create-hero">
+          <h1>Créer un événement</h1>
+          <p>
+            Préparez vos questions, structurez le vote et lancez votre régie en
+            quelques secondes.
+          </p>
         </div>
-        <span style={{ fontWeight: 700, fontSize: "1.05rem", color: "#1e293b" }}>
-          Avote
-        </span>
+
+        <div className="admin-create-grid">
+          <form id="create-event-form" className="admin-create-form" onSubmit={handleCreatePoll}>
+            <section className="admin-section-card">
+              <h2 className="admin-section-title">Informations événement</h2>
+              <label className="admin-label" htmlFor="event-title">
+                Titre de l’événement
+              </label>
+              <input
+                id="event-title"
+                type="text"
+                value={eventTitle}
+                onChange={(ev) => setEventTitle(ev.target.value)}
+                placeholder="Ex. Soirée partenaires Q2"
+                disabled={creating}
+                style={{ ...inputStyle, marginBottom: "0.95rem" }}
+              />
+
+              <label className="admin-label" htmlFor="event-desc">
+                Description (optionnelle)
+              </label>
+              <textarea
+                id="event-desc"
+                value={eventDescription}
+                onChange={(ev) => setEventDescription(ev.target.value)}
+                placeholder="Contexte, infos utiles, message d’introduction..."
+                disabled={creating}
+                rows={3}
+                maxLength={2000}
+                style={{
+                  ...inputStyle,
+                  minHeight: "4rem",
+                  resize: "vertical",
+                  fontFamily: "inherit",
+                }}
+              />
+            </section>
+
+            <section className="admin-section-card">
+              <div className="admin-questions-head">
+                <div>
+                  <h2 className="admin-section-title">Questions</h2>
+                  <p className="admin-section-sub">
+                    Ordre d’affichage = ordre du vote. Chaque question contient
+                    au moins 2 réponses.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={creating}
+                  onClick={ajouterQuestion}
+                  className="admin-add-question"
+                >
+                  + Ajouter une question
+                </button>
+              </div>
+
+              <div className="admin-question-list">
+                {questions.map((item, indexQ) => (
+                  <article key={item.id} className="admin-question-card">
+                    <div className="admin-question-top">
+                      <span className="admin-question-title">Question {indexQ + 1}</span>
+                      <button
+                        type="button"
+                        disabled={creating || questions.length <= 1}
+                        onClick={() => retirerQuestion(item.id)}
+                        className="admin-remove-question"
+                      >
+                        Supprimer
+                      </button>
+                    </div>
+
+                    <label className="admin-label" htmlFor={`q-text-${item.id}`}>
+                      Texte de la question
+                    </label>
+                    <input
+                      id={`q-text-${item.id}`}
+                      type="text"
+                      value={item.question}
+                      onChange={(ev) => majTexteQuestion(item.id, ev.target.value)}
+                      placeholder="Ex. Qui va marquer le prochain but ?"
+                      disabled={creating}
+                      style={{ ...inputStyle, marginBottom: "0.95rem" }}
+                    />
+
+                    <div className="admin-question-separator" />
+
+                    <fieldset style={{ border: "none", padding: 0, margin: "0 0 0.9rem 0" }}>
+                      <legend className="admin-label" style={{ marginBottom: "0.5rem" }}>
+                        Type de vote
+                      </legend>
+                      <div className="admin-type-grid">
+                        <label className="admin-choice">
+                          <input
+                            type="radio"
+                            name={`pollType-${item.id}`}
+                            checked={item.type === "SINGLE_CHOICE"}
+                            disabled={creating}
+                            onChange={() => majTypeQuestion(item.id, "SINGLE_CHOICE")}
+                          />
+                          <span>Choix unique</span>
+                        </label>
+                        <label className="admin-choice">
+                          <input
+                            type="radio"
+                            name={`pollType-${item.id}`}
+                            checked={item.type === "MULTIPLE_CHOICE"}
+                            disabled={creating}
+                            onChange={() => majTypeQuestion(item.id, "MULTIPLE_CHOICE")}
+                          />
+                          <span>Choix multiple</span>
+                        </label>
+                        <label className="admin-choice">
+                          <input
+                            type="radio"
+                            name={`pollType-${item.id}`}
+                            checked={item.type === "LEAD"}
+                            disabled={creating}
+                            onChange={() => majTypeQuestion(item.id, "LEAD")}
+                          />
+                          <span>Lead (Oui/Non + formulaire)</span>
+                        </label>
+                      </div>
+                    </fieldset>
+
+                    <div className="admin-question-separator" />
+
+                    <p className="admin-label" style={{ marginBottom: "0.45rem" }}>
+                      Réponses
+                    </p>
+                    <ul style={{ listStyle: "none", padding: 0, margin: "0 0 0.6rem 0" }}>
+                      {item.options.map((value, indexOpt) => (
+                        <li key={`${item.id}-opt-${indexOpt}`} className="admin-option-row">
+                          <input
+                            type="text"
+                            value={value}
+                            onChange={(ev) => majOption(item.id, indexOpt, ev.target.value)}
+                            placeholder={`Option ${indexOpt + 1}`}
+                            disabled={creating}
+                            style={{ ...inputStyle, flex: 1 }}
+                          />
+                          <button
+                            type="button"
+                            disabled={creating || item.options.length <= 2}
+                            onClick={() => retirerOption(item.id, indexOpt)}
+                            className="admin-option-remove"
+                          >
+                            Supprimer
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+
+                    {item.type === "LEAD" ? (
+                      <div className="admin-lead-config">
+                        <label htmlFor={`lead-trigger-${item.id}`} className="admin-label">
+                          Option déclencheuse du formulaire lead
+                        </label>
+                        <select
+                          id={`lead-trigger-${item.id}`}
+                          value={Math.min(
+                            Math.max(0, Number(item.leadTriggerOrder ?? 0)),
+                            Math.max(0, item.options.length - 1),
+                          )}
+                          onChange={(ev) =>
+                            majLeadTriggerOrder(item.id, Number(ev.target.value))
+                          }
+                          disabled={creating}
+                          style={{ ...inputStyle, padding: "0.45rem 0.6rem" }}
+                        >
+                          {item.options.map((opt, idx) => (
+                            <option key={`${item.id}-lead-trigger-${idx}`} value={idx}>
+                              {opt.trim() || `Option ${idx + 1}`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : null}
+
+                    <div className="admin-option-actions">
+                      <button
+                        type="button"
+                        disabled={creating}
+                        onClick={() => ajouterOption(item.id)}
+                        style={btnGhost}
+                      >
+                        Ajouter une option
+                      </button>
+                      <button
+                        type="button"
+                        disabled={creating}
+                        onClick={() => basculerPanneauImportMasse(item.id)}
+                        className="admin-bulk-btn"
+                      >
+                        {importMasseQuestionId === item.id
+                          ? "Fermer l’import en masse"
+                          : "Ajouter en masse"}
+                      </button>
+                    </div>
+
+                    {importMasseQuestionId === item.id ? (
+                      <div className="admin-bulk-panel">
+                        <p>
+                          Collez une réponse par ligne. Les lignes vides et doublons
+                          sont ignorés.
+                        </p>
+                        <textarea
+                          value={importMasseTexte}
+                          onChange={(ev) => setImportMasseTexte(ev.target.value)}
+                          disabled={creating}
+                          rows={6}
+                          placeholder={"Mbappé\nDembélé\nVitinha"}
+                          style={{
+                            ...inputStyle,
+                            display: "block",
+                            width: "100%",
+                            minHeight: "7rem",
+                            resize: "vertical",
+                            fontFamily: "inherit",
+                            marginBottom: "0.65rem",
+                          }}
+                        />
+                        <div className="admin-bulk-actions">
+                          <button
+                            type="button"
+                            disabled={creating}
+                            onClick={() => importerOptionsEnMasse(item.id)}
+                            className="admin-bulk-import"
+                          >
+                            Importer
+                          </button>
+                          <button
+                            type="button"
+                            disabled={creating}
+                            onClick={() => setImportMasseQuestionId(null)}
+                            style={btnGhost}
+                          >
+                            Annuler
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            {formError ? (
+              <p className="admin-alert-error" role="alert">
+                {formError}
+              </p>
+            ) : null}
+
+            {error ? (
+              <p className="admin-alert-error" role="alert">
+                {error}
+              </p>
+            ) : null}
+
+            <button type="submit" disabled={creating} className="admin-create-cta mobile">
+              {creating ? "Création en cours…" : "Créer l’événement"}
+            </button>
+
+            <p className="admin-footnote">
+              Après création, vous êtes redirigé vers la régie. Retrouvez vos
+              événements dans{" "}
+              <Link href="/admin/events" style={{ color: "#7c3aed", fontWeight: 700 }}>
+                Mes événements
+              </Link>
+              .
+            </p>
+          </form>
+
+          <aside className="admin-side-panel">
+            <div className="admin-side-sticky">
+              <section className="admin-side-card">
+                <p className="admin-side-kicker">Résumé</p>
+                <h3>{eventTitlePreview}</h3>
+                <ul>
+                  <li>{totalQuestions} question(s)</li>
+                  <li>{totalOptions} option(s) au total</li>
+                  <li>{singleQuestions} en choix unique</li>
+                  <li>{multipleQuestions} en choix multiple</li>
+                  <li>{leadQuestions} lead(s)</li>
+                </ul>
+              </section>
+
+              <section className="admin-side-card">
+                <p className="admin-side-kicker">Ce qui sera créé</p>
+                <p className="admin-side-text">
+                  Un événement publié, des questions prêtes pour la régie, et un
+                  accès direct salle/écran après création.
+                </p>
+              </section>
+
+              <button
+                type="submit"
+                form="create-event-form"
+                disabled={creating}
+                className="admin-create-cta desktop"
+              >
+                {creating ? "Création en cours…" : "Créer l’événement"}
+              </button>
+            </div>
+          </aside>
+        </div>
       </div>
 
-      <h1 style={{ fontSize: "1.5rem", marginBottom: "0.35rem" }}>
-        Créer un événement
-      </h1>
-      <p style={{ color: "#64748b", marginBottom: "1.25rem", fontSize: "0.95rem" }}>
-        Ajoute une ou plusieurs questions, partage le lien public et pilote le flux
-        depuis la régie (question suivante, résultats, etc.).
-      </p>
-
-      <form
-        onSubmit={handleCreatePoll}
-        style={{
-          marginBottom: "1.75rem",
-          padding: "1.25rem",
-          borderRadius: "12px",
-          border: "1px solid #e2e8f0",
-          background: "#fafafa",
-        }}
-      >
-        <label
-          style={{ display: "block", fontWeight: 600, marginBottom: "0.35rem" }}
-          htmlFor="event-title"
-        >
-          Titre de l’événement
-        </label>
-        <input
-          id="event-title"
-          type="text"
-          value={eventTitle}
-          onChange={(ev) => setEventTitle(ev.target.value)}
-          placeholder="Ex. Quiz match de foot"
-          disabled={creating}
-          style={{ ...inputStyle, marginBottom: "0.85rem" }}
-        />
-
-        <label
-          style={{ display: "block", fontWeight: 600, marginBottom: "0.35rem" }}
-          htmlFor="event-desc"
-        >
-          Description (optionnelle)
-        </label>
-        <textarea
-          id="event-desc"
-          value={eventDescription}
-          onChange={(ev) => setEventDescription(ev.target.value)}
-          placeholder="Court texte affiché dans la régie (contexte, consignes…)"
-          disabled={creating}
-          rows={2}
-          maxLength={2000}
-          style={{
-            ...inputStyle,
-            marginBottom: "1.25rem",
-            minHeight: "3.25rem",
-            resize: "vertical",
-            fontFamily: "inherit",
-          }}
-        />
-
-        <p style={{ fontWeight: 600, margin: "0 0 0.75rem 0" }}>Questions</p>
-        <p style={{ fontSize: "0.85rem", color: "#64748b", margin: "0 0 1rem 0" }}>
-          Ordre d’affichage = ordre du vote. Chaque question : texte, type et au moins
-          2 options.
-        </p>
-
-        {questions.map((item, indexQ) => (
-          <div
-            key={item.id}
-            style={{
-              marginBottom: "1.25rem",
-              padding: "1rem",
-              borderRadius: "10px",
-              border: "1px solid #cbd5e1",
-              background: "#fff",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: "0.5rem",
-                marginBottom: "0.75rem",
-                flexWrap: "wrap",
-              }}
-            >
-              <span style={{ fontWeight: 700, color: "#334155" }}>
-                Question {indexQ + 1}
-              </span>
-              <button
-                type="button"
-                disabled={creating || questions.length <= 1}
-                onClick={() => retirerQuestion(item.id)}
-                style={{
-                  ...btnGhost,
-                  color:
-                    creating || questions.length <= 1 ? "#94a3b8" : "#b91c1c",
-                  borderColor:
-                    creating || questions.length <= 1 ? "#e2e8f0" : "#fecaca",
-                  cursor:
-                    creating || questions.length <= 1 ? "not-allowed" : "pointer",
-                  background:
-                    creating || questions.length <= 1 ? "#f8fafc" : "#fff",
-                }}
-              >
-                Supprimer la question
-              </button>
-            </div>
-
-            <label
-              style={{ display: "block", fontWeight: 600, marginBottom: "0.35rem" }}
-              htmlFor={`q-text-${item.id}`}
-            >
-              Texte de la question
-            </label>
-            <input
-              id={`q-text-${item.id}`}
-              type="text"
-              value={item.question}
-              onChange={(ev) => majTexteQuestion(item.id, ev.target.value)}
-              placeholder="Ex. Qui va marquer le prochain but ?"
-              disabled={creating}
-              style={{ ...inputStyle, marginBottom: "0.85rem" }}
-            />
-
-            <fieldset
-              style={{ border: "none", padding: 0, margin: "0 0 0.85rem 0" }}
-            >
-              <legend style={{ fontWeight: 600, marginBottom: "0.5rem" }}>
-                Type de vote
-              </legend>
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  marginBottom: "0.35rem",
-                  cursor: creating ? "default" : "pointer",
-                }}
-              >
-                <input
-                  type="radio"
-                  name={`pollType-${item.id}`}
-                  checked={item.type === "SINGLE_CHOICE"}
-                  disabled={creating}
-                  onChange={() => majTypeQuestion(item.id, "SINGLE_CHOICE")}
-                />
-                Choix unique
-              </label>
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  cursor: creating ? "default" : "pointer",
-                }}
-              >
-                <input
-                  type="radio"
-                  name={`pollType-${item.id}`}
-                  checked={item.type === "MULTIPLE_CHOICE"}
-                  disabled={creating}
-                  onChange={() => majTypeQuestion(item.id, "MULTIPLE_CHOICE")}
-                />
-                Choix multiple
-              </label>
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  marginTop: "0.35rem",
-                  cursor: creating ? "default" : "pointer",
-                }}
-              >
-                <input
-                  type="radio"
-                  name={`pollType-${item.id}`}
-                  checked={item.type === "LEAD"}
-                  disabled={creating}
-                  onChange={() => majTypeQuestion(item.id, "LEAD")}
-                />
-                Lead (Oui/Non + mini formulaire)
-              </label>
-            </fieldset>
-
-            <p style={{ fontWeight: 600, margin: "0 0 0.5rem 0", fontSize: "0.9rem" }}>
-              Réponses
-            </p>
-            <ul style={{ listStyle: "none", padding: 0, margin: "0 0 0.5rem 0" }}>
-              {item.options.map((value, indexOpt) => (
-                <li
-                  key={`${item.id}-opt-${indexOpt}`}
-                  style={{
-                    display: "flex",
-                    gap: "0.5rem",
-                    marginBottom: "0.5rem",
-                    alignItems: "center",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={value}
-                    onChange={(ev) =>
-                      majOption(item.id, indexOpt, ev.target.value)
-                    }
-                    placeholder={`Option ${indexOpt + 1}`}
-                    disabled={creating}
-                    style={{ ...inputStyle, flex: 1 }}
-                  />
-                  <button
-                    type="button"
-                    disabled={creating || item.options.length <= 2}
-                    onClick={() => retirerOption(item.id, indexOpt)}
-                    style={{
-                      ...btnGhost,
-                      background:
-                        creating || item.options.length <= 2
-                          ? "#f1f5f9"
-                          : "#fff",
-                      color:
-                        creating || item.options.length <= 2
-                          ? "#94a3b8"
-                          : "#64748b",
-                      cursor:
-                        creating || item.options.length <= 2
-                          ? "not-allowed"
-                          : "pointer",
-                      flexShrink: 0,
-                    }}
-                  >
-                    Supprimer
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {item.type === "LEAD" ? (
-              <div
-                style={{
-                  margin: "0 0 0.75rem",
-                  padding: "0.7rem",
-                  borderRadius: "8px",
-                  border: "1px solid #dbeafe",
-                  background: "#eff6ff",
-                }}
-              >
-                <label
-                  htmlFor={`lead-trigger-${item.id}`}
-                  style={{
-                    display: "block",
-                    fontWeight: 600,
-                    marginBottom: "0.35rem",
-                    fontSize: "0.86rem",
-                    color: "#1e3a8a",
-                  }}
-                >
-                  Option déclencheuse du formulaire lead
-                </label>
-                <select
-                  id={`lead-trigger-${item.id}`}
-                  value={Math.min(
-                    Math.max(0, Number(item.leadTriggerOrder ?? 0)),
-                    Math.max(0, item.options.length - 1),
-                  )}
-                  onChange={(ev) =>
-                    majLeadTriggerOrder(item.id, Number(ev.target.value))
-                  }
-                  disabled={creating}
-                  style={{ ...inputStyle, padding: "0.45rem 0.6rem" }}
-                >
-                  {item.options.map((opt, idx) => (
-                    <option key={`${item.id}-lead-trigger-${idx}`} value={idx}>
-                      {opt.trim() || `Option ${idx + 1}`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : null}
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "0.5rem",
-                alignItems: "center",
-                marginBottom:
-                  importMasseQuestionId === item.id ? "0.75rem" : 0,
-              }}
-            >
-              <button
-                type="button"
-                disabled={creating}
-                onClick={() => ajouterOption(item.id)}
-                style={{
-                  ...btnGhost,
-                  marginBottom: 0,
-                  cursor: creating ? "wait" : "pointer",
-                }}
-              >
-                Ajouter une option
-              </button>
-              <button
-                type="button"
-                disabled={creating}
-                onClick={() => basculerPanneauImportMasse(item.id)}
-                style={{
-                  ...btnGhost,
-                  marginBottom: 0,
-                  borderColor: "#818cf8",
-                  color: "#4338ca",
-                  background:
-                    importMasseQuestionId === item.id ? "#eef2ff" : "#fff",
-                  cursor: creating ? "wait" : "pointer",
-                }}
-              >
-                {importMasseQuestionId === item.id
-                  ? "Fermer l’import en masse"
-                  : "Ajouter en masse"}
-              </button>
-            </div>
-
-            {importMasseQuestionId === item.id ? (
-              <div
-                style={{
-                  marginTop: "0.5rem",
-                  padding: "0.85rem",
-                  borderRadius: "8px",
-                  border: "1px solid #c7d2fe",
-                  background: "#f8fafc",
-                }}
-              >
-                <p
-                  style={{
-                    margin: "0 0 0.5rem 0",
-                    fontSize: "0.82rem",
-                    color: "#475569",
-                  }}
-                >
-                  Colle une réponse par ligne. Les lignes vides et les doublons
-                  (avec les options déjà présentes) sont ignorés.
-                </p>
-                <textarea
-                  value={importMasseTexte}
-                  onChange={(ev) => setImportMasseTexte(ev.target.value)}
-                  disabled={creating}
-                  rows={6}
-                  placeholder={"Mbappé\nDembélé\nVitinha"}
-                  style={{
-                    ...inputStyle,
-                    display: "block",
-                    width: "100%",
-                    minHeight: "7rem",
-                    resize: "vertical",
-                    fontFamily: "inherit",
-                    marginBottom: "0.65rem",
-                  }}
-                />
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "0.5rem",
-                  }}
-                >
-                  <button
-                    type="button"
-                    disabled={creating}
-                    onClick={() => importerOptionsEnMasse(item.id)}
-                    style={{
-                      padding: "0.45rem 0.9rem",
-                      fontSize: "0.9rem",
-                      borderRadius: "8px",
-                      border: "1px solid #4f46e5",
-                      background: creating ? "#94a3b8" : "#4f46e5",
-                      color: "#fff",
-                      fontWeight: 600,
-                      cursor: creating ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    Importer
-                  </button>
-                  <button
-                    type="button"
-                    disabled={creating}
-                    onClick={() => setImportMasseQuestionId(null)}
-                    style={{
-                      ...btnGhost,
-                      cursor: creating ? "wait" : "pointer",
-                    }}
-                  >
-                    Annuler
-                  </button>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        ))}
-
-        <button
-          type="button"
-          disabled={creating}
-          onClick={ajouterQuestion}
-          style={{
-            padding: "0.5rem 1rem",
-            fontSize: "0.95rem",
-            marginBottom: "1rem",
-            borderRadius: "8px",
-            border: "1px solid #2563eb",
-            background: creating ? "#e2e8f0" : "#eff6ff",
-            color: creating ? "#94a3b8" : "#1e40af",
-            cursor: creating ? "wait" : "pointer",
-            fontWeight: 600,
-          }}
-        >
-          + Ajouter une question
-        </button>
-
-        {formError && (
-          <p style={{ color: "#b91c1c", marginBottom: "0.75rem" }} role="alert">
-            {formError}
-          </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={creating}
-          style={{
-            padding: "0.65rem 1.25rem",
-            fontSize: "1rem",
-            cursor: creating ? "wait" : "pointer",
-            borderRadius: "8px",
-            border: "1px solid #2563eb",
-            background: creating ? "#93c5fd" : "#3b82f6",
-            color: "#fff",
-            fontWeight: 600,
-          }}
-        >
-          {creating ? "Création en cours…" : "Créer l’événement"}
-        </button>
-      </form>
-
-      {error && (
-        <p style={{ color: "#b91c1c", marginBottom: "1rem" }} role="alert">
-          {error}
-        </p>
-      )}
-
-      <p style={{ color: "#94a3b8", fontSize: "0.9rem", marginBottom: "1.5rem" }}>
-        Après création, vous êtes redirigé vers la régie. Retrouvez vos événements dans{" "}
-        <Link href="/admin/events" style={{ color: "#7c3aed", fontWeight: 600 }}>
-          Mes événements
-        </Link>
-        .
-      </p>
+      <style>{`
+        .admin-create-page {
+          min-height: 100vh;
+          background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 30%, #ffffff 100%);
+          font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+          line-height: 1.5;
+          color: #0f172a;
+        }
+        .admin-create-shell {
+          width: min(1460px, 96vw);
+          margin: 0 auto;
+          padding: 1rem 0.75rem 2rem;
+          box-sizing: border-box;
+        }
+        .admin-create-topbar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.75rem;
+          margin-bottom: 1rem;
+        }
+        .admin-create-links {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 0.6rem 1rem;
+        }
+        .admin-create-link-muted,
+        .admin-create-link-accent {
+          font-size: 0.9rem;
+          text-decoration: none;
+        }
+        .admin-create-link-muted { color: #64748b; }
+        .admin-create-link-accent { color: #7c3aed; font-weight: 700; }
+        .admin-create-brand {
+          font-weight: 800;
+          font-size: 1.02rem;
+          letter-spacing: -0.03em;
+        }
+        .admin-create-hero {
+          margin-bottom: 1rem;
+          padding: 1.1rem 1.2rem;
+          border: 1px solid #dbeafe;
+          border-radius: 14px;
+          background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+        }
+        .admin-create-hero h1 {
+          margin: 0 0 0.35rem;
+          font-size: clamp(1.4rem, 3.5vw, 1.9rem);
+          letter-spacing: -0.03em;
+        }
+        .admin-create-hero p {
+          margin: 0;
+          color: #64748b;
+          max-width: 56rem;
+          font-size: 0.95rem;
+        }
+        .admin-create-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr);
+          gap: 1rem;
+        }
+        .admin-create-form {
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 0.95rem;
+        }
+        .admin-section-card {
+          border-radius: 14px;
+          border: 1px solid #e2e8f0;
+          background: #fff;
+          padding: 1rem;
+          box-shadow: 0 2px 16px rgba(15, 23, 42, 0.04);
+        }
+        .admin-section-title {
+          margin: 0 0 0.65rem;
+          font-size: 1.02rem;
+          font-weight: 800;
+          letter-spacing: -0.02em;
+        }
+        .admin-section-sub {
+          margin: 0.1rem 0 0;
+          color: #64748b;
+          font-size: 0.88rem;
+        }
+        .admin-label {
+          display: block;
+          font-size: 0.85rem;
+          font-weight: 700;
+          color: #334155;
+          margin-bottom: 0.35rem;
+        }
+        .admin-questions-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          flex-wrap: wrap;
+          gap: 0.65rem 0.8rem;
+          margin-bottom: 0.75rem;
+        }
+        .admin-add-question {
+          padding: 0.6rem 0.95rem;
+          border-radius: 10px;
+          border: 1px solid #2563eb;
+          background: #eff6ff;
+          color: #1e40af;
+          font-weight: 700;
+          cursor: pointer;
+        }
+        .admin-question-list {
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+        .admin-question-card {
+          border: 1px solid #dbe3ef;
+          border-radius: 12px;
+          padding: 0.9rem;
+          background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+        }
+        .admin-question-top {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 0.5rem;
+          margin-bottom: 0.65rem;
+          flex-wrap: wrap;
+        }
+        .admin-question-title {
+          font-weight: 800;
+          font-size: 0.95rem;
+          color: #0f172a;
+        }
+        .admin-remove-question {
+          padding: 0.35rem 0.6rem;
+          border-radius: 8px;
+          border: 1px solid #fecaca;
+          background: #fff;
+          color: #b91c1c;
+          font-size: 0.8rem;
+          font-weight: 600;
+          cursor: pointer;
+        }
+        .admin-question-separator {
+          height: 1px;
+          background: #eef2f7;
+          margin: 0.15rem 0 0.85rem;
+        }
+        .admin-type-grid {
+          display: grid;
+          gap: 0.45rem;
+        }
+        .admin-choice {
+          display: flex;
+          align-items: center;
+          gap: 0.45rem;
+          font-size: 0.9rem;
+          color: #334155;
+        }
+        .admin-option-row {
+          display: flex;
+          gap: 0.5rem;
+          margin-bottom: 0.5rem;
+          align-items: center;
+        }
+        .admin-option-remove {
+          padding: 0.45rem 0.65rem;
+          border-radius: 8px;
+          border: 1px solid #cbd5e1;
+          background: #fff;
+          color: #64748b;
+          cursor: pointer;
+          flex-shrink: 0;
+        }
+        .admin-lead-config {
+          margin: 0 0 0.75rem;
+          padding: 0.7rem;
+          border-radius: 10px;
+          border: 1px solid #dbeafe;
+          background: #eff6ff;
+        }
+        .admin-option-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+          margin-top: 0.15rem;
+        }
+        .admin-bulk-btn {
+          padding: 0.45rem 0.65rem;
+          border-radius: 8px;
+          border: 1px solid #818cf8;
+          background: #fff;
+          color: #4338ca;
+          font-size: 0.85rem;
+          cursor: pointer;
+        }
+        .admin-bulk-panel {
+          margin-top: 0.6rem;
+          padding: 0.85rem;
+          border-radius: 10px;
+          border: 1px solid #c7d2fe;
+          background: #f8fafc;
+        }
+        .admin-bulk-panel p {
+          margin: 0 0 0.5rem;
+          font-size: 0.82rem;
+          color: #475569;
+        }
+        .admin-bulk-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+        }
+        .admin-bulk-import {
+          padding: 0.45rem 0.9rem;
+          font-size: 0.9rem;
+          border-radius: 8px;
+          border: 1px solid #4f46e5;
+          background: #4f46e5;
+          color: #fff;
+          font-weight: 700;
+          cursor: pointer;
+        }
+        .admin-alert-error {
+          margin: 0;
+          padding: 0.75rem 0.95rem;
+          border-radius: 10px;
+          border: 1px solid #fecaca;
+          background: #fef2f2;
+          color: #b91c1c;
+          font-size: 0.9rem;
+          font-weight: 600;
+        }
+        .admin-create-cta {
+          width: 100%;
+          border: none;
+          border-radius: 12px;
+          padding: 0.85rem 1.1rem;
+          background: linear-gradient(180deg, #2563eb, #1d4ed8);
+          color: #fff;
+          font-weight: 800;
+          font-size: 1rem;
+          cursor: pointer;
+          box-shadow: 0 10px 26px rgba(37, 99, 235, 0.3);
+        }
+        .admin-create-cta.desktop { display: none; }
+        .admin-footnote {
+          margin: 0.2rem 0 0;
+          color: #94a3b8;
+          font-size: 0.88rem;
+        }
+        .admin-side-panel { min-width: 0; }
+        .admin-side-sticky {
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+        .admin-side-card {
+          border-radius: 14px;
+          border: 1px solid #e2e8f0;
+          background: #fff;
+          padding: 0.95rem;
+          box-shadow: 0 2px 14px rgba(15, 23, 42, 0.04);
+        }
+        .admin-side-kicker {
+          margin: 0 0 0.35rem;
+          font-size: 0.73rem;
+          color: #64748b;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          font-weight: 800;
+        }
+        .admin-side-card h3 {
+          margin: 0 0 0.5rem;
+          font-size: 1rem;
+          font-weight: 800;
+          color: #0f172a;
+          letter-spacing: -0.02em;
+        }
+        .admin-side-card ul {
+          margin: 0;
+          padding-left: 1.05rem;
+          color: #334155;
+          font-size: 0.88rem;
+          display: grid;
+          gap: 0.2rem;
+        }
+        .admin-side-text {
+          margin: 0;
+          color: #475569;
+          font-size: 0.88rem;
+          line-height: 1.45;
+        }
+        @media (min-width: 980px) {
+          .admin-create-shell {
+            width: min(1540px, 95vw);
+            padding: 1.2rem 1.1rem 2.2rem;
+          }
+          .admin-create-grid {
+            grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+            align-items: start;
+            gap: 1.1rem;
+          }
+          .admin-side-sticky {
+            position: sticky;
+            top: 1rem;
+          }
+          .admin-create-cta.desktop { display: inline-flex; justify-content: center; }
+          .admin-create-cta.mobile { display: none; }
+          .admin-question-card {
+            padding: 1rem;
+          }
+        }
+        @media (min-width: 1280px) {
+          .admin-create-grid {
+            grid-template-columns: minmax(0, 1fr) minmax(340px, 390px);
+          }
+        }
+      `}</style>
     </main>
   );
 }
