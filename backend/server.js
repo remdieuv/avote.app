@@ -2421,6 +2421,128 @@ app.post("/polls/:pollId/leads", async (req, res) => {
   }
 });
 
+/**
+ * Leads agrégés : tous les événements du compte connecté (filtres query).
+ */
+function parseQueryDateStart(raw) {
+  if (!raw || typeof raw !== "string") return null;
+  const t = raw.trim();
+  if (!t) return null;
+  const d =
+    t.length === 10 ? new Date(`${t}T00:00:00.000Z`) : new Date(t);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function parseQueryDateEnd(raw) {
+  if (!raw || typeof raw !== "string") return null;
+  const t = raw.trim();
+  if (!t) return null;
+  const d =
+    t.length === 10 ? new Date(`${t}T23:59:59.999Z`) : new Date(t);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+app.get("/me/leads", requireAuth, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const eventIdFilter =
+      typeof req.query.eventId === "string" && req.query.eventId.trim()
+        ? req.query.eventId.trim()
+        : null;
+    const qRaw = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    const limitRaw = Number(req.query.limit ?? 500);
+    const limit = Math.min(
+      1000,
+      Math.max(1, Number.isFinite(limitRaw) ? Math.floor(limitRaw) : 500),
+    );
+    const fromDate = parseQueryDateStart(
+      typeof req.query.from === "string" ? req.query.from : "",
+    );
+    const toDate = parseQueryDateEnd(
+      typeof req.query.to === "string" ? req.query.to : "",
+    );
+
+    if (eventIdFilter) {
+      const owned = await assertEventOwnedBy(eventIdFilter, userId);
+      if (!owned.ok) {
+        return res
+          .status(owned.status)
+          .json({ error: "Événement introuvable." });
+      }
+    }
+
+    /** @type {import("@prisma/client").Prisma.LeadCaptureWhereInput} */
+    const where = {
+      event: {
+        userId,
+        ...(eventIdFilter ? { id: eventIdFilter } : {}),
+      },
+    };
+
+    const andParts =
+      /** @type {import("@prisma/client").Prisma.LeadCaptureWhereInput[]} */ ([]);
+    if (qRaw) {
+      andParts.push({
+        OR: [
+          { firstName: { contains: qRaw, mode: "insensitive" } },
+          { phone: { contains: qRaw, mode: "insensitive" } },
+          { email: { contains: qRaw, mode: "insensitive" } },
+        ],
+      });
+    }
+    if (fromDate || toDate) {
+      andParts.push({
+        createdAt: {
+          ...(fromDate ? { gte: fromDate } : {}),
+          ...(toDate ? { lte: toDate } : {}),
+        },
+      });
+    }
+    if (andParts.length) {
+      where.AND = andParts;
+    }
+
+    const [events, leads, total] = await prisma.$transaction([
+      prisma.event.findMany({
+        where: { userId },
+        select: { id: true, title: true },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.leadCapture.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        include: {
+          poll: { select: { id: true, question: true, order: true } },
+          event: { select: { id: true, title: true } },
+        },
+      }),
+      prisma.leadCapture.count({ where }),
+    ]);
+
+    return res.json({
+      leads: leads.map((x) => ({
+        id: x.id,
+        eventId: x.eventId,
+        eventTitle: x.event?.title ?? "",
+        pollId: x.pollId,
+        pollOrder: x.poll?.order ?? null,
+        pollQuestion: x.poll?.question ?? "",
+        firstName: x.firstName,
+        phone: x.phone,
+        email: x.email,
+        createdAt: x.createdAt.toISOString(),
+      })),
+      events,
+      total,
+      limit,
+    });
+  } catch (e) {
+    console.error("me/leads", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
 app.get("/events/:eventId/leads", requireAuth, async (req, res) => {
   const eventId = String(req.params.eventId || "").trim();
   try {

@@ -10,5 +10,10 @@ https://avote-app.vercel.app/
 
 
 git add .
-git commit -m "refonte design admin+"
+git commit -m "admin interne"
 git push
+
+
+-------------------------
+
+https://avote-app.vercel.app/admin-internal

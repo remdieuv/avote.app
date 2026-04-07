@@ -10,6 +10,7 @@ export function AdminAccountBar() {
       logoLabel="Avote"
       navItems={[
         { href: "/admin/events", label: "Mes événements", match: "prefix" },
+        { href: "/admin/leads", label: "Mes leads", match: "prefix" },
         { href: "/admin", label: "Créer", match: "exact" },
       ]}
       mobileQuickItem={{ href: "/admin/events", label: "Mes événements", match: "prefix" }}

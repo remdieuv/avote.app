@@ -7,6 +7,13 @@ import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
 const LEADS_LAST_SEEN_LS_PREFIX = "avote_leads_seen_at_";
 
+const CARD = {
+  background: "#fff",
+  border: "1px solid #e2e8f0",
+  borderRadius: "14px",
+  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
+};
+
 export default function EventLeadsPage() {
   const params = useParams();
   const raw = params?.eventId;
@@ -32,7 +39,9 @@ export default function EventLeadsPage() {
       setLoading(true);
       setError(null);
       try {
-        const res = await adminFetch(`${apiBaseBrowser()}/events/${eventId}/leads`);
+        const res = await adminFetch(
+          `${apiBaseBrowser()}/events/${eventId}/leads`,
+        );
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error || `Erreur ${res.status}`);
         setRows(Array.isArray(body) ? body : []);
@@ -46,56 +55,124 @@ export default function EventLeadsPage() {
   }, [eventId]);
 
   return (
-    <main style={{ maxWidth: "1000px", margin: "0 auto", padding: "1.2rem 1rem 2rem", fontFamily: 'system-ui, "Segoe UI", sans-serif' }}>
-      <p style={{ margin: "0 0 0.85rem" }}>
-        <Link href={`/admin/event/${encodeURIComponent(eventId || "")}`} style={{ color: "#64748b", fontWeight: 600 }}>
-          ← Retour régie
+    <div
+      style={{
+        maxWidth: "960px",
+        margin: "0 auto",
+        padding: "clamp(1rem, 3vw, 1.75rem) clamp(0.75rem, 2vw, 1rem) 2.5rem",
+        fontFamily: 'system-ui, "Segoe UI", sans-serif',
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "0.65rem",
+          marginBottom: "1.15rem",
+          alignItems: "center",
+        }}
+      >
+        <Link
+          href={`/admin/event/${encodeURIComponent(eventId || "")}`}
+          style={{
+            fontSize: "0.86rem",
+            fontWeight: 600,
+            color: "#64748b",
+            textDecoration: "none",
+          }}
+        >
+          ← Régie
         </Link>
-      </p>
-      <h1 style={{ margin: "0 0 0.35rem", fontSize: "1.3rem", color: "#0f172a" }}>
-        Leads
-      </h1>
-      <p style={{ margin: "0 0 1rem", color: "#64748b", fontSize: "0.9rem" }}>
-        Contacts collectés sur les questions de type lead.
-      </p>
-      {loading ? <p style={{ color: "#64748b" }}>Chargement…</p> : null}
+        <span style={{ color: "#e2e8f0" }}>|</span>
+        <Link
+          href="/admin/leads"
+          style={{
+            fontSize: "0.86rem",
+            fontWeight: 600,
+            color: "#4f46e5",
+            textDecoration: "none",
+          }}
+        >
+          Tous mes leads
+        </Link>
+      </div>
+
+      <header style={{ marginBottom: "1.25rem" }}>
+        <h1
+          style={{
+            margin: "0 0 0.35rem 0",
+            fontSize: "clamp(1.3rem, 2.2vw, 1.55rem)",
+            fontWeight: 800,
+            letterSpacing: "-0.03em",
+            color: "#0f172a",
+          }}
+        >
+          Leads de l’événement
+        </h1>
+        <p style={{ margin: 0, color: "#64748b", fontSize: "0.95rem" }}>
+          Contacts issus des questions de collecte pour cet événement uniquement.
+        </p>
+      </header>
+
+      {loading ? (
+        <p style={{ color: "#64748b" }}>Chargement…</p>
+      ) : null}
       {error ? (
         <p role="alert" style={{ color: "#b91c1c", fontWeight: 600 }}>
           {error}
         </p>
       ) : null}
+
       {!loading && !error ? (
-        <div style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: "12px", background: "#fff" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "720px" }}>
-            <thead>
-              <tr style={{ background: "#f8fafc" }}>
-                <Th>Date</Th>
-                <Th>Question</Th>
-                <Th>Prénom</Th>
-                <Th>Téléphone</Th>
-                <Th>E-mail</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id}>
-                  <Td>{new Date(r.createdAt).toLocaleString("fr-FR")}</Td>
-                  <Td>{r.pollQuestion || `Question ${Number(r.pollOrder ?? 0) + 1}`}</Td>
-                  <Td>{r.firstName}</Td>
-                  <Td>{r.phone}</Td>
-                  <Td>{r.email || "—"}</Td>
+        <div style={{ ...CARD, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                minWidth: "720px",
+              }}
+            >
+              <thead>
+                <tr style={{ background: "#f8fafc" }}>
+                  <Th>Date</Th>
+                  <Th>Question</Th>
+                  <Th>Prénom</Th>
+                  <Th>Téléphone</Th>
+                  <Th>E-mail</Th>
                 </tr>
-              ))}
-              {rows.length === 0 ? (
-                <tr>
-                  <Td colSpan={5}>Aucun lead pour cet événement.</Td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.id}>
+                    <Td>
+                      {new Date(r.createdAt).toLocaleString("fr-FR", {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      })}
+                    </Td>
+                    <Td title={r.pollQuestion}>
+                      {r.pollQuestion ||
+                        `Question ${Number(r.pollOrder ?? 0) + 1}`}
+                    </Td>
+                    <Td>{r.firstName}</Td>
+                    <Td>{r.phone}</Td>
+                    <Td subtle>{r.email || "—"}</Td>
+                  </tr>
+                ))}
+                {rows.length === 0 ? (
+                  <tr>
+                    <Td colSpan={5} subtle>
+                      Aucun lead pour cet événement.
+                    </Td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : null}
-    </main>
+    </div>
   );
 }
 
@@ -104,9 +181,12 @@ function Th({ children }) {
     <th
       style={{
         textAlign: "left",
-        padding: "0.65rem 0.75rem",
-        fontSize: "0.78rem",
-        color: "#475569",
+        padding: "0.72rem 0.85rem",
+        fontSize: "0.72rem",
+        fontWeight: 700,
+        color: "#64748b",
+        letterSpacing: "0.04em",
+        textTransform: "uppercase",
         borderBottom: "1px solid #e2e8f0",
       }}
     >
@@ -115,15 +195,21 @@ function Th({ children }) {
   );
 }
 
-function Td({ children, colSpan }) {
+function Td({ children, colSpan, subtle, title: titleAttr }) {
   return (
     <td
       colSpan={colSpan}
+      title={titleAttr}
       style={{
-        padding: "0.62rem 0.75rem",
+        padding: "0.65rem 0.85rem",
         fontSize: "0.86rem",
-        color: "#0f172a",
+        color: subtle ? "#64748b" : "#0f172a",
         borderBottom: "1px solid #f1f5f9",
+        maxWidth: titleAttr ? "280px" : undefined,
+        overflow: titleAttr ? "hidden" : undefined,
+        textOverflow: titleAttr ? "ellipsis" : undefined,
+        whiteSpace: titleAttr ? "nowrap" : undefined,
+        textAlign: colSpan ? "center" : undefined,
       }}
     >
       {children}
