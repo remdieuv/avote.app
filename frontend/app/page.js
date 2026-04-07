@@ -370,56 +370,78 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Comment ça marche — 3 étapes */}
+        {/* Comment ça marche — version premium */}
         <section id="how" style={sectionY}>
-          <h2
-            style={{
-              fontSize: "clamp(1.2rem, 3vw, 1.4rem)",
-              fontWeight: 700,
-              textAlign: "center",
-              margin: "0 0 2.75rem",
-              color: "#1e293b",
-            }}
-          >
-            Comment ça marche
-          </h2>
-          <div className="landing-steps">
-            {[
-              {
-                icon: "✏️",
-                title: "Créez votre événement",
-                line: "Questions et réponses prêtes avant le live.",
-              },
-              {
-                icon: "📱",
-                title: "Partagez le QR code",
-                line: "L’audience rejoint en un scan, sans app à installer.",
-              },
-              {
-                icon: "📊",
-                title: "Lancez et affichez les résultats",
-                line: "Régie, votes et écran restent synchros en direct.",
-              },
-            ].map((step) => (
-              <div
-                key={step.title}
-                style={{
-                  textAlign: "center",
-                  padding: "1.35rem 1rem",
-                  borderRadius: "14px",
-                  border: "1px solid #e2e8f0",
-                  background: "#fff",
-                }}
-              >
-                <span style={{ fontSize: "1.75rem", lineHeight: 1, display: "block", marginBottom: "0.75rem" }}>
-                  {step.icon}
-                </span>
-                <strong style={{ display: "block", fontSize: "0.98rem", marginBottom: "0.4rem", color: "#0f172a" }}>
-                  {step.title}
-                </strong>
-                <p style={{ margin: 0, fontSize: "0.88rem", color: "#64748b", lineHeight: 1.45 }}>{step.line}</p>
-              </div>
-            ))}
+          <div className="how-premium-wrap">
+            <div className="how-premium-head">
+              <p className="how-eyebrow">Flow produit</p>
+              <h2 className="how-title">Comment ça marche</h2>
+              <p className="how-subtitle">
+                Trois étapes simples pour passer de la préparation au résultat
+                live, sans friction.
+              </p>
+            </div>
+
+            <div className="how-timeline" aria-hidden />
+
+            <div className="how-grid">
+              {[
+                {
+                  step: "01",
+                  icon: "✏️",
+                  title: "Créez votre événement",
+                  line: "Questions et réponses prêtes avant le live.",
+                  micro: "Questions configurées · prête à lancer",
+                },
+                {
+                  step: "02",
+                  icon: "📱",
+                  title: "Partagez le QR code",
+                  line: "L’audience rejoint en un scan, sans app à installer.",
+                  micro: "Scan instantané · accès mobile immédiat",
+                },
+                {
+                  step: "03",
+                  icon: "📊",
+                  title: "Lancez et affichez les résultats",
+                  line: "Régie, votes et écran restent synchros en direct.",
+                  micro: "Votes + écran + régie synchronisés",
+                },
+              ].map((step, idx) => (
+                <article key={step.title} className="how-card">
+                  <div className="how-card-top">
+                    <span className="how-step">{step.step}</span>
+                    <span className="how-icon" aria-hidden>
+                      {step.icon}
+                    </span>
+                  </div>
+                  <h3 className="how-card-title">{step.title}</h3>
+                  <p className="how-card-line">{step.line}</p>
+
+                  {idx === 0 ? (
+                    <div className="how-micro how-micro-compose" aria-hidden>
+                      <span />
+                      <span />
+                      <span />
+                    </div>
+                  ) : null}
+                  {idx === 1 ? (
+                    <div className="how-micro how-micro-qr" aria-hidden>
+                      <div />
+                    </div>
+                  ) : null}
+                  {idx === 2 ? (
+                    <div className="how-micro how-micro-bars" aria-hidden>
+                      <span style={{ width: "68%" }} />
+                      <span style={{ width: "42%" }} />
+                      <span style={{ width: "24%" }} />
+                    </div>
+                  ) : null}
+
+                  <p className="how-card-micro">{step.micro}</p>
+                </article>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -641,15 +663,183 @@ export default function HomePage() {
             padding-right: 2rem;
           }
         }
-        .landing-steps {
+        .how-premium-wrap {
+          position: relative;
+          border-radius: 26px;
+          border: 1px solid #ddd6fe;
+          background:
+            radial-gradient(900px 260px at 50% -8%, rgba(124, 58, 237, 0.12), transparent 62%),
+            linear-gradient(160deg, #f8fafc 0%, #ffffff 45%, #faf5ff 100%);
+          padding: clamp(1.45rem, 3.8vw, 2.3rem);
+          box-shadow: 0 24px 58px rgba(76, 29, 149, 0.08);
+          overflow: hidden;
+        }
+        .how-premium-head {
+          text-align: center;
+          max-width: 650px;
+          margin: 0 auto;
+        }
+        .how-eyebrow {
+          margin: 0 0 0.5rem;
+          font-size: 0.72rem;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: #7c3aed;
+        }
+        .how-title {
+          margin: 0;
+          font-size: clamp(1.45rem, 3.4vw, 2rem);
+          line-height: 1.14;
+          letter-spacing: -0.03em;
+          font-weight: 800;
+          color: #0f172a;
+        }
+        .how-subtitle {
+          margin: 0.8rem auto 0;
+          max-width: 44ch;
+          font-size: clamp(0.9rem, 2.2vw, 1rem);
+          color: #64748b;
+        }
+        .how-timeline {
+          display: none;
+        }
+        .how-grid {
+          margin-top: clamp(1.2rem, 3.5vw, 1.8rem);
           display: grid;
-          gap: 1.25rem;
+          gap: 0.95rem;
           grid-template-columns: 1fr;
         }
-        @media (min-width: 768px) {
-          .landing-steps {
+        .how-card {
+          position: relative;
+          border-radius: 18px;
+          border: 1px solid #e9d5ff;
+          background: rgba(255, 255, 255, 0.86);
+          box-shadow:
+            0 10px 30px rgba(15, 23, 42, 0.06),
+            inset 0 1px 0 rgba(255, 255, 255, 0.95);
+          padding: clamp(1rem, 2.5vw, 1.2rem);
+          min-height: 212px;
+          display: flex;
+          flex-direction: column;
+          transition: transform .24s ease, box-shadow .24s ease, border-color .24s ease;
+        }
+        .how-card:hover {
+          transform: translateY(-3px);
+          border-color: #c4b5fd;
+          box-shadow:
+            0 18px 42px rgba(91, 33, 182, 0.14),
+            inset 0 1px 0 rgba(255, 255, 255, 0.95);
+        }
+        .how-card-top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.6rem;
+          margin-bottom: 0.7rem;
+        }
+        .how-step {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 2.2rem;
+          padding: 0.16rem 0.48rem;
+          border-radius: 999px;
+          border: 1px solid #c4b5fd;
+          background: #f5f3ff;
+          color: #6d28d9;
+          font-size: 0.72rem;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+        }
+        .how-icon {
+          width: 2.15rem;
+          height: 2.15rem;
+          border-radius: 10px;
+          border: 1px solid #ddd6fe;
+          background: #faf5ff;
+          display: grid;
+          place-items: center;
+          font-size: 1.05rem;
+        }
+        .how-card-title {
+          margin: 0;
+          font-size: 1.01rem;
+          line-height: 1.3;
+          font-weight: 750;
+          color: #111827;
+        }
+        .how-card-line {
+          margin: 0.46rem 0 0;
+          font-size: 0.89rem;
+          line-height: 1.5;
+          color: #64748b;
+        }
+        .how-micro {
+          margin-top: 0.85rem;
+          border-radius: 11px;
+          border: 1px solid #ede9fe;
+          background: #f8fafc;
+          padding: 0.5rem;
+        }
+        .how-micro-compose {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 0.35rem;
+        }
+        .how-micro-compose span {
+          display: block;
+          height: 26px;
+          border-radius: 7px;
+          border: 1px solid #ddd6fe;
+          background: #fff;
+        }
+        .how-micro-qr {
+          display: grid;
+          place-items: center;
+        }
+        .how-micro-qr > div {
+          width: 42px;
+          height: 42px;
+          border-radius: 8px;
+          border: 1px solid #d8b4fe;
+          background:
+            repeating-linear-gradient(90deg, #7c3aed 0 2px, transparent 2px 4px),
+            repeating-linear-gradient(0deg, #7c3aed 0 2px, transparent 2px 4px);
+          opacity: 0.85;
+        }
+        .how-micro-bars span {
+          display: block;
+          height: 7px;
+          border-radius: 999px;
+          margin-bottom: 0.32rem;
+          background: linear-gradient(90deg, #a78bfa 0%, #7c3aed 100%);
+        }
+        .how-card-micro {
+          margin: auto 0 0;
+          padding-top: 0.75rem;
+          font-size: 0.73rem;
+          font-weight: 600;
+          letter-spacing: 0.02em;
+          color: #7c3aed;
+        }
+        @media (min-width: 820px) {
+          .how-grid {
             grid-template-columns: repeat(3, 1fr);
-            gap: 1.5rem;
+            gap: 1.05rem;
+          }
+          .how-timeline {
+            position: absolute;
+            display: block;
+            left: clamp(2rem, 6vw, 3.2rem);
+            right: clamp(2rem, 6vw, 3.2rem);
+            top: clamp(11.1rem, 19vw, 12.2rem);
+            height: 2px;
+            background: linear-gradient(90deg, rgba(167, 139, 250, 0.16), rgba(124, 58, 237, 0.55), rgba(167, 139, 250, 0.16));
+            z-index: 0;
+          }
+          .how-card {
+            z-index: 1;
           }
         }
         @media (min-width: 640px) {
