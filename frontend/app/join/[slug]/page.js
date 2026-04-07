@@ -1,6 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
+import { JoinDemoExperience } from "@/components/JoinDemoExperience";
 import { JoinLiveHub } from "@/components/JoinLiveHub";
 
 export default function JoinEventPage() {
@@ -21,6 +22,10 @@ export default function JoinEventPage() {
         <p style={{ color: "#b91c1c" }}>Lien invalide.</p>
       </main>
     );
+  }
+
+  if (slug === "demo") {
+    return <JoinDemoExperience />;
   }
 
   return <JoinLiveHub slug={slug} />;

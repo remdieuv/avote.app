@@ -1,8 +1,8 @@
 "use client";
 
-import { JoinLiveHub } from "@/components/JoinLiveHub";
+import { JoinDemoExperience } from "@/components/JoinDemoExperience";
 
-/** Route statique : /join/demo (prioritaire sur /join/[slug]). */
+/** Route statique : /join/demo — démo interactive sans backend. */
 export default function JoinDemoPage() {
-  return <JoinLiveHub slug="demo" />;
+  return <JoinDemoExperience />;
 }
