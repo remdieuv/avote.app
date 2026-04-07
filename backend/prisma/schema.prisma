@@ -116,6 +116,7 @@ model Event {
   updatedAt    DateTime    @updatedAt
 
   polls Poll[]
+  leads LeadCapture[]
 
   @@index([userId])
 }
@@ -126,6 +127,8 @@ model Poll {
   title     String
   question  String
   type      PollType
+  leadEnabled         Boolean  @default(false)
+  leadTriggerOptionId String?
   status    PollStatus @default(DRAFT)
   order     Int        @default(0)
   createdAt DateTime   @default(now())
@@ -134,6 +137,7 @@ model Poll {
   event   Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
   options PollOption[]
   votes   Vote[]
+  leads   LeadCapture[]
 }
 
 model PollOption {
@@ -160,4 +164,22 @@ model Vote {
   @@index([pollId])
   @@index([optionId])
   @@index([pollId, voterSessionId])
+}
+
+model LeadCapture {
+  id             String   @id @default(cuid())
+  eventId        String
+  pollId         String
+  voterSessionId String
+  firstName      String
+  phone          String
+  email          String?
+  createdAt      DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  poll  Poll  @relation(fields: [pollId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, createdAt])
+  @@index([pollId, createdAt])
+  @@unique([pollId, voterSessionId])
 }

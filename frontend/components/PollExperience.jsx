@@ -203,6 +203,13 @@ export function PollExperience({
   const [voteSubmitting, setVoteSubmitting] = useState(false);
   const [aDejaVoteEnStockage, setADejaVoteEnStockage] = useState(false);
   const [merciPourVote, setMerciPourVote] = useState(false);
+  const [showLeadForm, setShowLeadForm] = useState(false);
+  const [leadFirstName, setLeadFirstName] = useState("");
+  const [leadPhone, setLeadPhone] = useState("");
+  const [leadEmail, setLeadEmail] = useState("");
+  const [leadSubmitting, setLeadSubmitting] = useState(false);
+  const [leadSuccess, setLeadSuccess] = useState(false);
+  const [leadError, setLeadError] = useState(null);
   const [storageVerifie, setStorageVerifie] = useState(false);
   /** Barres résultats : anim 0% → % après paint */
   const [resultsBarsAnimated, setResultsBarsAnimated] = useState(false);
@@ -834,10 +841,17 @@ export function PollExperience({
       }
 
       await loadPoll({ silent: true });
+      const leadTriggered =
+        Boolean(poll?.leadEnabled) &&
+        typeof poll?.leadTriggerOptionId === "string" &&
+        optionIds.includes(poll.leadTriggerOptionId);
       flushSync(() => {
         setSelectedOptionId(null);
         setSelectedOptionIds([]);
         setMerciPourVote(true);
+        setShowLeadForm(leadTriggered);
+        setLeadSuccess(false);
+        setLeadError(null);
       });
     } catch (e) {
       setVoteError(
@@ -846,6 +860,41 @@ export function PollExperience({
     } finally {
       voteLockRef.current = false;
       setVoteSubmitting(false);
+    }
+  }
+
+  async function submitLead() {
+    if (!pollId) return;
+    const voterSessionId = getOrCreateVoterSessionId();
+    if (!voterSessionId) return;
+    const firstName = leadFirstName.trim();
+    const phone = leadPhone.trim();
+    const email = leadEmail.trim();
+    if (!firstName || !phone) {
+      setLeadError("Prénom et téléphone requis.");
+      return;
+    }
+    setLeadSubmitting(true);
+    setLeadError(null);
+    try {
+      const res = await fetch(`${API_POLLS}/${pollId}/leads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          voterSessionId,
+          firstName,
+          phone,
+          email: email || null,
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || `Erreur ${res.status}`);
+      setLeadSuccess(true);
+      setShowLeadForm(false);
+    } catch (e) {
+      setLeadError(e?.message || "Lead non enregistré.");
+    } finally {
+      setLeadSubmitting(false);
     }
   }
 
@@ -1448,19 +1497,88 @@ export function PollExperience({
           )}
 
           {merciPourVote && voteOuvert && (
-            <p
-              style={{
-                marginBottom: "1rem",
-                padding: "0.75rem 1rem",
-                background: `color-mix(in srgb, ${accent} 18%, transparent)`,
-                borderRadius: "12px",
-                border: `1px solid color-mix(in srgb, ${accent} 35%, transparent)`,
-                color: palette.fg,
-                fontWeight: 600,
-              }}
-            >
-              Merci pour votre vote !
-            </p>
+            <>
+              <p
+                style={{
+                  marginBottom: "1rem",
+                  padding: "0.75rem 1rem",
+                  background: `color-mix(in srgb, ${accent} 18%, transparent)`,
+                  borderRadius: "12px",
+                  border: `1px solid color-mix(in srgb, ${accent} 35%, transparent)`,
+                  color: palette.fg,
+                  fontWeight: 600,
+                }}
+              >
+                Merci pour votre vote !
+              </p>
+              {showLeadForm ? (
+                <div
+                  style={{
+                    marginBottom: "1rem",
+                    padding: "0.9rem",
+                    borderRadius: "12px",
+                    border: `1px solid ${palette.cardBorder}`,
+                    background: palette.card,
+                  }}
+                >
+                  <p style={{ margin: "0 0 0.65rem", fontWeight: 700, color: palette.fg }}>
+                    Restez en contact
+                  </p>
+                  <div style={{ display: "grid", gap: "0.5rem" }}>
+                    <input
+                      type="text"
+                      placeholder="Prénom *"
+                      value={leadFirstName}
+                      onChange={(e) => setLeadFirstName(e.target.value)}
+                      disabled={leadSubmitting}
+                      style={{ padding: "0.55rem 0.65rem", borderRadius: "10px", border: "1px solid #cbd5e1" }}
+                    />
+                    <input
+                      type="tel"
+                      placeholder="Téléphone *"
+                      value={leadPhone}
+                      onChange={(e) => setLeadPhone(e.target.value)}
+                      disabled={leadSubmitting}
+                      style={{ padding: "0.55rem 0.65rem", borderRadius: "10px", border: "1px solid #cbd5e1" }}
+                    />
+                    <input
+                      type="email"
+                      placeholder="E-mail (optionnel)"
+                      value={leadEmail}
+                      onChange={(e) => setLeadEmail(e.target.value)}
+                      disabled={leadSubmitting}
+                      style={{ padding: "0.55rem 0.65rem", borderRadius: "10px", border: "1px solid #cbd5e1" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={submitLead}
+                      disabled={leadSubmitting}
+                      style={{
+                        border: "none",
+                        borderRadius: "10px",
+                        padding: "0.65rem 0.85rem",
+                        background: pollCtaGradient,
+                        color: "#fff",
+                        fontWeight: 700,
+                        cursor: leadSubmitting ? "wait" : "pointer",
+                      }}
+                    >
+                      {leadSubmitting ? "Envoi…" : "Envoyer"}
+                    </button>
+                    {leadError ? (
+                      <p role="alert" style={{ margin: 0, color: isDark ? "#fecaca" : "#b91c1c", fontSize: "0.84rem" }}>
+                        {leadError}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+              {leadSuccess ? (
+                <p style={{ margin: "0 0 1rem", color: palette.fg2, fontSize: "0.88rem" }}>
+                  Merci, vos coordonnées ont bien été enregistrées.
+                </p>
+              ) : null}
+            </>
           )}
 
           {!merciPourVote &&

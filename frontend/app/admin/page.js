@@ -21,6 +21,7 @@ const QUESTION_INITIALE = {
   question: "",
   type: "SINGLE_CHOICE",
   options: ["", ""],
+  leadTriggerOrder: 0,
 };
 
 const btnGhost = {
@@ -57,6 +58,7 @@ export default function AdminPage() {
         question: "",
         type: "SINGLE_CHOICE",
         options: ["", ""],
+        leadTriggerOrder: 0,
       },
     ]);
   }
@@ -84,7 +86,7 @@ export default function AdminPage() {
   }
 
   function majTypeQuestion(id, type) {
-    majQuestion(id, { type });
+    majQuestion(id, { type, leadTriggerOrder: 0 });
   }
 
   function ajouterOption(id) {
@@ -117,6 +119,12 @@ export default function AdminPage() {
         return { ...item, options: next };
       }),
     );
+  }
+
+  function majLeadTriggerOrder(qid, order) {
+    const n = Number(order);
+    if (!Number.isFinite(n) || n < 0) return;
+    majQuestion(qid, { leadTriggerOrder: Math.floor(n) });
   }
 
   function basculerPanneauImportMasse(questionId) {
@@ -198,11 +206,15 @@ export default function AdminPage() {
       question: premier.question.trim(),
       type: premier.type,
       options: premier.options.map((s) => s.trim()).filter(Boolean),
+      leadTriggerOrder:
+        premier.type === "LEAD" ? Number(premier.leadTriggerOrder ?? 0) : 0,
       polls: questions.map((x, order) => ({
         question: x.question.trim(),
         type: x.type,
         order,
         options: x.options.map((s) => s.trim()).filter(Boolean),
+        leadTriggerOrder:
+          x.type === "LEAD" ? Number(x.leadTriggerOrder ?? 0) : 0,
       })),
     };
 
@@ -448,6 +460,24 @@ export default function AdminPage() {
                 />
                 Choix multiple
               </label>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  marginTop: "0.35rem",
+                  cursor: creating ? "default" : "pointer",
+                }}
+              >
+                <input
+                  type="radio"
+                  name={`pollType-${item.id}`}
+                  checked={item.type === "LEAD"}
+                  disabled={creating}
+                  onChange={() => majTypeQuestion(item.id, "LEAD")}
+                />
+                Lead (Oui/Non + mini formulaire)
+              </label>
             </fieldset>
 
             <p style={{ fontWeight: 600, margin: "0 0 0.5rem 0", fontSize: "0.9rem" }}>
@@ -500,6 +530,48 @@ export default function AdminPage() {
                 </li>
               ))}
             </ul>
+            {item.type === "LEAD" ? (
+              <div
+                style={{
+                  margin: "0 0 0.75rem",
+                  padding: "0.7rem",
+                  borderRadius: "8px",
+                  border: "1px solid #dbeafe",
+                  background: "#eff6ff",
+                }}
+              >
+                <label
+                  htmlFor={`lead-trigger-${item.id}`}
+                  style={{
+                    display: "block",
+                    fontWeight: 600,
+                    marginBottom: "0.35rem",
+                    fontSize: "0.86rem",
+                    color: "#1e3a8a",
+                  }}
+                >
+                  Option déclencheuse du formulaire lead
+                </label>
+                <select
+                  id={`lead-trigger-${item.id}`}
+                  value={Math.min(
+                    Math.max(0, Number(item.leadTriggerOrder ?? 0)),
+                    Math.max(0, item.options.length - 1),
+                  )}
+                  onChange={(ev) =>
+                    majLeadTriggerOrder(item.id, Number(ev.target.value))
+                  }
+                  disabled={creating}
+                  style={{ ...inputStyle, padding: "0.45rem 0.6rem" }}
+                >
+                  {item.options.map((opt, idx) => (
+                    <option key={`${item.id}-lead-trigger-${idx}`} value={idx}>
+                      {opt.trim() || `Option ${idx + 1}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             <div
               style={{
                 display: "flex",

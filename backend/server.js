@@ -214,6 +214,8 @@ function pollToJson(poll) {
     title: poll.title,
     question: poll.question,
     type: poll.type,
+    leadEnabled: Boolean(poll.leadEnabled),
+    leadTriggerOptionId: poll.leadTriggerOptionId ?? null,
     status: poll.status,
     order: poll.order,
     createdAt: poll.createdAt.toISOString(),
@@ -1775,8 +1777,9 @@ function normaliserLibellesOptions(optionsInput) {
   return labels;
 }
 
-/** @returns {"SINGLE_CHOICE" | "MULTIPLE_CHOICE" | null} */
+/** @returns {"SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "LEAD" | null} */
 function parseTypeSondage(typeRaw) {
+  if (typeRaw === "LEAD") return "LEAD";
   if (typeRaw === "MULTIPLE_CHOICE") return "MULTIPLE_CHOICE";
   if (
     typeRaw === "SINGLE_CHOICE" ||
@@ -1786,6 +1789,13 @@ function parseTypeSondage(typeRaw) {
     return "SINGLE_CHOICE";
   }
   return null;
+}
+
+function normalizeLeadTriggerOrder(raw, labelsLength) {
+  const max = Math.max(0, labelsLength - 1);
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(max, Math.max(0, Math.floor(n)));
 }
 
 /** Extrait un tableau de sondages depuis le body (compat alias `questions`, chaîne JSON). */
@@ -1849,7 +1859,17 @@ app.post("/polls", requireAuth, async (req, res) => {
               : "";
         const labels = normaliserLibellesOptions(p?.options);
         const typ = parseTypeSondage(p?.type);
-        return { order: ordre, question: qBrut, labels, type: typ };
+        const leadTriggerOrder = normalizeLeadTriggerOrder(
+          p?.leadTriggerOrder,
+          labels.length,
+        );
+        return {
+          order: ordre,
+          question: qBrut,
+          labels,
+          type: typ,
+          leadTriggerOrder,
+        };
       });
 
       saisis.sort((a, b) => a.order - b.order);
@@ -1863,7 +1883,7 @@ app.post("/polls", requireAuth, async (req, res) => {
         }
         if (!p.type) {
           return res.status(400).json({
-            error: `Question « ${p.question.slice(0, 48)}${p.question.length > 48 ? "…" : ""} » : type invalide (SINGLE_CHOICE ou MULTIPLE_CHOICE).`,
+            error: `Question « ${p.question.slice(0, 48)}${p.question.length > 48 ? "…" : ""} » : type invalide (SINGLE_CHOICE, MULTIPLE_CHOICE ou LEAD).`,
           });
         }
         if (p.labels.length < 2) {
@@ -1898,14 +1918,27 @@ app.post("/polls", requireAuth, async (req, res) => {
               eventId: event.id,
               title: e.question,
               question: e.question,
-              type: e.type,
+              type: e.type === "LEAD" ? "SINGLE_CHOICE" : e.type,
+              leadEnabled: e.type === "LEAD",
               status: i === 0 ? "ACTIVE" : "DRAFT",
               order: i,
               options: {
                 create: e.labels.map((label, order) => ({ label, order })),
               },
             },
+            include: {
+              options: { orderBy: { order: "asc" } },
+            },
           });
+          if (e.type === "LEAD") {
+            const trigger = poll.options.find(
+              (opt) => opt.order === e.leadTriggerOrder,
+            );
+            await tx.poll.update({
+              where: { id: poll.id },
+              data: { leadTriggerOptionId: trigger?.id ?? poll.options[0]?.id ?? null },
+            });
+          }
           if (i === 0) premierId = poll.id;
         }
 
@@ -1968,9 +2001,13 @@ app.post("/polls", requireAuth, async (req, res) => {
     const pollTypeParsed = parseTypeSondage(typeRaw);
     if (!pollTypeParsed) {
       return res.status(400).json({
-        error: 'Le type doit être "SINGLE_CHOICE" ou "MULTIPLE_CHOICE".',
+        error: 'Le type doit être "SINGLE_CHOICE", "MULTIPLE_CHOICE" ou "LEAD".',
       });
     }
+    const leadTriggerOrder = normalizeLeadTriggerOrder(
+      body.leadTriggerOrder,
+      labels.length,
+    );
 
     const slug = await slugEvenementUnique();
     const descriptionInit = extraireDescriptionCreation(body);
@@ -1994,7 +2031,8 @@ app.post("/polls", requireAuth, async (req, res) => {
         eventId: event.id,
         title: questionTrim,
         question: questionTrim,
-        type: pollTypeParsed,
+        type: pollTypeParsed === "LEAD" ? "SINGLE_CHOICE" : pollTypeParsed,
+        leadEnabled: pollTypeParsed === "LEAD",
         status: "ACTIVE",
         order: 0,
         options: {
@@ -2007,6 +2045,13 @@ app.post("/polls", requireAuth, async (req, res) => {
         votes: true,
       },
     });
+    if (pollTypeParsed === "LEAD") {
+      const trigger = poll.options.find((opt) => opt.order === leadTriggerOrder);
+      await prisma.poll.update({
+        where: { id: poll.id },
+        data: { leadTriggerOptionId: trigger?.id ?? poll.options[0]?.id ?? null },
+      });
+    }
 
     await prisma.event.update({
       where: { id: event.id },
@@ -2105,6 +2150,107 @@ app.post("/polls/:pollId/vote", async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+app.post("/polls/:pollId/leads", async (req, res) => {
+  const pollId = String(req.params.pollId || "").trim();
+  const body = req.body ?? {};
+  const voterSessionId =
+    typeof body.voterSessionId === "string" ? body.voterSessionId.trim() : "";
+  const firstName =
+    typeof body.firstName === "string" ? body.firstName.trim() : "";
+  const phone = typeof body.phone === "string" ? body.phone.trim() : "";
+  const emailRaw = typeof body.email === "string" ? body.email.trim() : "";
+  const email = emailRaw === "" ? null : emailRaw.slice(0, 320);
+
+  if (!pollId || !voterSessionId) {
+    return res.status(400).json({ error: "pollId et voterSessionId requis." });
+  }
+  if (!firstName || !phone) {
+    return res.status(400).json({ error: "Prénom et téléphone requis." });
+  }
+
+  try {
+    const poll = await prisma.poll.findUnique({
+      where: { id: pollId },
+      select: {
+        id: true,
+        eventId: true,
+        leadEnabled: true,
+        leadTriggerOptionId: true,
+      },
+    });
+    if (!poll) return res.status(404).json({ error: "Sondage introuvable." });
+    if (!poll.leadEnabled || !poll.leadTriggerOptionId) {
+      return res.status(400).json({ error: "Collecte lead non activée." });
+    }
+
+    const aDeclenche = await prisma.vote.findFirst({
+      where: {
+        pollId,
+        voterSessionId,
+        optionId: poll.leadTriggerOptionId,
+      },
+      select: { id: true },
+    });
+    if (!aDeclenche) {
+      return res.status(403).json({ error: "Lead non autorisé pour ce vote." });
+    }
+
+    const lead = await prisma.leadCapture.upsert({
+      where: {
+        pollId_voterSessionId: {
+          pollId,
+          voterSessionId,
+        },
+      },
+      update: { firstName, phone, email },
+      create: {
+        pollId,
+        eventId: poll.eventId,
+        voterSessionId,
+        firstName,
+        phone,
+        email,
+      },
+    });
+    return res.status(201).json({ ok: true, id: lead.id });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+app.get("/events/:eventId/leads", requireAuth, async (req, res) => {
+  const eventId = String(req.params.eventId || "").trim();
+  try {
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    const leads = await prisma.leadCapture.findMany({
+      where: { eventId },
+      orderBy: { createdAt: "desc" },
+      include: {
+        poll: { select: { id: true, question: true, order: true } },
+      },
+    });
+    return res.json(
+      leads.map((x) => ({
+        id: x.id,
+        pollId: x.pollId,
+        pollOrder: x.poll?.order ?? null,
+        pollQuestion: x.poll?.question ?? "",
+        firstName: x.firstName,
+        phone: x.phone,
+        email: x.email,
+        createdAt: x.createdAt.toISOString(),
+      })),
+    );
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
   }
 });
 

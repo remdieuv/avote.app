@@ -1911,22 +1911,40 @@ function RegiePublicPreviewPanel({ slug, eventId, layout, onHide }) {
           </p>
         </div>
         {eventId ? (
-          <Link
-            href={`/admin/events/${encodeURIComponent(eventId)}/customization`}
-            style={{
-              fontSize: "0.72rem",
-              fontWeight: 700,
-              padding: "0.35rem 0.65rem",
-              borderRadius: "8px",
-              border: "1px solid #c7d2fe",
-              background: "#eef2ff",
-              color: "#3730a3",
-              textDecoration: "none",
-              whiteSpace: "nowrap",
-            }}
-          >
-            Personnalisation de la salle
-          </Link>
+          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+            <Link
+              href={`/admin/event/${encodeURIComponent(eventId)}/leads`}
+              style={{
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                padding: "0.35rem 0.65rem",
+                borderRadius: "8px",
+                border: "1px solid #bbf7d0",
+                background: "#f0fdf4",
+                color: "#166534",
+                textDecoration: "none",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Leads
+            </Link>
+            <Link
+              href={`/admin/events/${encodeURIComponent(eventId)}/customization`}
+              style={{
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                padding: "0.35rem 0.65rem",
+                borderRadius: "8px",
+                border: "1px solid #c7d2fe",
+                background: "#eef2ff",
+                color: "#3730a3",
+                textDecoration: "none",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Personnalisation de la salle
+            </Link>
+          </div>
         ) : null}
       </div>
       <div
