@@ -11,7 +11,6 @@ export function AdminAccountBar() {
       navItems={[
         { href: "/admin/events", label: "Mes événements", match: "prefix" },
         { href: "/admin", label: "Créer", match: "exact" },
-        { href: "/", label: "Site", match: "none" },
       ]}
       mobileQuickItem={{ href: "/admin/events", label: "Mes événements", match: "prefix" }}
       rightSlot={<AdminAccountMenu />}

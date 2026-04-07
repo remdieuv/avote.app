@@ -27,12 +27,8 @@ export function LandingHeader() {
     <AppHeaderShell
       logoHref="/"
       logoLabel="Avote"
-      navItems={[
-        { href: "/#how", label: "Comment ça marche", match: "none" },
-        { href: "/join/demo", label: "Démo", match: "none" },
-        { href: "/admin/events", label: "Produit", match: "none" },
-      ]}
-      mobileQuickItem={{ href: "/admin/events", label: "Produit", match: "none" }}
+      navItems={[]}
+      mobileQuickItem={null}
       rightSlot={
         <Link href={isAuthed ? "/admin/events" : "/admin"} className="landing-header-cta">
           {isAuthed ? "Mes événements" : "Créer un événement"}
