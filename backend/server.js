@@ -675,6 +675,27 @@ function requireAuth(req, res, next) {
   req.userEmail = payload.email;
   next();
 }
+
+async function requireAdmin(req, res, next) {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { id: true, role: true },
+    });
+    if (!user) {
+      clearAuthCookie(res);
+      return res.status(401).json({ error: "Compte introuvable." });
+    }
+    if (String(user.role || "").toUpperCase() !== "ADMIN") {
+      return res.status(403).json({ error: "Accès réservé aux administrateurs." });
+    }
+    req.userRole = "ADMIN";
+    next();
+  } catch (e) {
+    console.error("requireAdmin", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+}
 app.use("/uploads", express.static(UPLOAD_ROOT));
 
 app.get("/", (_req, res) => {
@@ -771,7 +792,7 @@ app.get("/auth/me", async (req, res) => {
     }
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, email: true },
+      select: { id: true, email: true, role: true },
     });
     if (!user) {
       clearAuthCookie(res);
@@ -866,6 +887,164 @@ app.get("/events", requireAuth, async (req, res) => {
     return res.json(list);
   } catch (e) {
     console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+app.get("/internal/stats", requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const [users, events, polls, votes, leads] = await Promise.all([
+      prisma.user.count(),
+      prisma.event.count(),
+      prisma.poll.count(),
+      prisma.vote.count(),
+      prisma.leadCapture.count(),
+    ]);
+    return res.json({ users, events, polls, votes, leads });
+  } catch (e) {
+    console.error("internal/stats", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+app.get("/internal/users", requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const users = await prisma.user.findMany({
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        createdAt: true,
+        _count: { select: { events: true } },
+      },
+    });
+    return res.json({
+      users: users.map((u) => ({
+        id: u.id,
+        email: u.email,
+        role: u.role ?? "USER",
+        createdAt: u.createdAt,
+        eventCount: u._count?.events ?? 0,
+      })),
+    });
+  } catch (e) {
+    console.error("internal/users", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+app.patch(
+  "/internal/users/:userId/role",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const { userId } = req.params;
+    const nextRoleRaw =
+      typeof req.body?.role === "string" ? req.body.role.trim().toUpperCase() : "";
+    const nextRole = nextRoleRaw === "ADMIN" ? "ADMIN" : nextRoleRaw === "USER" ? "USER" : null;
+    if (!nextRole) {
+      return res.status(400).json({ error: 'Rôle invalide. Utilisez "USER" ou "ADMIN".' });
+    }
+    if (req.userId === userId && nextRole !== "ADMIN") {
+      return res.status(400).json({ error: "Vous ne pouvez pas retirer votre propre rôle ADMIN." });
+    }
+    try {
+      const updated = await prisma.user.update({
+        where: { id: userId },
+        data: { role: nextRole },
+        select: { id: true, email: true, role: true, createdAt: true },
+      });
+      return res.json({ user: updated });
+    } catch (e) {
+      if (e && typeof e === "object" && "code" in e && e.code === "P2025") {
+        return res.status(404).json({ error: "Utilisateur introuvable." });
+      }
+      console.error("internal/users/:userId/role", e);
+      return res.status(500).json({ error: "Erreur serveur." });
+    }
+  },
+);
+
+app.get("/internal/events", requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const events = await prisma.event.findMany({
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        liveState: true,
+        createdAt: true,
+        user: { select: { email: true } },
+        _count: { select: { polls: true, leads: true } },
+      },
+    });
+    return res.json({
+      events: events.map((e) => ({
+        id: e.id,
+        title: e.title,
+        status: e.status,
+        liveState: e.liveState,
+        createdAt: e.createdAt,
+        ownerEmail: e.user?.email ?? "N/A",
+        pollCount: e._count?.polls ?? 0,
+        leadCount: e._count?.leads ?? 0,
+      })),
+    });
+  } catch (e) {
+    console.error("internal/events", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+app.get("/internal/leads", requireAuth, requireAdmin, async (req, res) => {
+  const takeRaw = Number(req.query?.take ?? 300);
+  const take = Number.isFinite(takeRaw)
+    ? Math.min(1000, Math.max(1, Math.floor(takeRaw)))
+    : 300;
+  try {
+    const leads = await prisma.leadCapture.findMany({
+      orderBy: { createdAt: "desc" },
+      take,
+      select: {
+        id: true,
+        firstName: true,
+        phone: true,
+        email: true,
+        createdAt: true,
+        event: {
+          select: {
+            id: true,
+            title: true,
+            user: { select: { email: true } },
+          },
+        },
+        poll: {
+          select: {
+            id: true,
+            question: true,
+            title: true,
+          },
+        },
+      },
+    });
+    return res.json({
+      leads: leads.map((l) => ({
+        id: l.id,
+        firstName: l.firstName,
+        phone: l.phone,
+        email: l.email,
+        createdAt: l.createdAt,
+        eventId: l.event?.id ?? null,
+        eventTitle: l.event?.title ?? "Événement",
+        ownerEmail: l.event?.user?.email ?? "N/A",
+        pollId: l.poll?.id ?? null,
+        pollQuestion: l.poll?.question || l.poll?.title || "Question",
+      })),
+    });
+  } catch (e) {
+    console.error("internal/leads", e);
     return res.status(500).json({ error: "Erreur serveur." });
   }
 });
