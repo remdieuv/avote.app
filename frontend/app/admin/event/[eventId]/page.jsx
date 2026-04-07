@@ -1828,16 +1828,24 @@ const btnGhost = {
 };
 
 const REGIE_PREVIEW_JOIN_LS_PREFIX = "avote_regie_preview_join_";
+const LEADS_LAST_SEEN_LS_PREFIX = "avote_leads_seen_at_";
 
 /**
  * @param {{
  *   slug: string;
  *   eventId: string | null;
+ *   newLeadCount?: number;
  *   layout: "beside" | "below" | "drawer";
  *   onHide?: () => void;
  * }} props
  */
-function RegiePublicPreviewPanel({ slug, eventId, layout, onHide }) {
+function RegiePublicPreviewPanel({
+  slug,
+  eventId,
+  newLeadCount = 0,
+  layout,
+  onHide,
+}) {
   const [iframeError, setIframeError] = useState(false);
   const joinPath = `/join/${encodeURIComponent(slug)}`;
 
@@ -1927,6 +1935,30 @@ function RegiePublicPreviewPanel({ slug, eventId, layout, onHide }) {
               }}
             >
               Leads
+              {newLeadCount > 0 ? (
+                <span
+                  style={{
+                    marginLeft: "0.4rem",
+                    display: "inline-flex",
+                    minWidth: "1.25rem",
+                    height: "1.25rem",
+                    borderRadius: "999px",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "0 0.35rem",
+                    background: "#dcfce7",
+                    border: "1px solid #86efac",
+                    color: "#166534",
+                    fontSize: "0.68rem",
+                    fontWeight: 800,
+                    lineHeight: 1,
+                  }}
+                  aria-label={`${newLeadCount} nouveaux leads`}
+                  title={`${newLeadCount} nouveaux leads`}
+                >
+                  {newLeadCount > 99 ? "99+" : newLeadCount}
+                </span>
+              ) : null}
             </Link>
             <Link
               href={`/admin/events/${encodeURIComponent(eventId)}/customization`}
@@ -2222,6 +2254,7 @@ function RegieAutoRevealCard({
  *   previewJoinOpen?: boolean;
  *   onTogglePreviewJoin?: () => void;
  *   onOpenJoinPreviewMobile?: () => void;
+ *   newLeadCount?: number;
  * }} props
  */
 function RegieSidebarInner({
@@ -2242,6 +2275,7 @@ function RegieSidebarInner({
   previewJoinOpen = false,
   onTogglePreviewJoin,
   onOpenJoinPreviewMobile,
+  newLeadCount = 0,
 }) {
   const [editingDesc, setEditingDesc] = useState(false);
   const [draftDesc, setDraftDesc] = useState("");
@@ -2345,6 +2379,30 @@ function RegieSidebarInner({
                 }}
               >
                 Leads
+                {newLeadCount > 0 ? (
+                  <span
+                    style={{
+                      marginLeft: "0.35rem",
+                      display: "inline-flex",
+                      minWidth: "1.1rem",
+                      height: "1.1rem",
+                      borderRadius: "999px",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "0 0.3rem",
+                      background: "#dcfce7",
+                      border: "1px solid #86efac",
+                      color: "#166534",
+                      fontSize: "0.66rem",
+                      fontWeight: 800,
+                      lineHeight: 1,
+                    }}
+                    aria-label={`${newLeadCount} nouveaux leads`}
+                    title={`${newLeadCount} nouveaux leads`}
+                  >
+                    {newLeadCount > 99 ? "99+" : newLeadCount}
+                  </span>
+                ) : null}
               </Link>
             ) : null}
           </div>
@@ -2913,6 +2971,7 @@ export default function RegieEventPage() {
   const [autoRotateResultsSec, setAutoRotateResultsSec] = useState(5);
   const [addQuestionModalOpen, setAddQuestionModalOpen] = useState(false);
   const [toastNotif, setToastNotif] = useState(/** @type {string | null} */ (null));
+  const [newLeadCount, setNewLeadCount] = useState(0);
 
   const loadPollAbortRef = useRef(null);
   const socketRef = useRef(null);
@@ -2995,6 +3054,34 @@ export default function RegieEventPage() {
     } catch {
       /* ignore */
     }
+  }, [eventId]);
+
+  useEffect(() => {
+    if (!eventId || typeof window === "undefined") return;
+    let cancelled = false;
+    const seenKey = LEADS_LAST_SEEN_LS_PREFIX + eventId;
+    const run = async () => {
+      try {
+        const seenRaw = window.localStorage.getItem(seenKey);
+        const seenMs = Number(seenRaw || "0");
+        const res = await adminFetch(`${apiBaseBrowser()}/events/${eventId}/leads`);
+        const body = await res.json().catch(() => []);
+        if (!res.ok || !Array.isArray(body) || cancelled) return;
+        const count = body.filter((x) => {
+          const ts = Date.parse(String(x?.createdAt || ""));
+          return Number.isFinite(ts) && ts > seenMs;
+        }).length;
+        setNewLeadCount(count);
+      } catch {
+        /* ignore */
+      }
+    };
+    void run();
+    const id = window.setInterval(() => void run(), 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
   }, [eventId]);
 
   const persistPreviewJoinOpen = useCallback(
@@ -3882,6 +3969,7 @@ export default function RegieEventPage() {
               joinPreviewDesktop
               previewJoinOpen={previewJoinOpen}
               onTogglePreviewJoin={togglePreviewJoin}
+              newLeadCount={newLeadCount}
             />
           ) : null}
 
@@ -3915,6 +4003,7 @@ export default function RegieEventPage() {
                     setMenuOpen(false);
                     setMobileJoinPreviewOpen(true);
                   }}
+                  newLeadCount={newLeadCount}
                 />
                 <header
                   style={{
@@ -4254,6 +4343,7 @@ export default function RegieEventPage() {
                   key={eventData.slug}
                   slug={eventData.slug}
                   eventId={eventId}
+                  newLeadCount={newLeadCount}
                   layout={desktopSplitWide ? "beside" : "below"}
                   onHide={() => persistPreviewJoinOpen(false)}
                 />

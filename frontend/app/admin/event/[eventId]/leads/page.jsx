@@ -5,6 +5,8 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
+const LEADS_LAST_SEEN_LS_PREFIX = "avote_leads_seen_at_";
+
 export default function EventLeadsPage() {
   const params = useParams();
   const raw = params?.eventId;
@@ -16,6 +18,16 @@ export default function EventLeadsPage() {
 
   useEffect(() => {
     if (!eventId) return;
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(
+          LEADS_LAST_SEEN_LS_PREFIX + eventId,
+          String(Date.now()),
+        );
+      } catch {
+        /* ignore */
+      }
+    }
     (async () => {
       setLoading(true);
       setError(null);
