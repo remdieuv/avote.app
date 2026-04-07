@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useMemo, useState } from "react";
 import {
   buildJoinRoomShellStyle,
@@ -76,6 +77,11 @@ export function JoinDemoExperience() {
   const [phase, setPhase] = useState(/** @type {"vote" | "results"} */ ("vote"));
   const [selectedId, setSelectedId] = useState(/** @type {string | null} */ (null));
   const [barsAnimated, setBarsAnimated] = useState(false);
+  const [demoJoinUrl, setDemoJoinUrl] = useState("");
+
+  useEffect(() => {
+    setDemoJoinUrl(`${window.location.origin}/join/demo`);
+  }, []);
 
   useEffect(() => {
     if (phase !== "results") {
@@ -111,6 +117,29 @@ export function JoinDemoExperience() {
 
   return (
     <main style={shell}>
+      <style>{`
+        .join-demo-vote-grid {
+          display: grid;
+          gap: 1.25rem;
+          width: 100%;
+          max-width: 100%;
+          align-items: start;
+        }
+        @media (min-width: 768px) {
+          .join-demo-vote-grid {
+            grid-template-columns: minmax(0, 1fr) auto;
+          }
+        }
+        @media (max-width: 767px) {
+          .join-demo-vote-main {
+            order: 2;
+          }
+          .join-demo-qr-aside {
+            order: 1;
+            margin-bottom: 0.25rem;
+          }
+        }
+      `}</style>
       <header
         style={{
           flexShrink: 0,
@@ -155,130 +184,224 @@ export function JoinDemoExperience() {
         <div style={panelBase}>
           {phase === "vote" ? (
             <>
-              <p style={badgeVote}>Testez l’expérience participant</p>
-              <h2
-                style={{
-                  margin: "0.65rem 0 0.5rem 0",
-                  fontSize: "clamp(1.15rem, 3.8vw, 1.45rem)",
-                  fontWeight: 800,
-                  lineHeight: 1.35,
-                  letterSpacing: "-0.02em",
-                  color: palette.fg,
-                }}
-              >
-                {QUESTION}
-              </h2>
-              <p
-                style={{
-                  margin: "0 0 1.1rem 0",
-                  fontSize: "0.88rem",
-                  color: palette.muted2,
-                  fontWeight: 500,
-                }}
-              >
-                Votez pour voir les résultats en direct.
-              </p>
-              <ul
-                style={{
-                  listStyle: "none",
-                  margin: 0,
-                  padding: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.65rem",
-                  textAlign: "left",
-                }}
-              >
-                {DEMO_OPTIONS.map((opt) => {
-                  const on = selectedId === opt.id;
-                  return (
-                    <li key={opt.id}>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedId(opt.id)}
+              <div className="join-demo-vote-grid">
+                <div className="join-demo-vote-main" style={{ minWidth: 0 }}>
+                  <p style={badgeVote}>Testez l’expérience participant</p>
+                  <h2
+                    style={{
+                      margin: "0.65rem 0 0.5rem 0",
+                      fontSize: "clamp(1.15rem, 3.8vw, 1.45rem)",
+                      fontWeight: 800,
+                      lineHeight: 1.35,
+                      letterSpacing: "-0.02em",
+                      color: palette.fg,
+                    }}
+                  >
+                    {QUESTION}
+                  </h2>
+                  <p
+                    style={{
+                      margin: "0 0 1.1rem 0",
+                      fontSize: "0.88rem",
+                      color: palette.muted2,
+                      fontWeight: 500,
+                    }}
+                  >
+                    Votez pour voir les résultats en direct.
+                  </p>
+                  <ul
+                    style={{
+                      listStyle: "none",
+                      margin: 0,
+                      padding: 0,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.65rem",
+                      textAlign: "left",
+                    }}
+                  >
+                    {DEMO_OPTIONS.map((opt) => {
+                      const on = selectedId === opt.id;
+                      return (
+                        <li key={opt.id}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedId(opt.id)}
+                            style={{
+                              width: "100%",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.65rem",
+                              padding: "0.85rem 1rem",
+                              borderRadius: "14px",
+                              border: on
+                                ? `2px solid ${accent}`
+                                : `1px solid ${palette.cardBorder}`,
+                              background: on
+                                ? `color-mix(in srgb, ${accent} 14%, transparent)`
+                                : isDark
+                                  ? "rgba(15, 23, 42, 0.35)"
+                                  : "rgba(255,255,255,0.65)",
+                              cursor: "pointer",
+                              boxSizing: "border-box",
+                              color: palette.fg,
+                              fontSize: "0.95rem",
+                              fontWeight: 600,
+                              textAlign: "left",
+                              transition:
+                                "border-color 0.15s, background 0.15s",
+                            }}
+                          >
+                            <span
+                              aria-hidden
+                              style={{
+                                width: "1.15rem",
+                                height: "1.15rem",
+                                borderRadius: "999px",
+                                border: on
+                                  ? `5px solid ${accent}`
+                                  : `2px solid ${palette.muted}`,
+                                flexShrink: 0,
+                                boxSizing: "border-box",
+                              }}
+                            />
+                            {opt.label}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={confirmVote}
+                    disabled={!selectedId}
+                    style={{
+                      marginTop: "1.25rem",
+                      width: "100%",
+                      maxWidth: "22rem",
+                      padding: "0.85rem 1.2rem",
+                      fontSize: "clamp(1rem, 3.2vw, 1.08rem)",
+                      fontWeight: 800,
+                      border: "none",
+                      borderRadius: "14px",
+                      background:
+                        !selectedId
+                          ? isDark
+                            ? "rgba(148, 163, 184, 0.35)"
+                            : "#94a3b8"
+                          : joinCtaGradient,
+                      color: "#fff",
+                      cursor: !selectedId ? "not-allowed" : "pointer",
+                      boxShadow:
+                        !selectedId
+                          ? "none"
+                          : `0 8px 28px rgba(0, 0, 0, ${isDark ? 0.32 : 0.18})`,
+                    }}
+                  >
+                    Valider mon choix
+                  </button>
+                  <p
+                    style={{
+                      margin: "1rem 0 0 0",
+                      fontSize: "0.78rem",
+                      color: palette.muted,
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    Les participants rejoignent via QR code ou lien — comme
+                    en vrai.
+                  </p>
+                </div>
+
+                <aside
+                  className="join-demo-qr-aside"
+                  style={{
+                    margin: "0 auto",
+                    width: "100%",
+                    maxWidth: "15.5rem",
+                    padding: "1rem 1.1rem",
+                    borderRadius: "16px",
+                    border: `1px solid ${palette.cardBorder}`,
+                    background: isDark
+                      ? "rgba(15, 23, 42, 0.5)"
+                      : "rgba(255,255,255,0.88)",
+                    boxSizing: "border-box",
+                    textAlign: "center",
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: "0 0 0.5rem 0",
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      color: accent,
+                    }}
+                  >
+                    Tester sur mobile
+                  </p>
+                  <p
+                    style={{
+                      margin: "0 0 0.85rem 0",
+                      fontSize: "0.82rem",
+                      color: palette.muted,
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    Scannez ce code : vous ouvrez{' '}
+                    <strong style={{ color: palette.fg2 }}>
+                      la même démo
+                    </strong>{' '}
+                    pour voter depuis votre téléphone (fictif, sans compte).
+                  </p>
+                  <div
+                    style={{
+                      display: "inline-block",
+                      padding: "0.5rem",
+                      borderRadius: "12px",
+                      background: "#fff",
+                      lineHeight: 0,
+                    }}
+                  >
+                    {demoJoinUrl ? (
+                      <QRCodeSVG
+                        value={demoJoinUrl}
+                        size={148}
+                        level="M"
+                        includeMargin
+                        title="Ouvrir la démo Avote sur mobile"
+                        fgColor="#0f172a"
+                        bgColor="#ffffff"
+                      />
+                    ) : (
+                      <div
                         style={{
-                          width: "100%",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "0.65rem",
-                          padding: "0.85rem 1rem",
-                          borderRadius: "14px",
-                          border: on
-                            ? `2px solid ${accent}`
-                            : `1px solid ${palette.cardBorder}`,
-                          background: on
-                            ? `color-mix(in srgb, ${accent} 14%, transparent)`
-                            : isDark
-                              ? "rgba(15, 23, 42, 0.35)"
-                              : "rgba(255,255,255,0.65)",
-                          cursor: "pointer",
-                          boxSizing: "border-box",
-                          color: palette.fg,
-                          fontSize: "0.95rem",
-                          fontWeight: 600,
-                          textAlign: "left",
-                          transition: "border-color 0.15s, background 0.15s",
+                          width: 148,
+                          height: 148,
+                          display: "grid",
+                          placeItems: "center",
+                          fontSize: "0.78rem",
+                          color: "#94a3b8",
                         }}
                       >
-                        <span
-                          aria-hidden
-                          style={{
-                            width: "1.15rem",
-                            height: "1.15rem",
-                            borderRadius: "999px",
-                            border: on
-                              ? `5px solid ${accent}`
-                              : `2px solid ${palette.muted}`,
-                            flexShrink: 0,
-                            boxSizing: "border-box",
-                          }}
-                        />
-                        {opt.label}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-              <button
-                type="button"
-                onClick={confirmVote}
-                disabled={!selectedId}
-                style={{
-                  marginTop: "1.25rem",
-                  width: "100%",
-                  maxWidth: "22rem",
-                  padding: "0.85rem 1.2rem",
-                  fontSize: "clamp(1rem, 3.2vw, 1.08rem)",
-                  fontWeight: 800,
-                  border: "none",
-                  borderRadius: "14px",
-                  background:
-                    !selectedId
-                      ? isDark
-                        ? "rgba(148, 163, 184, 0.35)"
-                        : "#94a3b8"
-                      : joinCtaGradient,
-                  color: "#fff",
-                  cursor: !selectedId ? "not-allowed" : "pointer",
-                  boxShadow:
-                    !selectedId
-                      ? "none"
-                      : `0 8px 28px rgba(0, 0, 0, ${isDark ? 0.32 : 0.18})`,
-                }}
-              >
-                Valider mon choix
-              </button>
-              <p
-                style={{
-                  margin: "1rem 0 0 0",
-                  fontSize: "0.78rem",
-                  color: palette.muted,
-                  lineHeight: 1.45,
-                }}
-              >
-                Les participants rejoignent via QR code ou lien — comme en
-                vrai.
-              </p>
+                        …
+                      </div>
+                    )}
+                  </div>
+                  <p
+                    style={{
+                      margin: "0.65rem 0 0 0",
+                      fontSize: "0.72rem",
+                      color: palette.muted,
+                      wordBreak: "break-all",
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    {demoJoinUrl || "Chargement du lien…"}
+                  </p>
+                </aside>
+              </div>
             </>
           ) : (
             <>
