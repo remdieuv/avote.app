@@ -299,25 +299,52 @@ export function EventDashboardCard({ event, featured, formatDate }) {
             Personnaliser ma salle
           </span>
         ) : (
-          <Link
-            href={`/admin/events/${ev.id}/customization`}
+          <div
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "0.55rem 0.95rem",
-              fontSize: "0.84rem",
-              fontWeight: 600,
-              borderRadius: "10px",
-              textDecoration: "none",
-              border: "1px solid #cbd5e1",
-              background: "#fff",
-              color: "#475569",
-              textAlign: "center",
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "0.45rem",
             }}
           >
-            Personnaliser ma salle
-          </Link>
+            <Link
+              href={`/admin/events/${ev.id}/customization`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "0.55rem 0.95rem",
+                fontSize: "0.84rem",
+                fontWeight: 600,
+                borderRadius: "10px",
+                textDecoration: "none",
+                border: "1px solid #cbd5e1",
+                background: "#fff",
+                color: "#475569",
+                textAlign: "center",
+              }}
+            >
+              Personnaliser
+            </Link>
+            <Link
+              href={`/admin/event/${ev.id}/leads`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "0.55rem 0.95rem",
+                fontSize: "0.84rem",
+                fontWeight: 700,
+                borderRadius: "10px",
+                textDecoration: "none",
+                border: "1px solid #bbf7d0",
+                background: "#f0fdf4",
+                color: "#166534",
+                textAlign: "center",
+              }}
+            >
+              Leads
+            </Link>
+          </div>
         )}
       </div>
 

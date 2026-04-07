@@ -2334,6 +2334,19 @@ function RegieSidebarInner({
             >
               Mes événements
             </Link>
+            {eventId ? (
+              <Link
+                href={`/admin/event/${encodeURIComponent(eventId)}/leads`}
+                style={{
+                  color: "#166534",
+                  fontWeight: 700,
+                  fontSize: "0.875rem",
+                  textDecoration: "none",
+                }}
+              >
+                Leads
+              </Link>
+            ) : null}
           </div>
           {onCloseDrawer ? (
             <button type="button" onClick={onCloseDrawer} style={btnGhost}>
