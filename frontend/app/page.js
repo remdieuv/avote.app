@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LandingHeader } from "@/components/landing/LandingHeader";
 
 const shell = {
   fontFamily: "system-ui, sans-serif",
@@ -319,41 +320,11 @@ function LiveResultsCard() {
 export default function HomePage() {
   return (
     <div style={shell}>
-      <header
-        style={{
-          borderBottom: "1px solid #e2e8f0",
-          background: "rgba(255,255,255,0.88)",
-          backdropFilter: "blur(8px)",
-          position: "sticky",
-          top: 0,
-          zIndex: 20,
-        }}
-      >
-        <div
-          style={{
-            width: "100%",
-            maxWidth: "960px",
-            margin: "0 auto",
-            padding: "1rem 1.25rem",
-            boxSizing: "border-box",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "1rem",
-          }}
-        >
-          <span style={{ fontWeight: 800, fontSize: "1.15rem", letterSpacing: "-0.02em" }}>
-            Avote
-          </span>
-          <Link href="/admin" style={{ ...btnPrimary, fontSize: "0.9rem", padding: "0.55rem 1rem" }}>
-            Créer un événement
-          </Link>
-        </div>
-      </header>
+      <LandingHeader />
 
       <main style={{ ...inner, flex: 1 }}>
         {/* Hero */}
-        <section className="landing-hero" style={{ ...sectionY }}>
+        <section id="hero" className="landing-hero" style={{ ...sectionY }}>
           <div className="landing-hero-text">
             <h1
               style={{
@@ -400,7 +371,7 @@ export default function HomePage() {
         </section>
 
         {/* Comment ça marche — 3 étapes */}
-        <section style={sectionY}>
+        <section id="how" style={sectionY}>
           <h2
             style={{
               fontSize: "clamp(1.2rem, 3vw, 1.4rem)",
@@ -453,7 +424,7 @@ export default function HomePage() {
         </section>
 
         {/* Pensé pour le live */}
-        <section style={sectionY}>
+        <section id="live" style={sectionY}>
           <div
             style={{
               borderRadius: "20px",
