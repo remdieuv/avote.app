@@ -6,7 +6,7 @@ import { AppHeaderShell } from "@/components/navigation/AppHeaderShell";
 export function AdminAccountBar() {
   return (
     <AppHeaderShell
-      logoHref="/admin/events"
+      logoHref="/"
       logoLabel="Avote"
       navItems={[
         { href: "/admin/events", label: "Mes événements", match: "prefix" },
