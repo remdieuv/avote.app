@@ -410,16 +410,24 @@ export default function AdminPage() {
                     <p className="admin-label" style={{ marginBottom: "0.45rem" }}>
                       Réponses
                     </p>
-                    <ul style={{ listStyle: "none", padding: 0, margin: "0 0 0.6rem 0" }}>
+                    <ul className="admin-options-list">
                       {item.options.map((value, indexOpt) => (
                         <li key={`${item.id}-opt-${indexOpt}`} className="admin-option-row">
+                          <span
+                            className={`admin-option-indicator ${
+                              item.type === "MULTIPLE_CHOICE"
+                                ? "checkbox"
+                                : "radio"
+                            }`}
+                            aria-hidden
+                          />
                           <input
                             type="text"
                             value={value}
                             onChange={(ev) => majOption(item.id, indexOpt, ev.target.value)}
                             placeholder={`Option ${indexOpt + 1}`}
                             disabled={creating}
-                            style={{ ...inputStyle, flex: 1 }}
+                            className="admin-option-input"
                           />
                           <button
                             type="button"
@@ -464,7 +472,7 @@ export default function AdminPage() {
                         type="button"
                         disabled={creating}
                         onClick={() => ajouterOption(item.id)}
-                        style={btnGhost}
+                        className="admin-option-add-btn"
                       >
                         Ajouter une option
                       </button>
@@ -758,18 +766,101 @@ export default function AdminPage() {
         }
         .admin-option-row {
           display: flex;
-          gap: 0.5rem;
-          margin-bottom: 0.5rem;
+          gap: 0.55rem;
           align-items: center;
+          min-height: 52px;
+          border: 1px solid #dbe4ef;
+          border-radius: 12px;
+          background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+          padding: 0.45rem 0.5rem 0.45rem 0.6rem;
+          transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease, background-color .18s ease;
+          animation: adminOptionAppear .2s ease-out;
+        }
+        .admin-option-row:hover {
+          border-color: #c7d2fe;
+          box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+          transform: translateY(-1px);
+          background: #fff;
+        }
+        .admin-options-list {
+          list-style: none;
+          padding: 0;
+          margin: 0 0 0.75rem 0;
+          display: grid;
+          gap: 0.55rem;
+        }
+        .admin-option-indicator {
+          width: 18px;
+          height: 18px;
+          flex-shrink: 0;
+          border: 2px solid #cbd5e1;
+          background: #fff;
+          box-sizing: border-box;
+          position: relative;
+          transition: border-color .16s ease, background-color .16s ease;
+        }
+        .admin-option-indicator.radio { border-radius: 999px; }
+        .admin-option-indicator.radio::after {
+          content: "";
+          position: absolute;
+          inset: 4px;
+          border-radius: 999px;
+          background: #93c5fd;
+          opacity: 0.9;
+        }
+        .admin-option-indicator.checkbox { border-radius: 5px; }
+        .admin-option-indicator.checkbox::after {
+          content: "";
+          position: absolute;
+          left: 4px;
+          top: 1px;
+          width: 5px;
+          height: 9px;
+          border: solid #60a5fa;
+          border-width: 0 2px 2px 0;
+          transform: rotate(45deg);
+        }
+        .admin-option-input {
+          flex: 1;
+          width: 100%;
+          min-width: 0;
+          border: none;
+          outline: none;
+          background: transparent;
+          color: #0f172a;
+          font-size: 0.95rem;
+          font-weight: 600;
+          padding: 0.25rem 0.15rem;
+          line-height: 1.35;
+        }
+        .admin-option-row:focus-within {
+          border-color: #2563eb;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+          background: #fff;
+        }
+        .admin-option-input::placeholder {
+          color: #94a3b8;
+          font-weight: 500;
         }
         .admin-option-remove {
-          padding: 0.45rem 0.65rem;
+          padding: 0.48rem 0.68rem;
           border-radius: 8px;
-          border: 1px solid #cbd5e1;
-          background: #fff;
-          color: #64748b;
+          border: 1px solid #fecaca;
+          background: #fff5f5;
+          color: #b91c1c;
+          font-size: 0.78rem;
+          font-weight: 700;
           cursor: pointer;
           flex-shrink: 0;
+          transition: background-color .16s ease, border-color .16s ease, color .16s ease, opacity .16s ease;
+        }
+        .admin-option-remove:hover {
+          background: #fef2f2;
+          border-color: #fca5a5;
+        }
+        .admin-option-remove:disabled {
+          opacity: 0.55;
+          cursor: not-allowed;
         }
         .admin-lead-config {
           margin: 0 0 0.75rem;
@@ -782,15 +873,34 @@ export default function AdminPage() {
           display: flex;
           flex-wrap: wrap;
           gap: 0.5rem;
-          margin-top: 0.15rem;
+          margin-top: 0.2rem;
+        }
+        .admin-option-add-btn {
+          width: 100%;
+          padding: 0.62rem 0.95rem;
+          border-radius: 10px;
+          border: 1px dashed #93c5fd;
+          background: #f8fbff;
+          color: #1d4ed8;
+          font-size: 0.9rem;
+          font-weight: 700;
+          cursor: pointer;
+          transition: background-color .18s ease, border-color .18s ease, transform .18s ease;
+        }
+        .admin-option-add-btn:hover {
+          background: #eff6ff;
+          border-color: #60a5fa;
+          transform: translateY(-1px);
         }
         .admin-bulk-btn {
-          padding: 0.45rem 0.65rem;
+          width: 100%;
+          padding: 0.58rem 0.75rem;
           border-radius: 8px;
-          border: 1px solid #818cf8;
+          border: 1px solid #c7d2fe;
           background: #fff;
           color: #4338ca;
-          font-size: 0.85rem;
+          font-size: 0.86rem;
+          font-weight: 700;
           cursor: pointer;
         }
         .admin-bulk-panel {
@@ -909,11 +1019,30 @@ export default function AdminPage() {
           .admin-question-card {
             padding: 1rem;
           }
+          .admin-option-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.55rem;
+          }
         }
         @media (min-width: 1280px) {
           .admin-create-grid {
             grid-template-columns: minmax(0, 1fr) minmax(340px, 390px);
           }
+        }
+        @media (max-width: 640px) {
+          .admin-option-row {
+            padding: 0.42rem 0.45rem 0.42rem 0.55rem;
+            min-height: 50px;
+          }
+          .admin-option-remove {
+            padding: 0.46rem 0.6rem;
+            font-size: 0.75rem;
+          }
+        }
+        @keyframes adminOptionAppear {
+          from { opacity: 0; transform: translateY(4px); }
+          to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
     </main>
