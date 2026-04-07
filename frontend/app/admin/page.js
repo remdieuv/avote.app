@@ -261,18 +261,6 @@ export default function AdminPage() {
   return (
     <main className="admin-create-page">
       <div className="admin-create-shell">
-        <header className="admin-create-topbar">
-          <div className="admin-create-links">
-            <Link href="/" className="admin-create-link-muted">
-              ← Accueil
-            </Link>
-            <Link href="/admin/events" className="admin-create-link-accent">
-              Mes événements
-            </Link>
-          </div>
-          <span className="admin-create-brand">Avote</span>
-        </header>
-
         <div className="admin-create-hero">
           <h1>Créer un événement</h1>
           <p>
@@ -618,33 +606,9 @@ export default function AdminPage() {
           padding: 1rem 0.75rem 2rem;
           box-sizing: border-box;
         }
-        .admin-create-topbar {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 0.75rem;
-          margin-bottom: 1rem;
-        }
-        .admin-create-links {
-          display: flex;
-          flex-wrap: wrap;
-          align-items: center;
-          gap: 0.6rem 1rem;
-        }
-        .admin-create-link-muted,
-        .admin-create-link-accent {
-          font-size: 0.9rem;
-          text-decoration: none;
-        }
-        .admin-create-link-muted { color: #64748b; }
-        .admin-create-link-accent { color: #7c3aed; font-weight: 700; }
-        .admin-create-brand {
-          font-weight: 800;
-          font-size: 1.02rem;
-          letter-spacing: -0.03em;
-        }
         .admin-create-hero {
           margin-bottom: 1rem;
+          margin-top: 0.5rem;
           padding: 1.1rem 1.2rem;
           border: 1px solid #dbeafe;
           border-radius: 14px;

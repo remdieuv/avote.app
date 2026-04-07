@@ -185,32 +185,6 @@ export default function AdminEventsPage() {
           width: "100%",
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "0.75rem 1rem",
-            marginBottom: "1.5rem",
-          }}
-        >
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.65rem 1.25rem", alignItems: "center" }}>
-            <Link
-              href="/admin"
-              style={{ fontSize: "0.88rem", color: "#64748b", textDecoration: "none", fontWeight: 600 }}
-            >
-              ← Tableau de bord
-            </Link>
-            <Link href="/" style={{ fontSize: "0.88rem", color: "#64748b", textDecoration: "none", fontWeight: 500 }}>
-              Accueil
-            </Link>
-          </div>
-          <span style={{ fontWeight: 800, fontSize: "0.95rem", color: "#0f172a", letterSpacing: "-0.03em" }}>
-            Avote
-          </span>
-        </div>
-
         <header style={{ marginBottom: "1.5rem" }}>
           <h1
             style={{

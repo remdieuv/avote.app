@@ -54,6 +54,7 @@ export function AdminAccountMenu() {
         aria-label={label}
         aria-expanded={open}
         aria-haspopup="true"
+        className="admin-account-trigger"
         style={{
           display: "inline-flex",
           alignItems: "center",
@@ -107,6 +108,7 @@ export function AdminAccountMenu() {
             role="menuitem"
             href="/admin/account"
             onClick={() => setOpen(false)}
+            className="admin-account-item"
             style={{
               display: "block",
               padding: "0.45rem 0.85rem",
@@ -122,6 +124,7 @@ export function AdminAccountMenu() {
             type="button"
             role="menuitem"
             onClick={() => void onLogout()}
+            className="admin-account-item danger"
             style={{
               display: "block",
               width: "100%",
@@ -141,6 +144,21 @@ export function AdminAccountMenu() {
       ) : null}
 
       <style>{`
+        .admin-account-trigger:hover {
+          border-color: #cbd5e1;
+          background: #f8fafc;
+        }
+        .admin-account-trigger:focus-visible,
+        .admin-account-item:focus-visible {
+          outline: 2px solid #93c5fd;
+          outline-offset: 1px;
+        }
+        .admin-account-item:hover {
+          background: #f8fafc;
+        }
+        .admin-account-item.danger:hover {
+          background: #fff1f2;
+        }
         @media (max-width: 520px) {
           .admin-account-label {
             position: absolute;
