@@ -538,6 +538,20 @@ function btnDanger(disabled) {
   };
 }
 
+function btnFinish(disabled) {
+  return {
+    padding: "0.5rem 0.95rem",
+    fontSize: "0.82rem",
+    borderRadius: "8px",
+    border: `1px solid ${disabled ? "#e5e7eb" : "#f59e0b"}`,
+    background: disabled ? "#f9fafb" : "#fff7ed",
+    color: disabled ? "#9ca3af" : "#b45309",
+    cursor: disabled ? "not-allowed" : "pointer",
+    fontWeight: 700,
+    opacity: disabled ? 0.7 : 1,
+  };
+}
+
 function lienDiffusionAbsolu(path) {
   if (typeof window === "undefined") return "";
   return `${window.location.origin}${path}`;
@@ -4350,6 +4364,24 @@ export default function RegieEventPage() {
                 }}
               >
                 Question suivante
+              </button>
+              <button
+                type="button"
+                disabled={busy || eventFinished}
+                onClick={() => {
+                  if (typeof window === "undefined") return;
+                  const ok = window.confirm(
+                    "Terminer le vote maintenant ? Cette action clôture l’événement.",
+                  );
+                  if (!ok) return;
+                  void postAction(`/events/${eventId}/finish`);
+                }}
+                style={{
+                  ...btnFinish(busy || eventFinished),
+                  width: desktop ? "100%" : "100%",
+                }}
+              >
+                Terminer le vote
               </button>
               <div
                 style={{

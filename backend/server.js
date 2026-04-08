@@ -1709,6 +1709,41 @@ app.post("/events/:eventId/next-poll", requireAuth, async (req, res) => {
   }
 });
 
+app.post("/events/:eventId/finish", requireAuth, async (req, res) => {
+  const { eventId } = req.params;
+  try {
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    await annulationAutoRevealProgrammee(eventId);
+    await prisma.poll.updateMany({
+      where: { eventId, status: "ACTIVE" },
+      data: { status: "CLOSED" },
+    });
+    const event = await prisma.event.update({
+      where: { id: eventId },
+      data: {
+        liveState: "FINISHED",
+        voteState: "CLOSED",
+        displayState: "WAITING",
+        activePollId: null,
+        autoRevealShowResultsAt: null,
+        ...QUESTION_TIMER_RESET,
+      },
+    });
+    await emitEventLiveUpdated(io, eventId);
+    return res.json({
+      ok: true,
+      finished: true,
+      event,
+    });
+  } catch (e) {
+    console.error("events/:eventId/finish", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
 app.post("/polls/:pollId/open", requireAuth, async (req, res) => {
   const { pollId } = req.params;
   try {
