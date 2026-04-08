@@ -1178,9 +1178,12 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
         id: p.id,
         title: p.title,
         question: p.question,
+        contestPrize: p.contestPrize ?? null,
         order: p.order,
         status: p.status,
         type: p.type,
+        leadEnabled: Boolean(p.leadEnabled),
+        leadTriggerOptionId: p.leadTriggerOptionId ?? null,
         voteCount: p._count.votes,
       })),
     });
