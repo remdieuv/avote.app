@@ -3247,6 +3247,25 @@ export default function RegieEventPage() {
     [fetchEvent],
   );
 
+  const fetchPollDrawSummary = useCallback(async (pollId) => {
+    const id = String(pollId || "").trim();
+    if (!id) return null;
+    try {
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/polls/${encodeURIComponent(id)}/draws/summary`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) return null;
+      const body = await res.json().catch(() => ({}));
+      return {
+        totalDraws: Number(body?.totalDraws || 0),
+        totalWinners: Number(body?.totalWinners || 0),
+      };
+    } catch {
+      return null;
+    }
+  }, []);
+
   useEffect(() => {
     void fetchEvent();
     return () => {
@@ -3335,20 +3354,14 @@ export default function RegieEventPage() {
       );
       await Promise.all(
         contestPollIds.map(async (pollId) => {
-          try {
-            const res = await adminFetch(
-              `${apiBaseBrowser()}/polls/${encodeURIComponent(pollId)}/draws/summary`,
-              { cache: "no-store" },
-            );
-            if (!res.ok) return;
-            const body = await res.json().catch(() => ({}));
+          const summary = await fetchPollDrawSummary(pollId);
+          if (summary) {
             next[pollId] = {
-              totalDraws: Number(body?.totalDraws || 0),
-              totalWinners: Number(body?.totalWinners || 0),
+              totalDraws: summary.totalDraws,
+              totalWinners: summary.totalWinners,
             };
-          } catch {
-            // fail silent: on garde le fallback (0)
           }
+          // fail silent: on garde le fallback (0)
         }),
       );
       if (!cancelled) {
@@ -3359,7 +3372,7 @@ export default function RegieEventPage() {
     return () => {
       cancelled = true;
     };
-  }, [eventData?.polls]);
+  }, [eventData?.polls, fetchPollDrawSummary]);
 
   useEffect(() => {
     if (!eventId || typeof window === "undefined") return;
@@ -3656,7 +3669,16 @@ export default function RegieEventPage() {
       setContestDrawModalOpen(false);
       setToastNotif("Gagnant tiré");
       window.setTimeout(() => setToastNotif(null), 3200);
-      await fetchEvent({ silent: true });
+      if (typeof body?.eligibleRemainingCount === "number") {
+        setContestEligibleCount(Math.max(0, body.eligibleRemainingCount));
+      }
+      const updatedSummary = await fetchPollDrawSummary(pollId);
+      if (updatedSummary) {
+        setPollDrawSummary((prev) => ({
+          ...prev,
+          [String(pollId)]: updatedSummary,
+        }));
+      }
       return true;
     } catch (e) {
       setActionError(e.message || "Tirage impossible.");
