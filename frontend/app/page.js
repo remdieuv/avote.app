@@ -381,6 +381,79 @@ function LiveContestPreviewCard() {
   );
 }
 
+function LiveResultsCardCompact() {
+  const rows = [
+    { label: "Option A — Lever de rideau", pct: 58, w: "58%" },
+    { label: "Option B — Table ronde", pct: 34, w: "34%" },
+    { label: "Option C — Networking", pct: 8, w: "8%" },
+  ];
+
+  return (
+    <div
+      style={{
+        borderRadius: "16px",
+        border: "1px solid #e2e8f0",
+        background: "#fff",
+        padding: "1.2rem 1.25rem",
+        boxShadow: "0 14px 32px rgba(15, 23, 42, 0.08)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.95rem" }}>
+        <span
+          style={{
+            width: "8px",
+            height: "8px",
+            borderRadius: "50%",
+            background: "#22c55e",
+            boxShadow: "0 0 0 4px rgba(34, 197, 94, 0.2)",
+          }}
+        />
+        <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "#0f172a" }}>
+          Résultats en direct
+        </h3>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        {rows.map((r) => (
+          <div key={r.label}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                fontSize: "0.8rem",
+                color: "#475569",
+                marginBottom: "0.3rem",
+              }}
+            >
+              <span>{r.label}</span>
+              <span style={{ fontWeight: 700, color: "#7c3aed" }}>{r.pct}%</span>
+            </div>
+            <div
+              style={{
+                height: "9px",
+                borderRadius: "99px",
+                background: "#f1f5f9",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  width: r.w,
+                  height: "100%",
+                  borderRadius: "99px",
+                  background: "linear-gradient(90deg, #8b5cf6 0%, #7c3aed 60%, #6d28d9 100%)",
+                }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+      <p style={{ margin: "0.85rem 0 0", fontSize: "0.76rem", color: "#94a3b8", textAlign: "center" }}>
+        Aperçu décoratif — vos vrais chiffres s’affichent pendant l’événement
+      </p>
+    </div>
+  );
+}
+
 /** Aperçu landing : question Lead (Oui/Non + formulaire) après vote déclencheur — 100 % décoratif. */
 function LiveLeadCapturePreviewCard() {
   return (
@@ -773,6 +846,28 @@ export default function HomePage() {
           <div className="landing-proof-grid">
             <LiveContestPreviewCard />
             <LiveLeadCapturePreviewCard />
+          </div>
+        </section>
+
+        <section style={sectionY} aria-labelledby="landing-live-results-heading">
+          <div className="results-dedicated-wrap">
+            <div className="results-dedicated-copy">
+              <p className="results-eyebrow">Lecture instantanée</p>
+              <h2 id="landing-live-results-heading" className="results-title">
+                Vos résultats parlent en temps réel
+              </h2>
+              <p className="results-slogan">
+                Un vote, un impact visuel immédiat.
+              </p>
+              <p className="results-explain">
+                Dès qu’un participant répond, les barres s’actualisent en direct.
+                Régie, participants et écran voient la même dynamique au même moment.
+                Idéal pour maintenir l’attention et rythmer une session live.
+              </p>
+            </div>
+            <div className="results-dedicated-visual">
+              <LiveResultsCardCompact />
+            </div>
           </div>
         </section>
 
@@ -1335,6 +1430,62 @@ export default function HomePage() {
           .landing-proof-grid {
             grid-template-columns: 1fr 1fr;
             gap: 1.35rem;
+          }
+        }
+        .results-dedicated-wrap {
+          border-radius: 22px;
+          border: 1px solid #ddd6fe;
+          background:
+            radial-gradient(680px 220px at 20% -10%, rgba(124, 58, 237, 0.1), transparent 62%),
+            linear-gradient(155deg, #ffffff 0%, #f8fafc 54%, #faf5ff 100%);
+          box-shadow: 0 20px 46px rgba(76, 29, 149, 0.08);
+          padding: clamp(1.2rem, 3.5vw, 2rem);
+          display: grid;
+          gap: 1rem;
+          grid-template-columns: 1fr;
+          align-items: center;
+        }
+        .results-eyebrow {
+          margin: 0 0 0.45rem;
+          font-size: 0.72rem;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: #7c3aed;
+        }
+        .results-title {
+          margin: 0;
+          font-size: clamp(1.2rem, 2.8vw, 1.7rem);
+          font-weight: 800;
+          line-height: 1.16;
+          letter-spacing: -0.03em;
+          color: #0f172a;
+        }
+        .results-slogan {
+          margin: 0.55rem 0 0;
+          font-size: 0.95rem;
+          font-weight: 700;
+          color: #5b21b6;
+        }
+        .results-explain {
+          margin: 0.65rem 0 0;
+          max-width: 52ch;
+          font-size: 0.9rem;
+          line-height: 1.55;
+          color: #64748b;
+        }
+        .results-dedicated-visual {
+          width: 100%;
+          max-width: 460px;
+          margin: 0 auto;
+        }
+        @media (min-width: 920px) {
+          .results-dedicated-wrap {
+            grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+            gap: 1.25rem;
+          }
+          .results-dedicated-copy {
+            padding-right: 0.5rem;
           }
         }
         .usecases-wrap {
