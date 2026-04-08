@@ -9,8 +9,11 @@ npm start
 https://avote-app.vercel.app/
 
 
+-----------------------------------------
+PS C:\Users\Rémi Gaming\Documents\PRO\A VOTE APP\avote>
+
 git add .
-git commit -m "admin interne"
+git commit -m "Participation concours"
 git push
 
 

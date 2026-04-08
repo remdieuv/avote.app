@@ -28,6 +28,7 @@ enum PollStatus {
 enum PollType {
   SINGLE_CHOICE
   MULTIPLE_CHOICE
+  CONTEST_ENTRY
   YES_NO
   RATING
   RANKING

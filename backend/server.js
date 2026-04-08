@@ -1569,7 +1569,7 @@ app.get("/p/:slug", async (req, res) => {
 
 /**
  * Régie : créer un sondage à la volée (file ou lancement immédiat).
- * Corpo : { question, type?: SINGLE_CHOICE|MULTIPLE_CHOICE|LEAD, options: string[], leadTriggerOrder?: number, launchNow?: boolean }
+ * Corpo : { question, type?: SINGLE_CHOICE|MULTIPLE_CHOICE|LEAD|CONTEST_ENTRY, options: string[], leadTriggerOrder?: number, launchNow?: boolean }
  */
 app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
   const { eventId } = req.params;
@@ -1594,6 +1594,8 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
   const pollTypeParsed =
     typeBrut === "LEAD"
       ? "LEAD"
+      : typeBrut === "CONTEST_ENTRY"
+        ? "CONTEST_ENTRY"
       : typeBrut === "MULTIPLE_CHOICE"
         ? "MULTIPLE_CHOICE"
         : "SINGLE_CHOICE";
@@ -1630,7 +1632,7 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
         title: titreCourt,
         question: questionBrute,
         type: pollType,
-        leadEnabled: pollTypeParsed === "LEAD",
+        leadEnabled: requiresFormOnPositiveAnswer(pollTypeParsed),
         status: "CLOSED",
         order: nextOrder,
         options: {
@@ -1640,7 +1642,7 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
       include: { options: { orderBy: { order: "asc" } } },
     });
 
-    if (pollTypeParsed === "LEAD") {
+    if (requiresFormOnPositiveAnswer(pollTypeParsed)) {
       const trigger = created.options[leadTriggerOrder] ?? created.options[0] ?? null;
       created = await prisma.poll.update({
         where: { id: created.id },
@@ -1976,8 +1978,9 @@ function normaliserLibellesOptions(optionsInput) {
   return labels;
 }
 
-/** @returns {"SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "LEAD" | null} */
+/** @returns {"SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "LEAD" | "CONTEST_ENTRY" | null} */
 function parseTypeSondage(typeRaw) {
+  if (typeRaw === "CONTEST_ENTRY") return "CONTEST_ENTRY";
   if (typeRaw === "LEAD") return "LEAD";
   if (typeRaw === "MULTIPLE_CHOICE") return "MULTIPLE_CHOICE";
   if (
@@ -1988,6 +1991,11 @@ function parseTypeSondage(typeRaw) {
     return "SINGLE_CHOICE";
   }
   return null;
+}
+
+/** @param {"SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "LEAD" | "CONTEST_ENTRY"} type */
+function requiresFormOnPositiveAnswer(type) {
+  return type === "LEAD" || type === "CONTEST_ENTRY";
 }
 
 function normalizeLeadTriggerOrder(raw, labelsLength) {
@@ -2082,7 +2090,7 @@ app.post("/polls", requireAuth, async (req, res) => {
         }
         if (!p.type) {
           return res.status(400).json({
-            error: `Question « ${p.question.slice(0, 48)}${p.question.length > 48 ? "…" : ""} » : type invalide (SINGLE_CHOICE, MULTIPLE_CHOICE ou LEAD).`,
+            error: `Question « ${p.question.slice(0, 48)}${p.question.length > 48 ? "…" : ""} » : type invalide (SINGLE_CHOICE, MULTIPLE_CHOICE, LEAD ou CONTEST_ENTRY).`,
           });
         }
         if (p.labels.length < 2) {
@@ -2118,7 +2126,7 @@ app.post("/polls", requireAuth, async (req, res) => {
               title: e.question,
               question: e.question,
               type: e.type === "LEAD" ? "SINGLE_CHOICE" : e.type,
-              leadEnabled: e.type === "LEAD",
+              leadEnabled: requiresFormOnPositiveAnswer(e.type),
               status: i === 0 ? "ACTIVE" : "DRAFT",
               order: i,
               options: {
@@ -2129,7 +2137,7 @@ app.post("/polls", requireAuth, async (req, res) => {
               options: { orderBy: { order: "asc" } },
             },
           });
-          if (e.type === "LEAD") {
+          if (requiresFormOnPositiveAnswer(e.type)) {
             const trigger = poll.options.find(
               (opt) => opt.order === e.leadTriggerOrder,
             );
@@ -2200,7 +2208,8 @@ app.post("/polls", requireAuth, async (req, res) => {
     const pollTypeParsed = parseTypeSondage(typeRaw);
     if (!pollTypeParsed) {
       return res.status(400).json({
-        error: 'Le type doit être "SINGLE_CHOICE", "MULTIPLE_CHOICE" ou "LEAD".',
+        error:
+          'Le type doit être "SINGLE_CHOICE", "MULTIPLE_CHOICE", "LEAD" ou "CONTEST_ENTRY".',
       });
     }
     const leadTriggerOrder = normalizeLeadTriggerOrder(
@@ -2231,7 +2240,7 @@ app.post("/polls", requireAuth, async (req, res) => {
         title: questionTrim,
         question: questionTrim,
         type: pollTypeParsed === "LEAD" ? "SINGLE_CHOICE" : pollTypeParsed,
-        leadEnabled: pollTypeParsed === "LEAD",
+        leadEnabled: requiresFormOnPositiveAnswer(pollTypeParsed),
         status: "ACTIVE",
         order: 0,
         options: {
@@ -2244,7 +2253,7 @@ app.post("/polls", requireAuth, async (req, res) => {
         votes: true,
       },
     });
-    if (pollTypeParsed === "LEAD") {
+    if (requiresFormOnPositiveAnswer(pollTypeParsed)) {
       const trigger = poll.options.find((opt) => opt.order === leadTriggerOrder);
       await prisma.poll.update({
         where: { id: poll.id },
@@ -2417,6 +2426,88 @@ app.post("/polls/:pollId/leads", async (req, res) => {
     return res.status(201).json({ ok: true, id: lead.id });
   } catch (e) {
     console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/**
+ * Préparation future « Tirer un gagnant » :
+ * participants concours éligibles = question CONTEST_ENTRY + vote sur l’option déclencheuse + lead soumis.
+ * @param {string} pollId
+ */
+async function listContestEligibleParticipants(pollId) {
+  const poll = await prisma.poll.findUnique({
+    where: { id: pollId },
+    select: {
+      id: true,
+      type: true,
+      leadEnabled: true,
+      leadTriggerOptionId: true,
+    },
+  });
+  if (
+    !poll ||
+    poll.type !== "CONTEST_ENTRY" ||
+    !poll.leadEnabled ||
+    !poll.leadTriggerOptionId
+  ) {
+    return [];
+  }
+  const [votes, leads] = await Promise.all([
+    prisma.vote.findMany({
+      where: { pollId, optionId: poll.leadTriggerOptionId },
+      select: { voterSessionId: true, createdAt: true },
+    }),
+    prisma.leadCapture.findMany({
+      where: { pollId },
+      select: {
+        voterSessionId: true,
+        firstName: true,
+        phone: true,
+        email: true,
+        createdAt: true,
+      },
+    }),
+  ]);
+  const leadBySession = new Map(
+    leads.map((l) => [
+      l.voterSessionId,
+      {
+        firstName: l.firstName,
+        phone: l.phone,
+        email: l.email,
+        leadCapturedAt: l.createdAt,
+      },
+    ]),
+  );
+  return votes
+    .map((v) => {
+      const lead = leadBySession.get(v.voterSessionId);
+      if (!lead) return null;
+      return {
+        voterSessionId: v.voterSessionId,
+        votedAt: v.createdAt,
+        ...lead,
+      };
+    })
+    .filter(Boolean);
+}
+
+app.get("/polls/:pollId/contest-eligible", requireAuth, async (req, res) => {
+  const { pollId } = req.params;
+  try {
+    const pOwn = await assertPollOwnedBy(pollId, req.userId);
+    if (!pOwn.ok) {
+      return res.status(pOwn.status).json({ error: "Sondage introuvable." });
+    }
+    const participants = await listContestEligibleParticipants(pollId);
+    return res.json({
+      pollId,
+      eligibleCount: participants.length,
+      participants,
+    });
+  } catch (e) {
+    console.error("polls/:pollId/contest-eligible", e);
     return res.status(500).json({ error: "Erreur serveur." });
   }
 });

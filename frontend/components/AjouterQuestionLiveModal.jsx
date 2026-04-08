@@ -3,6 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { adminFetch } from "@/lib/config";
 
+const CONTEST_DEFAULT_QUESTION = "Souhaitez-vous participer au tirage au sort ?";
+const CONTEST_DEFAULT_OPTIONS = ["Oui", "Non"];
+
+function isLeadLikeQuestionType(type) {
+  return type === "LEAD" || type === "CONTEST_ENTRY";
+}
+
 /**
  * @param {{
  *   open: boolean;
@@ -21,7 +28,7 @@ export function AjouterQuestionLiveModal({
 }) {
   const [question, setQuestion] = useState("");
   const [pollType, setPollType] = useState(
-    /** @type {"SINGLE_CHOICE"|"MULTIPLE_CHOICE"|"LEAD"} */ ("SINGLE_CHOICE"),
+    /** @type {"SINGLE_CHOICE"|"MULTIPLE_CHOICE"|"LEAD"|"CONTEST_ENTRY"} */ ("SINGLE_CHOICE"),
   );
   const [reponses, setReponses] = useState(["", ""]);
   const [leadTriggerOrder, setLeadTriggerOrder] = useState(0);
@@ -47,23 +54,27 @@ export function AjouterQuestionLiveModal({
   }, [open, submitting, onClose]);
 
   const ajouterLigne = useCallback(() => {
-    setReponses((prev) => [...prev, ""]);
-  }, []);
+    setReponses((prev) =>
+      pollType === "CONTEST_ENTRY" ? prev : [...prev, ""],
+    );
+  }, [pollType]);
 
   const majLigne = useCallback((idx, val) => {
+    if (pollType === "CONTEST_ENTRY") return;
     setReponses((prev) => {
       const next = [...prev];
       next[idx] = val;
       return next;
     });
-  }, []);
+  }, [pollType]);
 
   const supprimerLigne = useCallback((idx) => {
     setReponses((prev) => {
+      if (pollType === "CONTEST_ENTRY") return prev;
       if (prev.length <= 2) return prev;
       return prev.filter((_, i) => i !== idx);
     });
-  }, []);
+  }, [pollType]);
 
   const soumettre = useCallback(
     async (launchNow) => {
@@ -91,7 +102,9 @@ export function AjouterQuestionLiveModal({
               type: pollType,
               options: opts,
                 leadTriggerOrder:
-                  pollType === "LEAD" ? Number(leadTriggerOrder ?? 0) : 0,
+                  isLeadLikeQuestionType(pollType)
+                    ? Number(leadTriggerOrder ?? 0)
+                    : 0,
               launchNow,
             }),
           },
@@ -283,8 +296,31 @@ export function AjouterQuestionLiveModal({
             />
             Lead (Oui/Non + formulaire)
           </label>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.35rem",
+              fontSize: "0.86rem",
+              cursor: submitting ? "not-allowed" : "pointer",
+            }}
+          >
+            <input
+              type="radio"
+              name="pollTypeAjout"
+              checked={pollType === "CONTEST_ENTRY"}
+              disabled={submitting}
+              onChange={() => {
+                setPollType("CONTEST_ENTRY");
+                setQuestion(CONTEST_DEFAULT_QUESTION);
+                setReponses([...CONTEST_DEFAULT_OPTIONS]);
+                setLeadTriggerOrder(0);
+              }}
+            />
+            Participation concours
+          </label>
         </div>
-        {pollType === "LEAD" ? (
+        {isLeadLikeQuestionType(pollType) ? (
           <div
             style={{
               margin: "0 0 0.85rem 0",
@@ -369,7 +405,7 @@ export function AjouterQuestionLiveModal({
                 type="text"
                 value={r}
                 onChange={(e) => majLigne(i, e.target.value)}
-                disabled={submitting}
+                disabled={submitting || pollType === "CONTEST_ENTRY"}
                 placeholder={`Réponse ${i + 1}`}
                 style={{
                   flex: 1,
@@ -382,7 +418,11 @@ export function AjouterQuestionLiveModal({
               />
               <button
                 type="button"
-                disabled={submitting || reponses.length <= 2}
+                disabled={
+                  submitting ||
+                  reponses.length <= 2 ||
+                  pollType === "CONTEST_ENTRY"
+                }
                 onClick={() => supprimerLigne(i)}
                 style={{
                   flexShrink: 0,
@@ -406,7 +446,7 @@ export function AjouterQuestionLiveModal({
         </div>
         <button
           type="button"
-          disabled={submitting}
+          disabled={submitting || pollType === "CONTEST_ENTRY"}
           onClick={ajouterLigne}
           style={{
             marginBottom: "0.85rem",
@@ -420,7 +460,9 @@ export function AjouterQuestionLiveModal({
             cursor: submitting ? "not-allowed" : "pointer",
           }}
         >
-          + Ajouter une réponse
+          {pollType === "CONTEST_ENTRY"
+            ? "Options fixées à Oui / Non"
+            : "+ Ajouter une réponse"}
         </button>
 
         {erreur ? (

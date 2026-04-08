@@ -16,6 +16,13 @@ const inputStyle = {
   boxSizing: "border-box",
 };
 
+const CONTEST_DEFAULT_QUESTION = "Souhaitez-vous participer au tirage au sort ?";
+const CONTEST_DEFAULT_OPTIONS = ["Oui", "Non"];
+
+function isLeadLikeQuestionType(type) {
+  return type === "LEAD" || type === "CONTEST_ENTRY";
+}
+
 /** IDs stables (pas Date/random) pour éviter les erreurs d’hydratation SSR. */
 const QUESTION_INITIALE = {
   id: "q-1",
@@ -87,13 +94,26 @@ export default function AdminPage() {
   }
 
   function majTypeQuestion(id, type) {
+    if (type === "CONTEST_ENTRY") {
+      majQuestion(id, {
+        type,
+        question: CONTEST_DEFAULT_QUESTION,
+        options: [...CONTEST_DEFAULT_OPTIONS],
+        leadTriggerOrder: 0,
+      });
+      return;
+    }
     majQuestion(id, { type, leadTriggerOrder: 0 });
   }
 
   function ajouterOption(id) {
     setQuestions((q) =>
       q.map((item) =>
-        item.id === id ? { ...item, options: [...item.options, ""] } : item,
+        item.id === id
+          ? item.type === "CONTEST_ENTRY"
+            ? item
+            : { ...item, options: [...item.options, ""] }
+          : item,
       ),
     );
   }
@@ -102,6 +122,7 @@ export default function AdminPage() {
     setQuestions((q) =>
       q.map((item) => {
         if (item.id !== qid) return item;
+        if (item.type === "CONTEST_ENTRY") return item;
         if (item.options.length <= 2) return item;
         return {
           ...item,
@@ -115,6 +136,7 @@ export default function AdminPage() {
     setQuestions((q) =>
       q.map((item) => {
         if (item.id !== qid) return item;
+        if (item.type === "CONTEST_ENTRY") return item;
         const next = [...item.options];
         next[indexOption] = valeur;
         return { ...item, options: next };
@@ -142,6 +164,7 @@ export default function AdminPage() {
     setQuestions((q) =>
       q.map((item) => {
         if (item.id !== questionId) return item;
+        if (item.type === "CONTEST_ENTRY") return item;
         const deja = new Set();
         for (const o of item.options) {
           const t = o.trim();
@@ -208,14 +231,16 @@ export default function AdminPage() {
       type: premier.type,
       options: premier.options.map((s) => s.trim()).filter(Boolean),
       leadTriggerOrder:
-        premier.type === "LEAD" ? Number(premier.leadTriggerOrder ?? 0) : 0,
+        isLeadLikeQuestionType(premier.type)
+          ? Number(premier.leadTriggerOrder ?? 0)
+          : 0,
       polls: questions.map((x, order) => ({
         question: x.question.trim(),
         type: x.type,
         order,
         options: x.options.map((s) => s.trim()).filter(Boolean),
         leadTriggerOrder:
-          x.type === "LEAD" ? Number(x.leadTriggerOrder ?? 0) : 0,
+          isLeadLikeQuestionType(x.type) ? Number(x.leadTriggerOrder ?? 0) : 0,
       })),
     };
 
@@ -252,10 +277,14 @@ export default function AdminPage() {
   const totalQuestions = questions.length;
   const totalOptions = questions.reduce((sum, q) => sum + q.options.length, 0);
   const leadQuestions = questions.filter((q) => q.type === "LEAD").length;
+  const contestQuestions = questions.filter(
+    (q) => q.type === "CONTEST_ENTRY",
+  ).length;
   const multipleQuestions = questions.filter(
     (q) => q.type === "MULTIPLE_CHOICE",
   ).length;
-  const singleQuestions = totalQuestions - leadQuestions - multipleQuestions;
+  const singleQuestions =
+    totalQuestions - leadQuestions - contestQuestions - multipleQuestions;
   const eventTitlePreview = eventTitle.trim() || "Titre de l’événement";
 
   return (
@@ -390,6 +419,18 @@ export default function AdminPage() {
                           />
                           <span>Lead (Oui/Non + formulaire)</span>
                         </label>
+                        <label className="admin-choice">
+                          <input
+                            type="radio"
+                            name={`pollType-${item.id}`}
+                            checked={item.type === "CONTEST_ENTRY"}
+                            disabled={creating}
+                            onChange={() =>
+                              majTypeQuestion(item.id, "CONTEST_ENTRY")
+                            }
+                          />
+                          <span>Participation concours</span>
+                        </label>
                       </div>
                     </fieldset>
 
@@ -414,12 +455,16 @@ export default function AdminPage() {
                             value={value}
                             onChange={(ev) => majOption(item.id, indexOpt, ev.target.value)}
                             placeholder={`Option ${indexOpt + 1}`}
-                            disabled={creating}
+                            disabled={creating || item.type === "CONTEST_ENTRY"}
                             className="admin-option-input"
                           />
                           <button
                             type="button"
-                            disabled={creating || item.options.length <= 2}
+                            disabled={
+                              creating ||
+                              item.options.length <= 2 ||
+                              item.type === "CONTEST_ENTRY"
+                            }
                             onClick={() => retirerOption(item.id, indexOpt)}
                             className="admin-option-remove"
                           >
@@ -429,10 +474,10 @@ export default function AdminPage() {
                       ))}
                     </ul>
 
-                    {item.type === "LEAD" ? (
+                    {isLeadLikeQuestionType(item.type) ? (
                       <div className="admin-lead-config">
                         <label htmlFor={`lead-trigger-${item.id}`} className="admin-label">
-                          Option déclencheuse du formulaire lead
+                          Option déclencheuse du formulaire
                         </label>
                         <select
                           id={`lead-trigger-${item.id}`}
@@ -458,15 +503,17 @@ export default function AdminPage() {
                     <div className="admin-option-actions">
                       <button
                         type="button"
-                        disabled={creating}
+                        disabled={creating || item.type === "CONTEST_ENTRY"}
                         onClick={() => ajouterOption(item.id)}
                         className="admin-option-add-btn"
                       >
-                        Ajouter une option
+                        {item.type === "CONTEST_ENTRY"
+                          ? "Options fixées à Oui / Non"
+                          : "Ajouter une option"}
                       </button>
                       <button
                         type="button"
-                        disabled={creating}
+                        disabled={creating || item.type === "CONTEST_ENTRY"}
                         onClick={() => basculerPanneauImportMasse(item.id)}
                         className="admin-bulk-btn"
                       >
@@ -560,6 +607,7 @@ export default function AdminPage() {
                   <li>{singleQuestions} en choix unique</li>
                   <li>{multipleQuestions} en choix multiple</li>
                   <li>{leadQuestions} lead(s)</li>
+                  <li>{contestQuestions} concours</li>
                 </ul>
               </section>
 

@@ -39,7 +39,8 @@ export function EventLivePreview({
   const options = question
     ? question.options.map((x) => x.trim()).filter(Boolean)
     : [];
-  const showLead = question?.type === "LEAD";
+  const showLead =
+    question?.type === "LEAD" || question?.type === "CONTEST_ENTRY";
   const multiple = question?.type === "MULTIPLE_CHOICE";
 
   return (
