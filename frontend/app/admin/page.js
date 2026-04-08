@@ -18,9 +18,21 @@ const inputStyle = {
 
 const CONTEST_DEFAULT_QUESTION = "Souhaitez-vous participer au tirage au sort ?";
 const CONTEST_DEFAULT_OPTIONS = ["Oui", "Non"];
+const CONTEST_PRIZE_PLACEHOLDER =
+  "Ex : un iPhone 15 / une carte cadeau de 200€ / un week-end";
 
 function isLeadLikeQuestionType(type) {
   return type === "LEAD" || type === "CONTEST_ENTRY";
+}
+
+function isContestEntryQuestion(type) {
+  return type === "CONTEST_ENTRY";
+}
+
+function buildContestQuestion(prizeRaw) {
+  const prize = typeof prizeRaw === "string" ? prizeRaw.trim() : "";
+  if (!prize) return CONTEST_DEFAULT_QUESTION;
+  return `Souhaitez-vous participer au tirage au sort pour gagner ${prize} ?`;
 }
 
 /** IDs stables (pas Date/random) pour éviter les erreurs d’hydratation SSR. */
@@ -30,6 +42,8 @@ const QUESTION_INITIALE = {
   type: "SINGLE_CHOICE",
   options: ["", ""],
   leadTriggerOrder: 0,
+  contestPrize: "",
+  contestQuestionCustomized: false,
 };
 
 const btnGhost = {
@@ -67,6 +81,8 @@ export default function AdminPage() {
         type: "SINGLE_CHOICE",
         options: ["", ""],
         leadTriggerOrder: 0,
+        contestPrize: "",
+        contestQuestionCustomized: false,
       },
     ]);
   }
@@ -90,20 +106,65 @@ export default function AdminPage() {
   }
 
   function majTexteQuestion(id, texte) {
-    majQuestion(id, { question: texte });
+    setQuestions((q) =>
+      q.map((item) => {
+        if (item.id !== id) return item;
+        if (!isContestEntryQuestion(item.type)) {
+          return { ...item, question: texte };
+        }
+        const autoQuestion = buildContestQuestion(item.contestPrize);
+        return {
+          ...item,
+          question: texte,
+          contestQuestionCustomized: texte.trim() !== autoQuestion,
+        };
+      }),
+    );
   }
 
   function majTypeQuestion(id, type) {
     if (type === "CONTEST_ENTRY") {
-      majQuestion(id, {
-        type,
-        question: CONTEST_DEFAULT_QUESTION,
-        options: [...CONTEST_DEFAULT_OPTIONS],
-        leadTriggerOrder: 0,
-      });
+      setQuestions((q) =>
+        q.map((item) => {
+          if (item.id !== id) return item;
+          const contestPrize = item.contestPrize ?? "";
+          return {
+            ...item,
+            type,
+            question: buildContestQuestion(contestPrize),
+            options: [...CONTEST_DEFAULT_OPTIONS],
+            leadTriggerOrder: 0,
+            contestPrize,
+            contestQuestionCustomized: false,
+          };
+        }),
+      );
       return;
     }
     majQuestion(id, { type, leadTriggerOrder: 0 });
+  }
+
+  function majContestPrize(id, contestPrize) {
+    setQuestions((q) =>
+      q.map((item) => {
+        if (item.id !== id) return item;
+        if (!isContestEntryQuestion(item.type)) {
+          return { ...item, contestPrize };
+        }
+        const prevAuto = buildContestQuestion(item.contestPrize);
+        const nextAuto = buildContestQuestion(contestPrize);
+        const questionTrim = item.question.trim();
+        const shouldAutoSync =
+          !item.contestQuestionCustomized ||
+          !questionTrim ||
+          questionTrim === prevAuto;
+        return {
+          ...item,
+          contestPrize,
+          question: shouldAutoSync ? nextAuto : item.question,
+        };
+      }),
+    );
   }
 
   function ajouterOption(id) {
@@ -199,6 +260,9 @@ export default function AdminPage() {
       if (!qi) {
         return `Question ${i + 1} : saisis le texte de la question.`;
       }
+      if (isContestEntryQuestion(x.type) && !(x.contestPrize || "").trim()) {
+        return `Question ${i + 1} : précisez le lot à gagner pour rendre le concours clair pour les participants.`;
+      }
       const opts = x.options.map((s) => s.trim()).filter(Boolean);
       if (opts.length < 2) {
         return `Question ${i + 1} (« ${qi.slice(0, 40)}${qi.length > 40 ? "…" : ""} ») : au moins 2 réponses non vides.`;
@@ -229,6 +293,9 @@ export default function AdminPage() {
       /** Rétro-compat : anciens serveurs / legacy sans tableau `polls` */
       question: premier.question.trim(),
       type: premier.type,
+      contestPrize: isContestEntryQuestion(premier.type)
+        ? premier.contestPrize.trim() || null
+        : null,
       options: premier.options.map((s) => s.trim()).filter(Boolean),
       leadTriggerOrder:
         isLeadLikeQuestionType(premier.type)
@@ -237,6 +304,9 @@ export default function AdminPage() {
       polls: questions.map((x, order) => ({
         question: x.question.trim(),
         type: x.type,
+        contestPrize: isContestEntryQuestion(x.type)
+          ? x.contestPrize.trim() || null
+          : null,
         order,
         options: x.options.map((s) => s.trim()).filter(Boolean),
         leadTriggerOrder:
@@ -433,6 +503,37 @@ export default function AdminPage() {
                         </label>
                       </div>
                     </fieldset>
+
+                    {isContestEntryQuestion(item.type) ? (
+                      <div style={{ marginBottom: "0.9rem" }}>
+                        <label className="admin-label" htmlFor={`q-prize-${item.id}`}>
+                          Lot à gagner
+                        </label>
+                        <input
+                          id={`q-prize-${item.id}`}
+                          type="text"
+                          value={item.contestPrize || ""}
+                          onChange={(ev) =>
+                            majContestPrize(item.id, ev.target.value)
+                          }
+                          placeholder={CONTEST_PRIZE_PLACEHOLDER}
+                          disabled={creating}
+                          style={{ ...inputStyle, marginBottom: "0.45rem" }}
+                        />
+                        {!(item.contestPrize || "").trim() ? (
+                          <p
+                            style={{
+                              margin: 0,
+                              fontSize: "0.86rem",
+                              color: "#b45309",
+                            }}
+                          >
+                            Précisez le lot à gagner pour rendre le concours clair
+                            pour les participants.
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
 
                     <div className="admin-question-separator" />
 

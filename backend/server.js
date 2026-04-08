@@ -213,6 +213,7 @@ function pollToJson(poll) {
     id: poll.id,
     title: poll.title,
     question: poll.question,
+    contestPrize: poll.contestPrize ?? null,
     type: poll.type,
     leadEnabled: Boolean(poll.leadEnabled),
     leadTriggerOptionId: poll.leadTriggerOptionId ?? null,
@@ -1584,6 +1585,7 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
     typeof body.type === "string" ? body.type.trim().toUpperCase() : "";
   const launchNow = body.launchNow === true;
   const optionsBrutes = Array.isArray(body.options) ? body.options : [];
+  const contestPrize = normalizeContestPrize(body.contestPrize);
 
   if (!questionBrute || questionBrute.length > 2000) {
     return res
@@ -1631,6 +1633,7 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
         eventId,
         title: titreCourt,
         question: questionBrute,
+        contestPrize: pollTypeParsed === "CONTEST_ENTRY" ? contestPrize : null,
         type: pollType,
         leadEnabled: requiresFormOnPositiveAnswer(pollTypeParsed),
         status: "CLOSED",
@@ -2040,6 +2043,13 @@ function normalizeLeadTriggerOrder(raw, labelsLength) {
   return Math.min(max, Math.max(0, Math.floor(n)));
 }
 
+function normalizeContestPrize(raw) {
+  if (typeof raw !== "string") return null;
+  const t = raw.trim();
+  if (!t) return null;
+  return t.slice(0, 240);
+}
+
 /** Extrait un tableau de sondages depuis le body (compat alias `questions`, chaîne JSON). */
 function extraireTableauPolls(body) {
   let src = body.polls ?? body.questions;
@@ -2105,12 +2115,14 @@ app.post("/polls", requireAuth, async (req, res) => {
           p?.leadTriggerOrder,
           labels.length,
         );
+        const contestPrize = normalizeContestPrize(p?.contestPrize);
         return {
           order: ordre,
           question: qBrut,
           labels,
           type: typ,
           leadTriggerOrder,
+          contestPrize,
         };
       });
 
@@ -2160,6 +2172,7 @@ app.post("/polls", requireAuth, async (req, res) => {
               eventId: event.id,
               title: e.question,
               question: e.question,
+              contestPrize: e.type === "CONTEST_ENTRY" ? e.contestPrize : null,
               type: e.type === "LEAD" ? "SINGLE_CHOICE" : e.type,
               leadEnabled: requiresFormOnPositiveAnswer(e.type),
               status: i === 0 ? "ACTIVE" : "DRAFT",
@@ -2207,6 +2220,7 @@ app.post("/polls", requireAuth, async (req, res) => {
     const question = body.question;
     const optionsInput = body.options;
     const typeRaw = body.type;
+    const contestPrize = normalizeContestPrize(body.contestPrize);
 
     let titleTrim;
     let questionTrim;
@@ -2274,6 +2288,7 @@ app.post("/polls", requireAuth, async (req, res) => {
         eventId: event.id,
         title: questionTrim,
         question: questionTrim,
+        contestPrize: pollTypeParsed === "CONTEST_ENTRY" ? contestPrize : null,
         type: pollTypeParsed === "LEAD" ? "SINGLE_CHOICE" : pollTypeParsed,
         leadEnabled: requiresFormOnPositiveAnswer(pollTypeParsed),
         status: "ACTIVE",

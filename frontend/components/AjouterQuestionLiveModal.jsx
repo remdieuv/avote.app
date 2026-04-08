@@ -5,9 +5,17 @@ import { adminFetch } from "@/lib/config";
 
 const CONTEST_DEFAULT_QUESTION = "Souhaitez-vous participer au tirage au sort ?";
 const CONTEST_DEFAULT_OPTIONS = ["Oui", "Non"];
+const CONTEST_PRIZE_PLACEHOLDER =
+  "Ex : un iPhone 15 / une carte cadeau de 200€ / un week-end";
 
 function isLeadLikeQuestionType(type) {
   return type === "LEAD" || type === "CONTEST_ENTRY";
+}
+
+function buildContestQuestion(prizeRaw) {
+  const prize = typeof prizeRaw === "string" ? prizeRaw.trim() : "";
+  if (!prize) return CONTEST_DEFAULT_QUESTION;
+  return `Souhaitez-vous participer au tirage au sort pour gagner ${prize} ?`;
 }
 
 /**
@@ -32,6 +40,8 @@ export function AjouterQuestionLiveModal({
   );
   const [reponses, setReponses] = useState(["", ""]);
   const [leadTriggerOrder, setLeadTriggerOrder] = useState(0);
+  const [contestPrize, setContestPrize] = useState("");
+  const [contestQuestionCustomized, setContestQuestionCustomized] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [erreur, setErreur] = useState(/** @type {string | null} */ (null));
 
@@ -41,6 +51,8 @@ export function AjouterQuestionLiveModal({
     setPollType("SINGLE_CHOICE");
     setReponses(["", ""]);
     setLeadTriggerOrder(0);
+    setContestPrize("");
+    setContestQuestionCustomized(false);
     setErreur(null);
   }, [open, eventId]);
 
@@ -52,6 +64,29 @@ export function AjouterQuestionLiveModal({
     window.addEventListener("keydown", fn);
     return () => window.removeEventListener("keydown", fn);
   }, [open, submitting, onClose]);
+
+  const onQuestionChange = useCallback(
+    (value) => {
+      setQuestion(value);
+      if (pollType !== "CONTEST_ENTRY") return;
+      setContestQuestionCustomized(value.trim() !== buildContestQuestion(contestPrize));
+    },
+    [pollType, contestPrize],
+  );
+
+  const onContestPrizeChange = useCallback(
+    (value) => {
+      setContestPrize(value);
+      if (pollType !== "CONTEST_ENTRY") return;
+      const prevAuto = buildContestQuestion(contestPrize);
+      const nextAuto = buildContestQuestion(value);
+      const questionTrim = question.trim();
+      const shouldAutoSync =
+        !contestQuestionCustomized || !questionTrim || questionTrim === prevAuto;
+      if (shouldAutoSync) setQuestion(nextAuto);
+    },
+    [pollType, contestPrize, question, contestQuestionCustomized],
+  );
 
   const ajouterLigne = useCallback(() => {
     setReponses((prev) =>
@@ -89,6 +124,12 @@ export function AjouterQuestionLiveModal({
         setErreur("Ajoutez au moins deux réponses non vides.");
         return;
       }
+      if (pollType === "CONTEST_ENTRY" && !contestPrize.trim()) {
+        setErreur(
+          "Précisez le lot à gagner pour rendre le concours clair pour les participants.",
+        );
+        return;
+      }
       setSubmitting(true);
       setErreur(null);
       try {
@@ -100,11 +141,12 @@ export function AjouterQuestionLiveModal({
             body: JSON.stringify({
               question: q,
               type: pollType,
+              contestPrize:
+                pollType === "CONTEST_ENTRY" ? contestPrize.trim() || null : null,
               options: opts,
-                leadTriggerOrder:
-                  isLeadLikeQuestionType(pollType)
-                    ? Number(leadTriggerOrder ?? 0)
-                    : 0,
+              leadTriggerOrder: isLeadLikeQuestionType(pollType)
+                ? Number(leadTriggerOrder ?? 0)
+                : 0,
               launchNow,
             }),
           },
@@ -131,6 +173,7 @@ export function AjouterQuestionLiveModal({
       question,
       reponses,
       pollType,
+      contestPrize,
       leadTriggerOrder,
       onSuccess,
       onClose,
@@ -202,7 +245,7 @@ export function AjouterQuestionLiveModal({
         </label>
         <textarea
           value={question}
-          onChange={(e) => setQuestion(e.target.value)}
+          onChange={(e) => onQuestionChange(e.target.value)}
           disabled={submitting}
           rows={3}
           style={{
@@ -312,14 +355,56 @@ export function AjouterQuestionLiveModal({
               disabled={submitting}
               onChange={() => {
                 setPollType("CONTEST_ENTRY");
-                setQuestion(CONTEST_DEFAULT_QUESTION);
+                setContestPrize("");
+                setQuestion(buildContestQuestion(""));
                 setReponses([...CONTEST_DEFAULT_OPTIONS]);
                 setLeadTriggerOrder(0);
+                setContestQuestionCustomized(false);
               }}
             />
             Participation concours
           </label>
         </div>
+        {pollType === "CONTEST_ENTRY" ? (
+          <div style={{ marginBottom: "0.85rem" }}>
+            <label
+              style={{
+                display: "block",
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                color: "#64748b",
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+                marginBottom: "0.35rem",
+              }}
+            >
+              Lot à gagner
+            </label>
+            <input
+              type="text"
+              value={contestPrize}
+              onChange={(e) => onContestPrizeChange(e.target.value)}
+              disabled={submitting}
+              placeholder={CONTEST_PRIZE_PLACEHOLDER}
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "0.5rem 0.6rem",
+                borderRadius: "8px",
+                border: "1px solid #cbd5e1",
+                fontSize: "0.88rem",
+                fontFamily: "inherit",
+                marginBottom: "0.35rem",
+              }}
+            />
+            {!contestPrize.trim() ? (
+              <p style={{ margin: 0, fontSize: "0.78rem", color: "#b45309" }}>
+                Précisez le lot à gagner pour rendre le concours clair pour les
+                participants.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         {isLeadLikeQuestionType(pollType) ? (
           <div
             style={{
