@@ -1584,6 +1584,18 @@ export function PollExperience({
                     >
                       {leadSubmitting ? "Envoi…" : "Envoyer"}
                     </button>
+                    <p
+                      style={{
+                        margin: "0.1rem 0 0",
+                        fontSize: "0.72rem",
+                        lineHeight: 1.4,
+                        color: palette.muted,
+                      }}
+                    >
+                      En envoyant ce formulaire, vous acceptez que vos données
+                      soient utilisées pour vous recontacter dans le cadre de
+                      cet événement.
+                    </p>
                     {leadError ? (
                       <p role="alert" style={{ margin: 0, color: isDark ? "#fecaca" : "#b91c1c", fontSize: "0.84rem" }}>
                         {leadError}
