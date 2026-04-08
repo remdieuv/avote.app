@@ -317,6 +317,183 @@ function LiveResultsCard() {
   );
 }
 
+/** Aperçu landing : question Lead (Oui/Non + formulaire) après vote déclencheur — 100 % décoratif. */
+function LiveLeadCapturePreviewCard() {
+  return (
+    <div
+      style={{
+        borderRadius: "16px",
+        border: "1px solid #ddd6fe",
+        background: "#fff",
+        padding: "1.35rem 1.5rem",
+        boxShadow: "0 18px 40px rgba(91, 33, 182, 0.08)",
+        maxWidth: "420px",
+        width: "100%",
+        margin: "0 auto",
+        boxSizing: "border-box",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "0.5rem",
+          flexWrap: "wrap",
+          marginBottom: "1rem",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+          <span
+            style={{
+              fontSize: "0.65rem",
+              fontWeight: 800,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              padding: "0.18rem 0.45rem",
+              borderRadius: "999px",
+              border: "1px solid #c4b5fd",
+              background: "#f5f3ff",
+              color: "#6d28d9",
+            }}
+          >
+            Lead
+          </span>
+          <h3 style={{ margin: 0, fontSize: "1.02rem", fontWeight: 700, color: "#0f172a" }}>
+            Oui/Non + formulaire
+          </h3>
+        </div>
+      </div>
+
+      <p
+        style={{
+          margin: "0 0 0.75rem 0",
+          fontSize: "0.86rem",
+          fontWeight: 600,
+          color: "#334155",
+          lineHeight: 1.4,
+        }}
+      >
+        Souhaitez-vous être recontacté(e) après la session ?
+      </p>
+      <div
+        style={{
+          display: "flex",
+          gap: "0.5rem",
+          marginBottom: "0.85rem",
+        }}
+      >
+        <span
+          style={{
+            flex: 1,
+            textAlign: "center",
+            padding: "0.45rem 0.5rem",
+            borderRadius: "10px",
+            fontSize: "0.78rem",
+            fontWeight: 700,
+            border: "2px solid #7c3aed",
+            background: "#f5f3ff",
+            color: "#5b21b6",
+          }}
+        >
+          Oui
+        </span>
+        <span
+          style={{
+            flex: 1,
+            textAlign: "center",
+            padding: "0.45rem 0.5rem",
+            borderRadius: "10px",
+            fontSize: "0.78rem",
+            fontWeight: 600,
+            border: "1px solid #e2e8f0",
+            background: "#f8fafc",
+            color: "#64748b",
+          }}
+        >
+          Non
+        </span>
+      </div>
+
+      <p
+        style={{
+          margin: "0 0 0.65rem 0",
+          padding: "0.55rem 0.7rem",
+          borderRadius: "10px",
+          fontSize: "0.8rem",
+          fontWeight: 600,
+          color: "#0f172a",
+          background: "color-mix(in srgb, #7c3aed 12%, transparent)",
+          border: "1px solid color-mix(in srgb, #7c3aed 28%, transparent)",
+        }}
+      >
+        Merci pour votre vote !
+      </p>
+
+      <div
+        style={{
+          borderRadius: "12px",
+          border: "1px solid #e2e8f0",
+          background: "#fafafa",
+          padding: "0.85rem 0.9rem",
+        }}
+      >
+        <p style={{ margin: "0 0 0.6rem 0", fontSize: "0.84rem", fontWeight: 700, color: "#1e293b" }}>
+          Restez en contact
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+          {[
+            { ph: "Prénom", v: "Alex" },
+            { ph: "Téléphone", v: "06 12 34 56 78" },
+            { ph: "E-mail (optionnel)", v: "" },
+          ].map((f) => (
+            <div
+              key={f.ph}
+              style={{
+                padding: "0.48rem 0.55rem",
+                borderRadius: "8px",
+                border: "1px solid #e2e8f0",
+                background: "#fff",
+                fontSize: "0.8rem",
+                color: f.v ? "#334155" : "#94a3b8",
+              }}
+            >
+              {f.v || f.ph}
+            </div>
+          ))}
+        </div>
+        <div
+          style={{
+            marginTop: "0.6rem",
+            padding: "0.52rem",
+            borderRadius: "10px",
+            textAlign: "center",
+            fontSize: "0.78rem",
+            fontWeight: 700,
+            color: "#fff",
+            background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 50%, #6d28d9 100%)",
+            opacity: 0.85,
+          }}
+        >
+          Envoyer
+        </div>
+      </div>
+
+      <p style={{ margin: "0.85rem 0 0", fontSize: "0.78rem", color: "#94a3b8", textAlign: "center", lineHeight: 1.45 }}>
+        Aperçu décoratif — le formulaire s’ouvre après un vote sur l’option
+        définie (ex. « Oui »).
+      </p>
+      <p style={{ margin: "0.65rem 0 0", fontSize: "0.76rem", color: "#64748b", textAlign: "center", lineHeight: 1.45 }}>
+        Les contacts sont retrouvables dans votre espace{' '}
+        <Link href="/admin/leads" style={{ color: "#7c3aed", fontWeight: 700 }}>
+          Mes leads
+        </Link>
+        {' '}une fois connecté.
+      </p>
+    </div>
+  );
+}
+
 export default function HomePage() {
   return (
     <div style={shell}>
@@ -501,9 +678,39 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Preuve visuelle — résultats */}
-        <section style={sectionY}>
-          <LiveResultsCard />
+        {/* Preuve visuelle — résultats + collecte leads (aperçus décoratifs) */}
+        <section style={sectionY} aria-labelledby="landing-proof-heading">
+          <h2
+            id="landing-proof-heading"
+            style={{
+              fontSize: "clamp(1.1rem, 2.6vw, 1.35rem)",
+              fontWeight: 800,
+              textAlign: "center",
+              margin: "0 0 0.45rem",
+              color: "#1e293b",
+              letterSpacing: "-0.02em",
+            }}
+          >
+            Ce que vivent vos participants
+          </h2>
+          <p
+            style={{
+              margin: "0 auto 1.5rem",
+              maxWidth: "42ch",
+              textAlign: "center",
+              fontSize: "0.92rem",
+              color: "#64748b",
+              lineHeight: 1.5,
+            }}
+          >
+            Résultats visibles tout de suite, et possibilité de collecter des
+            contacts avec une question{' '}
+            <strong style={{ color: "#4c1d95" }}>Lead (Oui/Non + formulaire)</strong>.
+          </p>
+          <div className="landing-proof-grid">
+            <LiveResultsCard />
+            <LiveLeadCapturePreviewCard />
+          </div>
         </section>
 
         {/* Cas d’usage */}
@@ -988,6 +1195,20 @@ export default function HomePage() {
           .live-grid {
             grid-template-columns: repeat(3, 1fr);
             gap: 1.05rem;
+          }
+        }
+        .landing-proof-grid {
+          display: grid;
+          gap: 1.25rem;
+          grid-template-columns: 1fr;
+          max-width: 920px;
+          margin: 0 auto;
+          align-items: stretch;
+        }
+        @media (min-width: 840px) {
+          .landing-proof-grid {
+            grid-template-columns: 1fr 1fr;
+            gap: 1.35rem;
           }
         }
         @media (min-width: 640px) {
