@@ -14,13 +14,45 @@ export const LIVE_UX_STATE = {
 
 /** @type {Record<LiveUxState, string>} */
 const LABELS = {
-  WAITING: "La prochaine question arrive",
-  VOTING: "Vote en cours",
-  CLOSED: "Vote terminé",
-  RESULTS: "Résultats",
+  WAITING: "Préparez-vous à répondre",
+  VOTING: "Choisissez votre réponse",
+  CLOSED: "Votre réponse est prise en compte",
+  RESULTS: "Résultats en direct",
   PAUSED: "Pause en cours",
   FINISHED: "Événement terminé",
 };
+
+/**
+ * Mapping UX global lisible côté interface.
+ * @param {{
+ *   liveState?: string | null;
+ *   voteState?: string | null;
+ *   displayState?: string | null;
+ * }} input
+ * @returns {{ step: "waiting" | "action" | "confirmation" | "result" | "pause" | "finished"; label: string }}
+ */
+export function getUxState({ liveState, voteState, displayState }) {
+  const ls = String(liveState ?? "").toUpperCase();
+  const vs = String(voteState ?? "").toUpperCase();
+  const ds = String(displayState ?? "").toUpperCase();
+
+  if (ls === "FINISHED") {
+    return { step: "finished", label: LABELS.FINISHED };
+  }
+  if (ls === "PAUSED" || ds === "BLACK") {
+    return { step: "pause", label: LABELS.PAUSED };
+  }
+  if (ls === "RESULTS" || ds === "RESULTS") {
+    return { step: "result", label: LABELS.RESULTS };
+  }
+  if (ls === "CLOSED" || vs === "CLOSED") {
+    return { step: "confirmation", label: LABELS.CLOSED };
+  }
+  if (ls === "VOTING" || vs === "OPEN" || ds === "QUESTION") {
+    return { step: "action", label: LABELS.VOTING };
+  }
+  return { step: "waiting", label: LABELS.WAITING };
+}
 
 /** @type {Record<LiveUxState, 'neutral'|'dynamic'|'highlight'|'soft'|'conclusion'>} */
 const TONES = {

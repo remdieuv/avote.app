@@ -31,7 +31,7 @@ import {
   LIVE_UX_BODY_POLL_WAITING,
   LIVE_UX_STATE,
   deriveDisplayStateFromLive,
-  getLiveStateLabel,
+  getUxState,
   getLiveStatePresentation,
   getLiveStateTone,
 } from "@/lib/liveStateUx";
@@ -101,7 +101,7 @@ function CarteVoteTermineAttenteResultats({ accent, isDark }) {
             letterSpacing: "-0.02em",
           }}
         >
-          {getLiveStateLabel(LIVE_UX_STATE.CLOSED)}
+          {getUxState({ liveState: "CLOSED" }).label}
         </h3>
         <p
           style={{
@@ -1033,6 +1033,33 @@ export function PollExperience({
     () => getLiveStatePresentation(pollUxCtx),
     [pollUxCtx],
   );
+  const ux = useMemo(
+    () =>
+      getUxState({
+        liveState: liveScene,
+        voteState: voteStateForUx,
+        displayState: displayStateForUx,
+      }),
+    [liveScene, voteStateForUx, displayStateForUx],
+  );
+  const votingLabel = useMemo(
+    () =>
+      getUxState({
+        liveState: "VOTING",
+        voteState: "OPEN",
+        displayState: "QUESTION",
+      }).label,
+    [],
+  );
+  const resultsLabel = useMemo(
+    () =>
+      getUxState({
+        liveState: "RESULTS",
+        voteState: "CLOSED",
+        displayState: "RESULTS",
+      }).label,
+    [],
+  );
 
   const pollUxTone = getLiveStateTone(pollUxPres.ux);
   const pollVisualTokens = useMemo(
@@ -1241,6 +1268,20 @@ export function PollExperience({
           }}
         >
           <div style={panelStyle}>
+      {!loading && !error ? (
+        <div
+          className="text-center text-sm opacity-80 mb-2"
+          style={{
+            textAlign: "center",
+            fontSize: "0.86rem",
+            opacity: 0.82,
+            marginBottom: "0.6rem",
+            color: palette.muted,
+          }}
+        >
+          {ux.label}
+        </div>
+      ) : null}
       {loading && (
         <p style={{ color: palette.muted, marginTop: 0 }}>Chargement...</p>
       )}
@@ -1363,7 +1404,7 @@ export function PollExperience({
                   letterSpacing: "0.04em",
                 }}
               >
-                {getLiveStateLabel(LIVE_UX_STATE.VOTING)}
+                {votingLabel}
               </p>
               {chronoVoteActif ? (
                 <p
@@ -1821,7 +1862,7 @@ export function PollExperience({
                   letterSpacing: "-0.02em",
                 }}
               >
-                {getLiveStateLabel(LIVE_UX_STATE.RESULTS)}
+                {resultsLabel}
               </h3>
               {voteOuvert && affichageResultatsPublic ? (
                 <p

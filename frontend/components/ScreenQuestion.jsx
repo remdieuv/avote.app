@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { formatCountdownVerbose } from "@/lib/chronoFormat";
+import { getUxState } from "@/lib/liveStateUx";
 
 /** @param {Record<string, unknown> | null | undefined} tm */
 function chronoRestantSecondes(tm) {
@@ -19,14 +20,22 @@ function chronoRestantSecondes(tm) {
 }
 
 const PILL_VOTE_OPEN = {
-  label: "Vote en cours",
+  label: getUxState({
+    liveState: "VOTING",
+    voteState: "OPEN",
+    displayState: "QUESTION",
+  }).label,
   bg: "rgba(34, 197, 94, 0.22)",
   color: "#86efac",
   border: "1px solid rgba(34, 197, 94, 0.5)",
 };
 
 const PILL_VOTE_CLOSED = {
-  label: "Vote fermé",
+  label: getUxState({
+    liveState: "CLOSED",
+    voteState: "CLOSED",
+    displayState: "QUESTION",
+  }).label,
   bg: "rgba(148, 163, 184, 0.2)",
   color: "#cbd5e1",
   border: "1px solid rgba(148, 163, 184, 0.45)",

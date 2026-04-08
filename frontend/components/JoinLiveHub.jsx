@@ -20,6 +20,7 @@ import {
   LIVE_UX_BODY_JOIN_PAUSED,
   LIVE_UX_BODY_JOIN_WAITING,
   LIVE_UX_SUBTITLE_REVEAL_PENDING,
+  getUxState,
   getLiveStatePresentation,
   getLiveStateTone,
 } from "@/lib/liveStateUx";
@@ -524,6 +525,10 @@ export function JoinLiveHub({ slug }) {
   const joinPres = useMemo(
     () => getLiveStatePresentation(joinUxContext),
     [joinUxContext],
+  );
+  const ux = useMemo(
+    () => getUxState({ liveState: scene, voteState: vs, displayState: ds }),
+    [scene, vs, ds],
   );
 
   const votePath = `/p/${encodeURIComponent(slug)}`;
@@ -1093,7 +1098,21 @@ export function JoinLiveHub({ slug }) {
         ) : null}
 
         {!loading && !error && corps ? (
-          <div style={carteCentral}>{corps}</div>
+          <div style={carteCentral}>
+            <div
+              className="text-center text-sm opacity-80 mb-2"
+              style={{
+                textAlign: "center",
+                fontSize: "0.86rem",
+                opacity: 0.82,
+                marginBottom: "0.5rem",
+                color: palette.muted,
+              }}
+            >
+              {ux.label}
+            </div>
+            {corps}
+          </div>
         ) : null}
 
         {!loading && !error && pastPolls.length > 0 ? (

@@ -8,8 +8,7 @@ import {
 } from "@/lib/notationPoll";
 import {
   LIVE_UX_BODY_RESULTS_VOTES_OPEN,
-  LIVE_UX_STATE,
-  getLiveStateLabel,
+  getUxState,
   getScreenResultsPillLabel,
 } from "@/lib/liveStateUx";
 
@@ -217,7 +216,7 @@ function ScreenResultsNotation({
                 color: "#64748b",
               }}
             >
-              {getLiveStateLabel(LIVE_UX_STATE.CLOSED)}
+              {getUxState({ liveState: "CLOSED" }).label}
             </span>
           )}
         </div>
@@ -505,17 +504,22 @@ function ScreenResultsChoixClassiques({
 
   const ligneVoteChrono = (() => {
     if (!voteOuvertResultats) return null;
+    const resultLabel = getUxState({
+      liveState: "RESULTS",
+      voteState: "OPEN",
+      displayState: "RESULTS",
+    }).label;
     if (!chronometreApi) {
       return (
         <span style={{ color: "#64748b", fontWeight: 600 }}>
-          Vote en cours
+          {resultLabel}
         </span>
       );
     }
     if (chronometreApi.isPaused) {
       return (
         <span style={{ color: "#64748b", fontWeight: 600 }}>
-          Vote en cours{" "}
+          {resultLabel}{" "}
           <span style={{ color: "#94a3b8", fontWeight: 700 }}>•</span> Pause
         </span>
       );
@@ -528,7 +532,7 @@ function ScreenResultsChoixClassiques({
       secondesChronoVote !== null && secondesChronoVote <= 10;
     return (
       <span style={{ color: "#64748b", fontWeight: 600 }}>
-        Vote en cours{" "}
+        {resultLabel}{" "}
         <span style={{ color: "#94a3b8", fontWeight: 700 }}>•</span>{" "}
         <span
           style={{
@@ -617,7 +621,7 @@ function ScreenResultsChoixClassiques({
                 color: "#64748b",
               }}
             >
-              {getLiveStateLabel(LIVE_UX_STATE.CLOSED)}
+              {getUxState({ liveState: "CLOSED" }).label}
             </span>
           )}
         </div>

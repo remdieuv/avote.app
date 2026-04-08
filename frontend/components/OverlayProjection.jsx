@@ -15,8 +15,7 @@ import { formatCountdownVerbose } from "@/lib/chronoFormat";
 import { API_URL, SOCKET_URL } from "@/lib/config";
 import {
   LIVE_UX_DETAIL_SCREEN_WAITING_SLUG,
-  LIVE_UX_STATE,
-  getLiveStateLabel,
+  getUxState,
 } from "@/lib/liveStateUx";
 
 const FADE_MS = 260;
@@ -610,6 +609,21 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
       }),
     [modeOverride, ds, enAttenteAutoReveal, liveScene],
   );
+  const overlayVoteState = useMemo(() => {
+    if (typeof poll?.eventVoteState === "string" && poll.eventVoteState.trim()) {
+      return poll.eventVoteState;
+    }
+    return null;
+  }, [poll?.eventVoteState]);
+  const overlayUx = useMemo(
+    () =>
+      getUxState({
+        liveState: liveScene,
+        voteState: overlayVoteState,
+        displayState: ds,
+      }),
+    [liveScene, overlayVoteState, ds],
+  );
 
   const fadeKey = `${effectivePanel}|${pollId}|${variant}|${theme}|${position}|only:${onlyQr ? "qr" : "0"}|brand:${eventPrimaryHex || ""}`;
 
@@ -833,7 +847,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
                 color: th.text,
               }}
             >
-              {getLiveStateLabel(LIVE_UX_STATE.WAITING)}
+              {overlayUx.label}
             </p>
             <p style={{ margin: 0, fontSize: v.muted, color: th.textMuted }}>
               {LIVE_UX_DETAIL_SCREEN_WAITING_SLUG}
@@ -885,7 +899,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
                 color: th.teal,
               }}
             >
-              {getLiveStateLabel(LIVE_UX_STATE.CLOSED)}
+              {getUxState({ liveState: "CLOSED" }).label}
             </p>
             <p
               style={{
@@ -929,7 +943,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
                 color: th.accent,
               }}
             >
-              Résultats en direct
+              {getUxState({ liveState: "RESULTS", displayState: "RESULTS" }).label}
             </p>
             <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
               {topOptions.map((opt, i) => {

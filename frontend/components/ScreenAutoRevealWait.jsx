@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { LIVE_UX_STATE, getLiveStateLabel } from "@/lib/liveStateUx";
+import { getUxState } from "@/lib/liveStateUx";
 
 /**
  * Attente auto-reveal : vote terminé, résultats annoncés avec compte à rebours.
@@ -41,7 +41,7 @@ export function ScreenAutoRevealWait({ shell, untilIso, chronoTick }) {
           color: "#5eead4",
         }}
       >
-        {getLiveStateLabel(LIVE_UX_STATE.CLOSED)}
+        {getUxState({ liveState: "CLOSED" }).label}
       </p>
       <h1
         style={{
