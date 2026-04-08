@@ -166,6 +166,13 @@ function pollKindStyle(poll) {
   };
 }
 
+function formatContestDrawSummary(summary) {
+  const n = Number(summary?.totalWinners || 0);
+  if (!Number.isFinite(n) || n <= 0) return "Aucun tirage effectué";
+  if (n === 1) return "1 gagnant tiré";
+  return `${n} gagnants tirés`;
+}
+
 function PollCard({
   poll,
   isActive,
@@ -179,6 +186,7 @@ function PollCard({
   onResults,
   onContestShortcut,
   onLeadShortcut,
+  contestDrawSummary,
   desktop,
   compact = false,
 }) {
@@ -328,17 +336,31 @@ function PollCard({
   );
 
   const titre = (
-    <p
-      style={{
-        margin: compact ? "0.35rem 0 0 0" : desktop ? "0" : "0 0 0.85rem 0",
-        fontWeight: 600,
-        fontSize: compact ? "0.8rem" : desktop ? "1rem" : "0.98rem",
-        color: "#111827",
-        lineHeight: 1.35,
-      }}
-    >
-      {poll.question || poll.title}
-    </p>
+    <>
+      <p
+        style={{
+          margin: compact ? "0.35rem 0 0 0" : desktop ? "0" : "0 0 0.85rem 0",
+          fontWeight: 600,
+          fontSize: compact ? "0.8rem" : desktop ? "1rem" : "0.98rem",
+          color: "#111827",
+          lineHeight: 1.35,
+        }}
+      >
+        {poll.question || poll.title}
+      </p>
+      {isContestPoll(poll) ? (
+        <p
+          style={{
+            margin: compact ? "0.2rem 0 0 0" : "0.28rem 0 0 0",
+            fontSize: compact ? "0.68rem" : "0.76rem",
+            color: "#6b7280",
+            lineHeight: 1.35,
+          }}
+        >
+          {formatContestDrawSummary(contestDrawSummary)}
+        </p>
+      ) : null}
+    </>
   );
 
   if (compact) {
@@ -3157,6 +3179,9 @@ export default function RegieEventPage() {
      *   contestPrize: string | null;
    } | null} */ (null),
   );
+  const [pollDrawSummary, setPollDrawSummary] = useState(
+    /** @type {Record<string, { totalDraws: number; totalWinners: number }>} */ ({}),
+  );
 
   const loadPollAbortRef = useRef(null);
   const socketRef = useRef(null);
@@ -3292,6 +3317,49 @@ export default function RegieEventPage() {
       window.clearInterval(id);
     };
   }, [eventId, eventData?.activePollId, eventData?.polls]);
+
+  useEffect(() => {
+    const polls = Array.isArray(eventData?.polls) ? eventData.polls : [];
+    const contestPollIds = polls
+      .filter((p) => isContestPoll(p))
+      .map((p) => String(p.id))
+      .filter(Boolean);
+    if (contestPollIds.length === 0) {
+      setPollDrawSummary({});
+      return;
+    }
+    let cancelled = false;
+    const run = async () => {
+      const next = Object.fromEntries(
+        contestPollIds.map((id) => [id, { totalDraws: 0, totalWinners: 0 }]),
+      );
+      await Promise.all(
+        contestPollIds.map(async (pollId) => {
+          try {
+            const res = await adminFetch(
+              `${apiBaseBrowser()}/polls/${encodeURIComponent(pollId)}/draws/summary`,
+              { cache: "no-store" },
+            );
+            if (!res.ok) return;
+            const body = await res.json().catch(() => ({}));
+            next[pollId] = {
+              totalDraws: Number(body?.totalDraws || 0),
+              totalWinners: Number(body?.totalWinners || 0),
+            };
+          } catch {
+            // fail silent: on garde le fallback (0)
+          }
+        }),
+      );
+      if (!cancelled) {
+        setPollDrawSummary(next);
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [eventData?.polls]);
 
   useEffect(() => {
     if (!eventId || typeof window === "undefined") return;
@@ -3879,6 +3947,7 @@ export default function RegieEventPage() {
             onResults={(id) => postAction(`/polls/${id}/show-results`)}
             onContestShortcut={handleContestShortcut}
             onLeadShortcut={handleLeadShortcut}
+            contestDrawSummary={pollDrawSummary[String(poll.id)]}
           />
         ))}
       </div>
@@ -4720,7 +4789,7 @@ export default function RegieEventPage() {
                 onClick={() => {
                   if (typeof window === "undefined") return;
                   const ok = window.confirm(
-                    "Terminer le vote maintenant ? Cette action clôture l’événement.",
+                    "Terminer l’événement maintenant ? Cette action clôture l’événement.",
                   );
                   if (!ok) return;
                   void postAction(`/events/${eventId}/finish`);
@@ -4730,7 +4799,7 @@ export default function RegieEventPage() {
                   width: desktop ? "100%" : "100%",
                 }}
               >
-                Terminer le vote
+                Terminer l'événement
               </button>
               <div
                 style={{

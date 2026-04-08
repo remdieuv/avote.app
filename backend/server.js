@@ -2673,6 +2673,28 @@ app.post("/polls/:pollId/draw", requireAuth, async (req, res) => {
   }
 });
 
+app.get("/polls/:pollId/draws/summary", requireAuth, async (req, res) => {
+  const { pollId } = req.params;
+  try {
+    const pOwn = await assertPollOwnedBy(pollId, req.userId);
+    if (!pOwn.ok) {
+      return res.status(pOwn.status).json({ error: "Sondage introuvable." });
+    }
+    const [totalDraws, totalWinners] = await prisma.$transaction([
+      prisma.contestDraw.count({ where: { pollId } }),
+      prisma.contestDrawWinner.count({ where: { pollId } }),
+    ]);
+    return res.json({
+      pollId,
+      totalDraws,
+      totalWinners,
+    });
+  } catch (e) {
+    console.error("polls/:pollId/draws/summary", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
 /**
  * Leads agrégés : tous les événements du compte connecté (filtres query).
  */
