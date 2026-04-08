@@ -241,77 +241,141 @@ function HeroMockup() {
   );
 }
 
-function LiveResultsCard() {
-  const rows = [
-    { label: "Option A — Lever de rideau", pct: 58, w: "58%" },
-    { label: "Option B — Table ronde", pct: 34, w: "34%" },
-    { label: "Option C — Networking", pct: 8, w: "8%" },
-  ];
-
+function LiveContestPreviewCard() {
   return (
     <div
       style={{
         borderRadius: "16px",
-        border: "1px solid #e2e8f0",
+        border: "1px solid #ddd6fe",
         background: "#fff",
         padding: "1.35rem 1.5rem",
-        boxShadow: "0 18px 40px rgba(15, 23, 42, 0.08)",
+        boxShadow: "0 18px 40px rgba(91, 33, 182, 0.08)",
         maxWidth: "420px",
+        width: "100%",
         margin: "0 auto",
+        boxSizing: "border-box",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1.1rem" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "0.5rem",
+          flexWrap: "wrap",
+          marginBottom: "1rem",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+          <span
+            style={{
+              fontSize: "0.65rem",
+              fontWeight: 800,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              padding: "0.18rem 0.45rem",
+              borderRadius: "999px",
+              border: "1px solid #c4b5fd",
+              background: "#f5f3ff",
+              color: "#6d28d9",
+            }}
+          >
+            Concours
+          </span>
+          <h3 style={{ margin: 0, fontSize: "1.02rem", fontWeight: 700, color: "#0f172a" }}>
+            Oui/Non + tirage
+          </h3>
+        </div>
+      </div>
+
+      <p
+        style={{
+          margin: "0 0 0.75rem 0",
+          fontSize: "0.86rem",
+          fontWeight: 600,
+          color: "#334155",
+          lineHeight: 1.4,
+        }}
+      >
+        Souhaitez-vous participer au tirage au sort pour gagner un iPhone 15 ?
+      </p>
+      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.85rem" }}>
         <span
           style={{
-            width: "8px",
-            height: "8px",
-            borderRadius: "50%",
-            background: "#22c55e",
-            boxShadow: "0 0 0 4px rgba(34, 197, 94, 0.25)",
+            flex: 1,
+            textAlign: "center",
+            padding: "0.45rem 0.5rem",
+            borderRadius: "10px",
+            fontSize: "0.78rem",
+            fontWeight: 700,
+            border: "2px solid #7c3aed",
+            background: "#f5f3ff",
+            color: "#5b21b6",
           }}
-        />
-        <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "#0f172a" }}>
-          Résultats en direct
-        </h3>
+        >
+          Oui
+        </span>
+        <span
+          style={{
+            flex: 1,
+            textAlign: "center",
+            padding: "0.45rem 0.5rem",
+            borderRadius: "10px",
+            fontSize: "0.78rem",
+            fontWeight: 600,
+            border: "1px solid #e2e8f0",
+            background: "#f8fafc",
+            color: "#64748b",
+          }}
+        >
+          Non
+        </span>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-        {rows.map((r) => (
-          <div key={r.label}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                fontSize: "0.82rem",
-                color: "#475569",
-                marginBottom: "0.35rem",
-              }}
-            >
-              <span>{r.label}</span>
-              <span style={{ fontWeight: 700, color: "#7c3aed" }}>{r.pct}%</span>
-            </div>
-            <div
-              style={{
-                height: "10px",
-                borderRadius: "99px",
-                background: "#f1f5f9",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  width: r.w,
-                  height: "100%",
-                  borderRadius: "99px",
-                  background: "linear-gradient(90deg, #8b5cf6 0%, #7c3aed 50%, #6d28d9 100%)",
-                  transition: "width 0.6s ease-out",
-                }}
-              />
-            </div>
-          </div>
-        ))}
+
+      <p
+        style={{
+          margin: "0 0 0.65rem 0",
+          padding: "0.55rem 0.7rem",
+          borderRadius: "10px",
+          fontSize: "0.8rem",
+          fontWeight: 600,
+          color: "#0f172a",
+          background: "color-mix(in srgb, #7c3aed 12%, transparent)",
+          border: "1px solid color-mix(in srgb, #7c3aed 28%, transparent)",
+        }}
+      >
+        Merci pour votre participation !
+      </p>
+
+      <div
+        style={{
+          borderRadius: "12px",
+          border: "1px solid #e2e8f0",
+          background: "#fafafa",
+          padding: "0.85rem 0.9rem",
+        }}
+      >
+        <p style={{ margin: "0 0 0.6rem 0", fontSize: "0.84rem", fontWeight: 700, color: "#1e293b" }}>
+          Participant éligible
+        </p>
+        <div
+          style={{
+            padding: "0.52rem",
+            borderRadius: "10px",
+            textAlign: "center",
+            fontSize: "0.78rem",
+            fontWeight: 700,
+            color: "#fff",
+            background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 50%, #6d28d9 100%)",
+            opacity: 0.88,
+          }}
+        >
+          En attente du tirage
+        </div>
       </div>
-      <p style={{ margin: "1rem 0 0", fontSize: "0.78rem", color: "#94a3b8", textAlign: "center" }}>
-        Aperçu décoratif — vos vrais chiffres s’affichent pendant l’événement
+      <p style={{ margin: "0.85rem 0 0", fontSize: "0.78rem", color: "#94a3b8", textAlign: "center", lineHeight: 1.45 }}>
+        Aperçu décoratif — le formulaire s’ouvre après un vote sur l’option
+        définie (ex. « Oui »), puis le participant devient éligible.
       </p>
     </div>
   );
@@ -678,7 +742,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Preuve visuelle — résultats + collecte leads (aperçus décoratifs) */}
+        {/* Preuve visuelle — concours + collecte leads (aperçus décoratifs) */}
         <section style={sectionY} aria-labelledby="landing-proof-heading">
           <h2
             id="landing-proof-heading"
@@ -703,12 +767,11 @@ export default function HomePage() {
               lineHeight: 1.5,
             }}
           >
-            Résultats visibles tout de suite, et possibilité de collecter des
-            contacts avec une question{' '}
+            Activez un jeu concours, puis collectez les contacts via une question{' '}
             <strong style={{ color: "#4c1d95" }}>Lead (Oui/Non + formulaire)</strong>.
           </p>
           <div className="landing-proof-grid">
-            <LiveResultsCard />
+            <LiveContestPreviewCard />
             <LiveLeadCapturePreviewCard />
           </div>
         </section>
