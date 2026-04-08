@@ -2484,8 +2484,9 @@ app.post("/polls/:pollId/leads", async (req, res) => {
  * Préparation future « Tirer un gagnant » :
  * participants concours éligibles = question CONTEST_ENTRY + vote sur l’option déclencheuse + lead soumis.
  * @param {string} pollId
+ * @param {{ excludeAlreadyDrawn?: boolean }} [opts]
  */
-async function listContestEligibleParticipants(pollId) {
+async function listContestEligibleParticipants(pollId, opts = {}) {
   const poll = await prisma.poll.findUnique({
     where: { id: pollId },
     select: {
@@ -2530,7 +2531,7 @@ async function listContestEligibleParticipants(pollId) {
       },
     ]),
   );
-  return votes
+  let participants = votes
     .map((v) => {
       const lead = leadBySession.get(v.voterSessionId);
       if (!lead) return null;
@@ -2541,6 +2542,16 @@ async function listContestEligibleParticipants(pollId) {
       };
     })
     .filter(Boolean);
+  if (!opts.excludeAlreadyDrawn) {
+    return participants;
+  }
+  const winners = await prisma.contestDrawWinner.findMany({
+    where: { pollId },
+    select: { voterSessionId: true },
+  });
+  const excluded = new Set(winners.map((w) => w.voterSessionId));
+  participants = participants.filter((p) => !excluded.has(p.voterSessionId));
+  return participants;
 }
 
 app.get("/polls/:pollId/contest-eligible", requireAuth, async (req, res) => {
@@ -2558,6 +2569,103 @@ app.get("/polls/:pollId/contest-eligible", requireAuth, async (req, res) => {
     });
   } catch (e) {
     console.error("polls/:pollId/contest-eligible", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+app.post("/polls/:pollId/draw", requireAuth, async (req, res) => {
+  const { pollId } = req.params;
+  const winnerCountRaw = Number(req.body?.winnerCount ?? 1);
+  const winnerCount = Number.isFinite(winnerCountRaw)
+    ? Math.max(1, Math.floor(winnerCountRaw))
+    : 1;
+  try {
+    const pOwn = await assertPollOwnedBy(pollId, req.userId);
+    if (!pOwn.ok) {
+      return res.status(pOwn.status).json({ error: "Sondage introuvable." });
+    }
+    const poll = await prisma.poll.findUnique({
+      where: { id: pollId },
+      select: {
+        id: true,
+        eventId: true,
+        type: true,
+        contestPrize: true,
+      },
+    });
+    if (!poll || poll.type !== "CONTEST_ENTRY") {
+      return res
+        .status(400)
+        .json({ error: "Le tirage est réservé aux questions concours." });
+    }
+
+    const participants = await listContestEligibleParticipants(pollId, {
+      excludeAlreadyDrawn: true,
+    });
+    if (participants.length < 1) {
+      return res.status(409).json({
+        error: "Aucun participant éligible disponible pour le tirage.",
+        pollId,
+        eligibleRemainingCount: 0,
+      });
+    }
+    if (winnerCount > participants.length) {
+      return res.status(400).json({
+        error: `Nombre de gagnants demandé (${winnerCount}) supérieur aux participants éligibles restants (${participants.length}).`,
+      });
+    }
+
+    const pool = [...participants];
+    const winners = [];
+    for (let i = 0; i < winnerCount; i++) {
+      const idx = crypto.randomInt(0, pool.length);
+      const picked = pool[idx];
+      winners.push(picked);
+      pool.splice(idx, 1);
+    }
+
+    const draw = await prisma.$transaction(async (tx) => {
+      const createdDraw = await tx.contestDraw.create({
+        data: {
+          pollId,
+          eventId: poll.eventId,
+          createdByUserId: req.userId,
+          winnerCount,
+          eligibleCountAtDraw: participants.length,
+        },
+      });
+      await tx.contestDrawWinner.createMany({
+        data: winners.map((w, index) => ({
+          drawId: createdDraw.id,
+          pollId,
+          voterSessionId: w.voterSessionId,
+          position: index + 1,
+          firstName: w.firstName,
+          phone: w.phone,
+          email: w.email ?? null,
+        })),
+      });
+      return createdDraw;
+    });
+
+    return res.json({
+      ok: true,
+      pollId,
+      drawId: draw.id,
+      winnerCount,
+      eligibleCountAtDraw: participants.length,
+      eligibleRemainingCount: participants.length - winners.length,
+      contestPrize: poll.contestPrize ?? null,
+      winners: winners.map((w, index) => ({
+        position: index + 1,
+        voterSessionId: w.voterSessionId,
+        firstName: w.firstName,
+        phone: w.phone,
+        email: w.email ?? null,
+      })),
+    });
+  } catch (e) {
+    console.error("polls/:pollId/draw", e);
     return res.status(500).json({ error: "Erreur serveur." });
   }
 });

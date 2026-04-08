@@ -2991,6 +2991,15 @@ export default function RegieEventPage() {
   const [contestEligibleError, setContestEligibleError] = useState(
     /** @type {string | null} */ (null),
   );
+  const [contestDrawModalOpen, setContestDrawModalOpen] = useState(false);
+  const [contestDrawResult, setContestDrawResult] = useState(
+    /** @type {{
+     *   pollId: string;
+     *   drawId: string;
+     *   winner: { firstName: string; phone: string; email: string | null } | null;
+     *   contestPrize: string | null;
+   } | null} */ (null),
+  );
 
   const loadPollAbortRef = useRef(null);
   const socketRef = useRef(null);
@@ -3384,6 +3393,49 @@ export default function RegieEventPage() {
       await fetchEvent({ silent: true });
     } catch (e) {
       setActionError(e.message || "Action chrono échouée.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function postContestDraw(pollId) {
+    if (!pollId) return false;
+    setBusy(true);
+    setActionError(null);
+    try {
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/polls/${encodeURIComponent(pollId)}/draw`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ winnerCount: 1 }),
+        },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body.error || `Erreur ${res.status}`);
+      }
+      const winner = Array.isArray(body?.winners) ? body.winners[0] : null;
+      setContestDrawResult({
+        pollId,
+        drawId: String(body?.drawId || ""),
+        winner: winner
+          ? {
+              firstName: String(winner.firstName || ""),
+              phone: String(winner.phone || ""),
+              email: winner.email ? String(winner.email) : null,
+            }
+          : null,
+        contestPrize: body?.contestPrize ? String(body.contestPrize) : null,
+      });
+      setContestDrawModalOpen(false);
+      setToastNotif("Gagnant tiré");
+      window.setTimeout(() => setToastNotif(null), 3200);
+      await fetchEvent({ silent: true });
+      return true;
+    } catch (e) {
+      setActionError(e.message || "Tirage impossible.");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -4014,6 +4066,117 @@ export default function RegieEventPage() {
           onSuccess={handleQuestionLiveAdded}
         />
       ) : null}
+      {contestDrawModalOpen && String(activePoll?.type || "").toUpperCase() === "CONTEST_ENTRY" ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 10010,
+            background: "rgba(15, 23, 42, 0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+            boxSizing: "border-box",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !busy) {
+              setContestDrawModalOpen(false);
+            }
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "28rem",
+              borderRadius: "14px",
+              background: "#fff",
+              border: "1px solid #e5e7eb",
+              boxShadow: "0 24px 60px rgba(0, 0, 0, 0.25)",
+              padding: "1rem 1.1rem",
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                color: "#6b7280",
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+              }}
+            >
+              Concours
+            </p>
+            <h3
+              style={{
+                margin: "0.35rem 0 0 0",
+                fontSize: "1.05rem",
+                fontWeight: 800,
+                color: "#111827",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              Tirer un gagnant maintenant ?
+            </h3>
+            <p style={{ margin: "0.55rem 0 0 0", fontSize: "0.88rem", color: "#4b5563" }}>
+              Participant éligibles :{" "}
+              <strong style={{ color: "#111827" }}>{contestEligibleCount}</strong>
+            </p>
+            {activePoll?.contestPrize ? (
+              <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.86rem", color: "#4b5563" }}>
+                Lot : <strong style={{ color: "#111827" }}>{activePoll.contestPrize}</strong>
+              </p>
+            ) : null}
+            <div
+              style={{
+                marginTop: "0.9rem",
+                display: "flex",
+                gap: "0.55rem",
+                justifyContent: "flex-end",
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setContestDrawModalOpen(false)}
+                style={{
+                  padding: "0.45rem 0.75rem",
+                  borderRadius: "9px",
+                  border: "1px solid #d1d5db",
+                  background: "#fff",
+                  color: "#475569",
+                  fontWeight: 700,
+                  cursor: busy ? "not-allowed" : "pointer",
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={busy || !activePoll?.id}
+                onClick={() => void postContestDraw(activePoll?.id || "")}
+                style={{
+                  padding: "0.45rem 0.8rem",
+                  borderRadius: "9px",
+                  border: "1px solid #7c3aed",
+                  background: busy
+                    ? "#f1f5f9"
+                    : "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)",
+                  color: busy ? "#94a3b8" : "#fff",
+                  fontWeight: 800,
+                  cursor: busy ? "not-allowed" : "pointer",
+                }}
+              >
+                {busy ? "Tirage..." : "Confirmer le tirage"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {!loading && eventData && (
         <div
@@ -4549,21 +4712,93 @@ export default function RegieEventPage() {
               ) : null}
               <button
                 type="button"
-                disabled
+                disabled={
+                  busy ||
+                  contestEligibleLoading ||
+                  contestEligibleCount <= 0 ||
+                  !!contestEligibleError
+                }
+                onClick={() => setContestDrawModalOpen(true)}
                 style={{
                   marginTop: "0.6rem",
                   padding: "0.45rem 0.8rem",
                   borderRadius: "9px",
-                  border: "1px solid #d1d5db",
-                  background: "#f8fafc",
-                  color: "#94a3b8",
+                  border: "1px solid #7c3aed",
+                  background:
+                    busy ||
+                    contestEligibleLoading ||
+                    contestEligibleCount <= 0 ||
+                    !!contestEligibleError
+                      ? "#f8fafc"
+                      : "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)",
+                  color:
+                    busy ||
+                    contestEligibleLoading ||
+                    contestEligibleCount <= 0 ||
+                    !!contestEligibleError
+                      ? "#94a3b8"
+                      : "#fff",
                   fontSize: "0.8rem",
                   fontWeight: 700,
-                  cursor: "not-allowed",
+                  cursor:
+                    busy ||
+                    contestEligibleLoading ||
+                    contestEligibleCount <= 0 ||
+                    !!contestEligibleError
+                      ? "not-allowed"
+                      : "pointer",
                 }}
               >
-                Tirer un gagnant (bientôt)
+                Tirer un gagnant
               </button>
+              {contestDrawResult &&
+              String(contestDrawResult.pollId || "") ===
+                String(activePoll?.id || "") ? (
+                <div
+                  style={{
+                    marginTop: "0.65rem",
+                    padding: "0.6rem 0.7rem",
+                    borderRadius: "10px",
+                    border: "1px solid #d8b4fe",
+                    background: "#faf5ff",
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      color: "#6d28d9",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.06em",
+                    }}
+                  >
+                    Gagnant tiré
+                  </p>
+                  <p
+                    style={{
+                      margin: "0.25rem 0 0 0",
+                      fontSize: "0.9rem",
+                      fontWeight: 800,
+                      color: "#111827",
+                    }}
+                  >
+                    {contestDrawResult.winner?.firstName || "Participant"}
+                  </p>
+                  <p
+                    style={{
+                      margin: "0.2rem 0 0 0",
+                      fontSize: "0.8rem",
+                      color: "#4b5563",
+                    }}
+                  >
+                    {contestDrawResult.winner?.phone || "Téléphone indisponible"}
+                    {contestDrawResult.winner?.email
+                      ? ` · ${contestDrawResult.winner.email}`
+                      : ""}
+                  </p>
+                </div>
+              ) : null}
             </section>
           ) : null}
 
