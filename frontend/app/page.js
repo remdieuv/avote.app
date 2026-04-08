@@ -713,55 +713,118 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Cas d’usage */}
+        {/* Cas d’usage — version premium */}
         <section style={sectionY}>
-          <h2
-            style={{
-              fontSize: "clamp(1.2rem, 3vw, 1.4rem)",
-              fontWeight: 700,
-              textAlign: "center",
-              margin: "0 0 2.5rem",
-              color: "#1e293b",
-            }}
-          >
-            Cas d’usage
-          </h2>
-          <ul
-            style={{
-              listStyle: "none",
-              padding: 0,
-              margin: 0,
-              display: "grid",
-              gap: "1rem",
-              gridTemplateColumns: "1fr",
-            }}
-            className="landing-usecases"
-          >
-            {[
-              { icon: "🎤", text: "Conférences et keynotes interactives" },
-              { icon: "🏢", text: "Réunions d’équipe et votes internes" },
-              { icon: "🎓", text: "Formations et quiz en salle" },
-              { icon: "🎭", text: "Événements associatifs et assemblées" },
-            ].map((row) => (
-              <li
-                key={row.text}
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: "0.85rem",
-                  padding: "1rem 1.15rem",
-                  borderRadius: "12px",
-                  border: "1px solid #e2e8f0",
-                  background: "#fff",
-                }}
-              >
-                <span style={{ fontSize: "1.35rem", lineHeight: 1 }} aria-hidden>
-                  {row.icon}
-                </span>
-                <span style={{ fontSize: "1rem", color: "#334155" }}>{row.text}</span>
-              </li>
-            ))}
-          </ul>
+          <div className="usecases-wrap">
+            <div className="usecases-head">
+              <p className="usecases-eyebrow">Cas d’usage Avote</p>
+              <h2 className="usecases-title">Où Avote crée de l’impact</h2>
+              <p className="usecases-subtitle">
+                Du live événementiel à la génération de leads qualifiés :
+                activez votre audience et obtenez des résultats exploitables.
+              </p>
+            </div>
+
+            <div className="usecases-highlight">
+              <span className="usecases-highlight-pill">Focus conversion</span>
+              <p>
+                <strong>Marketing & business</strong> : génération de leads,
+                qualification prospects et collecte d’emails/téléphones pendant
+                le live.
+              </p>
+            </div>
+
+            <div className="usecases-grid">
+              {[
+                {
+                  icon: "🎤",
+                  title: "Événementiel & conférences",
+                  points: [
+                    "Conférences et keynotes interactives",
+                    "Tables rondes avec vote du public",
+                    "Salons professionnels (engagement visiteurs)",
+                  ],
+                },
+                {
+                  icon: "🏢",
+                  title: "Entreprises & interne",
+                  points: [
+                    "Réunions d’équipe interactives",
+                    "Votes internes (décisions rapides)",
+                    "Feedback collaborateurs en live",
+                  ],
+                },
+                {
+                  icon: "🎓",
+                  title: "Formation & éducation",
+                  points: [
+                    "Quiz en salle et tests en direct",
+                    "Formation interactive (engagement apprenants)",
+                    "Évaluation post-formation",
+                  ],
+                },
+                {
+                  icon: "🎭",
+                  title: "Public & collectivités",
+                  points: [
+                    "Assemblées générales et votes officiels",
+                    "Consultations citoyennes",
+                    "Débats publics interactifs",
+                  ],
+                },
+                {
+                  icon: "🎬",
+                  title: "Divertissement & médias",
+                  points: [
+                    "Votes du public (talent show)",
+                    "Jeux / quiz live et streams",
+                    "Podcasts et émissions interactives",
+                  ],
+                },
+                {
+                  icon: "🛍️",
+                  title: "Marketing & business",
+                  points: [
+                    "Génération de leads en live",
+                    "Qualification prospects (intérêt produit)",
+                    "Landing page interactive",
+                  ],
+                },
+                {
+                  icon: "⚽",
+                  title: "Sport & événements live",
+                  points: [
+                    "Votes supporters (MVP, pronostics)",
+                    "Animation écran géant",
+                    "Jeux concours live",
+                  ],
+                },
+                {
+                  icon: "⛪",
+                  title: "Associations & communautés",
+                  points: [
+                    "Votes associatifs",
+                    "Décisions collectives",
+                    "Animation de communauté",
+                  ],
+                },
+              ].map((block) => (
+                <article key={block.title} className="usecase-card">
+                  <div className="usecase-card-top">
+                    <span className="usecase-icon" aria-hidden>
+                      {block.icon}
+                    </span>
+                    <h3 className="usecase-title">{block.title}</h3>
+                  </div>
+                  <ul className="usecase-points">
+                    {block.points.map((p) => (
+                      <li key={p}>{p}</li>
+                    ))}
+                  </ul>
+                </article>
+              ))}
+            </div>
+          </div>
         </section>
 
         {/* CTA final */}
@@ -1211,9 +1274,142 @@ export default function HomePage() {
             gap: 1.35rem;
           }
         }
-        @media (min-width: 640px) {
-          .landing-usecases {
+        .usecases-wrap {
+          border-radius: 24px;
+          border: 1px solid #ddd6fe;
+          background:
+            radial-gradient(780px 220px at 50% -10%, rgba(124, 58, 237, 0.12), transparent 65%),
+            linear-gradient(160deg, #f8fafc 0%, #ffffff 55%, #faf5ff 100%);
+          box-shadow: 0 22px 52px rgba(76, 29, 149, 0.08);
+          padding: clamp(1.35rem, 3.8vw, 2.2rem);
+        }
+        .usecases-head {
+          text-align: center;
+          max-width: 690px;
+          margin: 0 auto;
+        }
+        .usecases-eyebrow {
+          margin: 0 0 0.48rem;
+          font-size: 0.72rem;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: #7c3aed;
+        }
+        .usecases-title {
+          margin: 0;
+          font-size: clamp(1.4rem, 3.2vw, 1.95rem);
+          line-height: 1.15;
+          letter-spacing: -0.03em;
+          font-weight: 800;
+          color: #0f172a;
+        }
+        .usecases-subtitle {
+          margin: 0.8rem auto 0;
+          max-width: 50ch;
+          font-size: clamp(0.9rem, 2.2vw, 1rem);
+          color: #64748b;
+          line-height: 1.55;
+        }
+        .usecases-highlight {
+          margin: 1rem auto 0;
+          max-width: 760px;
+          border: 1px solid #d8b4fe;
+          border-radius: 14px;
+          background: linear-gradient(135deg, #faf5ff 0%, #fff 100%);
+          padding: 0.8rem 0.95rem;
+          display: flex;
+          align-items: flex-start;
+          gap: 0.7rem;
+        }
+        .usecases-highlight p {
+          margin: 0;
+          color: #4b5563;
+          font-size: 0.87rem;
+          line-height: 1.45;
+        }
+        .usecases-highlight-pill {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0.22rem 0.52rem;
+          border-radius: 999px;
+          background: #f5f3ff;
+          border: 1px solid #c4b5fd;
+          color: #6d28d9;
+          font-size: 0.66rem;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          flex-shrink: 0;
+        }
+        .usecases-grid {
+          margin-top: 1.1rem;
+          display: grid;
+          gap: 0.9rem;
+          grid-template-columns: 1fr;
+        }
+        .usecase-card {
+          border-radius: 16px;
+          border: 1px solid #e9d5ff;
+          background: rgba(255, 255, 255, 0.9);
+          box-shadow:
+            0 10px 30px rgba(15, 23, 42, 0.06),
+            inset 0 1px 0 rgba(255, 255, 255, 0.95);
+          padding: 0.95rem 1rem;
+          transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+        }
+        .usecase-card:hover {
+          transform: translateY(-2px);
+          border-color: #c4b5fd;
+          box-shadow:
+            0 18px 42px rgba(91, 33, 182, 0.14),
+            inset 0 1px 0 rgba(255, 255, 255, 0.95);
+        }
+        .usecase-card-top {
+          display: flex;
+          align-items: center;
+          gap: 0.58rem;
+          margin-bottom: 0.6rem;
+        }
+        .usecase-icon {
+          width: 1.95rem;
+          height: 1.95rem;
+          border-radius: 10px;
+          display: grid;
+          place-items: center;
+          border: 1px solid #ddd6fe;
+          background: #faf5ff;
+          font-size: 0.95rem;
+          flex-shrink: 0;
+        }
+        .usecase-title {
+          margin: 0;
+          font-size: 0.94rem;
+          line-height: 1.3;
+          font-weight: 760;
+          color: #111827;
+        }
+        .usecase-points {
+          margin: 0;
+          padding: 0 0 0 1.05rem;
+          display: grid;
+          gap: 0.28rem;
+          color: #64748b;
+          font-size: 0.82rem;
+          line-height: 1.45;
+        }
+        .usecase-points li::marker {
+          color: #8b5cf6;
+        }
+        @media (min-width: 700px) {
+          .usecases-grid {
             grid-template-columns: 1fr 1fr;
+          }
+        }
+        @media (min-width: 1040px) {
+          .usecases-grid {
+            grid-template-columns: repeat(4, 1fr);
           }
         }
       `}</style>
