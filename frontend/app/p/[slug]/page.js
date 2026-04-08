@@ -35,7 +35,7 @@ function PublicPollBody({ slug }) {
       getPollUrl={getPollUrl}
       titrePage={titrePage}
       retourHref={`/join/${encodeURIComponent(slug)}`}
-      retourLabel="← Retour à l'accueil"
+      retourLabel="← Retour à la salle"
       slugPublic={slug}
     />
   );
