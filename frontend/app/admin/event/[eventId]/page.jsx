@@ -2972,6 +2972,11 @@ export default function RegieEventPage() {
   const [addQuestionModalOpen, setAddQuestionModalOpen] = useState(false);
   const [toastNotif, setToastNotif] = useState(/** @type {string | null} */ (null));
   const [newLeadCount, setNewLeadCount] = useState(0);
+  const [contestEligibleCount, setContestEligibleCount] = useState(0);
+  const [contestEligibleLoading, setContestEligibleLoading] = useState(false);
+  const [contestEligibleError, setContestEligibleError] = useState(
+    /** @type {string | null} */ (null),
+  );
 
   const loadPollAbortRef = useRef(null);
   const socketRef = useRef(null);
@@ -3055,6 +3060,58 @@ export default function RegieEventPage() {
       /* ignore */
     }
   }, [eventId]);
+
+  useEffect(() => {
+    if (!eventId) return;
+    const activePollId = eventData?.activePollId ?? null;
+    const activePollType = String(
+      eventData?.polls?.find((p) => p.id === activePollId)?.type || "",
+    ).toUpperCase();
+    if (!activePollId || activePollType !== "CONTEST_ENTRY") {
+      setContestEligibleCount(0);
+      setContestEligibleLoading(false);
+      setContestEligibleError(null);
+      return;
+    }
+    let cancelled = false;
+    const run = async () => {
+      setContestEligibleLoading(true);
+      setContestEligibleError(null);
+      try {
+        const res = await adminFetch(
+          `${apiBaseBrowser()}/polls/${encodeURIComponent(activePollId)}/contest-eligible`,
+          { cache: "no-store" },
+        );
+        const body = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!res.ok) {
+          setContestEligibleError(body?.error || `Erreur ${res.status}`);
+          return;
+        }
+        const n =
+          typeof body?.eligibleCount === "number"
+            ? body.eligibleCount
+            : Array.isArray(body?.participants)
+              ? body.participants.length
+              : 0;
+        setContestEligibleCount(Math.max(0, n));
+      } catch {
+        if (!cancelled) {
+          setContestEligibleError("Chargement indisponible.");
+        }
+      } finally {
+        if (!cancelled) {
+          setContestEligibleLoading(false);
+        }
+      }
+    };
+    void run();
+    const id = window.setInterval(() => void run(), 20000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [eventId, eventData?.activePollId, eventData?.polls]);
 
   useEffect(() => {
     if (!eventId || typeof window === "undefined") return;
@@ -4399,6 +4456,79 @@ export default function RegieEventPage() {
               </div>
             </div>
           </div>
+
+          {String(activePoll?.type || "").toUpperCase() === "CONTEST_ENTRY" ? (
+            <section
+              style={{
+                ...CARD,
+                marginTop: "0.9rem",
+                padding: "0.9rem 1rem",
+                border: "1px solid #ddd6fe",
+                background: "linear-gradient(160deg, #faf5ff 0%, #ffffff 100%)",
+              }}
+            >
+              <p
+                style={{
+                  margin: "0 0 0.35rem 0",
+                  fontSize: "0.68rem",
+                  fontWeight: 700,
+                  color: "#6b7280",
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Concours
+              </p>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: desktop ? "1rem" : "0.92rem",
+                  fontWeight: 800,
+                  color: "#111827",
+                }}
+              >
+                Participants éligibles :{" "}
+                {contestEligibleLoading ? "…" : contestEligibleCount}
+              </p>
+              <p
+                style={{
+                  margin: "0.35rem 0 0 0",
+                  fontSize: "0.8rem",
+                  color: "#64748b",
+                }}
+              >
+                Ont répondu "Oui" et complété le formulaire.
+              </p>
+              {contestEligibleError ? (
+                <p
+                  style={{
+                    margin: "0.35rem 0 0 0",
+                    fontSize: "0.74rem",
+                    color: "#b91c1c",
+                  }}
+                >
+                  {contestEligibleError}
+                </p>
+              ) : null}
+              <button
+                type="button"
+                disabled
+                style={{
+                  marginTop: "0.6rem",
+                  padding: "0.45rem 0.8rem",
+                  borderRadius: "9px",
+                  border: "1px solid #d1d5db",
+                  background: "#f8fafc",
+                  color: "#94a3b8",
+                  fontSize: "0.8rem",
+                  fontWeight: 700,
+                  cursor: "not-allowed",
+                }}
+              >
+                Tirer un gagnant (bientôt)
+              </button>
+            </section>
+          ) : null}
 
           {eventData.slug ? (
             <BlocProjectionEcran
