@@ -22,7 +22,7 @@ const UX = {
     border: "rgba(22, 163, 74, 0.38)",
   },
   lecture: {
-    label: "Lecture",
+    label: "Question affichée",
     bg: "rgba(99, 102, 241, 0.12)",
     color: "#3730a3",
     border: "rgba(99, 102, 241, 0.35)",

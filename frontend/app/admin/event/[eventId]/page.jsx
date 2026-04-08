@@ -3412,7 +3412,12 @@ export default function RegieEventPage() {
     [liveState, displayStateUi, voteStateUi],
   );
 
-  const stateLabel = ux.label;
+  const stateLabel =
+    ux.key === "lecture" &&
+    String(displayStateUi || "").toLowerCase() === "question" &&
+    String(voteStateUi || "").toLowerCase() === "closed"
+      ? "Question affichée (vote fermé)"
+      : ux.label;
   const statePanel = getEventUxPanelStyles(ux.key);
   const sceneBadge = getEventUxSceneBadgeFromKey(ux.key);
   const pilotageTag = ux.label;
