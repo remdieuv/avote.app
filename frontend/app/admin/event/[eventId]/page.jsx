@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { io } from "socket.io-client";
@@ -117,6 +117,55 @@ function badgeStyle(status) {
   }
 }
 
+function isContestPoll(poll) {
+  return String(poll?.type || "").toUpperCase() === "CONTEST_ENTRY";
+}
+
+function isLeadPoll(poll) {
+  return Boolean(poll?.leadEnabled) && !isContestPoll(poll);
+}
+
+function isStandardPoll(poll) {
+  return !isContestPoll(poll) && !isLeadPoll(poll);
+}
+
+function pollKindStyle(poll) {
+  if (isContestPoll(poll)) {
+    return {
+      label: "Concours",
+      bg: "#faf5ff",
+      border: "#d8b4fe",
+      color: "#6d28d9",
+      cardBg: "#fcfaff",
+    };
+  }
+  if (isLeadPoll(poll)) {
+    return {
+      label: "Lead",
+      bg: "#ecfeff",
+      border: "#99f6e4",
+      color: "#0f766e",
+      cardBg: "#f7feff",
+    };
+  }
+  if (isStandardPoll(poll)) {
+    return {
+      label: "Sondage",
+      bg: "#f8fafc",
+      border: "#cbd5e1",
+      color: "#475569",
+      cardBg: "#ffffff",
+    };
+  }
+  return {
+    label: "Sondage",
+    bg: "#f8fafc",
+    border: "#cbd5e1",
+    color: "#475569",
+    cardBg: "#ffffff",
+  };
+}
+
 function PollCard({
   poll,
   isActive,
@@ -128,10 +177,13 @@ function PollCard({
   onOpen,
   onCloseRegie,
   onResults,
+  onContestShortcut,
+  onLeadShortcut,
   desktop,
   compact = false,
 }) {
   const badge = badgeStyle(poll.status);
+  const kind = pollKindStyle(poll);
   const scene = String(liveState || "").toLowerCase();
   const voteOuvertSurCeSondage =
     String(activePollId || "") === String(poll.id) &&
@@ -183,6 +235,28 @@ function PollCard({
     </>
   );
 
+  const quickAction = isContestPoll(poll) ? (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={() => onContestShortcut?.(poll)}
+      style={btnSecondaryAction(busy)}
+      title="Raccourci vers le tirage concours"
+    >
+      Tirer un gagnant
+    </button>
+  ) : isLeadPoll(poll) ? (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={() => onLeadShortcut?.(poll)}
+      style={btnSecondaryAction(busy)}
+      title="Ouvrir la page leads de cet événement"
+    >
+      Voir les leads
+    </button>
+  ) : null;
+
   const metaRow = (
     <div
       style={{
@@ -225,6 +299,21 @@ function PollCard({
       <span style={{ fontSize: "0.78rem", color: "#6b7280" }}>
         Ordre {poll.order} · {poll.type}
       </span>
+          <span
+            style={{
+              fontSize: "0.66rem",
+              fontWeight: 800,
+              padding: "0.17rem 0.45rem",
+              borderRadius: "999px",
+              background: kind.bg,
+              color: kind.color,
+              border: `1px solid ${kind.border}`,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+            }}
+          >
+            {kind.label}
+          </span>
       <span
         style={{
           fontSize: "0.82rem",
@@ -261,7 +350,7 @@ function PollCard({
           borderRadius: "10px",
           padding: "0.55rem 0.65rem",
           marginBottom: "0.45rem",
-          background: isActive ? "#eff6ff" : "#fff",
+          background: isActive ? "#eff6ff" : kind.cardBg,
           boxShadow: isActive
             ? "0 1px 8px rgba(37, 99, 235, 0.14)"
             : "0 1px 2px rgba(0,0,0,0.04)",
@@ -309,6 +398,21 @@ function PollCard({
           <span style={{ fontSize: "0.68rem", color: "#6b7280", marginLeft: "auto" }}>
             <strong style={{ color: "#374151" }}>{poll.voteCount ?? 0}</strong> vote
             {(poll.voteCount ?? 0) !== 1 ? "s" : ""}
+          </span>
+          <span
+            style={{
+              fontSize: "0.58rem",
+              fontWeight: 800,
+              padding: "0.11rem 0.34rem",
+              borderRadius: "999px",
+              background: kind.bg,
+              color: kind.color,
+              border: `1px solid ${kind.border}`,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+            }}
+          >
+            {kind.label}
           </span>
         </div>
         {titre}
@@ -360,6 +464,25 @@ function PollCard({
           >
             Projeter les résultats finaux
           </button>
+          {quickAction ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                isContestPoll(poll)
+                  ? onContestShortcut?.(poll)
+                  : onLeadShortcut?.(poll)
+              }
+              style={{
+                ...btnSecondaryAction(busy),
+                width: "100%",
+                padding: "0.38rem 0.5rem",
+                fontSize: "0.72rem",
+              }}
+            >
+              {isContestPoll(poll) ? "Tirer un gagnant" : "Voir les leads"}
+            </button>
+          ) : null}
         </div>
       </div>
     );
@@ -372,7 +495,7 @@ function PollCard({
         borderRadius: "12px",
         padding: desktop ? "0.85rem 1.1rem" : "0.8rem 0.95rem",
         marginBottom: desktop ? "0.6rem" : "0.7rem",
-        background: isActive ? "#eff6ff" : "#fff",
+        background: isActive ? "#eff6ff" : kind.cardBg,
         boxShadow: isActive
           ? "0 2px 12px rgba(37, 99, 235, 0.12)"
           : "0 1px 2px rgba(0,0,0,0.04)",
@@ -403,6 +526,7 @@ function PollCard({
             }}
           >
             {boutons}
+            {quickAction}
           </div>
         </div>
       ) : (
@@ -441,13 +565,31 @@ function PollCard({
             <span style={{ fontSize: "0.8rem", color: "#6b7280" }}>
               Ordre {poll.order} · {poll.type}
             </span>
+            <span
+              style={{
+                fontSize: "0.62rem",
+                fontWeight: 800,
+                padding: "0.15rem 0.4rem",
+                borderRadius: "999px",
+                background: kind.bg,
+                color: kind.color,
+                border: `1px solid ${kind.border}`,
+                letterSpacing: "0.04em",
+                textTransform: "uppercase",
+              }}
+            >
+              {kind.label}
+            </span>
             <span style={{ fontSize: "0.85rem", color: "#4b5563", marginLeft: "auto" }}>
               <strong>{poll.voteCount ?? 0}</strong> vote
               {(poll.voteCount ?? 0) !== 1 ? "s" : ""}
             </span>
           </div>
           {titre}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>{boutons}</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+            {boutons}
+            {quickAction}
+          </div>
         </>
       )}
     </div>
@@ -519,6 +661,20 @@ function btnAfficherResultats(disabled) {
     border: `1px solid ${disabled ? "#bfdbfe" : "#1d4ed8"}`,
     background: disabled ? "#f8fafc" : "#2563eb",
     color: disabled ? "#9ca3af" : "#fff",
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.7 : 1,
+  };
+}
+
+function btnSecondaryAction(disabled) {
+  return {
+    padding: "0.46rem 0.82rem",
+    fontSize: "0.8rem",
+    fontWeight: 700,
+    borderRadius: "8px",
+    border: "1px solid #c4b5fd",
+    background: disabled ? "#f5f3ff" : "#faf5ff",
+    color: disabled ? "#a1a1aa" : "#5b21b6",
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.7 : 1,
   };
@@ -2956,6 +3112,7 @@ function RegiePreviewJoinDrawerMobile({ open, onClose, slug, eventId }) {
 }
 
 export default function RegieEventPage() {
+  const router = useRouter();
   const desktop = useBreakpointMin(1024);
   const desktopSplitWide = useBreakpointMin(1400);
   const params = useParams();
@@ -3627,6 +3784,33 @@ export default function RegieEventPage() {
     });
   }, [eventData?.polls, eventData?.activePollId]);
 
+  const handleContestShortcut = useCallback(
+    (poll) => {
+      const isContest = isContestPoll(poll);
+      if (!isContest) return;
+      const isActive = String(eventData?.activePollId || "") === String(poll?.id || "");
+      if (isActive) {
+        setContestDrawModalOpen(true);
+        return;
+      }
+      const el = document.getElementById("regie-concours-card");
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      setToastNotif("Astuce : activez d’abord cette question pour le tirage.");
+      window.setTimeout(() => setToastNotif(null), 2600);
+    },
+    [eventData?.activePollId],
+  );
+
+  const handleLeadShortcut = useCallback(
+    () => {
+      if (!eventId) return;
+      router.push(`/admin/event/${encodeURIComponent(eventId)}/leads`);
+    },
+    [eventId, router],
+  );
+
   const regiePollsBloc = (
     <nav
       aria-label="Liste des sondages"
@@ -3693,6 +3877,8 @@ export default function RegieEventPage() {
             onOpen={(id) => postAction(`/polls/${id}/open`)}
             onCloseRegie={(id) => postAction(`/polls/${id}/close`)}
             onResults={(id) => postAction(`/polls/${id}/show-results`)}
+            onContestShortcut={handleContestShortcut}
+            onLeadShortcut={handleLeadShortcut}
           />
         ))}
       </div>
@@ -4659,6 +4845,7 @@ export default function RegieEventPage() {
 
           {String(activePoll?.type || "").toUpperCase() === "CONTEST_ENTRY" ? (
             <section
+              id="regie-concours-card"
               style={{
                 ...CARD,
                 marginTop: "0.9rem",
