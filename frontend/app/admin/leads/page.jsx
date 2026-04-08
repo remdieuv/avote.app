@@ -129,112 +129,59 @@ export default function MesLeadsPage() {
     return `${rows.length} lead(s) affiché(s).`;
   }, [total, rows.length, limit, loading]);
 
+  const totalWithEmail = rows.reduce((acc, r) => (r.email ? acc + 1 : acc), 0);
+  const eventsTouched = useMemo(
+    () => new Set(rows.map((r) => r.eventId).filter(Boolean)).size,
+    [rows],
+  );
+
   return (
-    <div
-      style={{
-        maxWidth: "1180px",
-        margin: "0 auto",
-        padding: "clamp(1rem, 3vw, 1.75rem) clamp(0.75rem, 2vw, 1rem) 2.5rem",
-        fontFamily: 'system-ui, "Segoe UI", sans-serif',
-      }}
-    >
+    <div className="leads-page-wrap">
       <nav style={{ marginBottom: "1rem" }}>
-        <Link
-          href="/admin/events"
-          style={{
-            fontSize: "0.86rem",
-            fontWeight: 600,
-            color: "#64748b",
-            textDecoration: "none",
-          }}
-        >
+        <Link href="/admin/events" className="leads-back-link">
           ← Mes événements
         </Link>
       </nav>
 
-      <header
-        style={{
-          marginBottom: "1.35rem",
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "flex-end",
-          justifyContent: "space-between",
-          gap: "1rem",
-        }}
-      >
+      <header className="leads-head">
         <div>
-          <h1
-            style={{
-              margin: "0 0 0.35rem 0",
-              fontSize: "clamp(1.35rem, 2.5vw, 1.65rem)",
-              fontWeight: 800,
-              letterSpacing: "-0.03em",
-              color: "#0f172a",
-            }}
-          >
-            Mes leads
-          </h1>
-          <p style={{ margin: 0, color: "#64748b", fontSize: "0.95rem", maxWidth: "52ch" }}>
-            Tous les contacts captés sur vos événements. Filtrez par événement, période ou recherche.
+          <h1 className="leads-title">Mes leads</h1>
+          <p className="leads-subtitle">
+            Tous les contacts captés sur vos événements. Filtrez par événement,
+            période ou recherche.
           </p>
         </div>
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={exportCsv}
-            disabled={rows.length === 0}
-            style={{
-              padding: "0.5rem 0.85rem",
-              fontSize: "0.84rem",
-              fontWeight: 700,
-              borderRadius: "10px",
-              border: "1px solid #cbd5e1",
-              background: rows.length === 0 ? "#f1f5f9" : "#fff",
-              color: "#334155",
-              cursor: rows.length === 0 ? "not-allowed" : "pointer",
-            }}
-          >
-            Exporter CSV
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={exportCsv}
+          disabled={rows.length === 0}
+          className="leads-csv-btn"
+        >
+          Exporter CSV
+        </button>
       </header>
 
-      <section style={{ ...CARD, padding: "1rem 1.15rem", marginBottom: "1rem" }}>
-        <p
-          style={{
-            margin: "0 0 0.75rem 0",
-            fontSize: "0.72rem",
-            fontWeight: 700,
-            color: "#64748b",
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-          }}
-        >
-          Filtres
-        </p>
-        <div
-          style={{
-            display: "grid",
-            gap: "0.85rem",
-            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-            alignItems: "end",
-          }}
-        >
-          <label style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-            <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#475569" }}>
-              Événement
-            </span>
-            <select
-              value={eventId}
-              onChange={(e) => setEventId(e.target.value)}
-              style={{
-                padding: "0.5rem 0.6rem",
-                borderRadius: "10px",
-                border: "1px solid #cbd5e1",
-                fontSize: "0.88rem",
-                background: "#fff",
-              }}
-            >
+      <section className="leads-kpi-grid">
+        <article className="leads-kpi-card">
+          <p>Total leads</p>
+          <strong>{loading ? "…" : total}</strong>
+        </article>
+        <article className="leads-kpi-card">
+          <p>Avec e-mail</p>
+          <strong>{loading ? "…" : totalWithEmail}</strong>
+        </article>
+        <article className="leads-kpi-card">
+          <p>Événements touchés</p>
+          <strong>{loading ? "…" : eventsTouched}</strong>
+        </article>
+      </section>
+
+      <section className="leads-filters-card">
+        <p className="leads-section-eyebrow">Filtres</p>
+        <div className="leads-filters-grid">
+          <label className="field-col">
+            <span>Événement</span>
+            <select value={eventId} onChange={(e) => setEventId(e.target.value)} className="field-input">
               <option value="">Tous mes événements</option>
               {events.map((ev) => (
                 <option key={ev.id} value={ev.id}>
@@ -243,81 +190,33 @@ export default function MesLeadsPage() {
               ))}
             </select>
           </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-            <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#475569" }}>
-              Recherche
-            </span>
+          <label className="field-col">
+            <span>Recherche</span>
             <input
               type="search"
               value={qInput}
               onChange={(e) => setQInput(e.target.value)}
               placeholder="Prénom, téléphone, e-mail…"
               autoComplete="off"
-              style={{
-                padding: "0.5rem 0.6rem",
-                borderRadius: "10px",
-                border: "1px solid #cbd5e1",
-                fontSize: "0.88rem",
-              }}
+              className="field-input"
             />
           </label>
-          <label style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-            <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#475569" }}>
-              Du
-            </span>
-            <input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              style={{
-                padding: "0.5rem 0.6rem",
-                borderRadius: "10px",
-                border: "1px solid #cbd5e1",
-                fontSize: "0.88rem",
-              }}
-            />
+          <label className="field-col">
+            <span>Du</span>
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="field-input" />
           </label>
-          <label style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-            <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#475569" }}>
-              Au
-            </span>
-            <input
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              style={{
-                padding: "0.5rem 0.6rem",
-                borderRadius: "10px",
-                border: "1px solid #cbd5e1",
-                fontSize: "0.88rem",
-              }}
-            />
+          <label className="field-col">
+            <span>Au</span>
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="field-input" />
           </label>
         </div>
-        <div
-          style={{
-            marginTop: "0.85rem",
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "0.45rem",
-            alignItems: "center",
-          }}
-        >
-          <span style={{ fontSize: "0.76rem", color: "#94a3b8", marginRight: "0.25rem" }}>
-            Raccourcis :
-          </span>
-          <button
-            type="button"
-            onClick={() => setPresetDays(7)}
-            style={presetBtnStyle}
-          >
+
+        <div className="leads-presets-row">
+          <span>Raccourcis :</span>
+          <button type="button" onClick={() => setPresetDays(7)} style={presetBtnStyle}>
             7 jours
           </button>
-          <button
-            type="button"
-            onClick={() => setPresetDays(30)}
-            style={presetBtnStyle}
-          >
+          <button type="button" onClick={() => setPresetDays(30)} style={presetBtnStyle}>
             30 jours
           </button>
           <button type="button" onClick={clearDates} style={presetGhostStyle}>
@@ -326,24 +225,16 @@ export default function MesLeadsPage() {
         </div>
       </section>
 
-      <p style={{ margin: "0 0 0.65rem 0", fontSize: "0.84rem", color: "#64748b" }}>
-        {loading ? "Chargement…" : shownHint}
-      </p>
+      <p className="leads-hint">{loading ? "Chargement…" : shownHint}</p>
       {error ? (
         <p role="alert" style={{ color: "#b91c1c", fontWeight: 600, margin: "0 0 1rem" }}>
           {error}
         </p>
       ) : null}
 
-      <div style={{ ...CARD, overflow: "hidden" }}>
-        <div style={{ overflowX: "auto" }}>
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              minWidth: "880px",
-            }}
-          >
+      <div className="leads-table-wrap">
+        <div className="leads-table-scroll">
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "920px" }}>
             <thead>
               <tr style={{ background: "#f8fafc" }}>
                 <Th>Date</Th>
@@ -375,15 +266,7 @@ export default function MesLeadsPage() {
                   <Td subtle>{r.email || "—"}</Td>
                   <Td style={{ whiteSpace: "nowrap" }}>
                     {r.eventId ? (
-                      <Link
-                        href={`/admin/event/${encodeURIComponent(r.eventId)}/leads`}
-                        style={{
-                          fontSize: "0.78rem",
-                          fontWeight: 600,
-                          color: "#4f46e5",
-                          textDecoration: "none",
-                        }}
-                      >
+                      <Link href={`/admin/event/${encodeURIComponent(r.eventId)}/leads`} className="leads-detail-link">
                         Détail
                       </Link>
                     ) : null}
@@ -393,23 +276,236 @@ export default function MesLeadsPage() {
             </tbody>
           </table>
         </div>
+
         {!loading && rows.length === 0 ? (
-          <div
-            style={{
-              padding: "2.5rem 1.5rem",
-              textAlign: "center",
-              color: "#64748b",
-              fontSize: "0.92rem",
-            }}
-          >
+          <div className="leads-empty-state">
             Aucun lead à afficher. Essayez d’élargir la période ou un autre événement.
           </div>
         ) : null}
       </div>
 
+      {!loading && rows.length > 0 ? (
+        <div className="leads-mobile-list">
+          {rows.map((r) => (
+            <article key={`m-${r.id}`} className="leads-mobile-card">
+              <p className="mobile-card-date">
+                {new Date(r.createdAt).toLocaleString("fr-FR", {
+                  dateStyle: "short",
+                  timeStyle: "short",
+                })}
+              </p>
+              <p className="mobile-card-event">{r.eventTitle}</p>
+              <p className="mobile-card-question">
+                {r.pollQuestion || `Question ${Number(r.pollOrder ?? 0) + 1}`}
+              </p>
+              <div className="mobile-card-grid">
+                <span>Prénom: {r.firstName}</span>
+                <span>Téléphone: {r.phone}</span>
+                <span>E-mail: {r.email || "—"}</span>
+              </div>
+              {r.eventId ? (
+                <Link href={`/admin/event/${encodeURIComponent(r.eventId)}/leads`} className="leads-detail-link">
+                  Voir le détail
+                </Link>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      ) : null}
+
       <p style={{ margin: "1rem 0 0", fontSize: "0.75rem", color: "#94a3b8" }}>
         Les dates « Du / Au » sont interprétées en UTC (jour calendaire) côté serveur.
       </p>
+
+      <style>{`
+        .leads-page-wrap {
+          max-width: 1220px;
+          margin: 0 auto;
+          padding: clamp(1rem, 3vw, 1.9rem) clamp(0.85rem, 2vw, 1.25rem) 2.8rem;
+          font-family: system-ui, "Segoe UI", sans-serif;
+        }
+        .leads-back-link {
+          font-size: 0.88rem;
+          font-weight: 600;
+          color: #64748b;
+          text-decoration: none;
+        }
+        .leads-head {
+          margin-bottom: 1rem;
+          display: flex;
+          flex-wrap: wrap;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 0.8rem;
+        }
+        .leads-title {
+          margin: 0 0 0.35rem 0;
+          font-size: clamp(1.4rem, 2.8vw, 1.85rem);
+          font-weight: 820;
+          letter-spacing: -0.03em;
+          color: #0f172a;
+        }
+        .leads-subtitle {
+          margin: 0;
+          color: #64748b;
+          font-size: 0.95rem;
+          max-width: 60ch;
+        }
+        .leads-csv-btn {
+          padding: 0.56rem 0.95rem;
+          font-size: 0.84rem;
+          font-weight: 700;
+          border-radius: 10px;
+          border: 1px solid #cbd5e1;
+          background: #fff;
+          color: #334155;
+          cursor: pointer;
+        }
+        .leads-csv-btn:disabled {
+          background: #f1f5f9;
+          cursor: not-allowed;
+        }
+        .leads-kpi-grid {
+          display: grid;
+          gap: 0.65rem;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          margin-bottom: 1rem;
+        }
+        .leads-kpi-card {
+          background: linear-gradient(180deg, #fff 0%, #faf5ff 100%);
+          border: 1px solid #e9d5ff;
+          border-radius: 12px;
+          padding: 0.75rem 0.85rem;
+        }
+        .leads-kpi-card p {
+          margin: 0;
+          font-size: 0.76rem;
+          color: #64748b;
+          font-weight: 600;
+        }
+        .leads-kpi-card strong {
+          display: block;
+          margin-top: 0.15rem;
+          font-size: 1.15rem;
+          color: #4c1d95;
+          letter-spacing: -0.02em;
+        }
+        .leads-filters-card {
+          background: #fff;
+          border: 1px solid #e2e8f0;
+          border-radius: 14px;
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+          padding: 1rem 1.15rem;
+          margin-bottom: 1rem;
+        }
+        .leads-section-eyebrow {
+          margin: 0 0 0.75rem 0;
+          font-size: 0.72rem;
+          font-weight: 700;
+          color: #64748b;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+        }
+        .leads-filters-grid {
+          display: grid;
+          gap: 0.85rem;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          align-items: end;
+        }
+        .field-col { display: flex; flex-direction: column; gap: 0.35rem; }
+        .field-col span { font-size: 0.78rem; font-weight: 600; color: #475569; }
+        .field-input {
+          padding: 0.54rem 0.62rem;
+          border-radius: 10px;
+          border: 1px solid #cbd5e1;
+          font-size: 0.88rem;
+          background: #fff;
+          width: 100%;
+          box-sizing: border-box;
+        }
+        .leads-presets-row {
+          margin-top: 0.85rem;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.45rem;
+          align-items: center;
+        }
+        .leads-presets-row > span { font-size: 0.76rem; color: #94a3b8; margin-right: 0.25rem; }
+        .leads-hint {
+          margin: 0 0 0.65rem 0;
+          font-size: 0.84rem;
+          color: #64748b;
+          font-weight: 500;
+        }
+        .leads-table-wrap {
+          background: #fff;
+          border: 1px solid #e2e8f0;
+          border-radius: 14px;
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+          overflow: hidden;
+        }
+        .leads-table-scroll { overflow-x: auto; }
+        .leads-detail-link {
+          font-size: 0.78rem;
+          font-weight: 600;
+          color: #4f46e5;
+          text-decoration: none;
+        }
+        .leads-empty-state {
+          padding: 2.5rem 1.5rem;
+          text-align: center;
+          color: #64748b;
+          font-size: 0.92rem;
+        }
+        .leads-mobile-list { display: none; }
+        @media (max-width: 920px) {
+          .leads-kpi-grid { grid-template-columns: 1fr; }
+          .leads-filters-grid { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 720px) {
+          .leads-head { align-items: flex-start; }
+          .leads-csv-btn { width: 100%; }
+          .leads-filters-grid { grid-template-columns: 1fr; }
+          .leads-table-wrap { display: none; }
+          .leads-mobile-list {
+            display: grid;
+            gap: 0.7rem;
+          }
+          .leads-mobile-card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+            padding: 0.8rem 0.85rem;
+          }
+          .mobile-card-date {
+            margin: 0;
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: #7c3aed;
+            letter-spacing: 0.02em;
+          }
+          .mobile-card-event {
+            margin: 0.28rem 0 0;
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: #0f172a;
+          }
+          .mobile-card-question {
+            margin: 0.32rem 0 0.45rem;
+            font-size: 0.8rem;
+            color: #64748b;
+            line-height: 1.45;
+          }
+          .mobile-card-grid {
+            display: grid;
+            gap: 0.25rem;
+            margin-bottom: 0.55rem;
+            font-size: 0.8rem;
+            color: #334155;
+          }
+        }
+      `}</style>
     </div>
   );
 }
