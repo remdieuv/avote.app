@@ -762,7 +762,9 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
     return () => clearTimeout(t);
   }, [ds, pollId, resultsVoteSignature, poll?.eventVoteState]);
 
-  const voteOuvert = ds === "question" && poll?.status === "ACTIVE";
+  const voteOuvert =
+    ds === "question" &&
+    String(poll?.eventVoteState ?? "").toLowerCase() === "open";
   const voteOuvertResultats =
     String(poll?.eventVoteState ?? "").toLowerCase() === "open";
 

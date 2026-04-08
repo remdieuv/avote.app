@@ -18,11 +18,18 @@ function chronoRestantSecondes(tm) {
   return Math.max(0, tm.totalSec - acc - seg);
 }
 
-const PILL_VOTE = {
+const PILL_VOTE_OPEN = {
   label: "Vote en cours",
   bg: "rgba(34, 197, 94, 0.22)",
   color: "#86efac",
   border: "1px solid rgba(34, 197, 94, 0.5)",
+};
+
+const PILL_VOTE_CLOSED = {
+  label: "Vote fermé",
+  bg: "rgba(148, 163, 184, 0.2)",
+  color: "#cbd5e1",
+  border: "1px solid rgba(148, 163, 184, 0.45)",
 };
 
 /**
@@ -157,6 +164,7 @@ export function ScreenQuestion({
 
   const slugQr =
     typeof joinSlug === "string" && joinSlug.length > 0 ? joinSlug : null;
+  const votePill = voteOuvert ? PILL_VOTE_OPEN : PILL_VOTE_CLOSED;
 
   return (
     <main
@@ -197,12 +205,12 @@ export function ScreenQuestion({
             padding: "0.4rem 0.9rem",
             borderRadius: "9999px",
             marginBottom: "clamp(0.55rem, 1.8vw, 1rem)",
-            background: PILL_VOTE.bg,
-            color: PILL_VOTE.color,
-            border: PILL_VOTE.border,
+            background: votePill.bg,
+            color: votePill.color,
+            border: votePill.border,
           }}
         >
-          {PILL_VOTE.label}
+          {votePill.label}
         </span>
 
         <h1

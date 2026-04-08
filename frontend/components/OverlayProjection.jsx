@@ -623,7 +623,9 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
     return () => window.clearTimeout(t);
   }, [fadeKey]);
 
-  const voteOuvert = ds === "question" && poll?.status === "ACTIVE";
+  const voteOuvert =
+    ds === "question" &&
+    String(poll?.eventVoteState ?? "").toLowerCase() === "open";
   const voteOuvertResultats =
     String(poll?.eventVoteState ?? "").toLowerCase() === "open";
 
