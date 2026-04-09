@@ -79,7 +79,7 @@ function BlocQrVote({ slug, qrScale = 1, compactText = false }) {
     const ro = new ResizeObserver(maj);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [qrScale]);
 
   if (!joinUrl) return null;
 
