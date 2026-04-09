@@ -1043,10 +1043,6 @@ export function PollExperience({
     String(eventVoteStateUi || "").toLowerCase() === "closed" &&
     String(eventDisplayStateUi || "").toLowerCase() !== "results";
 
-  const displayStateForUx = useMemo(() => {
-    return voteStateForUx === "open" ? "question" : "waiting";
-  }, [voteStateForUx]);
-
   const voteStateForUx = useMemo(() => {
     if (
       poll &&
@@ -1057,6 +1053,9 @@ export function PollExperience({
     }
     return eventVoteStateUi;
   }, [poll, eventVoteStateUi]);
+  const displayStateForUx = useMemo(() => {
+    return voteStateForUx === "open" ? "question" : "waiting";
+  }, [voteStateForUx]);
   const liveStateForUx = useMemo(() => {
     if (String(liveScene || "").toLowerCase() === "finished") return "finished";
     return voteStateForUx === "open" ? "voting" : "waiting";
