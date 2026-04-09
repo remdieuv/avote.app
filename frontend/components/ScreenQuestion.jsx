@@ -189,6 +189,7 @@ function BlocQrVote({ slug, qrScale = 1, compactText = false, fullScreen = false
  *   qrScale?: number;
  *   compactQuestionText?: boolean;
  *   fullScreenQr?: boolean;
+ *   compactChrono?: boolean;
  * }} props
  */
 export function ScreenQuestion({
@@ -201,6 +202,7 @@ export function ScreenQuestion({
   qrScale = 1,
   compactQuestionText = false,
   fullScreenQr = false,
+  compactChrono = false,
 }) {
   const secondesChronoVote = useMemo(() => {
     void chronoTick;
@@ -313,7 +315,9 @@ export function ScreenQuestion({
             <p
               style={{
                 margin: 0,
-                fontSize: "clamp(0.85rem, 1.8vw, 1.05rem)",
+                fontSize: compactChrono
+                  ? "clamp(0.72rem, 1.4vw, 0.86rem)"
+                  : "clamp(0.85rem, 1.8vw, 1.05rem)",
                 color: "#c7d2fe",
                 fontWeight: 800,
                 letterSpacing: "0.14em",
@@ -325,9 +329,13 @@ export function ScreenQuestion({
             <p
               style={{
                 margin: "clamp(0.45rem, 1.2vw, 0.85rem) 0 0 0",
-                fontSize: affichageChrono.chronoLong
-                  ? "clamp(1.75rem, 7vw, 4rem)"
-                  : "clamp(3.5rem, 15vw, 8.25rem)",
+                fontSize: compactChrono
+                  ? affichageChrono.chronoLong
+                    ? "clamp(1.2rem, 4.2vw, 2.5rem)"
+                    : "clamp(1.9rem, 7.2vw, 4.25rem)"
+                  : affichageChrono.chronoLong
+                    ? "clamp(1.75rem, 7vw, 4rem)"
+                    : "clamp(3.5rem, 15vw, 8.25rem)",
                 fontWeight: 900,
                 fontVariantNumeric: "tabular-nums",
                 lineHeight: 1,

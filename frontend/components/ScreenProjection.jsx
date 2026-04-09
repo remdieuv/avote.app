@@ -1113,9 +1113,10 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
             (ds === "question" || qToRPhase === "fadeQ")
           }
           joinSlug={slugPublic}
-          qrScale={isModeQrFullscreen ? 2 : isModeXlargeQr ? 1.35 : isModeResultsFocus ? 0.82 : 1}
-          compactQuestionText={isModeQrFullscreen || isModeXlargeQr || isModeResultsFocus}
+          qrScale={isModeQrFullscreen ? 2 : isModeXlargeQr ? 1.35 : isModeResultsFocus ? 1.42 : 1}
+          compactQuestionText={isModeQrFullscreen || isModeXlargeQr}
           fullScreenQr={isModeQrFullscreen}
+          compactChrono={isModeResultsFocus}
         />
       </div>,
     );
@@ -1187,9 +1188,10 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
       chronoTick={chronoTick}
       voteOuvert={voteOuvert}
       joinSlug={slugPublic}
-      qrScale={isModeQrFullscreen ? 2 : isModeXlargeQr ? 1.35 : isModeResultsFocus ? 0.82 : 1}
-      compactQuestionText={isModeQrFullscreen || isModeXlargeQr || isModeResultsFocus}
+      qrScale={isModeQrFullscreen ? 2 : isModeXlargeQr ? 1.35 : isModeResultsFocus ? 1.42 : 1}
+      compactQuestionText={isModeQrFullscreen || isModeXlargeQr}
       fullScreenQr={isModeQrFullscreen}
+      compactChrono={isModeResultsFocus}
     />,
   );
 }
