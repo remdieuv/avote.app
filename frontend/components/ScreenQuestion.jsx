@@ -59,7 +59,23 @@ function BlocQrVote({ slug, qrScale = 1, compactText = false }) {
 
   useLayoutEffect(() => {
     const el = zoneRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
+    if (!el) return;
+    const scaleSafe = Math.max(0.8, Math.min(1.8, qrScale));
+
+    // Mode grande salle: taille forcée depuis le viewport (différence visible garantie)
+    if (typeof window !== "undefined" && scaleSafe > 1.1) {
+      const applyViewportSize = () => {
+        const forced = Math.round(
+          Math.min(window.innerWidth * 0.42, window.innerHeight * 0.52),
+        );
+        setCotePx(Math.max(260, Math.min(forced, 1700)));
+      };
+      applyViewportSize();
+      window.addEventListener("resize", applyViewportSize);
+      return () => window.removeEventListener("resize", applyViewportSize);
+    }
+
+    if (typeof ResizeObserver === "undefined") return;
     const maj = () => {
       const w = el.clientWidth;
       const h = el.clientHeight;
@@ -72,19 +88,9 @@ function BlocQrVote({ slug, qrScale = 1, compactText = false }) {
         Math.max(0, h - reserveLegende - padCarte),
       );
       const avecMarge = Math.floor(Math.max(0, brut) * 1);
-      const scaleSafe = Math.max(0.8, Math.min(1.8, qrScale));
       let scaled = Math.round(avecMarge * scaleSafe);
-
-      // Mode grande salle: privilégie une cible viewport franche (QR vraiment plus grand).
-      if (typeof window !== "undefined" && scaleSafe > 1.1) {
-        const viewportTarget = Math.round(
-          Math.min(window.innerWidth * 0.42, window.innerHeight * 0.52),
-        );
-        scaled = Math.max(scaled, viewportTarget);
-      }
-
-      const minPx = scaleSafe > 1.1 ? 250 : 170;
-      const maxPx = scaleSafe > 1.1 ? 1650 : 1400;
+      const minPx = 170;
+      const maxPx = 1400;
       setCotePx(Math.max(minPx, Math.min(scaled, maxPx)));
     };
     maj();
