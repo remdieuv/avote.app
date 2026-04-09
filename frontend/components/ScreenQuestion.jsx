@@ -75,10 +75,10 @@ function BlocQrVote({ slug, qrScale = 1, compactText = false }) {
       const scaleSafe = Math.max(0.8, Math.min(1.8, qrScale));
       let scaled = Math.round(avecMarge * scaleSafe);
 
-      // Mode grande salle: garantit une vraie hausse même si la zone flex est trop contrainte.
+      // Mode grande salle: privilégie une cible viewport franche (QR vraiment plus grand).
       if (typeof window !== "undefined" && scaleSafe > 1.1) {
         const viewportTarget = Math.round(
-          Math.min(window.innerWidth * 0.34, window.innerHeight * 0.42),
+          Math.min(window.innerWidth * 0.42, window.innerHeight * 0.52),
         );
         scaled = Math.max(scaled, viewportTarget);
       }
