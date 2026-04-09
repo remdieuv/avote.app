@@ -30,7 +30,6 @@ import {
   LIVE_UX_BODY_POLL_NO_POLL_SLUG,
   LIVE_UX_BODY_POLL_WAITING,
   LIVE_UX_STATE,
-  deriveDisplayStateFromLive,
   getUxState,
   getLiveStatePresentation,
   getLiveStateTone,
@@ -666,9 +665,18 @@ export function PollExperience({
     };
   }, [eventId, pollId, slugPublic, loadPoll, loadEventMetaForBranding]);
 
+  const voteStateParticipant = String(
+    poll?.eventVoteState ?? eventVoteStateUi ?? "",
+  ).toLowerCase();
+  const sceneParticipant =
+    String(liveScene || "").toLowerCase() === "finished"
+      ? "finished"
+      : voteStateParticipant === "open"
+        ? "voting"
+        : "waiting";
   const affichageResultatsPublic =
-    poll?.eventDisplayState === "results" ||
-    String(liveScene || "").toLowerCase() === "results";
+    voteStateParticipant === "closed" ||
+    String(liveScene || "").toLowerCase() === "finished";
 
   /** Bloc sous le formulaire : après vote, déjà voté (stockage), ou régie en mode résultats live */
   const showBlocResultatsEnDirect =
@@ -1036,18 +1044,8 @@ export function PollExperience({
     String(eventDisplayStateUi || "").toLowerCase() !== "results";
 
   const displayStateForUx = useMemo(() => {
-    if (
-      poll &&
-      typeof poll.eventDisplayState === "string" &&
-      poll.eventDisplayState.trim()
-    ) {
-      return poll.eventDisplayState.toLowerCase();
-    }
-    if (typeof eventDisplayStateUi === "string" && eventDisplayStateUi.trim()) {
-      return eventDisplayStateUi.toLowerCase();
-    }
-    return deriveDisplayStateFromLive(liveScene);
-  }, [poll, eventDisplayStateUi, liveScene]);
+    return voteStateForUx === "open" ? "question" : "waiting";
+  }, [voteStateForUx]);
 
   const voteStateForUx = useMemo(() => {
     if (
@@ -1059,6 +1057,10 @@ export function PollExperience({
     }
     return eventVoteStateUi;
   }, [poll, eventVoteStateUi]);
+  const liveStateForUx = useMemo(() => {
+    if (String(liveScene || "").toLowerCase() === "finished") return "finished";
+    return voteStateForUx === "open" ? "voting" : "waiting";
+  }, [liveScene, voteStateForUx]);
 
   const pollUxCtx = useMemo(
     () => ({
@@ -1089,11 +1091,11 @@ export function PollExperience({
   const ux = useMemo(
     () =>
       getUxState({
-        liveState: liveScene,
+        liveState: liveStateForUx,
         voteState: voteStateForUx,
         displayState: displayStateForUx,
       }),
-    [liveScene, voteStateForUx, displayStateForUx],
+    [liveStateForUx, voteStateForUx, displayStateForUx],
   );
   const votingLabel = useMemo(
     () =>
@@ -1394,7 +1396,7 @@ export function PollExperience({
         !error &&
         !poll &&
         (sansPollMaisVoteFermeSansResultatsSalle ||
-          String(liveScene || "").toLowerCase() === "waiting" ||
+          sceneParticipant === "waiting" ||
           pollFetch404Slug) && (
           <div
             style={{
@@ -1421,7 +1423,7 @@ export function PollExperience({
                 accent={accent}
                 isDark={isDark}
               />
-            ) : String(liveScene || "").toLowerCase() === "waiting" ||
+            ) : sceneParticipant === "waiting" ||
               pollFetch404Slug ? (
               <>
                 <h2

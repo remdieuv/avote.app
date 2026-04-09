@@ -232,6 +232,9 @@ function pollToJson(poll) {
     eventDisplayState: poll.event?.displayState
       ? String(poll.event.displayState).toLowerCase()
       : null,
+    eventScreenDisplayState: poll.event?.screenDisplayState
+      ? String(poll.event.screenDisplayState).toLowerCase()
+      : null,
     autoReveal: Boolean(poll.event?.autoReveal),
     autoRevealDelaySec: poll.event?.autoRevealDelaySec ?? 5,
     autoRevealShowResultsAt:
@@ -462,6 +465,9 @@ async function emitEventLiveUpdated(io, eventId) {
     liveState: event.liveState.toLowerCase(),
     voteState: String(event.voteState).toLowerCase(),
     displayState: String(event.displayState).toLowerCase(),
+    screenDisplayState: event.screenDisplayState
+      ? String(event.screenDisplayState).toLowerCase()
+      : null,
     activePollId: event.activePollId,
     autoReveal: event.autoReveal,
     autoRevealDelaySec: event.autoRevealDelaySec,
@@ -1254,6 +1260,9 @@ app.get("/events/slug/:slug", async (req, res) => {
       liveState: eventApres.liveState.toLowerCase(),
       voteState: String(eventApres.voteState).toLowerCase(),
       displayState: String(eventApres.displayState).toLowerCase(),
+      screenDisplayState: eventApres.screenDisplayState
+        ? String(eventApres.screenDisplayState).toLowerCase()
+        : null,
       activePollId: eventApres.activePollId,
       autoReveal: eventApres.autoReveal,
       autoRevealDelaySec: eventApres.autoRevealDelaySec,
@@ -1305,6 +1314,9 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
       liveState: event.liveState.toLowerCase(),
       voteState: String(event.voteState).toLowerCase(),
       displayState: String(event.displayState).toLowerCase(),
+      screenDisplayState: event.screenDisplayState
+        ? String(event.screenDisplayState).toLowerCase()
+        : null,
       activePollId: event.activePollId,
       autoReveal: event.autoReveal,
       autoRevealDelaySec: event.autoRevealDelaySec,
@@ -3275,22 +3287,21 @@ io.on("connection", (socket) => {
     try {
       const ev = await prisma.event.findUnique({ where: { id: eventId } });
       if (!ev) return;
-      await annulationAutoRevealProgrammee(eventId);
-      const live = computeLiveState(ev.voteState, displayState);
       await prisma.event.update({
         where: { id: eventId },
-        data: { displayState, liveState: live },
+        data: { screenDisplayState: displayState },
       });
       const fresh = await prisma.event.findUnique({ where: { id: eventId } });
       if (!fresh) return;
       io.to(eventId).emit("screen:update", {
         eventId,
         type,
-        displayState: String(fresh.displayState).toLowerCase(),
+        displayState: String(
+          fresh.screenDisplayState ?? fresh.displayState,
+        ).toLowerCase(),
         voteState: String(fresh.voteState).toLowerCase(),
         pollId: fresh.activePollId,
       });
-      await emitEventLiveUpdated(io, eventId);
     } catch (e) {
       console.error("screen:action", e);
     }

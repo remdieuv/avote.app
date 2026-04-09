@@ -308,8 +308,10 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
     setEventId(meta.id);
     setLiveScene(meta.liveState ?? null);
     setDisplayState(
-      typeof meta.displayState === "string"
-        ? meta.displayState.toLowerCase()
+      typeof meta.screenDisplayState === "string"
+        ? meta.screenDisplayState.toLowerCase()
+        : typeof meta.displayState === "string"
+          ? meta.displayState.toLowerCase()
         : deriveDisplayFromLive(meta.liveState),
     );
     const pc = meta.primaryColor;
@@ -534,7 +536,9 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
       setLoading(false);
 
       setLiveScene(payload.liveState ?? null);
-      if (typeof payload.displayState === "string") {
+      if (typeof payload.screenDisplayState === "string") {
+        setDisplayState(payload.screenDisplayState.toLowerCase());
+      } else if (typeof payload.displayState === "string") {
         setDisplayState(payload.displayState.toLowerCase());
       } else {
         setDisplayState(deriveDisplayFromLive(payload.liveState));
@@ -545,7 +549,9 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
         if (payload.poll.eventLiveState) {
           setLiveScene(payload.poll.eventLiveState);
         }
-        if (typeof payload.poll.eventDisplayState === "string") {
+        if (typeof payload.poll.eventScreenDisplayState === "string") {
+          setDisplayState(payload.poll.eventScreenDisplayState.toLowerCase());
+        } else if (typeof payload.poll.eventDisplayState === "string") {
           setDisplayState(payload.poll.eventDisplayState.toLowerCase());
         }
         setError(null);
@@ -570,7 +576,9 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
       if (data.eventLiveState) {
         setLiveScene(data.eventLiveState);
       }
-      if (typeof data.eventDisplayState === "string") {
+      if (typeof data.eventScreenDisplayState === "string") {
+        setDisplayState(data.eventScreenDisplayState.toLowerCase());
+      } else if (typeof data.eventDisplayState === "string") {
         setDisplayState(data.eventDisplayState.toLowerCase());
       }
     }

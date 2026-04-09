@@ -458,9 +458,11 @@ export function JoinLiveHub({ slug }) {
     };
   }, [eventId, fetchMeta]);
 
-  const scene = String(liveState || "").toLowerCase();
+  const sceneRaw = String(liveState || "").toLowerCase();
   const vs = String(voteState || "").toLowerCase();
-  const ds = String(displayState || "").toLowerCase();
+  const scene =
+    sceneRaw === "finished" ? "finished" : vs === "open" ? "voting" : "waiting";
+  const ds = scene === "voting" ? "question" : "waiting";
 
   const enAttenteRevealAuto = useMemo(() => {
     if (vs !== "closed") return false;

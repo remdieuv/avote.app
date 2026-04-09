@@ -102,6 +102,8 @@ model Event {
   liveState    LiveState   @default(WAITING)
   /** Affichage écran salle : question / résultats / noir / attente */
   displayState DisplayState @default(WAITING)
+  /** Affichage projection régie (optionnel) — si null, fallback sur displayState */
+  screenDisplayState DisplayState?
   /** Participants peuvent voter (indépendant de displayState) */
   voteState    VoteState    @default(CLOSED)
   /** Révélation automatique des résultats après fermeture du vote (délai en secondes) */
