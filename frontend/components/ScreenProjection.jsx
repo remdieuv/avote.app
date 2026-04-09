@@ -171,6 +171,8 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
       : projectionMode === "results_focus"
         ? "Mode: Résultats focus"
         : null;
+  const isModeXlargeQr = projectionMode === "xlarge_qr";
+  const isModeResultsFocus = projectionMode === "results_focus";
 
   const applyEventSlugMeta = useCallback((meta) => {
     setEventId(meta.id);
@@ -1107,8 +1109,8 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
             (ds === "question" || qToRPhase === "fadeQ")
           }
           joinSlug={slugPublic}
-          qrScale={projectionMode === "xlarge_qr" ? 1.35 : 1}
-          compactQuestionText={projectionMode === "xlarge_qr"}
+          qrScale={isModeXlargeQr ? 1.35 : isModeResultsFocus ? 0.82 : 1}
+          compactQuestionText={isModeXlargeQr || isModeResultsFocus}
         />
       </div>,
     );
@@ -1180,8 +1182,8 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
       chronoTick={chronoTick}
       voteOuvert={voteOuvert}
       joinSlug={slugPublic}
-      qrScale={projectionMode === "xlarge_qr" ? 1.35 : 1}
-      compactQuestionText={projectionMode === "xlarge_qr"}
+      qrScale={isModeXlargeQr ? 1.35 : isModeResultsFocus ? 0.82 : 1}
+      compactQuestionText={isModeXlargeQr || isModeResultsFocus}
     />,
   );
 }
