@@ -1372,7 +1372,8 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
   }
 });
 
-/** Mise à jour champ description (régie / admin) */
+/** Mise à jour titre et/ou description (régie / admin) */
+const EVENT_TITLE_MAX_LEN = 200;
 app.patch("/events/:eventId", requireAuth, async (req, res) => {
   try {
     const { eventId } = req.params;
@@ -1381,29 +1382,60 @@ app.patch("/events/:eventId", requireAuth, async (req, res) => {
       return res.status(owned.status).json({ error: "Événement introuvable." });
     }
     const body = req.body ?? {};
-    if (!Object.prototype.hasOwnProperty.call(body, "description")) {
-      return res
-        .status(400)
-        .json({ error: "Corps attendu : { description: string | null }." });
+    const hasTitle = Object.prototype.hasOwnProperty.call(body, "title");
+    const hasDescription = Object.prototype.hasOwnProperty.call(
+      body,
+      "description",
+    );
+    if (!hasTitle && !hasDescription) {
+      return res.status(400).json({
+        error:
+          "Corps attendu : au moins un des champs { title: string, description: string | null }.",
+      });
     }
-    const d = body.description;
-    let value;
-    if (d === null) {
-      value = null;
-    } else if (typeof d === "string") {
-      const t = d.trim();
-      value = t === "" ? null : t.slice(0, 2000);
-    } else {
-      return res
-        .status(400)
-        .json({ error: "description doit être une chaîne ou null." });
+    const data = {};
+    if (hasTitle) {
+      if (typeof body.title !== "string") {
+        return res.status(400).json({ error: "title doit être une chaîne." });
+      }
+      const t = body.title.trim();
+      if (t === "") {
+        return res
+          .status(400)
+          .json({ error: "Le titre ne peut pas être vide." });
+      }
+      if (t.length > EVENT_TITLE_MAX_LEN) {
+        return res.status(400).json({
+          error: `Titre trop long (max. ${EVENT_TITLE_MAX_LEN} caractères).`,
+        });
+      }
+      data.title = t;
+    }
+    if (hasDescription) {
+      const d = body.description;
+      let value;
+      if (d === null) {
+        value = null;
+      } else if (typeof d === "string") {
+        const t = d.trim();
+        value = t === "" ? null : t.slice(0, 2000);
+      } else {
+        return res
+          .status(400)
+          .json({ error: "description doit être une chaîne ou null." });
+      }
+      data.description = value;
     }
     const event = await prisma.event.update({
       where: { id: eventId },
-      data: { description: value },
-      select: { id: true, description: true },
+      data,
+      select: { id: true, title: true, description: true },
     });
-    return res.json({ id: event.id, description: event.description });
+    return res.json({
+      id: event.id,
+      title: event.title,
+      description: event.description,
+    });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Erreur serveur." });

@@ -2655,6 +2655,11 @@ function RegieSidebarInner({
   const [savingDesc, setSavingDesc] = useState(false);
   const [descError, setDescError] = useState(null);
 
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [savingTitle, setSavingTitle] = useState(false);
+  const [titleError, setTitleError] = useState(null);
+
   const badge =
     sceneBadge ??
     getEventUxSceneBadge({ liveState: normalizeRegieLiveStateForUx(liveState) });
@@ -2672,6 +2677,42 @@ function RegieSidebarInner({
     setDraftDesc(hasCustomDescription ? descriptionStored.trim() : "");
     setDescError(null);
     setEditingDesc(true);
+  }
+
+  function ouvrirEditionTitre() {
+    setDraftTitle((title || "").trim());
+    setTitleError(null);
+    setEditingTitle(true);
+  }
+
+  async function enregistrerTitre() {
+    if (!eventId || !onDescriptionSaved) return;
+    const trimmed = draftTitle.trim();
+    if (trimmed === "") {
+      setTitleError("Le titre ne peut pas être vide.");
+      return;
+    }
+    setSavingTitle(true);
+    setTitleError(null);
+    try {
+      const res = await adminFetch(`${apiBaseBrowser()}/events/${eventId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: trimmed.slice(0, 200),
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body.error || `Erreur ${res.status}`);
+      }
+      setEditingTitle(false);
+      await onDescriptionSaved();
+    } catch (e) {
+      setTitleError(e.message || "Enregistrement impossible.");
+    } finally {
+      setSavingTitle(false);
+    }
   }
 
   async function enregistrerDescription() {
@@ -2806,18 +2847,97 @@ function RegieSidebarInner({
         >
           Régie
         </p>
-        <p
-          style={{
-            margin: 0,
-            fontSize: "0.98rem",
-            fontWeight: 800,
-            color: "#111827",
-            lineHeight: 1.3,
-            letterSpacing: "-0.02em",
-          }}
-        >
-          {title || "Événement"}
-        </p>
+        {!editingTitle ? (
+          <p
+            style={{
+              margin: 0,
+              fontSize: "0.98rem",
+              fontWeight: 800,
+              color: "#111827",
+              lineHeight: 1.3,
+              letterSpacing: "-0.02em",
+            }}
+          >
+            {title || "Événement"}
+          </p>
+        ) : (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.45rem",
+            }}
+          >
+            <label
+              htmlFor="regie-title-edit"
+              style={{
+                fontSize: "0.72rem",
+                fontWeight: 600,
+                color: "#475569",
+              }}
+            >
+              Titre de l’événement
+            </label>
+            <input
+              id="regie-title-edit"
+              type="text"
+              value={draftTitle}
+              onChange={(e) => setDraftTitle(e.target.value)}
+              disabled={savingTitle}
+              maxLength={200}
+              autoComplete="off"
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "0.45rem 0.55rem",
+                fontSize: "0.8125rem",
+                fontWeight: 700,
+                borderRadius: "8px",
+                border: "1px solid #cbd5e1",
+                fontFamily: "inherit",
+              }}
+            />
+            {titleError ? (
+              <p
+                style={{
+                  color: "#b91c1c",
+                  fontSize: "0.72rem",
+                  margin: 0,
+                }}
+                role="alert"
+              >
+                {titleError}
+              </p>
+            ) : null}
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "0.4rem",
+              }}
+            >
+              <button
+                type="button"
+                disabled={savingTitle}
+                onClick={() => void enregistrerTitre()}
+                style={btnPrimary(savingTitle)}
+              >
+                Enregistrer
+              </button>
+              <button
+                type="button"
+                disabled={savingTitle}
+                onClick={() => {
+                  setEditingTitle(false);
+                  setTitleError(null);
+                }}
+                style={btnGhost}
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        )}
         {slug ? (
           <code
             style={{
@@ -2831,6 +2951,19 @@ function RegieSidebarInner({
           >
             {slug}
           </code>
+        ) : null}
+        {eventId && onDescriptionSaved && !editingTitle ? (
+          <button
+            type="button"
+            onClick={ouvrirEditionTitre}
+            style={{
+              ...btnGhost,
+              fontSize: "0.75rem",
+              alignSelf: "flex-start",
+            }}
+          >
+            Modifier le titre
+          </button>
         ) : null}
       </div>
 
