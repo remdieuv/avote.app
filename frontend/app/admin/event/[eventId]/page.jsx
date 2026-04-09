@@ -850,13 +850,43 @@ function BlocProjectionEcran({
   onAutoRotateResultsSecChange,
 }) {
   const [clientPret, setClientPret] = useState(false);
+  const [projectionMode, setProjectionMode] = useState("standard");
 
   useEffect(() => {
     if (typeof window !== "undefined") setClientPret(true);
   }, []);
+  useEffect(() => {
+    if (typeof window === "undefined" || !slug) return;
+    const raw = window.localStorage.getItem(`avote_projection_mode_${slug}`);
+    const val = String(raw || "").trim().toLowerCase();
+    if (val === "xlarge_qr" || val === "results_focus" || val === "standard") {
+      setProjectionMode(val);
+    }
+  }, [slug]);
 
   const enc = encodeURIComponent(slug);
-  const pathScreen = `/screen/${enc}`;
+  const pathScreen = `/screen/${enc}?pm=${encodeURIComponent(projectionMode)}`;
+  const projectionModeLabel =
+    projectionMode === "xlarge_qr"
+      ? "Grande salle (QR XXL)"
+      : projectionMode === "results_focus"
+        ? "Résultats focus"
+        : "Standard";
+  function changeProjectionMode(nextMode) {
+    const v = String(nextMode || "").trim().toLowerCase();
+    const safe =
+      v === "xlarge_qr" || v === "results_focus" || v === "standard"
+        ? v
+        : "standard";
+    setProjectionMode(safe);
+    if (typeof window !== "undefined" && slug) {
+      try {
+        window.localStorage.setItem(`avote_projection_mode_${slug}`, safe);
+      } catch {
+        // ignore
+      }
+    }
+  }
 
   function ouvrirEcran() {
     const url = lienDiffusionAbsolu(pathScreen);
@@ -991,6 +1021,73 @@ function BlocProjectionEcran({
         <button type="button" onClick={ouvrirEcran} style={btnOuvrir}>
           Ouvrir l’écran
         </button>
+      </div>
+      <div
+        style={{
+          marginBottom: "1.15rem",
+          padding: desktop ? "0.8rem 0.95rem" : "0.72rem 0.8rem",
+          borderRadius: "10px",
+          background: "rgba(255,255,255,0.58)",
+          border: "1px solid rgba(91, 33, 182, 0.2)",
+        }}
+      >
+        <p
+          style={{
+            margin: "0 0 0.45rem 0",
+            fontSize: "0.65rem",
+            fontWeight: 700,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "#7c3aed",
+            opacity: 0.9,
+          }}
+        >
+          Mode d'affichage projection
+        </p>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "0.45rem",
+          }}
+        >
+          {[
+            { id: "standard", label: "Standard" },
+            { id: "xlarge_qr", label: "Grande salle (QR XXL)" },
+            { id: "results_focus", label: "Résultats focus" },
+          ].map((m) => {
+            const on = projectionMode === m.id;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => changeProjectionMode(m.id)}
+                style={{
+                  padding: "0.38rem 0.65rem",
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  borderRadius: "8px",
+                  border: on ? "1px solid #6d28d9" : "1px solid #d1d5db",
+                  background: on ? "#f5f3ff" : "#fff",
+                  color: on ? "#5b21b6" : "#475569",
+                  cursor: "pointer",
+                }}
+              >
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+        <p
+          style={{
+            margin: "0.45rem 0 0 0",
+            fontSize: "0.72rem",
+            color: "#64748b",
+            lineHeight: 1.35,
+          }}
+        >
+          Mode actif : <strong style={{ color: "#111827" }}>{projectionModeLabel}</strong>
+        </p>
       </div>
 
       <div style={{ marginBottom: "1.35rem" }}>

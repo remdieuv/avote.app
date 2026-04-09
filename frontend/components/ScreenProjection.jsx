@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useSearchParams } from "next/navigation";
 import { io } from "socket.io-client";
 import { ScreenAutoRevealWait } from "./ScreenAutoRevealWait";
 import { ScreenQuestion } from "./ScreenQuestion";
@@ -116,6 +117,7 @@ function roomOverlayAlpha(strength) {
  * }} props
  */
 export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
+  const searchParams = useSearchParams();
   const [poll, setPoll] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -156,6 +158,13 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
   );
   const [questionFadeOp, setQuestionFadeOp] = useState(1);
   const [resultsFadeOp, setResultsFadeOp] = useState(1);
+  const projectionMode = useMemo(() => {
+    const raw = String(searchParams?.get("pm") || "standard")
+      .trim()
+      .toLowerCase();
+    if (raw === "xlarge_qr" || raw === "results_focus") return raw;
+    return "standard";
+  }, [searchParams]);
 
   const applyEventSlugMeta = useCallback((meta) => {
     setEventId(meta.id);
@@ -1071,6 +1080,8 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
             (ds === "question" || qToRPhase === "fadeQ")
           }
           joinSlug={slugPublic}
+          qrScale={projectionMode === "xlarge_qr" ? 1.35 : 1}
+          compactQuestionText={projectionMode === "xlarge_qr"}
         />
       </div>,
     );
@@ -1142,6 +1153,8 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
       chronoTick={chronoTick}
       voteOuvert={voteOuvert}
       joinSlug={slugPublic}
+      qrScale={projectionMode === "xlarge_qr" ? 1.35 : 1}
+      compactQuestionText={projectionMode === "xlarge_qr"}
     />,
   );
 }

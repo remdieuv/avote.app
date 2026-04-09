@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { QrAccesVoteEcran } from "@/components/QrAccesVoteEcran";
 import { ScreenProjection } from "@/components/ScreenProjection";
 import { API_URL } from "@/lib/config";
@@ -10,7 +10,11 @@ export default function ProjectionSallePage() {
   const params = useParams();
   const slugParam = params?.slug;
   const slug = typeof slugParam === "string" ? slugParam : slugParam?.[0];
+  const searchParams = useSearchParams();
   const [surface, setSurface] = useState("other");
+  const projectionMode = String(searchParams?.get("pm") || "standard")
+    .trim()
+    .toLowerCase();
 
   const getPollUrl = useMemo(() => {
     return () => {
@@ -44,7 +48,7 @@ export default function ProjectionSallePage() {
         getPollUrl={getPollUrl}
         onSurfaceChange={setSurface}
       />
-      {surface !== "question" ? (
+      {surface !== "question" && projectionMode !== "results_focus" ? (
         <QrAccesVoteEcran slug={slug} compact={surface === "results"} />
       ) : null}
     </>

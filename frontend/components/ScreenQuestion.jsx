@@ -43,9 +43,9 @@ const PILL_VOTE_CLOSED = {
 
 /**
  * Bloc QR responsive : occupe l’espace restant sans faire défiler la page.
- * @param {{ slug: string }} props
+ * @param {{ slug: string; qrScale?: number; compactText?: boolean }} props
  */
-function BlocQrVote({ slug }) {
+function BlocQrVote({ slug, qrScale = 1, compactText = false }) {
   const zoneRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const [cotePx, setCotePx] = useState(200);
   const [joinUrl, setJoinUrl] = useState("");
@@ -72,7 +72,8 @@ function BlocQrVote({ slug }) {
         Math.max(0, h - reserveLegende - padCarte),
       );
       const avecMarge = Math.floor(Math.max(0, brut) * 1);
-      setCotePx(Math.max(190, Math.min(avecMarge, 1300)));
+      const scaled = Math.round(avecMarge * Math.max(0.8, Math.min(1.55, qrScale)));
+      setCotePx(Math.max(190, Math.min(scaled, 1400)));
     };
     maj();
     const ro = new ResizeObserver(maj);
@@ -99,11 +100,11 @@ function BlocQrVote({ slug }) {
       <div
         style={{
           flex: "0 0 auto",
-        padding: "clamp(0.5rem, 1.4vw, 0.95rem)",
-        borderRadius: "clamp(16px, 3vw, 26px)",
+          padding: "clamp(0.5rem, 1.4vw, 0.95rem)",
+          borderRadius: "clamp(16px, 3vw, 26px)",
           background: "#ffffff",
           boxShadow:
-          "0 22px 64px rgba(0, 0, 0, 0.44), 0 0 0 1px rgba(15, 23, 42, 0.06)",
+            "0 22px 64px rgba(0, 0, 0, 0.44), 0 0 0 1px rgba(15, 23, 42, 0.06)",
           lineHeight: 0,
         }}
       >
@@ -119,7 +120,9 @@ function BlocQrVote({ slug }) {
       <p
         style={{
           margin: 0,
-          fontSize: "clamp(1.55rem, 5.2vw, 3.35rem)",
+          fontSize: compactText
+            ? "clamp(1.25rem, 4.2vw, 2.3rem)"
+            : "clamp(1.55rem, 5.2vw, 3.35rem)",
           fontWeight: 800,
           color: "#f1f5f9",
           letterSpacing: "0.03em",
@@ -143,6 +146,8 @@ function BlocQrVote({ slug }) {
  *   chronoTick: number;
  *   voteOuvert: boolean;
  *   joinSlug: string | null | undefined;
+ *   qrScale?: number;
+ *   compactQuestionText?: boolean;
  * }} props
  */
 export function ScreenQuestion({
@@ -152,6 +157,8 @@ export function ScreenQuestion({
   chronoTick,
   voteOuvert,
   joinSlug,
+  qrScale = 1,
+  compactQuestionText = false,
 }) {
   const secondesChronoVote = useMemo(() => {
     void chronoTick;
@@ -226,6 +233,9 @@ export function ScreenQuestion({
           style={{
             margin: 0,
             fontSize: "clamp(1.65rem, 6vw, 4.25rem)",
+            ...(compactQuestionText
+              ? { fontSize: "clamp(1.3rem, 4.5vw, 2.7rem)" }
+              : {}),
             fontWeight: 900,
             lineHeight: 1.08,
             letterSpacing: "-0.035em",
@@ -321,7 +331,13 @@ export function ScreenQuestion({
         </p>
       )}
 
-      {slugQr ? <BlocQrVote slug={slugQr} /> : null}
+      {slugQr ? (
+        <BlocQrVote
+          slug={slugQr}
+          qrScale={qrScale}
+          compactText={compactQuestionText}
+        />
+      ) : null}
     </main>
   );
 }
