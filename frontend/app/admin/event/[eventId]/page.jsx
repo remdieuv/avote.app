@@ -4535,21 +4535,37 @@ export default function RegieEventPage() {
             >
               Tirer un gagnant maintenant ?
             </h3>
+            <p
+              style={{
+                margin: "0.55rem 0 0 0",
+                fontSize: "0.9rem",
+                color: "#4b5563",
+              }}
+            >
+              Lot à gagner :{" "}
+              <strong
+                style={{
+                  color: "#5b21b6",
+                  fontWeight: 800,
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {String(activePoll?.contestPrize || "").trim() || "Lot à gagner non précisé"}
+              </strong>
+            </p>
             <p style={{ margin: "0.55rem 0 0 0", fontSize: "0.88rem", color: "#4b5563" }}>
               Participants éligibles :{" "}
               <strong style={{ color: "#111827" }}>{contestEligibleCount}</strong>
             </p>
-            <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.86rem", color: "#4b5563" }}>
+            <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.88rem", color: "#4b5563" }}>
               Gagnants tirés :{" "}
               <strong style={{ color: "#111827" }}>
                 {activeContestTotalWinners} / {activeContestWinnerQuota}
               </strong>
             </p>
-            {activePoll?.contestPrize ? (
-              <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.86rem", color: "#4b5563" }}>
-                Lot : <strong style={{ color: "#111827" }}>{activePoll.contestPrize}</strong>
-              </p>
-            ) : null}
+            <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.82rem", color: "#64748b" }}>
+              Confirmez le tirage pour sélectionner le prochain gagnant.
+            </p>
             <div
               style={{
                 marginTop: "0.9rem",
@@ -5114,6 +5130,25 @@ export default function RegieEventPage() {
               <p
                 style={{
                   margin: 0,
+                  fontSize: desktop ? "1rem" : "0.92rem",
+                  fontWeight: 800,
+                  color: "#111827",
+                }}
+              >
+                Lot à gagner :{" "}
+                <span
+                  style={{
+                    color: "#5b21b6",
+                    fontWeight: 800,
+                    overflowWrap: "anywhere",
+                  }}
+                >
+                  {String(activePoll?.contestPrize || "").trim() || "Lot à gagner non précisé"}
+                </span>
+              </p>
+              <p
+                style={{
+                  margin: "0.35rem 0 0 0",
                   fontSize: desktop ? "1rem" : "0.92rem",
                   fontWeight: 800,
                   color: "#111827",
