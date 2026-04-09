@@ -280,6 +280,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
   const [joinUrl, setJoinUrl] = useState("");
   const [panelOpacity, setPanelOpacity] = useState(1);
   const [resultsBarsAnimated, setResultsBarsAnimated] = useState(false);
+  const [contestWinners, setContestWinners] = useState([]);
 
   const evenementInvalideRef = useRef(false);
   const loadPollAbortRef = useRef(null);
@@ -625,6 +626,33 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
       }),
     [modeOverride, ds, enAttenteAutoReveal, liveScene],
   );
+
+  useEffect(() => {
+    const isContest = String(poll?.type || "").toUpperCase() === "CONTEST_ENTRY";
+    if (!isContest || !poll?.id || !poll?.eventSlug) {
+      setContestWinners([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const qs = new URLSearchParams({ pollId: String(poll.id) });
+        const res = await fetch(
+          `${API_URL}/p/${encodeURIComponent(poll.eventSlug)}/contest-status?${qs.toString()}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        if (!data || cancelled) return;
+        setContestWinners(Array.isArray(data.winners) ? data.winners : []);
+      } catch {
+        // silent
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [poll?.id, poll?.eventSlug, poll?.options]);
   const overlayVoteState = useMemo(() => {
     if (typeof poll?.eventVoteState === "string" && poll.eventVoteState.trim()) {
       return poll.eventVoteState;
@@ -997,6 +1025,26 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
                 >
                   Participants inscrits : {contestEligibleCountFromPoll(poll)}
                 </p>
+                {contestWinners.length > 0 ? (
+                  <div
+                    style={{
+                      marginTop: "0.5rem",
+                      borderTop: `1px solid ${theme === "light" ? "rgba(91,33,182,0.22)" : "rgba(167,139,250,0.28)"}`,
+                      paddingTop: "0.45rem",
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: `calc(${v.rowRem} * 0.9)`, color: th.textMuted, fontWeight: 700 }}>
+                      Gagnants tirés
+                    </p>
+                    <ol style={{ margin: "0.3rem 0 0 1rem", padding: 0, color: th.text, fontSize: `calc(${v.rowRem} * 0.9)` }}>
+                      {contestWinners.map((w) => (
+                        <li key={String(w.id)} style={{ marginBottom: "0.12rem" }}>
+                          {String(w.displayName || "Gagnant")} - {String(w.displayContact || "")}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                ) : null}
               </div>
             ) : (
             <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>

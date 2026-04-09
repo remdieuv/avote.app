@@ -235,6 +235,8 @@ export function PollExperience({
   const [leadSubmitting, setLeadSubmitting] = useState(false);
   const [leadSuccess, setLeadSuccess] = useState(false);
   const [leadError, setLeadError] = useState(null);
+  const [contestPublicWinners, setContestPublicWinners] = useState([]);
+  const [isContestWinnerMe, setIsContestWinnerMe] = useState(false);
   const [storageVerifie, setStorageVerifie] = useState(false);
   /** Barres résultats : anim 0% → % après paint */
   const [resultsBarsAnimated, setResultsBarsAnimated] = useState(false);
@@ -815,6 +817,37 @@ export function PollExperience({
 
   const isMultipleChoice = poll?.type === "MULTIPLE_CHOICE";
   const isContestEntry = String(poll?.type || "").toUpperCase() === "CONTEST_ENTRY";
+
+  useEffect(() => {
+    if (!poll?.id || !isContestEntry || !poll?.eventSlug) {
+      setContestPublicWinners([]);
+      setIsContestWinnerMe(false);
+      return;
+    }
+    const voterSessionId = getOrCreateVoterSessionId();
+    const qs = new URLSearchParams();
+    qs.set("pollId", String(poll.id));
+    if (voterSessionId) qs.set("voterSessionId", voterSessionId);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `${API_URL}/p/${encodeURIComponent(poll.eventSlug)}/contest-status?${qs.toString()}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        if (!data || cancelled) return;
+        setContestPublicWinners(Array.isArray(data.winners) ? data.winners : []);
+        setIsContestWinnerMe(Boolean(data.isCurrentVoterWinner));
+      } catch {
+        // silent
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [poll?.id, poll?.eventSlug, isContestEntry, resultsVoteSignature]);
 
   function toggleOptionMultiple(optionId) {
     if (
@@ -2062,6 +2095,47 @@ export function PollExperience({
                   <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.8rem", color: palette.muted }}>
                     Les gagnants seront annoncés par l’organisateur.
                   </p>
+                  {isContestWinnerMe ? (
+                    <p
+                      style={{
+                        margin: "0.65rem 0 0 0",
+                        fontSize: "0.86rem",
+                        fontWeight: 800,
+                        color: "#16a34a",
+                      }}
+                    >
+                      Felicitations, vous avez ete tire au sort !
+                    </p>
+                  ) : null}
+                  {contestPublicWinners.length > 0 ? (
+                    <div
+                      style={{
+                        marginTop: "0.75rem",
+                        borderTop: `1px solid ${palette.cardBorder}`,
+                        paddingTop: "0.65rem",
+                      }}
+                    >
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "0.74rem",
+                          fontWeight: 800,
+                          letterSpacing: "0.06em",
+                          textTransform: "uppercase",
+                          color: palette.muted,
+                        }}
+                      >
+                        Gagnants tires
+                      </p>
+                      <ul style={{ margin: "0.45rem 0 0 1rem", padding: 0, color: palette.fg2 }}>
+                        {contestPublicWinners.map((w) => (
+                          <li key={String(w.id)} style={{ marginBottom: "0.28rem" }}>
+                            {String(w.displayName || "Gagnant")} - {String(w.displayContact || "")}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                 </div>
               ) : pollEstNotation ? (
                 <>

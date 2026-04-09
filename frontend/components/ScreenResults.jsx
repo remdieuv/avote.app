@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatCountdownVerbose } from "@/lib/chronoFormat";
 import {
   estPollNotation,
@@ -11,6 +11,7 @@ import {
   getUxState,
   getScreenResultsPillLabel,
 } from "@/lib/liveStateUx";
+import { API_URL } from "@/lib/config";
 
 const RESULTATS_TOP_N = 8;
 
@@ -909,8 +910,35 @@ function ScreenResultsChoixClassiques({
 }
 
 export function ScreenResults(props) {
-  if (String(props?.poll?.type || "").toUpperCase() === "CONTEST_ENTRY") {
-    const poll = props.poll;
+  const poll = props?.poll;
+  const isContestEntry = String(poll?.type || "").toUpperCase() === "CONTEST_ENTRY";
+  const [contestWinners, setContestWinners] = useState([]);
+  useEffect(() => {
+    if (!isContestEntry || !poll?.id || !poll?.eventSlug) {
+      setContestWinners([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const qs = new URLSearchParams({ pollId: String(poll.id) });
+        const res = await fetch(
+          `${API_URL}/p/${encodeURIComponent(poll.eventSlug)}/contest-status?${qs.toString()}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        if (!data || cancelled) return;
+        setContestWinners(Array.isArray(data.winners) ? data.winners : []);
+      } catch {
+        // silent
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isContestEntry, poll?.id, poll?.eventSlug, poll?.options]);
+  if (isContestEntry) {
     const questionAffichee =
       (typeof poll?.question === "string" && poll.question) ||
       (typeof poll?.title === "string" && poll.title) ||
@@ -984,6 +1012,26 @@ export function ScreenResults(props) {
           <p style={{ margin: "0.2rem 0 0 0", color: "#94a3b8", fontSize: "0.82rem" }}>
             Tirage en cours en régie.
           </p>
+          {contestWinners.length > 0 ? (
+            <div
+              style={{
+                marginTop: "0.55rem",
+                paddingTop: "0.55rem",
+                borderTop: "1px solid rgba(148, 163, 184, 0.18)",
+              }}
+            >
+              <p style={{ margin: 0, color: "#cbd5e1", fontSize: "0.78rem", fontWeight: 700 }}>
+                Gagnants tirés
+              </p>
+              <ol style={{ margin: "0.4rem 0 0 1rem", padding: 0, color: "#e2e8f0", fontSize: "0.88rem" }}>
+                {contestWinners.map((w) => (
+                  <li key={String(w.id)} style={{ marginBottom: "0.18rem" }}>
+                    {String(w.displayName || "Gagnant")} - {String(w.displayContact || "")}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
         </section>
       </main>
     );

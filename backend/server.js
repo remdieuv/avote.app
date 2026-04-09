@@ -251,6 +251,35 @@ function pollToJson(poll) {
   };
 }
 
+function maskPhoneForPublic(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (!digits) return null;
+  if (digits.length <= 4) return "XX XX";
+  const head = digits.slice(0, 2);
+  const tail = digits.slice(-2);
+  return `${head} XX XX XX ${tail}`;
+}
+
+function maskEmailForPublic(email) {
+  const raw = String(email || "").trim();
+  if (!raw || !raw.includes("@")) return null;
+  const [local, domain] = raw.split("@");
+  if (!domain) return null;
+  const safeLocal =
+    local.length <= 2 ? `${local[0] || "*"}*` : `${local.slice(0, 2)}***`;
+  return `${safeLocal}@${domain}`;
+}
+
+function winnerDisplayNameForPublic(firstName, position) {
+  const n = String(firstName || "").trim();
+  if (!n) return `Gagnant ${position}`;
+  return `${n[0].toUpperCase()}${n.slice(1)}.`;
+}
+
+function winnerDisplayContactForPublic(phone, email) {
+  return maskPhoneForPublic(phone) || maskEmailForPublic(email) || "Contact privé";
+}
+
 async function loadPollFull(pollId) {
   return prisma.poll.findUnique({
     where: { id: pollId },
@@ -1717,6 +1746,82 @@ app.get("/p/:slug", async (req, res) => {
     return res.json(pollToJson(poll));
   } catch (e) {
     console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/**
+ * Public (votant + écran) : statut concours pour la salle
+ * - liste gagnants masquée
+ * - indicateur "votant courant gagnant" si voterSessionId fourni
+ */
+app.get("/p/:slug/contest-status", async (req, res) => {
+  try {
+    const slug =
+      typeof req.params.slug === "string" ? req.params.slug.trim() : "";
+    if (!slug) return res.status(400).json({ error: "Slug invalide." });
+
+    const event = await prisma.event.findUnique({
+      where: { slug },
+      select: { id: true, activePollId: true },
+    });
+    if (!event) return res.status(404).json({ error: "Événement introuvable." });
+
+    const pollIdQuery =
+      typeof req.query.pollId === "string" ? req.query.pollId.trim() : "";
+    const targetPollId = pollIdQuery || event.activePollId || "";
+    if (!targetPollId) {
+      return res.status(404).json({ error: "Aucune question concours active." });
+    }
+
+    const poll = await prisma.poll.findFirst({
+      where: { id: targetPollId, eventId: event.id, type: "CONTEST_ENTRY" },
+      select: {
+        id: true,
+        contestPrize: true,
+        contestWinnerCount: true,
+      },
+    });
+    if (!poll) return res.status(404).json({ error: "Question concours introuvable." });
+
+    const winners = await prisma.contestDrawWinner.findMany({
+      where: { pollId: poll.id },
+      orderBy: [{ draw: { createdAt: "asc" } }, { position: "asc" }],
+      select: {
+        id: true,
+        voterSessionId: true,
+        firstName: true,
+        phone: true,
+        email: true,
+        position: true,
+        createdAt: true,
+      },
+    });
+
+    const voterSessionId =
+      typeof req.query.voterSessionId === "string"
+        ? req.query.voterSessionId.trim()
+        : "";
+    const isCurrentVoterWinner =
+      !!voterSessionId &&
+      winners.some((w) => String(w.voterSessionId) === String(voterSessionId));
+
+    return res.json({
+      pollId: poll.id,
+      contestPrize: poll.contestPrize ?? null,
+      contestWinnerCount: normalizeContestWinnerCount(poll.contestWinnerCount),
+      totalWinners: winners.length,
+      isCurrentVoterWinner,
+      winners: winners.map((w, idx) => ({
+        id: w.id,
+        position: idx + 1,
+        displayName: winnerDisplayNameForPublic(w.firstName, idx + 1),
+        displayContact: winnerDisplayContactForPublic(w.phone, w.email),
+        createdAt: w.createdAt.toISOString(),
+      })),
+    });
+  } catch (e) {
+    console.error("p/:slug/contest-status", e);
     return res.status(500).json({ error: "Erreur serveur." });
   }
 });
