@@ -284,29 +284,37 @@ export function ScreenQuestion({
             lineHeight: 1.08,
             letterSpacing: "-0.035em",
             color: "#f8fafc",
-            maxWidth: "20ch",
+            maxWidth: compactQuestionText ? "26ch" : "34ch",
+            textWrap: "balance",
           }}
         >
           {questionAffichee}
         </h1>
       </div>
 
-      {voteOuvert && !fullScreenQr ? (
+      {voteOuvert ? (
         chronometreApi ? (
           <div
             style={{
-              marginTop: "clamp(0.85rem, 2.5vw, 1.65rem)",
-              marginBottom: "clamp(0.55rem, 1.8vw, 1rem)",
-              padding:
-                "clamp(1rem, 2.6vw, 1.65rem) clamp(1.5rem, 4.5vw, 3rem)",
-              borderRadius: "28px",
+              marginTop: compactChrono
+                ? "clamp(0.5rem, 1.2vw, 0.8rem)"
+                : "clamp(0.85rem, 2.5vw, 1.65rem)",
+              marginBottom: compactChrono
+                ? "clamp(0.3rem, 0.8vw, 0.6rem)"
+                : "clamp(0.55rem, 1.8vw, 1rem)",
+              padding: compactChrono
+                ? "clamp(0.45rem, 1.1vw, 0.75rem) clamp(0.75rem, 2vw, 1.35rem)"
+                : "clamp(1rem, 2.6vw, 1.65rem) clamp(1.5rem, 4.5vw, 3rem)",
+              borderRadius: compactChrono ? "14px" : "28px",
               background:
                 "linear-gradient(165deg, rgba(49, 46, 129, 0.9) 0%, rgba(15, 23, 42, 0.94) 100%)",
-              border: "4px solid rgba(129, 140, 248, 0.7)",
+              border: compactChrono
+                ? "2px solid rgba(129, 140, 248, 0.65)"
+                : "4px solid rgba(129, 140, 248, 0.7)",
               boxShadow:
                 "0 0 0 1px rgba(255,255,255,0.07) inset, 0 16px 48px rgba(79, 70, 229, 0.42)",
-              minWidth: "min(580px, 100%)",
-              maxWidth: "min(100%, 780px)",
+              minWidth: compactChrono ? "min(360px, 90%)" : "min(580px, 100%)",
+              maxWidth: compactChrono ? "min(100%, 520px)" : "min(100%, 780px)",
               marginLeft: "auto",
               marginRight: "auto",
               flexShrink: 0,

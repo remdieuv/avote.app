@@ -1116,7 +1116,7 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
           qrScale={isModeQrFullscreen ? 2 : isModeXlargeQr ? 1.35 : isModeResultsFocus ? 1.42 : 1}
           compactQuestionText={isModeQrFullscreen || isModeXlargeQr}
           fullScreenQr={isModeQrFullscreen}
-          compactChrono={isModeResultsFocus}
+          compactChrono={isModeResultsFocus || isModeQrFullscreen}
         />
       </div>,
     );
@@ -1191,7 +1191,7 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
       qrScale={isModeQrFullscreen ? 2 : isModeXlargeQr ? 1.35 : isModeResultsFocus ? 1.42 : 1}
       compactQuestionText={isModeQrFullscreen || isModeXlargeQr}
       fullScreenQr={isModeQrFullscreen}
-      compactChrono={isModeResultsFocus}
+      compactChrono={isModeResultsFocus || isModeQrFullscreen}
     />,
   );
 }
