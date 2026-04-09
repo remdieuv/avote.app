@@ -178,6 +178,31 @@ function formatContestDrawSummary(summary, poll) {
   return `Gagnants tirés : ${Math.max(0, winners)} / ${quota}`;
 }
 
+function formatWinnerName(winner) {
+  const first = String(winner?.firstName || "").trim();
+  if (!first) return "Participant";
+  const initial = first.charAt(0).toUpperCase();
+  return `${first} ${initial}.`;
+}
+
+function maskPhone(phoneRaw) {
+  const phone = String(phoneRaw || "").trim();
+  if (!phone) return "Téléphone indisponible";
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 4) return phone;
+  const start = phone.slice(0, 2);
+  const end = digits.slice(-2);
+  return `${start} XX XX XX ${end}`;
+}
+
+function maskEmail(emailRaw) {
+  const email = String(emailRaw || "").trim();
+  if (!email || !email.includes("@")) return null;
+  const [local, domain] = email.split("@");
+  const localMask = local.length <= 2 ? `${local}***` : `${local.slice(0, 2)}***`;
+  return `${localMask}@${domain || ""}`;
+}
+
 function PollCard({
   poll,
   isActive,
@@ -3201,6 +3226,13 @@ export default function RegieEventPage() {
   const [pollDrawSummary, setPollDrawSummary] = useState(
     /** @type {Record<string, { totalDraws: number; totalWinners: number; contestWinnerCount: number }>} */ ({}),
   );
+  const [contestWinners, setContestWinners] = useState(
+    /** @type {{ id: string; drawId: string; position: number; firstName: string; phone: string; email: string | null; createdAt: string }[]} */ ([]),
+  );
+  const [contestWinnersLoading, setContestWinnersLoading] = useState(false);
+  const [contestWinnersError, setContestWinnersError] = useState(
+    /** @type {string | null} */ (null),
+  );
 
   const loadPollAbortRef = useRef(null);
   const socketRef = useRef(null);
@@ -3281,6 +3313,31 @@ export default function RegieEventPage() {
         totalWinners: Number(body?.totalWinners || 0),
         contestWinnerCount: normalizeContestWinnerCount(body?.contestWinnerCount),
       };
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const fetchContestWinners = useCallback(async (pollId) => {
+    const id = String(pollId || "").trim();
+    if (!id) return null;
+    try {
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/polls/${encodeURIComponent(id)}/draws/winners`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) return null;
+      const body = await res.json().catch(() => ({}));
+      const winners = Array.isArray(body?.winners) ? body.winners : [];
+      return winners.map((w) => ({
+        id: String(w?.id || ""),
+        drawId: String(w?.drawId || ""),
+        position: Number(w?.position || 1),
+        firstName: String(w?.firstName || ""),
+        phone: String(w?.phone || ""),
+        email: w?.email ? String(w.email) : null,
+        createdAt: String(w?.createdAt || ""),
+      }));
     } catch {
       return null;
     }
@@ -3405,6 +3462,36 @@ export default function RegieEventPage() {
       cancelled = true;
     };
   }, [eventData?.polls, fetchPollDrawSummary]);
+
+  useEffect(() => {
+    const activePollId = String(eventData?.activePollId || "").trim();
+    const activePollType = String(
+      eventData?.polls?.find((p) => String(p?.id) === activePollId)?.type || "",
+    ).toUpperCase();
+    if (!activePollId || activePollType !== "CONTEST_ENTRY") {
+      setContestWinners([]);
+      setContestWinnersLoading(false);
+      setContestWinnersError(null);
+      return;
+    }
+    let cancelled = false;
+    const run = async () => {
+      setContestWinnersLoading(true);
+      setContestWinnersError(null);
+      const winners = await fetchContestWinners(activePollId);
+      if (cancelled) return;
+      if (winners === null) {
+        setContestWinnersError("Chargement indisponible.");
+      } else {
+        setContestWinners(winners);
+      }
+      setContestWinnersLoading(false);
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [eventData?.activePollId, eventData?.polls, fetchContestWinners]);
 
   useEffect(() => {
     if (!eventId || typeof window === "undefined") return;
@@ -3710,6 +3797,11 @@ export default function RegieEventPage() {
           ...prev,
           [String(pollId)]: updatedSummary,
         }));
+      }
+      const updatedWinners = await fetchContestWinners(pollId);
+      if (updatedWinners) {
+        setContestWinners(updatedWinners);
+        setContestWinnersError(null);
       }
       return true;
     } catch (e) {
@@ -5164,6 +5256,62 @@ export default function RegieEventPage() {
                   </p>
                 </div>
               ) : null}
+              <div
+                style={{
+                  marginTop: "0.7rem",
+                  paddingTop: "0.65rem",
+                  borderTop: "1px dashed #ddd6fe",
+                }}
+              >
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "0.78rem",
+                    fontWeight: 800,
+                    color: "#374151",
+                  }}
+                >
+                  Gagnants déjà tirés
+                </p>
+                {contestWinnersLoading ? (
+                  <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.78rem", color: "#6b7280" }}>
+                    Chargement...
+                  </p>
+                ) : contestWinners.length < 1 ? (
+                  <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.78rem", color: "#6b7280" }}>
+                    Aucun gagnant tiré pour le moment.
+                  </p>
+                ) : (
+                  <ol
+                    style={{
+                      margin: "0.45rem 0 0 0",
+                      paddingLeft: "1.1rem",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.25rem",
+                    }}
+                  >
+                    {contestWinners.map((winner, idx) => (
+                      <li
+                        key={`${winner.id || winner.drawId}-${idx}`}
+                        style={{
+                          fontSize: "0.8rem",
+                          color: "#374151",
+                          lineHeight: 1.35,
+                        }}
+                      >
+                        {formatWinnerName(winner)} — {maskPhone(winner.phone)}
+                        {maskEmail(winner.email) ? ` · ${maskEmail(winner.email)}` : ""}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                {contestWinnersError ? (
+                  <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.74rem", color: "#6b7280" }}>
+                    Liste des gagnants temporairement indisponible.
+                  </p>
+                ) : null}
+              </div>
             </section>
           ) : null}
 

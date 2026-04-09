@@ -2752,6 +2752,45 @@ app.get("/polls/:pollId/draws/summary", requireAuth, async (req, res) => {
   }
 });
 
+app.get("/polls/:pollId/draws/winners", requireAuth, async (req, res) => {
+  const { pollId } = req.params;
+  try {
+    const pOwn = await assertPollOwnedBy(pollId, req.userId);
+    if (!pOwn.ok) {
+      return res.status(pOwn.status).json({ error: "Sondage introuvable." });
+    }
+    const winners = await prisma.contestDrawWinner.findMany({
+      where: { pollId },
+      orderBy: [{ draw: { createdAt: "asc" } }, { position: "asc" }],
+      select: {
+        id: true,
+        drawId: true,
+        position: true,
+        firstName: true,
+        phone: true,
+        email: true,
+        createdAt: true,
+      },
+    });
+    return res.json({
+      pollId,
+      totalWinners: winners.length,
+      winners: winners.map((w) => ({
+        id: w.id,
+        drawId: w.drawId,
+        position: w.position,
+        firstName: w.firstName,
+        phone: w.phone,
+        email: w.email ?? null,
+        createdAt: w.createdAt.toISOString(),
+      })),
+    });
+  } catch (e) {
+    console.error("polls/:pollId/draws/winners", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
 /**
  * Leads agrégés : tous les événements du compte connecté (filtres query).
  */
