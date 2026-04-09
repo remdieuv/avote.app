@@ -78,6 +78,7 @@ export default function AdminEventsPage() {
   const [statusFilter, setStatusFilter] = useState(EVENT_STATUS_FILTER_ALL);
   const [sortMode, setSortMode] = useState(SORT_ACTIVE_FIRST);
   const [actionEventId, setActionEventId] = useState(null);
+  const [toastMsg, setToastMsg] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -160,6 +161,8 @@ export default function AdminEventsPage() {
           throw new Error(body?.error || `Erreur ${res.status}`);
         }
         await load();
+        setToastMsg("Événement dupliqué");
+        window.setTimeout(() => setToastMsg(null), 2600);
       } catch (e) {
         setFetchError(e?.message || "Duplication impossible.");
       } finally {
@@ -189,6 +192,8 @@ export default function AdminEventsPage() {
           throw new Error(body?.error || `Erreur ${res.status}`);
         }
         await load();
+        setToastMsg("Événement supprimé");
+        window.setTimeout(() => setToastMsg(null), 2600);
       } catch (e) {
         setFetchError(e?.message || "Suppression impossible.");
       } finally {
@@ -230,6 +235,28 @@ export default function AdminEventsPage() {
         background: "linear-gradient(180deg, #f1f5f9 0%, #f8fafc 32%, #fff 100%)",
       }}
     >
+      {toastMsg ? (
+        <div
+          style={{
+            position: "fixed",
+            top: "1rem",
+            right: "1rem",
+            zIndex: 60,
+            padding: "0.55rem 0.9rem",
+            borderRadius: "10px",
+            background: "#0f172a",
+            color: "#f8fafc",
+            border: "1px solid #1f2937",
+            boxShadow: "0 12px 28px rgba(0,0,0,0.22)",
+            fontSize: "0.84rem",
+            fontWeight: 700,
+          }}
+          role="status"
+          aria-live="polite"
+        >
+          {toastMsg}
+        </div>
+      ) : null}
       <div
         style={{
           maxWidth: "1200px",
