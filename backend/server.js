@@ -214,6 +214,7 @@ function pollToJson(poll) {
     title: poll.title,
     question: poll.question,
     contestPrize: poll.contestPrize ?? null,
+    contestWinnerCount: Number(poll.contestWinnerCount || 1),
     type: poll.type,
     leadEnabled: Boolean(poll.leadEnabled),
     leadTriggerOptionId: poll.leadTriggerOptionId ?? null,
@@ -1179,6 +1180,7 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
         title: p.title,
         question: p.question,
         contestPrize: p.contestPrize ?? null,
+        contestWinnerCount: Number(p.contestWinnerCount || 1),
         order: p.order,
         status: p.status,
         type: p.type,
@@ -1589,6 +1591,7 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
   const launchNow = body.launchNow === true;
   const optionsBrutes = Array.isArray(body.options) ? body.options : [];
   const contestPrize = normalizeContestPrize(body.contestPrize);
+  const contestWinnerCount = normalizeContestWinnerCount(body.contestWinnerCount);
 
   if (!questionBrute || questionBrute.length > 2000) {
     return res
@@ -1637,6 +1640,8 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
         title: titreCourt,
         question: questionBrute,
         contestPrize: pollTypeParsed === "CONTEST_ENTRY" ? contestPrize : null,
+        contestWinnerCount:
+          pollTypeParsed === "CONTEST_ENTRY" ? contestWinnerCount : 1,
         type: pollType,
         leadEnabled: requiresFormOnPositiveAnswer(pollTypeParsed),
         status: "CLOSED",
@@ -2053,6 +2058,12 @@ function normalizeContestPrize(raw) {
   return t.slice(0, 240);
 }
 
+function normalizeContestWinnerCount(raw) {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 1;
+  return Math.max(1, Math.floor(n));
+}
+
 /** Extrait un tableau de sondages depuis le body (compat alias `questions`, chaîne JSON). */
 function extraireTableauPolls(body) {
   let src = body.polls ?? body.questions;
@@ -2119,6 +2130,9 @@ app.post("/polls", requireAuth, async (req, res) => {
           labels.length,
         );
         const contestPrize = normalizeContestPrize(p?.contestPrize);
+        const contestWinnerCount = normalizeContestWinnerCount(
+          p?.contestWinnerCount,
+        );
         return {
           order: ordre,
           question: qBrut,
@@ -2126,6 +2140,7 @@ app.post("/polls", requireAuth, async (req, res) => {
           type: typ,
           leadTriggerOrder,
           contestPrize,
+          contestWinnerCount,
         };
       });
 
@@ -2176,6 +2191,8 @@ app.post("/polls", requireAuth, async (req, res) => {
               title: e.question,
               question: e.question,
               contestPrize: e.type === "CONTEST_ENTRY" ? e.contestPrize : null,
+              contestWinnerCount:
+                e.type === "CONTEST_ENTRY" ? e.contestWinnerCount : 1,
               type: e.type === "LEAD" ? "SINGLE_CHOICE" : e.type,
               leadEnabled: requiresFormOnPositiveAnswer(e.type),
               status: i === 0 ? "ACTIVE" : "DRAFT",
@@ -2224,6 +2241,9 @@ app.post("/polls", requireAuth, async (req, res) => {
     const optionsInput = body.options;
     const typeRaw = body.type;
     const contestPrize = normalizeContestPrize(body.contestPrize);
+    const contestWinnerCount = normalizeContestWinnerCount(
+      body.contestWinnerCount,
+    );
 
     let titleTrim;
     let questionTrim;
@@ -2292,6 +2312,8 @@ app.post("/polls", requireAuth, async (req, res) => {
         title: questionTrim,
         question: questionTrim,
         contestPrize: pollTypeParsed === "CONTEST_ENTRY" ? contestPrize : null,
+        contestWinnerCount:
+          pollTypeParsed === "CONTEST_ENTRY" ? contestWinnerCount : 1,
         type: pollTypeParsed === "LEAD" ? "SINGLE_CHOICE" : pollTypeParsed,
         leadEnabled: requiresFormOnPositiveAnswer(pollTypeParsed),
         status: "ACTIVE",
@@ -2594,12 +2616,38 @@ app.post("/polls/:pollId/draw", requireAuth, async (req, res) => {
         eventId: true,
         type: true,
         contestPrize: true,
+        contestWinnerCount: true,
       },
     });
     if (!poll || poll.type !== "CONTEST_ENTRY") {
       return res
         .status(400)
         .json({ error: "Le tirage est réservé aux questions concours." });
+    }
+
+    const contestWinnerCount = normalizeContestWinnerCount(
+      poll.contestWinnerCount,
+    );
+    const totalWinnersAlready = await prisma.contestDrawWinner.count({
+      where: { pollId },
+    });
+    if (totalWinnersAlready >= contestWinnerCount) {
+      return res.status(409).json({
+        error: "Tous les gagnants ont déjà été tirés.",
+        pollId,
+        quotaReached: true,
+        totalWinners: totalWinnersAlready,
+        contestWinnerCount,
+      });
+    }
+    const remainingSlots = contestWinnerCount - totalWinnersAlready;
+    if (winnerCount > remainingSlots) {
+      return res.status(400).json({
+        error: `Nombre de gagnants demandé (${winnerCount}) supérieur au quota restant (${remainingSlots}).`,
+        pollId,
+        totalWinners: totalWinnersAlready,
+        contestWinnerCount,
+      });
     }
 
     const participants = await listContestEligibleParticipants(pollId, {
@@ -2610,6 +2658,8 @@ app.post("/polls/:pollId/draw", requireAuth, async (req, res) => {
         error: "Aucun participant éligible disponible pour le tirage.",
         pollId,
         eligibleRemainingCount: 0,
+        totalWinners: totalWinnersAlready,
+        contestWinnerCount,
       });
     }
     if (winnerCount > participants.length) {
@@ -2659,6 +2709,8 @@ app.post("/polls/:pollId/draw", requireAuth, async (req, res) => {
       eligibleCountAtDraw: participants.length,
       eligibleRemainingCount: participants.length - winners.length,
       contestPrize: poll.contestPrize ?? null,
+      totalWinners: totalWinnersAlready + winners.length,
+      contestWinnerCount,
       winners: winners.map((w, index) => ({
         position: index + 1,
         voterSessionId: w.voterSessionId,
@@ -2680,6 +2732,10 @@ app.get("/polls/:pollId/draws/summary", requireAuth, async (req, res) => {
     if (!pOwn.ok) {
       return res.status(pOwn.status).json({ error: "Sondage introuvable." });
     }
+    const poll = await prisma.poll.findUnique({
+      where: { id: pollId },
+      select: { contestWinnerCount: true },
+    });
     const [totalDraws, totalWinners] = await prisma.$transaction([
       prisma.contestDraw.count({ where: { pollId } }),
       prisma.contestDrawWinner.count({ where: { pollId } }),
@@ -2688,6 +2744,7 @@ app.get("/polls/:pollId/draws/summary", requireAuth, async (req, res) => {
       pollId,
       totalDraws,
       totalWinners,
+      contestWinnerCount: normalizeContestWinnerCount(poll?.contestWinnerCount),
     });
   } catch (e) {
     console.error("polls/:pollId/draws/summary", e);

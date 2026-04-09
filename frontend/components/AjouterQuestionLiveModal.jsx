@@ -7,6 +7,7 @@ const CONTEST_DEFAULT_QUESTION = "Souhaitez-vous participer au tirage au sort ?"
 const CONTEST_DEFAULT_OPTIONS = ["Oui", "Non"];
 const CONTEST_PRIZE_PLACEHOLDER =
   "Ex : un iPhone 15 / une carte cadeau de 200€ / un week-end";
+const CONTEST_WINNER_COUNT_DEFAULT = 1;
 
 function isLeadLikeQuestionType(type) {
   return type === "LEAD" || type === "CONTEST_ENTRY";
@@ -16,6 +17,12 @@ function buildContestQuestion(prizeRaw) {
   const prize = typeof prizeRaw === "string" ? prizeRaw.trim() : "";
   if (!prize) return CONTEST_DEFAULT_QUESTION;
   return `Souhaitez-vous participer au tirage au sort pour gagner ${prize} ?`;
+}
+
+function normalizeContestWinnerCount(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return CONTEST_WINNER_COUNT_DEFAULT;
+  return Math.max(1, Math.floor(n));
 }
 
 /**
@@ -41,6 +48,9 @@ export function AjouterQuestionLiveModal({
   const [reponses, setReponses] = useState(["", ""]);
   const [leadTriggerOrder, setLeadTriggerOrder] = useState(0);
   const [contestPrize, setContestPrize] = useState("");
+  const [contestWinnerCount, setContestWinnerCount] = useState(
+    CONTEST_WINNER_COUNT_DEFAULT,
+  );
   const [contestQuestionCustomized, setContestQuestionCustomized] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [erreur, setErreur] = useState(/** @type {string | null} */ (null));
@@ -52,6 +62,7 @@ export function AjouterQuestionLiveModal({
     setReponses(["", ""]);
     setLeadTriggerOrder(0);
     setContestPrize("");
+    setContestWinnerCount(CONTEST_WINNER_COUNT_DEFAULT);
     setContestQuestionCustomized(false);
     setErreur(null);
   }, [open, eventId]);
@@ -130,6 +141,7 @@ export function AjouterQuestionLiveModal({
         );
         return;
       }
+      const winnerCountNormalized = normalizeContestWinnerCount(contestWinnerCount);
       setSubmitting(true);
       setErreur(null);
       try {
@@ -143,6 +155,8 @@ export function AjouterQuestionLiveModal({
               type: pollType,
               contestPrize:
                 pollType === "CONTEST_ENTRY" ? contestPrize.trim() || null : null,
+              contestWinnerCount:
+                pollType === "CONTEST_ENTRY" ? winnerCountNormalized : 1,
               options: opts,
               leadTriggerOrder: isLeadLikeQuestionType(pollType)
                 ? Number(leadTriggerOrder ?? 0)
@@ -174,6 +188,7 @@ export function AjouterQuestionLiveModal({
       reponses,
       pollType,
       contestPrize,
+      contestWinnerCount,
       leadTriggerOrder,
       onSuccess,
       onClose,
@@ -356,6 +371,7 @@ export function AjouterQuestionLiveModal({
               onChange={() => {
                 setPollType("CONTEST_ENTRY");
                 setContestPrize("");
+                setContestWinnerCount(CONTEST_WINNER_COUNT_DEFAULT);
                 setQuestion(buildContestQuestion(""));
                 setReponses([...CONTEST_DEFAULT_OPTIONS]);
                 setLeadTriggerOrder(0);
@@ -403,6 +419,52 @@ export function AjouterQuestionLiveModal({
                 participants.
               </p>
             ) : null}
+            <div style={{ marginTop: "0.6rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                  color: "#64748b",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                  marginBottom: "0.35rem",
+                }}
+              >
+                Nombre de gagnants
+              </label>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={normalizeContestWinnerCount(contestWinnerCount)}
+                onChange={(e) => setContestWinnerCount(e.target.value)}
+                onBlur={(e) =>
+                  setContestWinnerCount(
+                    normalizeContestWinnerCount(e.target.value),
+                  )
+                }
+                disabled={submitting}
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: "0.5rem 0.6rem",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "0.88rem",
+                  fontFamily: "inherit",
+                }}
+              />
+              <p
+                style={{
+                  margin: "0.3rem 0 0 0",
+                  fontSize: "0.74rem",
+                  color: "#64748b",
+                }}
+              >
+                Nombre total de gagnants à tirer pour ce concours.
+              </p>
+            </div>
           </div>
         ) : null}
         {isLeadLikeQuestionType(pollType) ? (

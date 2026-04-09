@@ -20,6 +20,7 @@ const CONTEST_DEFAULT_QUESTION = "Souhaitez-vous participer au tirage au sort ?"
 const CONTEST_DEFAULT_OPTIONS = ["Oui", "Non"];
 const CONTEST_PRIZE_PLACEHOLDER =
   "Ex : un iPhone 15 / une carte cadeau de 200€ / un week-end";
+const CONTEST_WINNER_COUNT_DEFAULT = 1;
 
 function isLeadLikeQuestionType(type) {
   return type === "LEAD" || type === "CONTEST_ENTRY";
@@ -35,6 +36,12 @@ function buildContestQuestion(prizeRaw) {
   return `Souhaitez-vous participer au tirage au sort pour gagner ${prize} ?`;
 }
 
+function normalizeContestWinnerCount(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return CONTEST_WINNER_COUNT_DEFAULT;
+  return Math.max(1, Math.floor(n));
+}
+
 /** IDs stables (pas Date/random) pour éviter les erreurs d’hydratation SSR. */
 const QUESTION_INITIALE = {
   id: "q-1",
@@ -43,6 +50,7 @@ const QUESTION_INITIALE = {
   options: ["", ""],
   leadTriggerOrder: 0,
   contestPrize: "",
+  contestWinnerCount: CONTEST_WINNER_COUNT_DEFAULT,
   contestQuestionCustomized: false,
 };
 
@@ -82,6 +90,7 @@ export default function AdminPage() {
         options: ["", ""],
         leadTriggerOrder: 0,
         contestPrize: "",
+        contestWinnerCount: CONTEST_WINNER_COUNT_DEFAULT,
         contestQuestionCustomized: false,
       },
     ]);
@@ -128,6 +137,9 @@ export default function AdminPage() {
         q.map((item) => {
           if (item.id !== id) return item;
           const contestPrize = item.contestPrize ?? "";
+          const contestWinnerCount = normalizeContestWinnerCount(
+            item.contestWinnerCount,
+          );
           return {
             ...item,
             type,
@@ -135,6 +147,7 @@ export default function AdminPage() {
             options: [...CONTEST_DEFAULT_OPTIONS],
             leadTriggerOrder: 0,
             contestPrize,
+            contestWinnerCount,
             contestQuestionCustomized: false,
           };
         }),
@@ -164,6 +177,15 @@ export default function AdminPage() {
           question: shouldAutoSync ? nextAuto : item.question,
         };
       }),
+    );
+  }
+
+  function majContestWinnerCount(id, rawValue) {
+    const contestWinnerCount = normalizeContestWinnerCount(rawValue);
+    setQuestions((q) =>
+      q.map((item) =>
+        item.id === id ? { ...item, contestWinnerCount } : item,
+      ),
     );
   }
 
@@ -263,6 +285,12 @@ export default function AdminPage() {
       if (isContestEntryQuestion(x.type) && !(x.contestPrize || "").trim()) {
         return `Question ${i + 1} : précisez le lot à gagner pour rendre le concours clair pour les participants.`;
       }
+      if (
+        isContestEntryQuestion(x.type) &&
+        normalizeContestWinnerCount(x.contestWinnerCount) < 1
+      ) {
+        return `Question ${i + 1} : le nombre de gagnants doit être au minimum de 1.`;
+      }
       const opts = x.options.map((s) => s.trim()).filter(Boolean);
       if (opts.length < 2) {
         return `Question ${i + 1} (« ${qi.slice(0, 40)}${qi.length > 40 ? "…" : ""} ») : au moins 2 réponses non vides.`;
@@ -296,6 +324,9 @@ export default function AdminPage() {
       contestPrize: isContestEntryQuestion(premier.type)
         ? premier.contestPrize.trim() || null
         : null,
+      contestWinnerCount: isContestEntryQuestion(premier.type)
+        ? normalizeContestWinnerCount(premier.contestWinnerCount)
+        : 1,
       options: premier.options.map((s) => s.trim()).filter(Boolean),
       leadTriggerOrder:
         isLeadLikeQuestionType(premier.type)
@@ -307,6 +338,9 @@ export default function AdminPage() {
         contestPrize: isContestEntryQuestion(x.type)
           ? x.contestPrize.trim() || null
           : null,
+        contestWinnerCount: isContestEntryQuestion(x.type)
+          ? normalizeContestWinnerCount(x.contestWinnerCount)
+          : 1,
         order,
         options: x.options.map((s) => s.trim()).filter(Boolean),
         leadTriggerOrder:
@@ -532,6 +566,37 @@ export default function AdminPage() {
                             pour les participants.
                           </p>
                         ) : null}
+                        <div style={{ marginTop: "0.65rem" }}>
+                          <label
+                            className="admin-label"
+                            htmlFor={`q-winner-count-${item.id}`}
+                          >
+                            Nombre de gagnants
+                          </label>
+                          <input
+                            id={`q-winner-count-${item.id}`}
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={normalizeContestWinnerCount(
+                              item.contestWinnerCount,
+                            )}
+                            onChange={(ev) =>
+                              majContestWinnerCount(item.id, ev.target.value)
+                            }
+                            disabled={creating}
+                            style={{ ...inputStyle, marginBottom: "0.32rem" }}
+                          />
+                          <p
+                            style={{
+                              margin: 0,
+                              fontSize: "0.8rem",
+                              color: "#64748b",
+                            }}
+                          >
+                            Nombre total de gagnants à tirer pour ce concours.
+                          </p>
+                        </div>
                       </div>
                     ) : null}
 

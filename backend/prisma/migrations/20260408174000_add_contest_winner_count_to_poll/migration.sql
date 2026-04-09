@@ -1,0 +1,2 @@
+ALTER TABLE "Poll"
+ADD COLUMN "contestWinnerCount" INTEGER NOT NULL DEFAULT 1;

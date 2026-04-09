@@ -166,11 +166,16 @@ function pollKindStyle(poll) {
   };
 }
 
-function formatContestDrawSummary(summary) {
-  const n = Number(summary?.totalWinners || 0);
-  if (!Number.isFinite(n) || n <= 0) return "Aucun tirage effectué";
-  if (n === 1) return "1 gagnant tiré";
-  return `${n} gagnants tirés`;
+function normalizeContestWinnerCount(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 1;
+  return Math.max(1, Math.floor(n));
+}
+
+function formatContestDrawSummary(summary, poll) {
+  const winners = Number(summary?.totalWinners || 0);
+  const quota = normalizeContestWinnerCount(poll?.contestWinnerCount);
+  return `Gagnants tirés : ${Math.max(0, winners)} / ${quota}`;
 }
 
 function PollCard({
@@ -349,16 +354,30 @@ function PollCard({
         {poll.question || poll.title}
       </p>
       {isContestPoll(poll) ? (
-        <p
-          style={{
-            margin: compact ? "0.2rem 0 0 0" : "0.28rem 0 0 0",
-            fontSize: compact ? "0.68rem" : "0.76rem",
-            color: "#6b7280",
-            lineHeight: 1.35,
-          }}
-        >
-          {formatContestDrawSummary(contestDrawSummary)}
-        </p>
+        <>
+          {poll?.contestPrize ? (
+            <p
+              style={{
+                margin: compact ? "0.18rem 0 0 0" : "0.22rem 0 0 0",
+                fontSize: compact ? "0.66rem" : "0.74rem",
+                color: "#4b5563",
+                lineHeight: 1.35,
+              }}
+            >
+              Lot : {poll.contestPrize}
+            </p>
+          ) : null}
+          <p
+            style={{
+              margin: compact ? "0.2rem 0 0 0" : "0.24rem 0 0 0",
+              fontSize: compact ? "0.68rem" : "0.76rem",
+              color: "#6b7280",
+              lineHeight: 1.35,
+            }}
+          >
+            {formatContestDrawSummary(contestDrawSummary, poll)}
+          </p>
+        </>
       ) : null}
     </>
   );
@@ -3180,7 +3199,7 @@ export default function RegieEventPage() {
    } | null} */ (null),
   );
   const [pollDrawSummary, setPollDrawSummary] = useState(
-    /** @type {Record<string, { totalDraws: number; totalWinners: number }>} */ ({}),
+    /** @type {Record<string, { totalDraws: number; totalWinners: number; contestWinnerCount: number }>} */ ({}),
   );
 
   const loadPollAbortRef = useRef(null);
@@ -3260,6 +3279,7 @@ export default function RegieEventPage() {
       return {
         totalDraws: Number(body?.totalDraws || 0),
         totalWinners: Number(body?.totalWinners || 0),
+        contestWinnerCount: normalizeContestWinnerCount(body?.contestWinnerCount),
       };
     } catch {
       return null;
@@ -3350,7 +3370,16 @@ export default function RegieEventPage() {
     let cancelled = false;
     const run = async () => {
       const next = Object.fromEntries(
-        contestPollIds.map((id) => [id, { totalDraws: 0, totalWinners: 0 }]),
+        contestPollIds.map((id) => [
+          id,
+          {
+            totalDraws: 0,
+            totalWinners: 0,
+            contestWinnerCount: normalizeContestWinnerCount(
+              polls.find((p) => String(p?.id) === id)?.contestWinnerCount,
+            ),
+          },
+        ]),
       );
       await Promise.all(
         contestPollIds.map(async (pollId) => {
@@ -3359,6 +3388,9 @@ export default function RegieEventPage() {
             next[pollId] = {
               totalDraws: summary.totalDraws,
               totalWinners: summary.totalWinners,
+              contestWinnerCount: normalizeContestWinnerCount(
+                summary.contestWinnerCount,
+              ),
             };
           }
           // fail silent: on garde le fallback (0)
@@ -3692,6 +3724,19 @@ export default function RegieEventPage() {
   const activePoll = eventData?.polls?.find(
     (p) => p.id === eventData.activePollId,
   );
+  const activeContestSummary = pollDrawSummary[String(activePoll?.id || "")] ?? {
+    totalDraws: 0,
+    totalWinners: 0,
+    contestWinnerCount: normalizeContestWinnerCount(activePoll?.contestWinnerCount),
+  };
+  const activeContestWinnerQuota = normalizeContestWinnerCount(
+    activePoll?.contestWinnerCount ?? activeContestSummary?.contestWinnerCount,
+  );
+  const activeContestTotalWinners = Math.max(
+    0,
+    Number(activeContestSummary?.totalWinners || 0),
+  );
+  const contestQuotaReached = activeContestTotalWinners >= activeContestWinnerQuota;
   const pollsOrdered = Array.isArray(eventData?.polls) ? eventData.polls : [];
   const totalQuestions = pollsOrdered.length;
   const activeQuestionIndex = pollsOrdered.findIndex(
@@ -4399,8 +4444,14 @@ export default function RegieEventPage() {
               Tirer un gagnant maintenant ?
             </h3>
             <p style={{ margin: "0.55rem 0 0 0", fontSize: "0.88rem", color: "#4b5563" }}>
-              Participant éligibles :{" "}
+              Participants éligibles :{" "}
               <strong style={{ color: "#111827" }}>{contestEligibleCount}</strong>
+            </p>
+            <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.86rem", color: "#4b5563" }}>
+              Gagnants tirés :{" "}
+              <strong style={{ color: "#111827" }}>
+                {activeContestTotalWinners} / {activeContestWinnerQuota}
+              </strong>
             </p>
             {activePoll?.contestPrize ? (
               <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.86rem", color: "#4b5563" }}>
@@ -4434,23 +4485,34 @@ export default function RegieEventPage() {
               </button>
               <button
                 type="button"
-                disabled={busy || !activePoll?.id}
+                disabled={busy || !activePoll?.id || contestQuotaReached}
                 onClick={() => void postContestDraw(activePoll?.id || "")}
                 style={{
                   padding: "0.45rem 0.8rem",
                   borderRadius: "9px",
                   border: "1px solid #7c3aed",
-                  background: busy
+                  background: busy || contestQuotaReached
                     ? "#f1f5f9"
                     : "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)",
-                  color: busy ? "#94a3b8" : "#fff",
+                  color: busy || contestQuotaReached ? "#94a3b8" : "#fff",
                   fontWeight: 800,
-                  cursor: busy ? "not-allowed" : "pointer",
+                  cursor: busy || contestQuotaReached ? "not-allowed" : "pointer",
                 }}
               >
                 {busy ? "Tirage..." : "Confirmer le tirage"}
               </button>
             </div>
+            {contestQuotaReached ? (
+              <p
+                style={{
+                  margin: "0.65rem 0 0 0",
+                  fontSize: "0.78rem",
+                  color: "#6b7280",
+                }}
+              >
+                Tous les gagnants ont déjà été tirés.
+              </p>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -4971,6 +5033,16 @@ export default function RegieEventPage() {
               <p
                 style={{
                   margin: "0.35rem 0 0 0",
+                  fontSize: "0.86rem",
+                  color: "#374151",
+                  fontWeight: 700,
+                }}
+              >
+                Gagnants tirés : {activeContestTotalWinners} / {activeContestWinnerQuota}
+              </p>
+              <p
+                style={{
+                  margin: "0.35rem 0 0 0",
                   fontSize: "0.8rem",
                   color: "#64748b",
                 }}
@@ -4994,7 +5066,8 @@ export default function RegieEventPage() {
                   busy ||
                   contestEligibleLoading ||
                   contestEligibleCount <= 0 ||
-                  !!contestEligibleError
+                  !!contestEligibleError ||
+                  contestQuotaReached
                 }
                 onClick={() => setContestDrawModalOpen(true)}
                 style={{
@@ -5006,14 +5079,16 @@ export default function RegieEventPage() {
                     busy ||
                     contestEligibleLoading ||
                     contestEligibleCount <= 0 ||
-                    !!contestEligibleError
+                    !!contestEligibleError ||
+                    contestQuotaReached
                       ? "#f8fafc"
                       : "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)",
                   color:
                     busy ||
                     contestEligibleLoading ||
                     contestEligibleCount <= 0 ||
-                    !!contestEligibleError
+                    !!contestEligibleError ||
+                    contestQuotaReached
                       ? "#94a3b8"
                       : "#fff",
                   fontSize: "0.8rem",
@@ -5022,13 +5097,25 @@ export default function RegieEventPage() {
                     busy ||
                     contestEligibleLoading ||
                     contestEligibleCount <= 0 ||
-                    !!contestEligibleError
+                    !!contestEligibleError ||
+                    contestQuotaReached
                       ? "not-allowed"
                       : "pointer",
                 }}
               >
                 Tirer un gagnant
               </button>
+              {contestQuotaReached ? (
+                <p
+                  style={{
+                    margin: "0.45rem 0 0 0",
+                    fontSize: "0.78rem",
+                    color: "#6b7280",
+                  }}
+                >
+                  Tous les gagnants ont déjà été tirés.
+                </p>
+              ) : null}
               {contestDrawResult &&
               String(contestDrawResult.pollId || "") ===
                 String(activePoll?.id || "") ? (

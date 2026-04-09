@@ -131,6 +131,7 @@ model Poll {
   title     String
   question  String
   contestPrize String?
+  contestWinnerCount Int @default(1)
   type      PollType
   leadEnabled         Boolean  @default(false)
   leadTriggerOptionId String?
