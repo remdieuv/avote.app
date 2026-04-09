@@ -57,6 +57,10 @@ function formatNotationMoyenneUneDecimale(x) {
 function cleVotePourPoll(pollId) {
   return `avote_voted_poll_${pollId}`;
 }
+/** @param {string} pollId */
+function cleOptionsVotePourPoll(pollId) {
+  return `avote_voted_options_poll_${pollId}`;
+}
 
 function contestEligibleCountFromPoll(poll) {
   const opts = Array.isArray(poll?.options) ? poll.options : [];
@@ -210,6 +214,7 @@ export function PollExperience({
   const [selectedOptionIds, setSelectedOptionIds] = useState([]);
   const [voteSubmitting, setVoteSubmitting] = useState(false);
   const [aDejaVoteEnStockage, setADejaVoteEnStockage] = useState(false);
+  const [votedOptionIdsEnStockage, setVotedOptionIdsEnStockage] = useState([]);
   const [merciPourVote, setMerciPourVote] = useState(false);
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [leadFirstName, setLeadFirstName] = useState("");
@@ -354,6 +359,7 @@ export function PollExperience({
 
   useEffect(() => {
     setMerciPourVote(false);
+    setVotedOptionIdsEnStockage([]);
     if (!pollId) {
       setStorageVerifie(true);
       return;
@@ -362,6 +368,16 @@ export function PollExperience({
       if (typeof window !== "undefined") {
         const marqueur = window.localStorage.getItem(cleVotePourPoll(pollId));
         setADejaVoteEnStockage(marqueur === "true" || marqueur === "1");
+        const rawOpts = window.localStorage.getItem(cleOptionsVotePourPoll(pollId));
+        const parsed = rawOpts ? JSON.parse(rawOpts) : [];
+        if (Array.isArray(parsed)) {
+          const ids = parsed
+            .map((x) => String(x || "").trim())
+            .filter(Boolean);
+          setVotedOptionIdsEnStockage(ids);
+          setSelectedOptionIds(ids);
+          setSelectedOptionId(ids[0] || null);
+        }
       }
     } catch {
       // navigation privée, etc.
@@ -854,10 +870,15 @@ export function PollExperience({
       try {
         if (typeof window !== "undefined") {
           window.localStorage.setItem(cleVotePourPoll(pollId), "true");
+          window.localStorage.setItem(
+            cleOptionsVotePourPoll(pollId),
+            JSON.stringify(optionIds),
+          );
         }
       } catch {
         // ignore
       }
+      setVotedOptionIdsEnStockage(optionIds);
 
       await loadPoll({ silent: true });
       const leadTriggered =
@@ -938,6 +959,29 @@ export function PollExperience({
     merciPourVote ||
     !storageVerifie ||
     voteSubmitting;
+  const enModeDejaVote = voteOuvert && (aDejaVoteEnStockage || merciPourVote);
+  const optionsDejaVote = useMemo(() => {
+    if (!enModeDejaVote) return optionsPourVote;
+    const setIds = new Set(
+      (isMultipleChoice
+        ? selectedOptionIds
+        : selectedOptionId
+          ? [selectedOptionId]
+          : []
+      ).filter(Boolean),
+    );
+    if (setIds.size === 0) {
+      votedOptionIdsEnStockage.forEach((id) => setIds.add(String(id)));
+    }
+    return optionsPourVote.filter((opt) => setIds.has(String(opt.id)));
+  }, [
+    enModeDejaVote,
+    isMultipleChoice,
+    optionsPourVote,
+    selectedOptionId,
+    selectedOptionIds,
+    votedOptionIdsEnStockage,
+  ]);
 
   const pollOptions = poll?.options ?? [];
   const totalVotesResults = showBlocResultatsEnDirect
@@ -1762,8 +1806,44 @@ export function PollExperience({
                     : "Choisis une réponse, puis valide."}
                 </p>
               )}
-              <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                {optionsPourVote.map((opt) => (
+              {enModeDejaVote ? (
+                <p
+                  style={{
+                    margin: "0 0 0.85rem 0",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    padding: "0.34rem 0.62rem",
+                    borderRadius: "9999px",
+                    fontSize: "0.76rem",
+                    fontWeight: 700,
+                    letterSpacing: "0.04em",
+                    textTransform: "uppercase",
+                    color: isDark ? "#bbf7d0" : "#166534",
+                    background: isDark
+                      ? "rgba(22, 163, 74, 0.22)"
+                      : "rgba(34, 197, 94, 0.16)",
+                    border: isDark
+                      ? "1px solid rgba(34, 197, 94, 0.45)"
+                      : "1px solid rgba(22, 163, 74, 0.35)",
+                  }}
+                >
+                  Choix valide
+                </p>
+              ) : null}
+              {enModeDejaVote && optionsDejaVote.length === 0 ? (
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "0.9rem",
+                    color: palette.muted,
+                  }}
+                >
+                  Votre vote est bien enregistré.
+                </p>
+              ) : (
+                <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                {optionsDejaVote.map((opt) => (
                   <li
                     key={opt.id}
                     style={{
@@ -1834,7 +1914,9 @@ export function PollExperience({
                   </li>
                 ))}
               </ul>
-              <div style={{ marginTop: "1.15rem" }}>
+              )}
+              {!enModeDejaVote ? (
+                <div style={{ marginTop: "1.15rem" }}>
                 <button
                   className="poll-live-submit"
                   type="button"
@@ -1868,6 +1950,7 @@ export function PollExperience({
                   {voteSubmitting ? "Envoi…" : "Valider mon vote"}
                 </button>
               </div>
+              ) : null}
             </div>
           ) : null}
 
