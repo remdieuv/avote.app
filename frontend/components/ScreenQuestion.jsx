@@ -100,6 +100,9 @@ function BlocQrVote({ slug, qrScale = 1, compactText = false }) {
   }, [qrScale]);
 
   if (!joinUrl) return null;
+  const scaleSafe = Math.max(0.8, Math.min(1.8, qrScale));
+  const forceLargeMode = scaleSafe > 1.1;
+  const qrRenderedSize = forceLargeMode ? Math.max(cotePx, 420) : cotePx;
 
   return (
     <div
@@ -128,7 +131,7 @@ function BlocQrVote({ slug, qrScale = 1, compactText = false }) {
       >
         <QRCodeSVG
           value={joinUrl}
-          size={cotePx}
+          size={qrRenderedSize}
           level="M"
           marginSize={2}
           bgColor="#ffffff"
