@@ -162,15 +162,19 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
     const raw = String(searchParams?.get("pm") || "standard")
       .trim()
       .toLowerCase();
-    if (raw === "xlarge_qr" || raw === "results_focus") return raw;
+    if (raw === "xlarge_qr" || raw === "qr_fullscreen" || raw === "results_focus") return raw;
     return "standard";
   }, [searchParams]);
   const projectionModeHint =
+    projectionMode === "qr_fullscreen"
+      ? "Mode: QR plein écran"
+      :
     projectionMode === "xlarge_qr"
       ? "Mode: Grande salle"
       : projectionMode === "results_focus"
         ? "Mode: Résultats focus"
         : null;
+  const isModeQrFullscreen = projectionMode === "qr_fullscreen";
   const isModeXlargeQr = projectionMode === "xlarge_qr";
   const isModeResultsFocus = projectionMode === "results_focus";
 
@@ -1109,8 +1113,9 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
             (ds === "question" || qToRPhase === "fadeQ")
           }
           joinSlug={slugPublic}
-          qrScale={isModeXlargeQr ? 1.35 : isModeResultsFocus ? 0.82 : 1}
-          compactQuestionText={isModeXlargeQr || isModeResultsFocus}
+          qrScale={isModeQrFullscreen ? 2 : isModeXlargeQr ? 1.35 : isModeResultsFocus ? 0.82 : 1}
+          compactQuestionText={isModeQrFullscreen || isModeXlargeQr || isModeResultsFocus}
+          fullScreenQr={isModeQrFullscreen}
         />
       </div>,
     );
@@ -1182,8 +1187,9 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
       chronoTick={chronoTick}
       voteOuvert={voteOuvert}
       joinSlug={slugPublic}
-      qrScale={isModeXlargeQr ? 1.35 : isModeResultsFocus ? 0.82 : 1}
-      compactQuestionText={isModeXlargeQr || isModeResultsFocus}
+      qrScale={isModeQrFullscreen ? 2 : isModeXlargeQr ? 1.35 : isModeResultsFocus ? 0.82 : 1}
+      compactQuestionText={isModeQrFullscreen || isModeXlargeQr || isModeResultsFocus}
+      fullScreenQr={isModeQrFullscreen}
     />,
   );
 }

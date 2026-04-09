@@ -859,7 +859,12 @@ function BlocProjectionEcran({
     if (typeof window === "undefined" || !slug) return;
     const raw = window.localStorage.getItem(`avote_projection_mode_${slug}`);
     const val = String(raw || "").trim().toLowerCase();
-    if (val === "xlarge_qr" || val === "results_focus" || val === "standard") {
+    if (
+      val === "xlarge_qr" ||
+      val === "qr_fullscreen" ||
+      val === "results_focus" ||
+      val === "standard"
+    ) {
       setProjectionMode(val);
     }
   }, [slug]);
@@ -867,7 +872,9 @@ function BlocProjectionEcran({
   const enc = encodeURIComponent(slug);
   const pathScreen = `/screen/${enc}?pm=${encodeURIComponent(projectionMode)}`;
   const projectionModeLabel =
-    projectionMode === "xlarge_qr"
+    projectionMode === "qr_fullscreen"
+      ? "QR plein écran"
+      : projectionMode === "xlarge_qr"
       ? "Grande salle (QR XXL)"
       : projectionMode === "results_focus"
         ? "Résultats focus"
@@ -875,7 +882,10 @@ function BlocProjectionEcran({
   function changeProjectionMode(nextMode) {
     const v = String(nextMode || "").trim().toLowerCase();
     const safe =
-      v === "xlarge_qr" || v === "results_focus" || v === "standard"
+      v === "xlarge_qr" ||
+      v === "qr_fullscreen" ||
+      v === "results_focus" ||
+      v === "standard"
         ? v
         : "standard";
     setProjectionMode(safe);
@@ -1054,6 +1064,7 @@ function BlocProjectionEcran({
           {[
             { id: "standard", label: "Standard" },
             { id: "xlarge_qr", label: "Grande salle (QR XXL)" },
+            { id: "qr_fullscreen", label: "QR plein écran" },
             { id: "results_focus", label: "Résultats focus" },
           ].map((m) => {
             const on = projectionMode === m.id;

@@ -43,9 +43,9 @@ const PILL_VOTE_CLOSED = {
 
 /**
  * Bloc QR responsive : occupe l’espace restant sans faire défiler la page.
- * @param {{ slug: string; qrScale?: number; compactText?: boolean }} props
+ * @param {{ slug: string; qrScale?: number; compactText?: boolean; fullScreen?: boolean }} props
  */
-function BlocQrVote({ slug, qrScale = 1, compactText = false }) {
+function BlocQrVote({ slug, qrScale = 1, compactText = false, fullScreen = false }) {
   const zoneRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const [cotePx, setCotePx] = useState(200);
   const [joinUrl, setJoinUrl] = useState("");
@@ -61,6 +61,19 @@ function BlocQrVote({ slug, qrScale = 1, compactText = false }) {
     const el = zoneRef.current;
     if (!el) return;
     const scaleSafe = Math.max(0.8, Math.min(1.8, qrScale));
+
+    // Mode QR plein écran: priorise un QR dominant (quasi plein écran)
+    if (typeof window !== "undefined" && fullScreen) {
+      const applyViewportSize = () => {
+        const forced = Math.round(
+          Math.min(window.innerWidth * 0.72, window.innerHeight * 0.78),
+        );
+        setCotePx(Math.max(520, Math.min(forced, 2200)));
+      };
+      applyViewportSize();
+      window.addEventListener("resize", applyViewportSize);
+      return () => window.removeEventListener("resize", applyViewportSize);
+    }
 
     // Mode grande salle: taille forcée depuis le viewport (différence visible garantie)
     if (typeof window !== "undefined" && scaleSafe > 1.1) {
@@ -97,12 +110,16 @@ function BlocQrVote({ slug, qrScale = 1, compactText = false }) {
     const ro = new ResizeObserver(maj);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [qrScale]);
+  }, [qrScale, fullScreen]);
 
   if (!joinUrl) return null;
   const scaleSafe = Math.max(0.8, Math.min(1.8, qrScale));
   const forceLargeMode = scaleSafe > 1.1;
-  const qrRenderedSize = forceLargeMode ? Math.max(cotePx, 420) : cotePx;
+  const qrRenderedSize = fullScreen
+    ? Math.max(cotePx, 520)
+    : forceLargeMode
+      ? Math.max(cotePx, 420)
+      : cotePx;
 
   return (
     <div
@@ -141,7 +158,9 @@ function BlocQrVote({ slug, qrScale = 1, compactText = false }) {
       <p
         style={{
           margin: 0,
-          fontSize: compactText
+          fontSize: fullScreen
+            ? "clamp(1.05rem, 2.4vw, 1.5rem)"
+            : compactText
             ? "clamp(1.25rem, 4.2vw, 2.3rem)"
             : "clamp(1.55rem, 5.2vw, 3.35rem)",
           fontWeight: 800,
@@ -169,6 +188,7 @@ function BlocQrVote({ slug, qrScale = 1, compactText = false }) {
  *   joinSlug: string | null | undefined;
  *   qrScale?: number;
  *   compactQuestionText?: boolean;
+ *   fullScreenQr?: boolean;
  * }} props
  */
 export function ScreenQuestion({
@@ -180,6 +200,7 @@ export function ScreenQuestion({
   joinSlug,
   qrScale = 1,
   compactQuestionText = false,
+  fullScreenQr = false,
 }) {
   const secondesChronoVote = useMemo(() => {
     void chronoTick;
@@ -268,7 +289,7 @@ export function ScreenQuestion({
         </h1>
       </div>
 
-      {voteOuvert ? (
+      {voteOuvert && !fullScreenQr ? (
         chronometreApi ? (
           <div
             style={{
@@ -357,6 +378,7 @@ export function ScreenQuestion({
           slug={slugQr}
           qrScale={qrScale}
           compactText={compactQuestionText}
+          fullScreen={fullScreenQr}
         />
       ) : null}
     </main>
