@@ -1069,6 +1069,19 @@ export function PollExperience({
       }).label,
     [],
   );
+  const voteTakenLabel = useMemo(
+    () =>
+      getUxState({
+        liveState: "CLOSED",
+        voteState: "CLOSED",
+        displayState: "QUESTION",
+      }).label,
+    [],
+  );
+  const topUxLabel =
+    voteOuvert && (merciPourVote || aDejaVoteEnStockage)
+      ? voteTakenLabel
+      : ux.label;
 
   const pollUxTone = getLiveStateTone(pollUxPres.ux);
   const pollVisualTokens = useMemo(
@@ -1306,7 +1319,7 @@ export function PollExperience({
             color: palette.muted,
           }}
         >
-          {ux.label}
+          {topUxLabel}
         </div>
       ) : null}
       {loading && (

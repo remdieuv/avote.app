@@ -153,6 +153,7 @@ export function JoinLiveHub({ slug }) {
   const [pollsProgress, setPollsProgress] = useState(null);
   /** @type {{ id: string; label: string }[]} */
   const [pastPolls, setPastPolls] = useState([]);
+  const [hasVotedActivePoll, setHasVotedActivePoll] = useState(false);
   const [chronoTick, setChronoTick] = useState(0);
   /** Personnalisation salle (/admin/.../customization) */
   const [roomDescription, setRoomDescription] = useState(null);
@@ -536,6 +537,30 @@ export function JoinLiveHub({ slug }) {
     router.push(votePath);
   }
 
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    if (!activePollId) {
+      setHasVotedActivePoll(false);
+      return undefined;
+    }
+    const key = `avote_voted_poll_${activePollId}`;
+    const sync = () => {
+      try {
+        const v = window.localStorage.getItem(key);
+        setHasVotedActivePoll(v === "true" || v === "1");
+      } catch {
+        setHasVotedActivePoll(false);
+      }
+    };
+    sync();
+    window.addEventListener("focus", sync);
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      window.removeEventListener("focus", sync);
+      document.removeEventListener("visibilitychange", sync);
+    };
+  }, [activePollId]);
+
   const progressionLigne = useMemo(() => {
     if (!pollsProgress) return null;
     const { current, total } = pollsProgress;
@@ -657,7 +682,9 @@ export function JoinLiveHub({ slug }) {
     scene === "finished"
       ? null
       : scene === "voting"
-        ? "Le vote est ouvert : appuyez sur « Voter maintenant »."
+        ? hasVotedActivePoll
+          ? "Réponse envoyée. Vous pouvez suivre le direct depuis cette page."
+          : "Le vote est ouvert : appuyez sur « Voter maintenant »."
         : scene === "results"
           ? "Les résultats sont visibles ici, puis la prochaine question arrive."
           : "Gardez cette page ouverte : la session continue en direct.";
@@ -745,7 +772,9 @@ export function JoinLiveHub({ slug }) {
     } else if (scene === "voting") {
       corps = (
         <>
-          <p style={{ margin: 0, ...joinBadgeEtat }}>{joinPres.title}</p>
+          <p style={{ margin: 0, ...joinBadgeEtat }}>
+            {hasVotedActivePoll ? "Votre réponse est prise en compte" : joinPres.title}
+          </p>
           <h2
             style={{
               margin: "0.65rem 0 0 0",
@@ -804,13 +833,14 @@ export function JoinLiveHub({ slug }) {
               fontWeight: 800,
               border: "none",
               borderRadius: "14px",
-              background: joinCtaGradient,
-              color: "#fff",
+              background: hasVotedActivePoll ? "transparent" : joinCtaGradient,
+              color: hasVotedActivePoll ? palette.link : "#fff",
+              border: hasVotedActivePoll ? `1px solid ${palette.cardBorder}` : "none",
               cursor: "pointer",
               boxShadow: `0 ${Math.round(8 * joinVisualTokens.shadowScale)}px ${Math.round(30 * joinVisualTokens.shadowScale)}px rgba(0, 0, 0, ${isDark ? 0.32 : 0.18})`,
             }}
           >
-            Voter maintenant
+            {hasVotedActivePoll ? "Voir mon vote" : "Voter maintenant"}
           </button>
         </>
       );
