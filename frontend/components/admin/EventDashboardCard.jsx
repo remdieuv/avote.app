@@ -23,6 +23,9 @@ import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
  *   featured?: boolean;
  *   newLeadCount?: number;
  *   formatDate: (iso: string | undefined, fallback?: string | null) => string;
+ *   actionBusy?: boolean;
+ *   onDuplicate?: (eventId: string) => void;
+ *   onDelete?: (eventId: string) => void;
  * }} props
  */
 export function EventDashboardCard({
@@ -30,6 +33,9 @@ export function EventDashboardCard({
   featured,
   newLeadCount = 0,
   formatDate,
+  actionBusy = false,
+  onDuplicate,
+  onDelete,
 }) {
   const ev = event;
   const ux = getEventUxState(ev);
@@ -305,76 +311,120 @@ export function EventDashboardCard({
             Personnaliser ma salle
           </span>
         ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "0.45rem",
-            }}
-          >
-            <Link
-              href={`/admin/events/${ev.id}/customization`}
+          <>
+            <div
               style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "0.55rem 0.95rem",
-                fontSize: "0.84rem",
-                fontWeight: 600,
-                borderRadius: "10px",
-                textDecoration: "none",
-                border: "1px solid #cbd5e1",
-                background: "#fff",
-                color: "#475569",
-                textAlign: "center",
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "0.45rem",
               }}
             >
-              Personnaliser
-            </Link>
-            <Link
-              href={`/admin/event/${ev.id}/leads`}
+              <Link
+                href={`/admin/events/${ev.id}/customization`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "0.55rem 0.95rem",
+                  fontSize: "0.84rem",
+                  fontWeight: 600,
+                  borderRadius: "10px",
+                  textDecoration: "none",
+                  border: "1px solid #cbd5e1",
+                  background: "#fff",
+                  color: "#475569",
+                  textAlign: "center",
+                }}
+              >
+                Personnaliser
+              </Link>
+              <Link
+                href={`/admin/event/${ev.id}/leads`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "0.55rem 0.95rem",
+                  fontSize: "0.84rem",
+                  fontWeight: 700,
+                  borderRadius: "10px",
+                  textDecoration: "none",
+                  border: "1px solid #bbf7d0",
+                  background: "#f0fdf4",
+                  color: "#166534",
+                  textAlign: "center",
+                }}
+              >
+                Leads
+                {newLeadCount > 0 ? (
+                  <span
+                    style={{
+                      marginLeft: "0.35rem",
+                      display: "inline-flex",
+                      minWidth: "1.1rem",
+                      height: "1.1rem",
+                      borderRadius: "999px",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "0 0.3rem",
+                      background: "#dcfce7",
+                      border: "1px solid #86efac",
+                      color: "#166534",
+                      fontSize: "0.66rem",
+                      fontWeight: 800,
+                      lineHeight: 1,
+                    }}
+                    aria-label={`${newLeadCount} nouveaux leads`}
+                    title={`${newLeadCount} nouveaux leads`}
+                  >
+                    {newLeadCount > 99 ? "99+" : newLeadCount}
+                  </span>
+                ) : null}
+              </Link>
+            </div>
+            <div
               style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "0.55rem 0.95rem",
-                fontSize: "0.84rem",
-                fontWeight: 700,
-                borderRadius: "10px",
-                textDecoration: "none",
-                border: "1px solid #bbf7d0",
-                background: "#f0fdf4",
-                color: "#166534",
-                textAlign: "center",
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "0.45rem",
               }}
             >
-              Leads
-              {newLeadCount > 0 ? (
-                <span
-                  style={{
-                    marginLeft: "0.35rem",
-                    display: "inline-flex",
-                    minWidth: "1.1rem",
-                    height: "1.1rem",
-                    borderRadius: "999px",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: "0 0.3rem",
-                    background: "#dcfce7",
-                    border: "1px solid #86efac",
-                    color: "#166534",
-                    fontSize: "0.66rem",
-                    fontWeight: 800,
-                    lineHeight: 1,
-                  }}
-                  aria-label={`${newLeadCount} nouveaux leads`}
-                  title={`${newLeadCount} nouveaux leads`}
-                >
-                  {newLeadCount > 99 ? "99+" : newLeadCount}
-                </span>
-              ) : null}
-            </Link>
-          </div>
+              <button
+                type="button"
+                disabled={actionBusy}
+                onClick={() => onDuplicate?.(ev.id)}
+                style={{
+                  padding: "0.5rem 0.75rem",
+                  fontSize: "0.8rem",
+                  fontWeight: 700,
+                  borderRadius: "9px",
+                  border: "1px solid #cbd5e1",
+                  background: "#fff",
+                  color: actionBusy ? "#94a3b8" : "#334155",
+                  cursor: actionBusy ? "not-allowed" : "pointer",
+                }}
+              >
+                {actionBusy ? "..." : "Dupliquer"}
+              </button>
+              <button
+                type="button"
+                disabled={actionBusy}
+                onClick={() => onDelete?.(ev.id)}
+                style={{
+                  padding: "0.5rem 0.75rem",
+                  fontSize: "0.8rem",
+                  fontWeight: 700,
+                  borderRadius: "9px",
+                  border: "1px solid #fecaca",
+                  background: "#fff5f5",
+                  color: actionBusy ? "#fda4af" : "#b91c1c",
+                  cursor: actionBusy ? "not-allowed" : "pointer",
+                }}
+              >
+                {actionBusy ? "..." : "Supprimer"}
+              </button>
+            </div>
+          </>
         )}
       </div>
 

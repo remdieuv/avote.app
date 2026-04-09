@@ -77,6 +77,7 @@ export default function AdminEventsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState(EVENT_STATUS_FILTER_ALL);
   const [sortMode, setSortMode] = useState(SORT_ACTIVE_FIRST);
+  const [actionEventId, setActionEventId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -143,6 +144,59 @@ export default function AdminEventsPage() {
       window.clearInterval(id);
     };
   }, [rows]);
+
+  const duplicateEvent = useCallback(
+    async (eventId) => {
+      if (!eventId) return;
+      setActionEventId(eventId);
+      setFetchError(null);
+      try {
+        const res = await adminFetch(
+          `${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/duplicate`,
+          { method: "POST" },
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(body?.error || `Erreur ${res.status}`);
+        }
+        await load();
+      } catch (e) {
+        setFetchError(e?.message || "Duplication impossible.");
+      } finally {
+        setActionEventId(null);
+      }
+    },
+    [load],
+  );
+
+  const deleteEvent = useCallback(
+    async (eventId) => {
+      const ev = rows.find((x) => String(x.id) === String(eventId));
+      const titre = ev?.title || "cet événement";
+      const ok = window.confirm(
+        `Supprimer définitivement « ${titre} » ? Cette action est irréversible.`,
+      );
+      if (!ok) return;
+      setActionEventId(eventId);
+      setFetchError(null);
+      try {
+        const res = await adminFetch(
+          `${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}`,
+          { method: "DELETE" },
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(body?.error || `Erreur ${res.status}`);
+        }
+        await load();
+      } catch (e) {
+        setFetchError(e?.message || "Suppression impossible.");
+      } finally {
+        setActionEventId(null);
+      }
+    },
+    [rows, load],
+  );
 
   const filteredSorted = useMemo(() => {
     let list = filterEventsBySearch(rows, searchQuery);
@@ -325,6 +379,9 @@ export default function AdminEventsPage() {
                   featured={ev.id === featuredId}
                   newLeadCount={newLeadCounts[ev.id] || 0}
                   formatDate={formatEventDate}
+                  actionBusy={actionEventId === ev.id}
+                  onDuplicate={duplicateEvent}
+                  onDelete={deleteEvent}
                 />
               </div>
             ))}

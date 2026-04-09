@@ -893,6 +893,142 @@ app.get("/events", requireAuth, async (req, res) => {
   }
 });
 
+app.post("/events/:eventId/duplicate", requireAuth, async (req, res) => {
+  const { eventId } = req.params;
+  try {
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    const source = await prisma.event.findUnique({
+      where: { id: eventId },
+      include: {
+        polls: {
+          orderBy: { order: "asc" },
+          include: { options: { orderBy: { order: "asc" } } },
+        },
+      },
+    });
+    if (!source) {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+    if (!Array.isArray(source.polls) || source.polls.length < 1) {
+      return res.status(400).json({ error: "Aucune question à dupliquer." });
+    }
+
+    const slug = await slugEvenementUnique();
+    const duplicated = await prisma.$transaction(async (tx) => {
+      const event = await tx.event.create({
+        data: {
+          userId: req.userId,
+          title: `${source.title} (copie)`,
+          description: source.description ?? null,
+          logoUrl: source.logoUrl ?? null,
+          backgroundUrl: source.backgroundUrl ?? null,
+          primaryColor: source.primaryColor ?? null,
+          themeMode: source.themeMode ?? null,
+          backgroundOverlayStrength: source.backgroundOverlayStrength ?? null,
+          roomBackgroundColor: source.roomBackgroundColor ?? null,
+          slug,
+          status: "PUBLISHED",
+          liveState: "WAITING",
+          voteState: "CLOSED",
+          displayState: "WAITING",
+          autoReveal: Boolean(source.autoReveal),
+          autoRevealDelaySec: source.autoRevealDelaySec ?? 5,
+          autoRevealShowResultsAt: null,
+          questionTimerTotalSec: source.questionTimerTotalSec ?? null,
+          questionTimerAccumulatedSec: 0,
+          questionTimerStartedAt: null,
+          questionTimerIsPaused: true,
+        },
+      });
+
+      let firstPollId = null;
+      for (let i = 0; i < source.polls.length; i++) {
+        const sp = source.polls[i];
+        const created = await tx.poll.create({
+          data: {
+            eventId: event.id,
+            title: sp.title,
+            question: sp.question,
+            contestPrize: sp.contestPrize ?? null,
+            contestWinnerCount: normalizeContestWinnerCount(sp.contestWinnerCount),
+            type: sp.type,
+            leadEnabled: Boolean(sp.leadEnabled),
+            status: i === 0 ? "ACTIVE" : "DRAFT",
+            order: i,
+            options: {
+              create: sp.options.map((o) => ({
+                label: o.label,
+                order: o.order,
+              })),
+            },
+          },
+          include: { options: { orderBy: { order: "asc" } } },
+        });
+        if (sp.leadEnabled) {
+          const sourceTrigger = sp.options.find((o) => o.id === sp.leadTriggerOptionId);
+          const triggerOrder = sourceTrigger?.order ?? 0;
+          const mappedTrigger =
+            created.options.find((o) => o.order === triggerOrder) ?? created.options[0] ?? null;
+          await tx.poll.update({
+            where: { id: created.id },
+            data: { leadTriggerOptionId: mappedTrigger?.id ?? null },
+          });
+        }
+        if (!firstPollId) firstPollId = created.id;
+      }
+
+      await tx.event.update({
+        where: { id: event.id },
+        data: { activePollId: firstPollId },
+      });
+      return event;
+    });
+
+    return res.status(201).json({
+      ok: true,
+      event: {
+        id: duplicated.id,
+        title: duplicated.title,
+        slug: duplicated.slug,
+      },
+    });
+  } catch (e) {
+    console.error("events/:eventId/duplicate", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+app.delete("/events/:eventId", requireAuth, async (req, res) => {
+  const { eventId } = req.params;
+  try {
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    const evt = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, liveState: true, title: true },
+    });
+    if (!evt) {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+    if (String(evt.liveState || "").toUpperCase() === "VOTING") {
+      return res.status(409).json({
+        error:
+          "Impossible de supprimer un événement pendant le vote en cours. Terminez d’abord l’événement.",
+      });
+    }
+    await prisma.event.delete({ where: { id: eventId } });
+    return res.json({ ok: true, id: eventId });
+  } catch (e) {
+    console.error("delete /events/:eventId", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
 app.get("/internal/stats", requireAuth, requireAdmin, async (_req, res) => {
   try {
     const [users, events, polls, votes, leads] = await Promise.all([
