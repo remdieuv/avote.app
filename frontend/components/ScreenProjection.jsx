@@ -165,6 +165,12 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
     if (raw === "xlarge_qr" || raw === "results_focus") return raw;
     return "standard";
   }, [searchParams]);
+  const projectionModeHint =
+    projectionMode === "xlarge_qr"
+      ? "Mode: Grande salle"
+      : projectionMode === "results_focus"
+        ? "Mode: Résultats focus"
+        : null;
 
   const applyEventSlugMeta = useCallback((meta) => {
     setEventId(meta.id);
@@ -860,6 +866,27 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
   const wrapOut = (blackoutFlag, node) => (
     <>
       {ambientBg}
+      {projectionModeHint ? (
+        <div
+          style={{
+            position: "fixed",
+            top: "clamp(0.55rem, 1.6vh, 0.85rem)",
+            right: "clamp(0.6rem, 1.8vw, 1rem)",
+            zIndex: 92,
+            fontSize: "clamp(0.62rem, 1.05vw, 0.72rem)",
+            fontWeight: 700,
+            letterSpacing: "0.04em",
+            color: "rgba(226, 232, 240, 0.92)",
+            padding: "0.2rem 0.45rem",
+            borderRadius: "999px",
+            background: "rgba(15, 23, 42, 0.34)",
+            border: "1px solid rgba(148, 163, 184, 0.26)",
+            pointerEvents: "none",
+          }}
+        >
+          {projectionModeHint}
+        </div>
+      ) : null}
       {!poll || (ds !== "question" && ds !== "results") ? (
         <div
           className="text-center text-sm opacity-80 mb-2"

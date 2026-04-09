@@ -72,8 +72,20 @@ function BlocQrVote({ slug, qrScale = 1, compactText = false }) {
         Math.max(0, h - reserveLegende - padCarte),
       );
       const avecMarge = Math.floor(Math.max(0, brut) * 1);
-      const scaled = Math.round(avecMarge * Math.max(0.8, Math.min(1.55, qrScale)));
-      setCotePx(Math.max(190, Math.min(scaled, 1400)));
+      const scaleSafe = Math.max(0.8, Math.min(1.8, qrScale));
+      let scaled = Math.round(avecMarge * scaleSafe);
+
+      // Mode grande salle: garantit une vraie hausse même si la zone flex est trop contrainte.
+      if (typeof window !== "undefined" && scaleSafe > 1.1) {
+        const viewportTarget = Math.round(
+          Math.min(window.innerWidth * 0.34, window.innerHeight * 0.42),
+        );
+        scaled = Math.max(scaled, viewportTarget);
+      }
+
+      const minPx = scaleSafe > 1.1 ? 250 : 170;
+      const maxPx = scaleSafe > 1.1 ? 1650 : 1400;
+      setCotePx(Math.max(minPx, Math.min(scaled, maxPx)));
     };
     maj();
     const ro = new ResizeObserver(maj);
