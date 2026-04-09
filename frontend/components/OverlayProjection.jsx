@@ -189,6 +189,14 @@ function chronoRestantSecondes(tm) {
   return Math.max(0, tm.totalSec - acc - seg);
 }
 
+function contestEligibleCountFromPoll(poll) {
+  const opts = Array.isArray(poll?.options) ? poll.options : [];
+  const triggerId = String(poll?.leadTriggerOptionId || "");
+  if (!triggerId) return 0;
+  const trigger = opts.find((o) => String(o?.id || "") === triggerId);
+  return Number(trigger?.voteCount ?? trigger?.votes ?? 0) || 0;
+}
+
 /** @param {string | null | undefined} live */
 function deriveDisplayFromLive(live) {
   const s = String(live || "").toLowerCase();
@@ -929,6 +937,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
   }
 
   if (effectivePanel === "results") {
+    const isContestEntry = String(poll?.type || "").toUpperCase() === "CONTEST_ENTRY";
     return (
       <main style={shell}>
         {wrapGlass(
@@ -943,8 +952,45 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
                 color: th.accent,
               }}
             >
-              {getUxState({ liveState: "RESULTS", displayState: "RESULTS" }).label}
+              {isContestEntry
+                ? "Concours en cours"
+                : getUxState({ liveState: "RESULTS", displayState: "RESULTS" }).label}
             </p>
+            {isContestEntry ? (
+              <div
+                style={{
+                  borderRadius: "10px",
+                  border: `1px solid ${theme === "light" ? "rgba(91,33,182,0.25)" : "rgba(167,139,250,0.3)"}`,
+                  background: theme === "light" ? "rgba(245,243,255,0.75)" : "rgba(76,29,149,0.18)",
+                  padding: "0.55rem 0.65rem",
+                }}
+              >
+                <p style={{ margin: 0, fontSize: v.muted, color: th.textMuted }}>
+                  Lot à gagner
+                </p>
+                <p
+                  style={{
+                    margin: "0.18rem 0 0 0",
+                    fontSize: v.rowRem,
+                    color: th.accent,
+                    fontWeight: 800,
+                    overflowWrap: "anywhere",
+                  }}
+                >
+                  {String(poll?.contestPrize || "").trim() || "Lot à gagner non précisé"}
+                </p>
+                <p
+                  style={{
+                    margin: "0.45rem 0 0 0",
+                    fontSize: `calc(${v.rowRem} * 0.92)`,
+                    color: th.textMuted,
+                    fontWeight: 700,
+                  }}
+                >
+                  Participants inscrits : {contestEligibleCountFromPoll(poll)}
+                </p>
+              </div>
+            ) : (
             <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
               {topOptions.map((opt, i) => {
                 const optVotes =
@@ -1017,6 +1063,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
                 );
               })}
             </ul>
+            )}
             {showQR && joinUrl ? (
               <div
                 style={{

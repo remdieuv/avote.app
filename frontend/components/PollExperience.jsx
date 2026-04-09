@@ -58,6 +58,14 @@ function cleVotePourPoll(pollId) {
   return `avote_voted_poll_${pollId}`;
 }
 
+function contestEligibleCountFromPoll(poll) {
+  const opts = Array.isArray(poll?.options) ? poll.options : [];
+  const triggerId = String(poll?.leadTriggerOptionId || "");
+  if (!triggerId) return 0;
+  const trigger = opts.find((o) => String(o?.id || "") === triggerId);
+  return Number(trigger?.voteCount ?? trigger?.votes ?? 0) || 0;
+}
+
 /**
  * Carte « vote clos, résultats pas encore à la salle » — teintée par l’accent événement.
  * @param {{ accent: string; isDark: boolean }} props
@@ -768,6 +776,7 @@ export function PollExperience({
   }, [merciPourVote, showLeadForm]);
 
   const isMultipleChoice = poll?.type === "MULTIPLE_CHOICE";
+  const isContestEntry = String(poll?.type || "").toUpperCase() === "CONTEST_ENTRY";
 
   function toggleOptionMultiple(optionId) {
     if (
@@ -1862,9 +1871,19 @@ export function PollExperience({
                   letterSpacing: "-0.02em",
                 }}
               >
-                {resultsLabel}
+                {isContestEntry ? "Concours en cours" : resultsLabel}
               </h3>
-              {voteOuvert && affichageResultatsPublic ? (
+              {isContestEntry ? (
+                <p
+                  style={{
+                    margin: "0 0 1rem 0",
+                    fontSize: "0.82rem",
+                    color: palette.muted,
+                  }}
+                >
+                  Le tirage est piloté par l’organisateur.
+                </p>
+              ) : voteOuvert && affichageResultatsPublic ? (
                 <p
                   style={{
                     margin: "0 0 1rem 0",
@@ -1885,7 +1904,46 @@ export function PollExperience({
                   Classement par nombre de votes.
                 </p>
               )}
-              {pollEstNotation ? (
+              {isContestEntry ? (
+                <div
+                  style={{
+                    borderRadius: "12px",
+                    border: `1px solid ${palette.cardBorder}`,
+                    background: isDark
+                      ? "rgba(15, 23, 42, 0.45)"
+                      : "rgba(255,255,255,0.6)",
+                    padding: "0.9rem 1rem",
+                  }}
+                >
+                  <p style={{ margin: 0, fontSize: "0.82rem", color: palette.muted }}>
+                    Lot à gagner
+                  </p>
+                  <p
+                    style={{
+                      margin: "0.22rem 0 0 0",
+                      fontSize: "1rem",
+                      fontWeight: 800,
+                      color: accent,
+                      overflowWrap: "anywhere",
+                    }}
+                  >
+                    {String(poll?.contestPrize || "").trim() || "Lot à gagner non précisé"}
+                  </p>
+                  <p
+                    style={{
+                      margin: "0.75rem 0 0 0",
+                      fontSize: "0.86rem",
+                      color: palette.fg2,
+                      fontWeight: 700,
+                    }}
+                  >
+                    Participants inscrits : {contestEligibleCountFromPoll(poll)}
+                  </p>
+                  <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.8rem", color: palette.muted }}>
+                    Les gagnants seront annoncés par l’organisateur.
+                  </p>
+                </div>
+              ) : pollEstNotation ? (
                 <>
                   <style>{`
                     @keyframes avote-poll-moyenne-pulse {
@@ -1953,7 +2011,8 @@ export function PollExperience({
                   </div>
                 </>
               ) : null}
-              <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+              {!isContestEntry ? (
+                <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                 {optionsPourResultatsTriees.map((opt) => {
                   const badgeLeaderLabel = voteOuvert ? "En tête" : "Gagnant";
                   const optVotes =
@@ -2068,7 +2127,8 @@ export function PollExperience({
                     </li>
                   );
                 })}
-              </ul>
+                </ul>
+              ) : null}
             </section>
           ) : null}
 
@@ -2084,8 +2144,45 @@ export function PollExperience({
                   fontWeight: 800,
                 }}
               >
-                Résultats
+                {isContestEntry ? "Concours" : "Résultats"}
               </h3>
+              {isContestEntry ? (
+                <div
+                  style={{
+                    borderRadius: "12px",
+                    border: `1px solid ${palette.cardBorder}`,
+                    background: isDark
+                      ? "rgba(15, 23, 42, 0.45)"
+                      : "rgba(255,255,255,0.6)",
+                    padding: "0.85rem 0.95rem",
+                  }}
+                >
+                  <p style={{ margin: 0, fontSize: "0.82rem", color: palette.muted }}>
+                    Lot à gagner
+                  </p>
+                  <p
+                    style={{
+                      margin: "0.22rem 0 0 0",
+                      fontSize: "0.98rem",
+                      fontWeight: 800,
+                      color: accent,
+                      overflowWrap: "anywhere",
+                    }}
+                  >
+                    {String(poll?.contestPrize || "").trim() || "Lot à gagner non précisé"}
+                  </p>
+                  <p
+                    style={{
+                      margin: "0.7rem 0 0 0",
+                      color: palette.fg2,
+                      fontSize: "0.86rem",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Participants inscrits : {contestEligibleCountFromPoll(poll)}
+                  </p>
+                </div>
+              ) : (
               <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                 {optionsPourVote.map((opt) => {
                   const optVotes =
@@ -2110,6 +2207,7 @@ export function PollExperience({
                   );
                 })}
               </ul>
+              )}
             </>
           ) : null}
         </>

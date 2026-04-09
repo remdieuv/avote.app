@@ -18,6 +18,14 @@ function votesOption(o) {
   return Number(o.voteCount ?? o.votes ?? 0) || 0;
 }
 
+function contestEligibleCountFromPoll(poll) {
+  const opts = Array.isArray(poll?.options) ? poll.options : [];
+  const triggerId = String(poll?.leadTriggerOptionId || "");
+  if (!triggerId) return 0;
+  const trigger = opts.find((o) => String(o?.id || "") === triggerId);
+  return Number(trigger?.voteCount ?? trigger?.votes ?? 0) || 0;
+}
+
 /** @param {Record<string, unknown> | null | undefined} tm */
 function chronoRestantSecondes(tm) {
   if (!tm || typeof tm.totalSec !== "number") return null;
@@ -901,6 +909,85 @@ function ScreenResultsChoixClassiques({
 }
 
 export function ScreenResults(props) {
+  if (String(props?.poll?.type || "").toUpperCase() === "CONTEST_ENTRY") {
+    const poll = props.poll;
+    const questionAffichee =
+      (typeof poll?.question === "string" && poll.question) ||
+      (typeof poll?.title === "string" && poll.title) ||
+      "Concours";
+    const contestPrize =
+      String(poll?.contestPrize || "").trim() || "Lot à gagner non précisé";
+    const quota = Math.max(1, Number(poll?.contestWinnerCount || 1));
+    const participants = contestEligibleCountFromPoll(poll);
+    return (
+      <main style={{ ...props.shell, textAlign: "left" }}>
+        <header
+          style={{
+            alignSelf: "stretch",
+            marginBottom: "clamp(0.9rem, 2vw, 1.25rem)",
+            paddingBottom: "clamp(0.55rem, 1.2vw, 0.85rem)",
+            borderBottom: "1px solid rgba(148, 163, 184, 0.18)",
+            flexShrink: 0,
+          }}
+        >
+          <span
+            style={{
+              display: "inline-block",
+              fontSize: "clamp(0.6rem, 1.15vw, 0.72rem)",
+              fontWeight: 800,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              padding: "0.28rem 0.62rem",
+              borderRadius: "9999px",
+              background: "rgba(124, 58, 237, 0.22)",
+              color: "#c4b5fd",
+              border: "1px solid rgba(167, 139, 250, 0.55)",
+            }}
+          >
+            Concours
+          </span>
+          <h1
+            style={{
+              margin: "0.6rem 0 0 0",
+              fontSize: "clamp(1.45rem, 4vw, 2.4rem)",
+              fontWeight: 800,
+              lineHeight: 1.12,
+              letterSpacing: "-0.03em",
+              color: "#f0fdfa",
+            }}
+          >
+            {questionAffichee}
+          </h1>
+        </header>
+        <section
+          style={{
+            borderRadius: "14px",
+            border: "1px solid rgba(167, 139, 250, 0.35)",
+            background: "linear-gradient(165deg, rgba(124,58,237,0.14) 0%, rgba(15,23,42,0.75) 100%)",
+            padding: "clamp(1rem, 2.5vw, 1.35rem) clamp(1.1rem, 3vw, 1.55rem)",
+            display: "grid",
+            gap: "0.65rem",
+          }}
+        >
+          <p style={{ margin: 0, color: "#a78bfa", fontSize: "0.82rem", fontWeight: 700 }}>
+            Lot à gagner
+          </p>
+          <p style={{ margin: 0, color: "#ede9fe", fontSize: "1.1rem", fontWeight: 800 }}>
+            {contestPrize}
+          </p>
+          <p style={{ margin: "0.35rem 0 0 0", color: "#cbd5e1", fontSize: "0.96rem", fontWeight: 700 }}>
+            Participants inscrits : {participants}
+          </p>
+          <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.9rem" }}>
+            Gagnants à tirer : {quota}
+          </p>
+          <p style={{ margin: "0.2rem 0 0 0", color: "#94a3b8", fontSize: "0.82rem" }}>
+            Tirage en cours en régie.
+          </p>
+        </section>
+      </main>
+    );
+  }
   if (props.poll && estPollNotation(props.poll)) {
     return <ScreenResultsNotation {...props} />;
   }
