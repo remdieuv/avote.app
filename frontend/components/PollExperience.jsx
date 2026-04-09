@@ -1188,6 +1188,23 @@ export function PollExperience({
           lineHeight: 1.5,
         }}
       >
+        <style>{`
+          @media (max-width: 640px) {
+            .poll-live-zone {
+              padding: 0.8rem 0.8rem 1.35rem !important;
+            }
+            .poll-live-panel {
+              max-width: 100% !important;
+              padding: 1rem 0.9rem !important;
+              border-radius: 16px !important;
+            }
+            .poll-live-submit {
+              max-width: 100% !important;
+              min-height: 50px !important;
+              font-size: 1rem !important;
+            }
+          }
+        `}</style>
         <header
           style={{
             flexShrink: 0,
@@ -1260,11 +1277,12 @@ export function PollExperience({
               color: accent,
             }}
           >
-            Espace vote
+            Page votant
           </p>
         </header>
 
         <div
+          className="poll-live-zone"
           style={{
             flex: 1,
             width: "100%",
@@ -1276,7 +1294,7 @@ export function PollExperience({
             boxSizing: "border-box",
           }}
         >
-          <div style={panelStyle}>
+          <div className="poll-live-panel" style={panelStyle}>
       {!loading && !error ? (
         <div
           className="text-center text-sm opacity-80 mb-2"
@@ -1373,20 +1391,10 @@ export function PollExperience({
                     lineHeight: 1.5,
                   }}
                 >
-                  {LIVE_UX_BODY_POLL_WAITING}
+                  {pollFetch404Slug
+                    ? "La salle est en attente d’une question active. Revenez ici dès l’ouverture du vote."
+                    : LIVE_UX_BODY_POLL_WAITING}
                 </p>
-                {pollUxPres.subtitle ? (
-                  <p
-                    style={{
-                      margin: "0.65rem 0 0 0",
-                      fontSize: "0.9rem",
-                      color: palette.muted,
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    {pollUxPres.subtitle}
-                  </p>
-                ) : null}
               </>
             ) : null}
           </div>
@@ -1815,6 +1823,7 @@ export function PollExperience({
               </ul>
               <div style={{ marginTop: "1.15rem" }}>
                 <button
+                  className="poll-live-submit"
                   type="button"
                   onClick={submitVote}
                   disabled={votesBloques || !hasSelectionValide}

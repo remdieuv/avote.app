@@ -16,7 +16,6 @@ import { resolveApiAssetUrlNullable } from "@/lib/assetUrl";
 import { API_URL, SOCKET_URL } from "@/lib/config";
 import {
   LIVE_UX_BODY_FINISHED_MERCI,
-  LIVE_UX_BODY_JOIN_AFTER_RESULTS,
   LIVE_UX_BODY_JOIN_PAUSED,
   LIVE_UX_BODY_JOIN_WAITING,
   LIVE_UX_SUBTITLE_REVEAL_PENDING,
@@ -655,7 +654,13 @@ export function JoinLiveHub({ slug }) {
   );
 
   const piedEncouragement =
-    scene === "finished" ? null : "Gardez cette page ouverte.";
+    scene === "finished"
+      ? null
+      : scene === "voting"
+        ? "Le vote est ouvert : appuyez sur « Voter maintenant »."
+        : scene === "results"
+          ? "Les résultats sont visibles ici, puis la prochaine question arrive."
+          : "Gardez cette page ouverte : la session continue en direct.";
 
   let corps = null;
 
@@ -786,6 +791,7 @@ export function JoinLiveHub({ slug }) {
             </>
           ) : null}
           <button
+            className="join-live-cta"
             type="button"
             onClick={participer}
             style={{
@@ -804,7 +810,7 @@ export function JoinLiveHub({ slug }) {
               boxShadow: `0 ${Math.round(8 * joinVisualTokens.shadowScale)}px ${Math.round(30 * joinVisualTokens.shadowScale)}px rgba(0, 0, 0, ${isDark ? 0.32 : 0.18})`,
             }}
           >
-            Participer au vote
+            Voter maintenant
           </button>
         </>
       );
@@ -849,7 +855,7 @@ export function JoinLiveHub({ slug }) {
                   textUnderlineOffset: "4px",
                 }}
               >
-                Voir les résultats
+                Consulter les résultats
               </Link>
             ) : (
               <p
@@ -876,14 +882,8 @@ export function JoinLiveHub({ slug }) {
               marginRight: "auto",
             }}
           >
-            {LIVE_UX_BODY_JOIN_AFTER_RESULTS}
+            La prochaine question arrive bientôt. Restez sur cette page.
           </p>
-          <div style={{ marginTop: "1.35rem" }}>
-            <AttenteAnimee
-              accent={accent}
-              pulseAllowed={joinVisualTokens.pulseAllowed}
-            />
-          </div>
         </>
       );
     } else if (scene === "paused") {
@@ -990,6 +990,21 @@ export function JoinLiveHub({ slug }) {
           0%, 100% { opacity: 0.55; }
           50% { opacity: 1; }
         }
+        @media (max-width: 640px) {
+          .join-live-zone {
+            padding: 0.75rem 0.8rem 1.25rem !important;
+          }
+          .join-live-card {
+            max-width: 100% !important;
+            padding: 1rem 0.9rem !important;
+            border-radius: 16px !important;
+          }
+          .join-live-cta {
+            max-width: 100% !important;
+            min-height: 50px !important;
+            font-size: 1rem !important;
+          }
+        }
       `}</style>
 
       <header
@@ -1073,9 +1088,9 @@ export function JoinLiveHub({ slug }) {
         ) : null}
       </header>
 
-      <div style={zoneMain}>
+      <div className="join-live-zone" style={zoneMain}>
         {loading ? (
-          <div style={carteCentral}>
+          <div className="join-live-card" style={carteCentral}>
             <p
               style={{
                 margin: 0,
@@ -1090,7 +1105,7 @@ export function JoinLiveHub({ slug }) {
         ) : null}
 
         {error ? (
-          <div style={carteCentral}>
+          <div className="join-live-card" style={carteCentral}>
             <p style={{ margin: 0, color: "#fca5a5" }} role="alert">
               {error}
             </p>
@@ -1098,7 +1113,7 @@ export function JoinLiveHub({ slug }) {
         ) : null}
 
         {!loading && !error && corps ? (
-          <div style={carteCentral}>
+          <div className="join-live-card" style={carteCentral}>
             <div
               className="text-center text-sm opacity-80 mb-2"
               style={{
