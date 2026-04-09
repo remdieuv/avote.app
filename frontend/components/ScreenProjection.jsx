@@ -851,27 +851,29 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
   const wrapOut = (blackoutFlag, node) => (
     <>
       {ambientBg}
-      <div
-        className="text-center text-sm opacity-80 mb-2"
-        style={{
-          position: "fixed",
-          top: "clamp(0.6rem, 2vh, 1rem)",
-          left: "50%",
-          transform: "translateX(-50%)",
-          zIndex: 90,
-          textAlign: "center",
-          fontSize: "clamp(0.76rem, 1.3vw, 0.88rem)",
-          opacity: 0.82,
-          color: "rgba(226, 232, 240, 0.9)",
-          padding: "0.3rem 0.65rem",
-          borderRadius: "999px",
-          background: "rgba(15, 23, 42, 0.38)",
-          border: "1px solid rgba(148, 163, 184, 0.28)",
-          pointerEvents: "none",
-        }}
-      >
-        {ux.label}
-      </div>
+      {!poll || (ds !== "question" && ds !== "results") ? (
+        <div
+          className="text-center text-sm opacity-80 mb-2"
+          style={{
+            position: "fixed",
+            top: "clamp(0.6rem, 2vh, 1rem)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 90,
+            textAlign: "center",
+            fontSize: "clamp(0.76rem, 1.3vw, 0.88rem)",
+            opacity: 0.82,
+            color: "rgba(226, 232, 240, 0.9)",
+            padding: "0.3rem 0.65rem",
+            borderRadius: "999px",
+            background: "rgba(15, 23, 42, 0.38)",
+            border: "1px solid rgba(148, 163, 184, 0.28)",
+            pointerEvents: "none",
+          }}
+        >
+          {ux.label}
+        </div>
+      ) : null}
       {wrap(blackoutFlag, node)}
     </>
   );

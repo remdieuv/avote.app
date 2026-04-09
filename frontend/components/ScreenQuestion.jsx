@@ -68,11 +68,11 @@ function BlocQrVote({ slug }) {
       const padCarte =
         2 * Math.max(10, Math.min(22, Math.round(Math.min(w, h) * 0.035)));
       const brut = Math.min(
-        w * 0.985 - padCarte,
+        w * 0.995 - padCarte,
         Math.max(0, h - reserveLegende - padCarte),
       );
-      const avecMarge = Math.floor(Math.max(0, brut) * 0.99);
-      setCotePx(Math.max(160, Math.min(avecMarge, 1024)));
+      const avecMarge = Math.floor(Math.max(0, brut) * 1);
+      setCotePx(Math.max(190, Math.min(avecMarge, 1300)));
     };
     maj();
     const ro = new ResizeObserver(maj);
@@ -99,11 +99,11 @@ function BlocQrVote({ slug }) {
       <div
         style={{
           flex: "0 0 auto",
-          padding: "clamp(0.4rem, 1.15vw, 0.75rem)",
-          borderRadius: "clamp(16px, 3vw, 24px)",
+        padding: "clamp(0.5rem, 1.4vw, 0.95rem)",
+        borderRadius: "clamp(16px, 3vw, 26px)",
           background: "#ffffff",
           boxShadow:
-            "0 20px 56px rgba(0, 0, 0, 0.42), 0 0 0 1px rgba(15, 23, 42, 0.06)",
+          "0 22px 64px rgba(0, 0, 0, 0.44), 0 0 0 1px rgba(15, 23, 42, 0.06)",
           lineHeight: 0,
         }}
       >
