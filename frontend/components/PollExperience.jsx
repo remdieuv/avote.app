@@ -70,6 +70,19 @@ function contestEligibleCountFromPoll(poll) {
 }
 
 /**
+ * /p ne doit pas suivre les bascules d'affichage projection.
+ * On garde une scène participant stable: vote ouvert => voting, sinon waiting, sauf finished.
+ * @param {string | null | undefined} liveState
+ * @param {string | null | undefined} voteState
+ */
+function deriveParticipantLiveScene(liveState, voteState) {
+  const ls = String(liveState || "").toLowerCase();
+  if (ls === "finished") return "finished";
+  const vs = String(voteState || "").toLowerCase();
+  return vs === "open" ? "voting" : "waiting";
+}
+
+/**
  * Carte « vote clos, résultats pas encore à la salle » — teintée par l’accent événement.
  * @param {{ accent: string; isDark: boolean }} props
  */
@@ -434,13 +447,9 @@ export function PollExperience({
 
         if (signal?.aborted) return;
 
-        if (data.eventLiveState) {
-          setLiveScene(data.eventLiveState);
-        } else if (data.status === "ACTIVE") {
-          setLiveScene("voting");
-        } else {
-          setLiveScene("results");
-        }
+        setLiveScene(
+          deriveParticipantLiveScene(data.eventLiveState, data.eventVoteState),
+        );
         if (data.eventId) {
           setEventId(data.eventId);
         }
@@ -562,7 +571,9 @@ export function PollExperience({
       loadPollAbortRef.current?.abort();
       setLoading(false);
 
-      setLiveScene(payload.liveState ?? null);
+      setLiveScene(
+        deriveParticipantLiveScene(payload.liveState, payload.voteState),
+      );
       if (typeof payload.voteState === "string") {
         setEventVoteStateUi(payload.voteState.toLowerCase());
       }
@@ -572,9 +583,12 @@ export function PollExperience({
 
       if (payload.poll) {
         setPoll(payload.poll);
-        if (payload.poll.eventLiveState) {
-          setLiveScene(payload.poll.eventLiveState);
-        }
+        setLiveScene(
+          deriveParticipantLiveScene(
+            payload.poll?.eventLiveState,
+            payload.poll?.eventVoteState,
+          ),
+        );
         const pv = payload.poll?.eventVoteState;
         const pd = payload.poll?.eventDisplayState;
         if (typeof pv === "string") setEventVoteStateUi(pv.toLowerCase());
@@ -636,9 +650,9 @@ export function PollExperience({
         }
         return prev;
       });
-      if (data.eventLiveState) {
-        setLiveScene(data.eventLiveState);
-      }
+      setLiveScene(
+        deriveParticipantLiveScene(data.eventLiveState, data.eventVoteState),
+      );
     }
 
     socket.on("connect", rejoindreSalles);
