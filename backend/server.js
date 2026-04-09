@@ -2365,6 +2365,69 @@ app.get("/polls/:pollId", async (req, res) => {
   }
 });
 
+app.patch("/polls/:pollId", requireAuth, async (req, res) => {
+  const { pollId } = req.params;
+  try {
+    const pOwn = await assertPollOwnedBy(pollId, req.userId);
+    if (!pOwn.ok) {
+      return res.status(pOwn.status).json({ error: "Sondage introuvable." });
+    }
+    const body = req.body ?? {};
+    const poll = await prisma.poll.findUnique({
+      where: { id: pollId },
+      select: {
+        id: true,
+        type: true,
+      },
+    });
+    if (!poll) {
+      return res.status(404).json({ error: "Sondage introuvable." });
+    }
+
+    /** @type {import("@prisma/client").Prisma.PollUpdateInput} */
+    const data = {};
+    if (typeof body.question === "string") {
+      const q = body.question.trim();
+      if (!q || q.length > 2000) {
+        return res
+          .status(400)
+          .json({ error: "question requise (1 à 2000 caractères)." });
+      }
+      data.question = q;
+      data.title = q.length > 120 ? `${q.slice(0, 117)}…` : q;
+    }
+
+    const isContestEntry = String(poll.type || "").toUpperCase() === "CONTEST_ENTRY";
+    if (isContestEntry) {
+      if (Object.prototype.hasOwnProperty.call(body, "contestPrize")) {
+        data.contestPrize = normalizeContestPrize(body.contestPrize);
+      }
+      if (Object.prototype.hasOwnProperty.call(body, "contestWinnerCount")) {
+        data.contestWinnerCount = normalizeContestWinnerCount(
+          body.contestWinnerCount,
+        );
+      }
+    }
+
+    if (Object.keys(data).length === 0) {
+      return res.status(400).json({ error: "Aucune modification détectée." });
+    }
+
+    await prisma.poll.update({
+      where: { id: pollId },
+      data,
+    });
+    const full = await loadPollFull(pollId);
+    if (!full) {
+      return res.status(404).json({ error: "Sondage introuvable." });
+    }
+    return res.json(pollToJson(full));
+  } catch (e) {
+    console.error("patch /polls/:pollId", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
 app.post("/polls/:pollId/vote", async (req, res) => {
   const pollId = req.params.pollId;
   const body = req.body ?? {};

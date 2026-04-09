@@ -216,6 +216,7 @@ function PollCard({
   onResults,
   onContestShortcut,
   onLeadShortcut,
+  onEdit,
   contestDrawSummary,
   desktop,
   compact = false,
@@ -294,6 +295,17 @@ function PollCard({
       Voir les leads
     </button>
   ) : null;
+  const editAction = (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={() => onEdit?.(poll)}
+      style={btnSecondaryAction(busy)}
+      title="Modifier cette question"
+    >
+      Modifier
+    </button>
+  );
 
   const metaRow = (
     <div
@@ -549,6 +561,21 @@ function PollCard({
               {isContestPoll(poll) ? "Tirer un gagnant" : "Voir les leads"}
             </button>
           ) : null}
+          {editAction ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onEdit?.(poll)}
+              style={{
+                ...btnSecondaryAction(busy),
+                width: "100%",
+                padding: "0.38rem 0.5rem",
+                fontSize: "0.72rem",
+              }}
+            >
+              Modifier
+            </button>
+          ) : null}
         </div>
       </div>
     );
@@ -593,6 +620,7 @@ function PollCard({
           >
             {boutons}
             {quickAction}
+            {editAction}
           </div>
         </div>
       ) : (
@@ -655,6 +683,7 @@ function PollCard({
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
             {boutons}
             {quickAction}
+            {editAction}
           </div>
         </>
       )}
@@ -3233,6 +3262,11 @@ export default function RegieEventPage() {
   const [contestWinnersError, setContestWinnersError] = useState(
     /** @type {string | null} */ (null),
   );
+  const [editPollModalOpen, setEditPollModalOpen] = useState(false);
+  const [editingPoll, setEditingPoll] = useState(/** @type {any | null} */ (null));
+  const [editQuestionText, setEditQuestionText] = useState("");
+  const [editContestPrize, setEditContestPrize] = useState("");
+  const [editContestWinnerCount, setEditContestWinnerCount] = useState(1);
 
   const loadPollAbortRef = useRef(null);
   const socketRef = useRef(null);
@@ -3685,6 +3719,15 @@ export default function RegieEventPage() {
     [eventId],
   );
 
+  const openEditPollModal = useCallback((poll) => {
+    if (!poll) return;
+    setEditingPoll(poll);
+    setEditQuestionText(String(poll?.question || poll?.title || ""));
+    setEditContestPrize(String(poll?.contestPrize || ""));
+    setEditContestWinnerCount(normalizeContestWinnerCount(poll?.contestWinnerCount));
+    setEditPollModalOpen(true);
+  }, []);
+
   /** @returns {Promise<boolean>} */
   async function postAction(path) {
     setAutoRotate(false);
@@ -3703,6 +3746,51 @@ export default function RegieEventPage() {
     } catch (e) {
       setActionError(e.message || "Action échouée.");
       return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitPollEdit() {
+    const pollId = String(editingPoll?.id || "");
+    if (!pollId) return;
+    const question = String(editQuestionText || "").trim();
+    if (!question) {
+      setActionError("Texte de question requis.");
+      return;
+    }
+    const isContest = String(editingPoll?.type || "").toUpperCase() === "CONTEST_ENTRY";
+    const payload = {
+      question,
+      ...(isContest
+        ? {
+            contestPrize: String(editContestPrize || "").trim() || null,
+            contestWinnerCount: normalizeContestWinnerCount(editContestWinnerCount),
+          }
+        : {}),
+    };
+    setBusy(true);
+    setActionError(null);
+    try {
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/polls/${encodeURIComponent(pollId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body?.error || `Erreur ${res.status}`);
+      }
+      setEditPollModalOpen(false);
+      setEditingPoll(null);
+      setToastNotif("Question modifiée");
+      window.setTimeout(() => setToastNotif(null), 2800);
+      await fetchEvent({ silent: true });
+    } catch (e) {
+      setActionError(e?.message || "Modification impossible.");
     } finally {
       setBusy(false);
     }
@@ -4106,6 +4194,7 @@ export default function RegieEventPage() {
             onResults={(id) => postAction(`/polls/${id}/show-results`)}
             onContestShortcut={handleContestShortcut}
             onLeadShortcut={handleLeadShortcut}
+            onEdit={openEditPollModal}
             contestDrawSummary={pollDrawSummary[String(poll.id)]}
           />
         ))}
@@ -4479,6 +4568,189 @@ export default function RegieEventPage() {
           eventId={eventId}
           onSuccess={handleQuestionLiveAdded}
         />
+      ) : null}
+      {editPollModalOpen && editingPoll ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 10012,
+            background: "rgba(15, 23, 42, 0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+            boxSizing: "border-box",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !busy) {
+              setEditPollModalOpen(false);
+            }
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "30rem",
+              borderRadius: "14px",
+              background: "#fff",
+              border: "1px solid #e5e7eb",
+              boxShadow: "0 24px 60px rgba(0, 0, 0, 0.25)",
+              padding: "1rem 1.1rem",
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                color: "#6b7280",
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+              }}
+            >
+              Modifier la question
+            </p>
+            <p style={{ margin: "0.28rem 0 0 0", fontSize: "0.86rem", color: "#64748b" }}>
+              Type : <strong style={{ color: "#111827" }}>{editingPoll.type}</strong>
+            </p>
+            <label
+              style={{
+                display: "block",
+                marginTop: "0.7rem",
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                color: "#475569",
+              }}
+            >
+              Texte de la question
+            </label>
+            <textarea
+              value={editQuestionText}
+              onChange={(e) => setEditQuestionText(e.target.value)}
+              disabled={busy}
+              rows={3}
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                marginTop: "0.32rem",
+                padding: "0.52rem 0.62rem",
+                borderRadius: "8px",
+                border: "1px solid #cbd5e1",
+                fontSize: "0.88rem",
+                fontFamily: "inherit",
+                resize: "vertical",
+              }}
+            />
+            {String(editingPoll?.type || "").toUpperCase() === "CONTEST_ENTRY" ? (
+              <>
+                <label
+                  style={{
+                    display: "block",
+                    marginTop: "0.62rem",
+                    fontSize: "0.78rem",
+                    fontWeight: 700,
+                    color: "#475569",
+                  }}
+                >
+                  Lot à gagner
+                </label>
+                <input
+                  type="text"
+                  value={editContestPrize}
+                  onChange={(e) => setEditContestPrize(e.target.value)}
+                  disabled={busy}
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    marginTop: "0.32rem",
+                    padding: "0.5rem 0.6rem",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "0.88rem",
+                  }}
+                />
+                <label
+                  style={{
+                    display: "block",
+                    marginTop: "0.62rem",
+                    fontSize: "0.78rem",
+                    fontWeight: 700,
+                    color: "#475569",
+                  }}
+                >
+                  Nombre de gagnants
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={normalizeContestWinnerCount(editContestWinnerCount)}
+                  onChange={(e) => setEditContestWinnerCount(e.target.value)}
+                  onBlur={(e) =>
+                    setEditContestWinnerCount(
+                      normalizeContestWinnerCount(e.target.value),
+                    )
+                  }
+                  disabled={busy}
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    marginTop: "0.32rem",
+                    padding: "0.5rem 0.6rem",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "0.88rem",
+                  }}
+                />
+              </>
+            ) : null}
+            <div
+              style={{
+                marginTop: "0.95rem",
+                display: "flex",
+                gap: "0.55rem",
+                justifyContent: "flex-end",
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setEditPollModalOpen(false)}
+                style={{
+                  padding: "0.45rem 0.75rem",
+                  borderRadius: "9px",
+                  border: "1px solid #d1d5db",
+                  background: "#fff",
+                  color: "#475569",
+                  fontWeight: 700,
+                  cursor: busy ? "not-allowed" : "pointer",
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void submitPollEdit()}
+                style={{
+                  padding: "0.45rem 0.82rem",
+                  borderRadius: "9px",
+                  border: "1px solid #1d4ed8",
+                  background: busy ? "#f1f5f9" : "#2563eb",
+                  color: busy ? "#94a3b8" : "#fff",
+                  fontWeight: 800,
+                  cursor: busy ? "not-allowed" : "pointer",
+                }}
+              >
+                {busy ? "Enregistrement..." : "Enregistrer"}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
       {contestDrawModalOpen && String(activePoll?.type || "").toUpperCase() === "CONTEST_ENTRY" ? (
         <div
