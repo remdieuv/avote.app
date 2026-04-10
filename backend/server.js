@@ -215,6 +215,7 @@ function pollToJson(poll) {
     question: poll.question,
     contestPrize: poll.contestPrize ?? null,
     contestWinnerCount: Number(poll.contestWinnerCount || 1),
+    quizRevealed: Boolean(poll.quizRevealed),
     type: poll.type,
     leadEnabled: Boolean(poll.leadEnabled),
     leadTriggerOptionId: poll.leadTriggerOptionId ?? null,
@@ -242,12 +243,18 @@ function pollToJson(poll) {
     questionTimer: poll.event
       ? questionTimerSnapshot(poll.event)
       : null,
-    options: poll.options.map((option) => ({
-      id: option.id,
-      label: option.label,
-      order: option.order,
-      votes: voteCounts[option.id] || 0,
-    })),
+    options: poll.options.map((option) => {
+      const base = {
+        id: option.id,
+        label: option.label,
+        order: option.order,
+        votes: voteCounts[option.id] || 0,
+      };
+      if (poll.quizRevealed) {
+        return { ...base, isCorrect: Boolean(option.isCorrect) };
+      }
+      return base;
+    }),
   };
 }
 
@@ -1358,6 +1365,7 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
         question: p.question,
         contestPrize: p.contestPrize ?? null,
         contestWinnerCount: Number(p.contestWinnerCount || 1),
+        quizRevealed: Boolean(p.quizRevealed),
         order: p.order,
         status: p.status,
         type: p.type,
@@ -1860,7 +1868,7 @@ app.get("/p/:slug/contest-status", async (req, res) => {
 
 /**
  * Régie : créer un sondage à la volée (file ou lancement immédiat).
- * Corpo : { question, type?: SINGLE_CHOICE|MULTIPLE_CHOICE|LEAD|CONTEST_ENTRY, options: string[], leadTriggerOrder?: number, launchNow?: boolean }
+ * Corpo : { question, type?: SINGLE_CHOICE|MULTIPLE_CHOICE|LEAD|CONTEST_ENTRY|QUIZ, options: string[], leadTriggerOrder?: number, quizCorrectOrder?: number, launchNow?: boolean }
  */
 app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
   const { eventId } = req.params;
@@ -1884,14 +1892,7 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
       .json({ error: "question requise (1 à 2000 caractères)." });
   }
 
-  const pollTypeParsed =
-    typeBrut === "LEAD"
-      ? "LEAD"
-      : typeBrut === "CONTEST_ENTRY"
-        ? "CONTEST_ENTRY"
-      : typeBrut === "MULTIPLE_CHOICE"
-        ? "MULTIPLE_CHOICE"
-        : "SINGLE_CHOICE";
+  const pollTypeParsed = parseTypeSondage(typeBrut) ?? "SINGLE_CHOICE";
   const pollType = pollTypeParsed === "LEAD" ? "SINGLE_CHOICE" : pollTypeParsed;
   const leadTriggerOrder = normalizeLeadTriggerOrder(
     body.leadTriggerOrder,
@@ -1906,6 +1907,15 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
   }
   if (labels.length > 32) {
     return res.status(400).json({ error: "Maximum 32 réponses." });
+  }
+  const quizCorrectOrder = normalizeQuizCorrectOrder(
+    body.quizCorrectOrder,
+    labels.length,
+  );
+  if (pollTypeParsed === "QUIZ" && quizCorrectOrder == null) {
+    return res
+      .status(400)
+      .json({ error: "QUIZ: une seule bonne réponse doit être définie." });
   }
 
   try {
@@ -1932,7 +1942,12 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
         status: "CLOSED",
         order: nextOrder,
         options: {
-          create: labels.map((label, order) => ({ label, order })),
+          create: labels.map((label, order) => ({
+            label,
+            order,
+            isCorrect:
+              pollTypeParsed === "QUIZ" ? order === quizCorrectOrder : false,
+          })),
         },
       },
       include: { options: { orderBy: { order: "asc" } } },
@@ -2074,7 +2089,11 @@ app.post("/polls/:pollId/open", requireAuth, async (req, res) => {
 
     await prisma.poll.update({
       where: { id: poll.id },
-      data: { status: "ACTIVE" },
+      data: {
+        status: "ACTIVE",
+        quizRevealed:
+          String(poll.type || "").toUpperCase() === "QUIZ" ? false : undefined,
+      },
     });
 
     const event = await prisma.event.update({
@@ -2263,6 +2282,48 @@ app.post("/polls/:pollId/display-question", requireAuth, async (req, res) => {
   }
 });
 
+app.post("/polls/:pollId/reveal", requireAuth, async (req, res) => {
+  const { pollId } = req.params;
+  try {
+    const pOwn = await assertPollOwnedBy(pollId, req.userId);
+    if (!pOwn.ok) {
+      return res.status(pOwn.status).json({ error: "Sondage introuvable." });
+    }
+    const poll = await prisma.poll.findUnique({
+      where: { id: pollId },
+      include: { event: true },
+    });
+    if (!poll) {
+      return res.status(404).json({ error: "Sondage introuvable." });
+    }
+    if (String(poll.type || "").toUpperCase() !== "QUIZ") {
+      return res.status(400).json({ error: "Cette action est réservée aux QUIZ." });
+    }
+    if (String(poll.event.voteState || "").toUpperCase() !== "CLOSED") {
+      return res
+        .status(400)
+        .json({ error: "Fermez d'abord le vote avant de révéler la réponse." });
+    }
+
+    await prisma.poll.update({
+      where: { id: poll.id },
+      data: { quizRevealed: true },
+    });
+
+    const full = await loadPollFull(poll.id);
+    if (!full) {
+      return res.status(404).json({ error: "Sondage introuvable." });
+    }
+    await emitPollUpdated(io, poll.id);
+    await emitEventLiveUpdated(io, poll.eventId);
+
+    return res.json({ ok: true, poll: pollToJson(full) });
+  } catch (e) {
+    console.error("polls/:pollId/reveal", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
 app.get("/polls", requireAuth, async (req, res) => {
   try {
     const polls = await prisma.poll.findMany({
@@ -2309,8 +2370,9 @@ function normaliserLibellesOptions(optionsInput) {
   return labels;
 }
 
-/** @returns {"SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "LEAD" | "CONTEST_ENTRY" | null} */
+/** @returns {"SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "LEAD" | "CONTEST_ENTRY" | "QUIZ" | null} */
 function parseTypeSondage(typeRaw) {
+  if (typeRaw === "QUIZ") return "QUIZ";
   if (typeRaw === "CONTEST_ENTRY") return "CONTEST_ENTRY";
   if (typeRaw === "LEAD") return "LEAD";
   if (typeRaw === "MULTIPLE_CHOICE") return "MULTIPLE_CHOICE";
@@ -2347,6 +2409,15 @@ function normalizeContestWinnerCount(raw) {
   const n = Number(raw);
   if (!Number.isFinite(n)) return 1;
   return Math.max(1, Math.floor(n));
+}
+
+function normalizeQuizCorrectOrder(raw, labelsLength) {
+  const max = Math.max(0, labelsLength - 1);
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return null;
+  const i = Math.floor(n);
+  if (i < 0 || i > max) return null;
+  return i;
 }
 
 /** Extrait un tableau de sondages depuis le body (compat alias `questions`, chaîne JSON). */
@@ -2418,6 +2489,10 @@ app.post("/polls", requireAuth, async (req, res) => {
         const contestWinnerCount = normalizeContestWinnerCount(
           p?.contestWinnerCount,
         );
+        const quizCorrectOrder = normalizeQuizCorrectOrder(
+          p?.quizCorrectOrder,
+          labels.length,
+        );
         return {
           order: ordre,
           question: qBrut,
@@ -2426,6 +2501,7 @@ app.post("/polls", requireAuth, async (req, res) => {
           leadTriggerOrder,
           contestPrize,
           contestWinnerCount,
+          quizCorrectOrder,
         };
       });
 
@@ -2440,12 +2516,17 @@ app.post("/polls", requireAuth, async (req, res) => {
         }
         if (!p.type) {
           return res.status(400).json({
-            error: `Question « ${p.question.slice(0, 48)}${p.question.length > 48 ? "…" : ""} » : type invalide (SINGLE_CHOICE, MULTIPLE_CHOICE, LEAD ou CONTEST_ENTRY).`,
+            error: `Question « ${p.question.slice(0, 48)}${p.question.length > 48 ? "…" : ""} » : type invalide (SINGLE_CHOICE, MULTIPLE_CHOICE, LEAD, CONTEST_ENTRY ou QUIZ).`,
           });
         }
         if (p.labels.length < 2) {
           return res.status(400).json({
             error: `Question « ${p.question.slice(0, 48)}${p.question.length > 48 ? "…" : ""} » : au moins 2 options non vides sont requises.`,
+          });
+        }
+        if (p.type === "QUIZ" && p.quizCorrectOrder == null) {
+          return res.status(400).json({
+            error: `Question « ${p.question.slice(0, 48)}${p.question.length > 48 ? "…" : ""} » : QUIZ requiert exactement une bonne réponse.`,
           });
         }
       }
@@ -2483,7 +2564,11 @@ app.post("/polls", requireAuth, async (req, res) => {
               status: i === 0 ? "ACTIVE" : "DRAFT",
               order: i,
               options: {
-                create: e.labels.map((label, order) => ({ label, order })),
+                create: e.labels.map((label, order) => ({
+                  label,
+                  order,
+                  isCorrect: e.type === "QUIZ" ? order === e.quizCorrectOrder : false,
+                })),
               },
             },
             include: {
@@ -2566,13 +2651,22 @@ app.post("/polls", requireAuth, async (req, res) => {
     if (!pollTypeParsed) {
       return res.status(400).json({
         error:
-          'Le type doit être "SINGLE_CHOICE", "MULTIPLE_CHOICE", "LEAD" ou "CONTEST_ENTRY".',
+          'Le type doit être "SINGLE_CHOICE", "MULTIPLE_CHOICE", "LEAD", "CONTEST_ENTRY" ou "QUIZ".',
       });
     }
     const leadTriggerOrder = normalizeLeadTriggerOrder(
       body.leadTriggerOrder,
       labels.length,
     );
+    const quizCorrectOrder = normalizeQuizCorrectOrder(
+      body.quizCorrectOrder,
+      labels.length,
+    );
+    if (pollTypeParsed === "QUIZ" && quizCorrectOrder == null) {
+      return res
+        .status(400)
+        .json({ error: "QUIZ: une seule bonne réponse doit être définie." });
+    }
 
     const slug = await slugEvenementUnique();
     const descriptionInit = extraireDescriptionCreation(body);
@@ -2604,7 +2698,12 @@ app.post("/polls", requireAuth, async (req, res) => {
         status: "ACTIVE",
         order: 0,
         options: {
-          create: labels.map((label, order) => ({ label, order })),
+          create: labels.map((label, order) => ({
+            label,
+            order,
+            isCorrect:
+              pollTypeParsed === "QUIZ" ? order === quizCorrectOrder : false,
+          })),
         },
       },
       include: {
@@ -2663,6 +2762,7 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
       select: {
         id: true,
         type: true,
+        options: { select: { id: true }, orderBy: { order: "asc" } },
       },
     });
     if (!poll) {
@@ -2683,6 +2783,7 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
     }
 
     const isContestEntry = String(poll.type || "").toUpperCase() === "CONTEST_ENTRY";
+    const isQuiz = String(poll.type || "").toUpperCase() === "QUIZ";
     if (isContestEntry) {
       if (Object.prototype.hasOwnProperty.call(body, "contestPrize")) {
         data.contestPrize = normalizeContestPrize(body.contestPrize);
@@ -2693,15 +2794,46 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
         );
       }
     }
+    let quizCorrectUpdated = false;
+    if (isQuiz && Object.prototype.hasOwnProperty.call(body, "quizCorrectOrder")) {
+      const quizCorrectOrder = normalizeQuizCorrectOrder(
+        body.quizCorrectOrder,
+        poll.options.length,
+      );
+      if (quizCorrectOrder == null) {
+        return res
+          .status(400)
+          .json({ error: "QUIZ: une seule bonne réponse doit être définie." });
+      }
+      const target = poll.options[quizCorrectOrder];
+      if (!target) {
+        return res
+          .status(400)
+          .json({ error: "QUIZ: bonne réponse introuvable." });
+      }
+      await prisma.$transaction([
+        prisma.pollOption.updateMany({
+          where: { pollId },
+          data: { isCorrect: false },
+        }),
+        prisma.pollOption.update({
+          where: { id: target.id },
+          data: { isCorrect: true },
+        }),
+      ]);
+      quizCorrectUpdated = true;
+    }
 
-    if (Object.keys(data).length === 0) {
+    if (Object.keys(data).length === 0 && !quizCorrectUpdated) {
       return res.status(400).json({ error: "Aucune modification détectée." });
     }
 
-    await prisma.poll.update({
-      where: { id: pollId },
-      data,
-    });
+    if (Object.keys(data).length > 0) {
+      await prisma.poll.update({
+        where: { id: pollId },
+        data,
+      });
+    }
     const full = await loadPollFull(pollId);
     if (!full) {
       return res.status(404).json({ error: "Sondage introuvable." });

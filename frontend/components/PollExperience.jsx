@@ -1037,6 +1037,25 @@ export function PollExperience({
     selectedOptionIds,
     votedOptionIdsEnStockage,
   ]);
+  const isQuiz = String(poll?.type || "").toUpperCase() === "QUIZ";
+  const quizRevealed = Boolean(poll?.quizRevealed);
+  const quizCorrectOptionIds = useMemo(() => {
+    if (!isQuiz || !quizRevealed) return [];
+    return (Array.isArray(poll?.options) ? poll.options : [])
+      .filter((opt) => Boolean(opt?.isCorrect))
+      .map((opt) => String(opt.id));
+  }, [isQuiz, quizRevealed, poll?.options]);
+  const quizVotedOptionIds = useMemo(() => {
+    const ids = (votedOptionIdsEnStockage || []).map((id) => String(id));
+    if (ids.length > 0) return ids;
+    if (selectedOptionId) return [String(selectedOptionId)];
+    return (selectedOptionIds || []).map((id) => String(id));
+  }, [votedOptionIdsEnStockage, selectedOptionId, selectedOptionIds]);
+  const quizAnsweredCorrectly =
+    isQuiz &&
+    quizRevealed &&
+    quizCorrectOptionIds.length === 1 &&
+    quizVotedOptionIds.includes(quizCorrectOptionIds[0]);
 
   const pollOptions = poll?.options ?? [];
   const totalVotesResults = showBlocResultatsEnDirect
@@ -1795,6 +1814,29 @@ export function PollExperience({
                 Vous avez déjà voté pour ce sondage.
               </p>
             )}
+          {isQuiz && quizRevealed && quizVotedOptionIds.length > 0 ? (
+            <p
+              style={{
+                marginBottom: "1rem",
+                padding: "0.75rem 1rem",
+                background: quizAnsweredCorrectly
+                  ? (isDark ? "rgba(22, 163, 74, 0.24)" : "rgba(220, 252, 231, 0.9)")
+                  : (isDark ? "rgba(239, 68, 68, 0.22)" : "rgba(254, 226, 226, 0.92)"),
+                borderRadius: "12px",
+                border: quizAnsweredCorrectly
+                  ? (isDark
+                      ? "1px solid rgba(74, 222, 128, 0.45)"
+                      : "1px solid rgba(22, 163, 74, 0.35)")
+                  : (isDark
+                      ? "1px solid rgba(248, 113, 113, 0.4)"
+                      : "1px solid rgba(239, 68, 68, 0.35)"),
+                color: quizAnsweredCorrectly ? (isDark ? "#bbf7d0" : "#166534") : (isDark ? "#fecaca" : "#991b1b"),
+                fontWeight: 700,
+              }}
+            >
+              {quizAnsweredCorrectly ? "Bonne réponse ✅" : "Mauvaise réponse ❌"}
+            </p>
+          ) : null}
 
           {voteError && (
             <p

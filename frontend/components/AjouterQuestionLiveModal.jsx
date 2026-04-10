@@ -43,10 +43,11 @@ export function AjouterQuestionLiveModal({
 }) {
   const [question, setQuestion] = useState("");
   const [pollType, setPollType] = useState(
-    /** @type {"SINGLE_CHOICE"|"MULTIPLE_CHOICE"|"LEAD"|"CONTEST_ENTRY"} */ ("SINGLE_CHOICE"),
+    /** @type {"SINGLE_CHOICE"|"MULTIPLE_CHOICE"|"LEAD"|"CONTEST_ENTRY"|"QUIZ"} */ ("SINGLE_CHOICE"),
   );
   const [reponses, setReponses] = useState(["", ""]);
   const [leadTriggerOrder, setLeadTriggerOrder] = useState(0);
+  const [quizCorrectOrder, setQuizCorrectOrder] = useState(0);
   const [contestPrize, setContestPrize] = useState("");
   const [contestWinnerCount, setContestWinnerCount] = useState(
     CONTEST_WINNER_COUNT_DEFAULT,
@@ -61,6 +62,7 @@ export function AjouterQuestionLiveModal({
     setPollType("SINGLE_CHOICE");
     setReponses(["", ""]);
     setLeadTriggerOrder(0);
+    setQuizCorrectOrder(0);
     setContestPrize("");
     setContestWinnerCount(CONTEST_WINNER_COUNT_DEFAULT);
     setContestQuestionCustomized(false);
@@ -135,6 +137,14 @@ export function AjouterQuestionLiveModal({
         setErreur("Ajoutez au moins deux réponses non vides.");
         return;
       }
+      if (pollType === "QUIZ") {
+        const max = Math.max(0, opts.length - 1);
+        const idx = Number(quizCorrectOrder);
+        if (!Number.isFinite(idx) || idx < 0 || idx > max) {
+          setErreur("Sélectionnez la bonne réponse du quiz.");
+          return;
+        }
+      }
       if (pollType === "CONTEST_ENTRY" && !contestPrize.trim()) {
         setErreur(
           "Précisez le lot à gagner pour rendre le concours clair pour les participants.",
@@ -161,6 +171,8 @@ export function AjouterQuestionLiveModal({
               leadTriggerOrder: isLeadLikeQuestionType(pollType)
                 ? Number(leadTriggerOrder ?? 0)
                 : 0,
+              quizCorrectOrder:
+                pollType === "QUIZ" ? Number(quizCorrectOrder ?? 0) : null,
               launchNow,
             }),
           },
@@ -190,6 +202,7 @@ export function AjouterQuestionLiveModal({
       contestPrize,
       contestWinnerCount,
       leadTriggerOrder,
+      quizCorrectOrder,
       onSuccess,
       onClose,
     ],
@@ -380,6 +393,27 @@ export function AjouterQuestionLiveModal({
             />
             Participation concours
           </label>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.35rem",
+              fontSize: "0.86rem",
+              cursor: submitting ? "not-allowed" : "pointer",
+            }}
+          >
+            <input
+              type="radio"
+              name="pollTypeAjout"
+              checked={pollType === "QUIZ"}
+              disabled={submitting}
+              onChange={() => {
+                setPollType("QUIZ");
+                setQuizCorrectOrder(0);
+              }}
+            />
+            Quiz (1 bonne réponse)
+          </label>
         </div>
         {pollType === "CONTEST_ENTRY" ? (
           <div style={{ marginBottom: "0.85rem" }}>
@@ -520,6 +554,52 @@ export function AjouterQuestionLiveModal({
             >
               Le formulaire s’ouvre après un vote sur cette option.
             </p>
+          </div>
+        ) : null}
+        {pollType === "QUIZ" ? (
+          <div
+            style={{
+              margin: "0 0 0.85rem 0",
+              padding: "0.55rem 0.65rem",
+              borderRadius: "8px",
+              border: "1px solid #dcfce7",
+              background: "#f0fdf4",
+            }}
+          >
+            <label
+              style={{
+                display: "block",
+                fontSize: "0.74rem",
+                fontWeight: 700,
+                color: "#166534",
+                marginBottom: "0.35rem",
+              }}
+            >
+              Bonne réponse
+            </label>
+            <select
+              value={Math.max(0, Number(quizCorrectOrder ?? 0))}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                setQuizCorrectOrder(Number.isFinite(n) && n >= 0 ? n : 0);
+              }}
+              disabled={submitting}
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "0.42rem 0.5rem",
+                borderRadius: "7px",
+                border: "1px solid #86efac",
+                fontSize: "0.84rem",
+                background: "#fff",
+              }}
+            >
+              {reponses.map((r, idx) => (
+                <option key={`quiz-correct-${idx}`} value={idx}>
+                  {`Option ${idx + 1}${r.trim() ? ` - ${r.trim()}` : ""}`}
+                </option>
+              ))}
+            </select>
           </div>
         ) : null}
 

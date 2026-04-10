@@ -1057,6 +1057,10 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
                     : 0;
                 const percentRounded = Math.round(percentRaw * 10) / 10;
                 const isTop = maxTop > 0 && optVotes === maxTop;
+                const isQuizCorrect =
+                  String(poll?.type || "").toUpperCase() === "QUIZ" &&
+                  Boolean(poll?.quizRevealed) &&
+                  Boolean(opt?.isCorrect);
                 const barW = resultsBarsAnimated
                   ? Math.min(100, percentRaw)
                   : 0;
@@ -1065,6 +1069,13 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
                     key={opt.id}
                     style={{
                       marginBottom: i === topOptions.length - 1 ? 0 : "0.55rem",
+                      padding: isQuizCorrect ? "0.35rem 0.42rem" : 0,
+                      borderRadius: isQuizCorrect ? "10px" : undefined,
+                      background: isQuizCorrect
+                        ? (theme === "light"
+                            ? "rgba(22,163,74,0.11)"
+                            : "rgba(74,222,128,0.16)")
+                        : "transparent",
                     }}
                   >
                     <div
@@ -1081,7 +1092,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
                         style={{
                           fontWeight: 600,
                           minWidth: 0,
-                          color: th.text,
+                          color: isQuizCorrect ? "#22c55e" : th.text,
                         }}
                       >
                         {opt.label}
@@ -1109,7 +1120,11 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
                         style={{
                           width: `${barW}%`,
                           height: "100%",
-                          background: isTop ? "#22c55e" : th.accentSoft,
+                          background: isQuizCorrect
+                            ? "#22c55e"
+                            : isTop
+                              ? "#22c55e"
+                              : th.accentSoft,
                           borderRadius: "999px",
                           transition: "width 0.55s cubic-bezier(0.22, 1, 0.36, 1)",
                         }}

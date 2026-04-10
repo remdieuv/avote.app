@@ -474,6 +474,8 @@ function ScreenResultsChoixClassiques({
   }, [chronometreApi, chronoTick]);
 
   const pollOptions = poll?.options ?? [];
+  const isQuiz = String(poll?.type || "").toUpperCase() === "QUIZ";
+  const quizRevealed = Boolean(poll?.quizRevealed);
   const totalVotes = pollOptions.reduce(
     (sum, o) => sum + (Number(o.voteCount ?? o.votes ?? 0) || 0),
     0,
@@ -690,6 +692,7 @@ function ScreenResultsChoixClassiques({
                   ? String(percentRounded)
                   : percentRounded.toFixed(1);
             const isWinner = maxVotes > 0 && optVotes === maxVotes;
+            const isQuizCorrect = isQuiz && quizRevealed && Boolean(opt?.isCorrect);
             const fillW = barFillPct(percentRaw);
 
             return (
@@ -697,7 +700,14 @@ function ScreenResultsChoixClassiques({
                 key={opt.id}
                 style={{
                   flexShrink: 0,
-                  ...(isWinner
+                  ...(isQuizCorrect
+                    ? {
+                        padding: padBloc,
+                        background: "rgba(34, 197, 94, 0.14)",
+                        borderRadius: "12px",
+                        borderLeft: "5px solid #22c55e",
+                      }
+                    : isWinner
                     ? {
                         padding: padBloc,
                         background: "rgba(234, 179, 8, 0.09)",
@@ -735,12 +745,31 @@ function ScreenResultsChoixClassiques({
                       style={{
                         fontSize: fsLabel,
                         fontWeight: 700,
-                        color: isWinner ? "#fef08a" : "#e2e8f0",
+                        color: isQuizCorrect
+                          ? "#86efac"
+                          : isWinner
+                            ? "#fef08a"
+                            : "#e2e8f0",
                       }}
                     >
                       {opt.label}
                     </span>
-                    {isWinner ? (
+                    {isQuizCorrect ? (
+                      <span
+                        style={{
+                          fontSize: "clamp(0.65rem, 1.15vw, 0.82rem)",
+                          fontWeight: 800,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.07em",
+                          color: "#14532d",
+                          background: "linear-gradient(180deg, #86efac, #4ade80)",
+                          padding: "0.22rem 0.65rem",
+                          borderRadius: "9999px",
+                        }}
+                      >
+                        Bonne réponse
+                      </span>
+                    ) : isWinner ? (
                       <span
                         style={{
                           fontSize: "clamp(0.65rem, 1.15vw, 0.82rem)",
@@ -761,7 +790,11 @@ function ScreenResultsChoixClassiques({
                     style={{
                       fontSize: fsPct,
                       fontWeight: 600,
-                      color: isWinner ? "#fde047" : "#94a3b8",
+                      color: isQuizCorrect
+                        ? "#4ade80"
+                        : isWinner
+                          ? "#fde047"
+                          : "#94a3b8",
                       whiteSpace: "nowrap",
                     }}
                   >
@@ -782,9 +815,11 @@ function ScreenResultsChoixClassiques({
                     style={{
                       width: `${fillW}%`,
                       height: "100%",
-                      background: isWinner
-                        ? "linear-gradient(90deg, #ca8a04, #eab308)"
-                        : "linear-gradient(90deg, #2563eb, #60a5fa)",
+                      background: isQuizCorrect
+                        ? "linear-gradient(90deg, #16a34a, #4ade80)"
+                        : isWinner
+                          ? "linear-gradient(90deg, #ca8a04, #eab308)"
+                          : "linear-gradient(90deg, #2563eb, #60a5fa)",
                       borderRadius: "9999px",
                       transform: `scaleX(${barScaleDone})`,
                       transformOrigin: "left center",

@@ -30,6 +30,10 @@ function isContestEntryQuestion(type) {
   return type === "CONTEST_ENTRY";
 }
 
+function isQuizQuestion(type) {
+  return type === "QUIZ";
+}
+
 function buildContestQuestion(prizeRaw) {
   const prize = typeof prizeRaw === "string" ? prizeRaw.trim() : "";
   if (!prize) return CONTEST_DEFAULT_QUESTION;
@@ -49,6 +53,7 @@ const QUESTION_INITIALE = {
   type: "SINGLE_CHOICE",
   options: ["", ""],
   leadTriggerOrder: 0,
+  quizCorrectOrder: 0,
   contestPrize: "",
   contestWinnerCount: CONTEST_WINNER_COUNT_DEFAULT,
   contestQuestionCustomized: false,
@@ -89,6 +94,7 @@ export default function AdminPage() {
         type: "SINGLE_CHOICE",
         options: ["", ""],
         leadTriggerOrder: 0,
+        quizCorrectOrder: 0,
         contestPrize: "",
         contestWinnerCount: CONTEST_WINNER_COUNT_DEFAULT,
         contestQuestionCustomized: false,
@@ -146,12 +152,17 @@ export default function AdminPage() {
             question: buildContestQuestion(contestPrize),
             options: [...CONTEST_DEFAULT_OPTIONS],
             leadTriggerOrder: 0,
+            quizCorrectOrder: 0,
             contestPrize,
             contestWinnerCount,
             contestQuestionCustomized: false,
           };
         }),
       );
+      return;
+    }
+    if (type === "QUIZ") {
+      majQuestion(id, { type, leadTriggerOrder: 0, quizCorrectOrder: 0 });
       return;
     }
     majQuestion(id, { type, leadTriggerOrder: 0 });
@@ -295,6 +306,13 @@ export default function AdminPage() {
       if (opts.length < 2) {
         return `Question ${i + 1} (« ${qi.slice(0, 40)}${qi.length > 40 ? "…" : ""} ») : au moins 2 réponses non vides.`;
       }
+      if (isQuizQuestion(x.type)) {
+        const idx = Number(x.quizCorrectOrder);
+        const max = Math.max(0, opts.length - 1);
+        if (!Number.isFinite(idx) || idx < 0 || idx > max) {
+          return `Question ${i + 1} : sélectionnez la bonne réponse du quiz.`;
+        }
+      }
     }
     return null;
   }
@@ -332,6 +350,9 @@ export default function AdminPage() {
         isLeadLikeQuestionType(premier.type)
           ? Number(premier.leadTriggerOrder ?? 0)
           : 0,
+      quizCorrectOrder: isQuizQuestion(premier.type)
+        ? Number(premier.quizCorrectOrder ?? 0)
+        : null,
       polls: questions.map((x, order) => ({
         question: x.question.trim(),
         type: x.type,
@@ -345,6 +366,9 @@ export default function AdminPage() {
         options: x.options.map((s) => s.trim()).filter(Boolean),
         leadTriggerOrder:
           isLeadLikeQuestionType(x.type) ? Number(x.leadTriggerOrder ?? 0) : 0,
+        quizCorrectOrder: isQuizQuestion(x.type)
+          ? Number(x.quizCorrectOrder ?? 0)
+          : null,
       })),
     };
 
@@ -535,6 +559,16 @@ export default function AdminPage() {
                           />
                           <span>Participation concours</span>
                         </label>
+                        <label className="admin-choice">
+                          <input
+                            type="radio"
+                            name={`pollType-${item.id}`}
+                            checked={item.type === "QUIZ"}
+                            disabled={creating}
+                            onChange={() => majTypeQuestion(item.id, "QUIZ")}
+                          />
+                          <span>Quiz (1 bonne réponse)</span>
+                        </label>
                       </div>
                     </fieldset>
 
@@ -659,6 +693,31 @@ export default function AdminPage() {
                         >
                           {item.options.map((opt, idx) => (
                             <option key={`${item.id}-lead-trigger-${idx}`} value={idx}>
+                              {opt.trim() || `Option ${idx + 1}`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : null}
+                    {isQuizQuestion(item.type) ? (
+                      <div className="admin-lead-config">
+                        <label htmlFor={`quiz-correct-${item.id}`} className="admin-label">
+                          Bonne réponse
+                        </label>
+                        <select
+                          id={`quiz-correct-${item.id}`}
+                          value={Math.min(
+                            Math.max(0, Number(item.quizCorrectOrder ?? 0)),
+                            Math.max(0, item.options.length - 1),
+                          )}
+                          onChange={(ev) =>
+                            majQuestion(item.id, { quizCorrectOrder: Number(ev.target.value) })
+                          }
+                          disabled={creating}
+                          style={{ ...inputStyle, padding: "0.45rem 0.6rem" }}
+                        >
+                          {item.options.map((opt, idx) => (
+                            <option key={`${item.id}-quiz-correct-${idx}`} value={idx}>
                               {opt.trim() || `Option ${idx + 1}`}
                             </option>
                           ))}

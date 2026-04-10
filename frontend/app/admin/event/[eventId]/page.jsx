@@ -813,6 +813,9 @@ function lienDiffusionAbsolu(path) {
  * @param {{
  *   slug: string;
  *   activePollId: string | null;
+ *   activePollType?: string | null;
+ *   activePollQuizRevealed?: boolean;
+ *   voteState?: string | null;
  *   liveState: string;
  *   displayState: string;
  *   busy: boolean;
@@ -833,6 +836,9 @@ function lienDiffusionAbsolu(path) {
 function BlocProjectionEcran({
   slug,
   activePollId,
+  activePollType = null,
+  activePollQuizRevealed = false,
+  voteState = null,
   liveState,
   displayState: displayStateProp,
   busy,
@@ -1166,6 +1172,44 @@ function BlocProjectionEcran({
               }}
             >
               Les participants répondent depuis leur téléphone
+            </p>
+          </div>
+          <div className="proj-ecran-action">
+            <button
+              type="button"
+              disabled={
+                busy ||
+                !activePollId ||
+                String(activePollType || "").toUpperCase() !== "QUIZ" ||
+                String(voteState || "").toLowerCase() !== "closed" ||
+                Boolean(activePollQuizRevealed)
+              }
+              onClick={async () => {
+                await postAction(`/polls/${activePollId}/reveal`);
+              }}
+              style={{
+                ...btnOutlineSecondaire,
+                ...secDisabled(
+                  busy ||
+                    !activePollId ||
+                    String(activePollType || "").toUpperCase() !== "QUIZ" ||
+                    String(voteState || "").toLowerCase() !== "closed" ||
+                    Boolean(activePollQuizRevealed),
+                ),
+              }}
+            >
+              Révéler la réponse
+            </button>
+            <p
+              style={{
+                margin: "0.35rem 0 0 0",
+                fontSize: "0.72rem",
+                lineHeight: 1.4,
+                color: "#64748b",
+                fontWeight: 500,
+              }}
+            >
+              Disponible uniquement pour les quiz après fermeture du vote
             </p>
           </div>
         </div>
@@ -5867,6 +5911,9 @@ export default function RegieEventPage() {
             <BlocProjectionEcran
               slug={eventData.slug}
               activePollId={eventData.activePollId ?? null}
+              activePollType={activePoll?.type ?? null}
+              activePollQuizRevealed={Boolean(activePoll?.quizRevealed)}
+              voteState={voteStateUi}
               liveState={liveState}
               displayState={displayStateUi}
               busy={busy}
