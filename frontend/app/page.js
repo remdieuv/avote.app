@@ -631,16 +631,23 @@ export default function HomePage() {
         <section id="hero" className="landing-hero" style={{ ...sectionY }}>
           <div className="landing-hero-text">
             <span className="hero-eyebrow">Vote interactif en direct</span>
-            <h1 className="hero-title">Faites voter votre audience en direct.</h1>
+            <h1 className="hero-title">
+              Faites voter
+              <br />
+              votre audience
+              <br />
+              en direct.
+            </h1>
             <p className="hero-subtitle">
-              Un QR code, quelques secondes pour répondre, et des résultats
-              affichés instantanément sur écran.
+              <span>Un QR code.</span>
+              <span>Quelques secondes pour répondre.</span>
+              <span>Résultats affichés instantanément sur écran.</span>
             </p>
             <div className="hero-cta-row">
-              <Link href="/join/demo" style={btnPrimary}>
+              <Link href="/join/demo" style={btnPrimary} className="hero-cta-primary">
                 Tester en live
               </Link>
-              <Link href="/admin" style={btnSecondary}>
+              <Link href="/admin" style={btnSecondary} className="hero-cta-secondary">
                 Créer un événement gratuit
               </Link>
             </div>
@@ -1053,15 +1060,29 @@ export default function HomePage() {
           font-size: clamp(1rem, 2vw, 1.14rem);
           color: #475569;
           line-height: 1.6;
+          display: grid;
+          gap: 0.18rem;
+        }
+        .hero-subtitle > span {
+          display: block;
         }
         .hero-cta-row {
           display: flex;
           flex-wrap: wrap;
           gap: 0.75rem;
-          margin-top: 1.35rem;
+          margin-top: 1.95rem;
+        }
+        .hero-cta-primary {
+          padding: 1rem 1.75rem !important;
+          font-size: 1.03rem !important;
+          font-weight: 720 !important;
+          box-shadow: 0 14px 30px rgba(124, 58, 237, 0.34) !important;
+        }
+        .hero-cta-secondary {
+          padding: 0.92rem 1.3rem !important;
         }
         .hero-reassurance {
-          margin: 0.78rem 0 0;
+          margin: 1.3rem 0 0;
           font-size: 0.86rem;
           color: #64748b;
           font-weight: 520;
@@ -1093,7 +1114,7 @@ export default function HomePage() {
         .hero-phone {
           position: relative;
           z-index: 2;
-          width: min(84vw, 290px);
+          width: min(88vw, 330px);
           border-radius: 2rem;
           padding: 0.46rem;
           background: linear-gradient(145deg, #0f172a 0%, #334155 100%);
@@ -1176,10 +1197,12 @@ export default function HomePage() {
           z-index: 3;
           width: min(44vw, 200px);
           border-radius: 14px;
-          background: rgba(255, 255, 255, 0.92);
+          background: rgba(255, 255, 255, 0.88);
           border: 1px solid #e9d5ff;
-          box-shadow: 0 18px 36px rgba(91, 33, 182, 0.14);
-          backdrop-filter: blur(6px);
+          box-shadow:
+            0 24px 46px rgba(91, 33, 182, 0.18),
+            0 0 0 1px rgba(255, 255, 255, 0.45) inset;
+          backdrop-filter: blur(10px);
           padding: 0.7rem 0.78rem;
           animation: heroFloat 4.8s ease-in-out infinite;
         }
@@ -1233,13 +1256,14 @@ export default function HomePage() {
           left: 4%;
           top: 8%;
           z-index: 4;
-          width: 92px;
-          height: 92px;
+          width: 72px;
+          height: 72px;
           border-radius: 14px;
           border: 1px solid #e2e8f0;
           background: #fff;
           box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
-          padding: 0.5rem;
+          padding: 0.4rem;
+          opacity: 0.78;
         }
         .hero-qr-grid {
           width: 100%;
@@ -1295,9 +1319,11 @@ export default function HomePage() {
             min-height: 360px;
             width: 100%;
             max-width: 380px;
+            padding-left: 0.8rem;
+            padding-right: 0.8rem;
           }
           .hero-phone {
-            width: min(86vw, 260px);
+            width: min(86vw, 290px);
           }
           .hero-live-card {
             right: 0;
@@ -1310,9 +1336,10 @@ export default function HomePage() {
           .hero-qr-card {
             left: 2%;
             top: 6%;
-            width: 78px;
-            height: 78px;
-            padding: 0.42rem;
+            width: 62px;
+            height: 62px;
+            padding: 0.36rem;
+            opacity: 0.72;
           }
         }
         .how-premium-wrap {
