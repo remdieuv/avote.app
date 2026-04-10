@@ -720,6 +720,10 @@ function ScreenResultsChoixClassiques({
                         borderRadius: "12px",
                         border: "1px solid rgba(148, 163, 184, 0.1)",
                       }),
+                  opacity:
+                    isQuiz && quizRevealed && !isQuizCorrect
+                      ? 0.52
+                      : 1,
                 }}
               >
                 <div

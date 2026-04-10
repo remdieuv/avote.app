@@ -1076,6 +1076,12 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
                             ? "rgba(22,163,74,0.11)"
                             : "rgba(74,222,128,0.16)")
                         : "transparent",
+                      opacity:
+                        String(poll?.type || "").toUpperCase() === "QUIZ" &&
+                        Boolean(poll?.quizRevealed) &&
+                        !isQuizCorrect
+                          ? 0.5
+                          : 1,
                     }}
                   >
                     <div

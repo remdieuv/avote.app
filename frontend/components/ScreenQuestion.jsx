@@ -220,7 +220,7 @@ export function ScreenQuestion({
   const questionAffichee =
     (typeof poll?.question === "string" && poll.question) ||
     (typeof poll?.title === "string" && poll.title) ||
-    "Sondage";
+    (String(poll?.type || "").toUpperCase() === "QUIZ" ? "Quiz" : "Question");
 
   const slugQr =
     typeof joinSlug === "string" && joinSlug.length > 0 ? joinSlug : null;

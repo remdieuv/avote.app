@@ -121,12 +121,16 @@ function isContestPoll(poll) {
   return String(poll?.type || "").toUpperCase() === "CONTEST_ENTRY";
 }
 
+function isQuizPoll(poll) {
+  return String(poll?.type || "").toUpperCase() === "QUIZ";
+}
+
 function isLeadPoll(poll) {
   return Boolean(poll?.leadEnabled) && !isContestPoll(poll);
 }
 
 function isStandardPoll(poll) {
-  return !isContestPoll(poll) && !isLeadPoll(poll);
+  return !isContestPoll(poll) && !isLeadPoll(poll) && !isQuizPoll(poll);
 }
 
 function pollKindStyle(poll) {
@@ -148,9 +152,18 @@ function pollKindStyle(poll) {
       cardBg: "#f7feff",
     };
   }
+  if (isQuizPoll(poll)) {
+    return {
+      label: "Quiz",
+      bg: "#ecfdf5",
+      border: "#86efac",
+      color: "#166534",
+      cardBg: "#f7fff9",
+    };
+  }
   if (isStandardPoll(poll)) {
     return {
-      label: "Sondage",
+      label: "Question",
       bg: "#f8fafc",
       border: "#cbd5e1",
       color: "#475569",
@@ -158,7 +171,7 @@ function pollKindStyle(poll) {
     };
   }
   return {
-    label: "Sondage",
+    label: "Question",
     bg: "#f8fafc",
     border: "#cbd5e1",
     color: "#475569",
@@ -209,11 +222,12 @@ function PollCard({
   busy,
   liveState,
   activePollId,
-  /** État vote événement (open | closed) — le sondage peut être ACTIVE sans vote ouvert */
+  /** État vote événement (open | closed) — la question peut être ACTIVE sans vote ouvert */
   voteState,
   onOpen,
   onCloseRegie,
   onResults,
+  onReveal,
   onContestShortcut,
   onLeadShortcut,
   onEdit,
@@ -233,6 +247,11 @@ function PollCard({
     voteOuvertSurCeSondage;
   const disableStop = busy || poll.status !== "ACTIVE";
   const disableResultats = busy;
+  const disableRevealQuiz =
+    busy ||
+    !isQuizPoll(poll) ||
+    String(voteState || "").toLowerCase().trim() !== "closed" ||
+    Boolean(poll?.quizRevealed);
 
   const boutons = (
     <>
@@ -243,7 +262,7 @@ function PollCard({
         style={btnLancerVote(disableLancer)}
         title={
           voteOuvertSurCeSondage
-            ? "Le vote est déjà lancé sur ce sondage."
+            ? "Le vote est déjà lancé sur cette question."
             : undefined
         }
       >
@@ -256,7 +275,7 @@ function PollCard({
         style={btnStopVote(disableStop)}
         title={
           poll.status !== "ACTIVE"
-            ? "Ce sondage n’est pas ouvert au vote."
+            ? "Cette question n’est pas ouverte au vote."
             : undefined
         }
       >
@@ -270,6 +289,15 @@ function PollCard({
         title="Affiche les barres à la salle. Même commande que « Afficher les résultats en direct » (le vote peut rester ouvert)."
       >
         Projeter les résultats finaux
+      </button>
+      <button
+        type="button"
+        disabled={disableRevealQuiz}
+        onClick={() => onReveal?.(poll.id)}
+        style={btnAfficherResultats(disableRevealQuiz)}
+        title="Révèle la bonne réponse du quiz (uniquement vote fermé)."
+      >
+        Révéler la réponse
       </button>
     </>
   );
@@ -319,7 +347,7 @@ function PollCard({
     >
       {isActive ? (
         <span
-          title="Sondage actuellement relié à l’événement (affiches & commandes). Peut être ouvert ou fermé au vote."
+          title="Question actuellement reliée à l’événement (affiches & commandes). Peut être ouverte ou fermée au vote."
           style={{
             fontSize: "0.62rem",
             fontWeight: 800,
@@ -446,7 +474,7 @@ function PollCard({
         >
           {isActive ? (
             <span
-              title="Sondage relié à l’événement (voir carte étendue)."
+              title="Question reliée à l’événement (voir carte étendue)."
               style={{
                 fontSize: "0.58rem",
                 fontWeight: 800,
@@ -628,7 +656,7 @@ function PollCard({
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
             {isActive ? (
               <span
-                title="Sondage actuellement relié à l’événement (affiches & commandes). Peut être ouvert ou fermé au vote."
+                title="Question actuellement reliée à l’événement (affiches & commandes). Peut être ouverte ou fermée au vote."
                 style={{
                   fontSize: "0.62rem",
                   fontWeight: 800,
@@ -643,7 +671,7 @@ function PollCard({
               </span>
             ) : null}
             <span
-              title="Statut Prisma du sondage (ACTIVE = vote possible si session ouverte, CLOSED = vote arrêté sur ce sondage)."
+              title="Statut Prisma de la question (ACTIVE = vote possible si session ouverte, CLOSED = vote arrêté sur cette question)."
               style={{
                 fontSize: "0.7rem",
                 fontWeight: 700,
@@ -813,9 +841,6 @@ function lienDiffusionAbsolu(path) {
  * @param {{
  *   slug: string;
  *   activePollId: string | null;
- *   activePollType?: string | null;
- *   activePollQuizRevealed?: boolean;
- *   voteState?: string | null;
  *   liveState: string;
  *   displayState: string;
  *   busy: boolean;
@@ -836,9 +861,6 @@ function lienDiffusionAbsolu(path) {
 function BlocProjectionEcran({
   slug,
   activePollId,
-  activePollType = null,
-  activePollQuizRevealed = false,
-  voteState = null,
   liveState,
   displayState: displayStateProp,
   busy,
@@ -1174,44 +1196,6 @@ function BlocProjectionEcran({
               Les participants répondent depuis leur téléphone
             </p>
           </div>
-          <div className="proj-ecran-action">
-            <button
-              type="button"
-              disabled={
-                busy ||
-                !activePollId ||
-                String(activePollType || "").toUpperCase() !== "QUIZ" ||
-                String(voteState || "").toLowerCase() !== "closed" ||
-                Boolean(activePollQuizRevealed)
-              }
-              onClick={async () => {
-                await postAction(`/polls/${activePollId}/reveal`);
-              }}
-              style={{
-                ...btnOutlineSecondaire,
-                ...secDisabled(
-                  busy ||
-                    !activePollId ||
-                    String(activePollType || "").toUpperCase() !== "QUIZ" ||
-                    String(voteState || "").toLowerCase() !== "closed" ||
-                    Boolean(activePollQuizRevealed),
-                ),
-              }}
-            >
-              Révéler la réponse
-            </button>
-            <p
-              style={{
-                margin: "0.35rem 0 0 0",
-                fontSize: "0.72rem",
-                lineHeight: 1.4,
-                color: "#64748b",
-                fontWeight: 500,
-              }}
-            >
-              Disponible uniquement pour les quiz après fermeture du vote
-            </p>
-          </div>
         </div>
       </div>
 
@@ -1373,7 +1357,7 @@ function BlocProjectionEcran({
           }}
         >
           Alterne la question puis les résultats live selon ces durées.
-          Désactivée si écran noir, vote fermé ou changement de sondage ; toute
+          Désactivée si écran noir, vote fermé ou changement de question ; toute
           action manuelle l’arrête.
         </p>
       </div>
@@ -3562,7 +3546,7 @@ export default function RegieEventPage() {
   const prevPollForAutoRef = useRef(
     /** @type {string | null | undefined} */ (undefined),
   );
-  /** Ids des sondages de l’événement (pour ignorer poll_updated d’un autre event) */
+  /** Ids des questions de l’événement (pour ignorer poll_updated d’un autre event) */
   const eventPollIdsRef = useRef(new Set());
 
   const fetchEvent = useCallback(async (opts = {}) => {
@@ -4413,7 +4397,7 @@ export default function RegieEventPage() {
 
   const regiePollsBloc = (
     <nav
-      aria-label="Liste des sondages"
+      aria-label="Liste des questions"
       style={{
         marginTop: "0.15rem",
         paddingTop: "0.95rem",
@@ -4431,7 +4415,7 @@ export default function RegieEventPage() {
           color: "#64748b",
         }}
       >
-        Sondages
+        Questions
       </p>
       <button
         type="button"
@@ -4477,6 +4461,7 @@ export default function RegieEventPage() {
             onOpen={(id) => postAction(`/polls/${id}/open`)}
             onCloseRegie={(id) => postAction(`/polls/${id}/close`)}
             onResults={(id) => postAction(`/polls/${id}/show-results`)}
+            onReveal={(id) => postAction(`/polls/${id}/reveal`)}
             onContestShortcut={handleContestShortcut}
             onLeadShortcut={handleLeadShortcut}
             onEdit={openEditPollModal}
@@ -5911,9 +5896,6 @@ export default function RegieEventPage() {
             <BlocProjectionEcran
               slug={eventData.slug}
               activePollId={eventData.activePollId ?? null}
-              activePollType={activePoll?.type ?? null}
-              activePollQuizRevealed={Boolean(activePoll?.quizRevealed)}
-              voteState={voteStateUi}
               liveState={liveState}
               displayState={displayStateUi}
               busy={busy}
