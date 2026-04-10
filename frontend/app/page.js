@@ -634,7 +634,7 @@ export default function HomePage() {
             <h1 className="hero-title">
               Faites voter
               <br />
-              votre audience
+              votre&nbsp;audience
               <br />
               en direct.
             </h1>
