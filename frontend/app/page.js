@@ -381,6 +381,135 @@ function LiveContestPreviewCard() {
   );
 }
 
+function LiveQuestionPreviewCard() {
+  return (
+    <div
+      style={{
+        borderRadius: "16px",
+        border: "1px solid #ddd6fe",
+        background: "#fff",
+        padding: "1.35rem 1.5rem",
+        boxShadow: "0 18px 40px rgba(91, 33, 182, 0.08)",
+        maxWidth: "420px",
+        width: "100%",
+        margin: "0 auto",
+        boxSizing: "border-box",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", marginBottom: "1rem" }}>
+        <span
+          style={{
+            fontSize: "0.65rem",
+            fontWeight: 800,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            padding: "0.18rem 0.45rem",
+            borderRadius: "999px",
+            border: "1px solid #c4b5fd",
+            background: "#f5f3ff",
+            color: "#6d28d9",
+          }}
+        >
+          Question
+        </span>
+        <h3 style={{ margin: 0, fontSize: "1.02rem", fontWeight: 700, color: "#0f172a" }}>
+          Sondage
+        </h3>
+      </div>
+      <p style={{ margin: "0 0 0.75rem 0", fontSize: "0.86rem", fontWeight: 600, color: "#334155", lineHeight: 1.4 }}>
+        Qui est le gagnant ?
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+        {["Option A", "Option B", "Option C"].map((opt, idx) => (
+          <div
+            key={opt}
+            style={{
+              padding: "0.5rem 0.6rem",
+              borderRadius: "10px",
+              border: idx === 0 ? "2px solid #7c3aed" : "1px solid #e2e8f0",
+              background: idx === 0 ? "#f5f3ff" : "#f8fafc",
+              color: idx === 0 ? "#5b21b6" : "#64748b",
+              fontSize: "0.8rem",
+              fontWeight: idx === 0 ? 700 : 600,
+              textAlign: "center",
+            }}
+          >
+            {opt}
+          </div>
+        ))}
+      </div>
+      <p style={{ margin: "0.85rem 0 0", fontSize: "0.78rem", color: "#94a3b8", textAlign: "center", lineHeight: 1.45 }}>
+        Aperçu décoratif — vote classique à choix simple ou multiple.
+      </p>
+    </div>
+  );
+}
+
+function LiveQuizPreviewCard() {
+  return (
+    <div
+      style={{
+        borderRadius: "16px",
+        border: "1px solid #bbf7d0",
+        background: "#fff",
+        padding: "1.35rem 1.5rem",
+        boxShadow: "0 18px 40px rgba(22, 163, 74, 0.1)",
+        maxWidth: "420px",
+        width: "100%",
+        margin: "0 auto",
+        boxSizing: "border-box",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", marginBottom: "1rem" }}>
+        <span
+          style={{
+            fontSize: "0.65rem",
+            fontWeight: 800,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            padding: "0.18rem 0.45rem",
+            borderRadius: "999px",
+            border: "1px solid #86efac",
+            background: "#ecfdf5",
+            color: "#166534",
+          }}
+        >
+          Quiz
+        </span>
+        <h3 style={{ margin: 0, fontSize: "1.02rem", fontWeight: 700, color: "#0f172a" }}>
+          1 bonne réponse
+        </h3>
+      </div>
+      <p style={{ margin: "0 0 0.75rem 0", fontSize: "0.86rem", fontWeight: 600, color: "#334155", lineHeight: 1.4 }}>
+        Qui a marqué le premier but ?
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+        {["Mbappé", "Dembélé", "Vitinha"].map((opt, idx) => (
+          <div
+            key={opt}
+            style={{
+              padding: "0.5rem 0.6rem",
+              borderRadius: "10px",
+              border: idx === 0 ? "2px solid #16a34a" : "1px solid #e2e8f0",
+              background: idx === 0 ? "#f0fdf4" : "#f8fafc",
+              color: idx === 0 ? "#166534" : "#64748b",
+              fontSize: "0.8rem",
+              fontWeight: idx === 0 ? 700 : 600,
+              textAlign: "center",
+              opacity: idx === 0 ? 1 : 0.75,
+            }}
+          >
+            {opt}
+          </div>
+        ))}
+      </div>
+      <p style={{ margin: "0.85rem 0 0", fontSize: "0.78rem", color: "#94a3b8", textAlign: "center", lineHeight: 1.45 }}>
+        Aperçu décoratif — la bonne réponse est révélée en régie après fermeture du vote.
+      </p>
+    </div>
+  );
+}
+
 function LiveResultsCardCompact() {
   const rows = [
     { label: "Option A — Lever de rideau", pct: 58, w: "58%" },
@@ -840,12 +969,16 @@ export default function HomePage() {
               lineHeight: 1.5,
             }}
           >
-            Activez un jeu concours, puis collectez les contacts via une question{' '}
-            <strong style={{ color: "#4c1d95" }}>Lead (Oui/Non + formulaire)</strong>.
+            Une carte par type de vote, pour montrer clairement les 4 usages :{" "}
+            <strong style={{ color: "#4c1d95" }}>
+              Question sondage, Lead, Participation concours, Quiz
+            </strong>.
           </p>
           <div className="landing-proof-grid">
+            <LiveQuestionPreviewCard />
             <LiveContestPreviewCard />
             <LiveLeadCapturePreviewCard />
+            <LiveQuizPreviewCard />
           </div>
         </section>
 
@@ -1422,7 +1555,7 @@ export default function HomePage() {
           display: grid;
           gap: 1.25rem;
           grid-template-columns: 1fr;
-          max-width: 920px;
+          max-width: 980px;
           margin: 0 auto;
           align-items: stretch;
         }
