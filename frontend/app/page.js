@@ -660,15 +660,15 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Comment ça marche — version premium */}
+        {/* Comment ça marche */}
         <section id="how" style={sectionY}>
           <div className="how-premium-wrap">
             <div className="how-premium-head">
-              <p className="how-eyebrow">Flow produit</p>
-              <h2 className="how-title">Comment ça marche</h2>
+              <p className="how-eyebrow">Comment ça marche</p>
+              <h2 className="how-title">De la question au résultat, en quelques secondes.</h2>
               <p className="how-subtitle">
-                Trois étapes simples pour passer de la préparation au résultat
-                live, sans friction.
+                Créez votre événement, partagez un QR code, laissez votre audience
+                voter, puis affichez les résultats en direct.
               </p>
             </div>
 
@@ -678,57 +678,31 @@ export default function HomePage() {
               {[
                 {
                   step: "01",
-                  icon: "✏️",
                   title: "Créez votre événement",
-                  line: "Questions et réponses prêtes avant le live.",
-                  micro: "Questions configurées · prête à lancer",
+                  line: "Préparez vos questions et votre session avant le live.",
                 },
                 {
                   step: "02",
-                  icon: "📱",
                   title: "Partagez le QR code",
-                  line: "L’audience rejoint en un scan, sans app à installer.",
-                  micro: "Scan instantané · accès mobile immédiat",
+                  line: "Votre audience rejoint l’expérience en un scan, sans application à installer.",
                 },
                 {
                   step: "03",
-                  icon: "📊",
-                  title: "Lancez et affichez les résultats",
-                  line: "Régie, votes et écran restent synchros en direct.",
-                  micro: "Votes + écran + régie synchronisés",
+                  title: "Les participants votent",
+                  line: "Réponse rapide sur mobile, en direct, depuis n’importe quel appareil.",
                 },
-              ].map((step, idx) => (
+                {
+                  step: "04",
+                  title: "Affichez les résultats",
+                  line: "Les réponses apparaissent instantanément sur écran ou en projection.",
+                },
+              ].map((step) => (
                 <article key={step.title} className="how-card">
                   <div className="how-card-top">
                     <span className="how-step">{step.step}</span>
-                    <span className="how-icon" aria-hidden>
-                      {step.icon}
-                    </span>
                   </div>
                   <h3 className="how-card-title">{step.title}</h3>
                   <p className="how-card-line">{step.line}</p>
-
-                  {idx === 0 ? (
-                    <div className="how-micro how-micro-compose" aria-hidden>
-                      <span />
-                      <span />
-                      <span />
-                    </div>
-                  ) : null}
-                  {idx === 1 ? (
-                    <div className="how-micro how-micro-qr" aria-hidden>
-                      <div />
-                    </div>
-                  ) : null}
-                  {idx === 2 ? (
-                    <div className="how-micro how-micro-bars" aria-hidden>
-                      <span style={{ width: "68%" }} />
-                      <span style={{ width: "42%" }} />
-                      <span style={{ width: "24%" }} />
-                    </div>
-                  ) : null}
-
-                  <p className="how-card-micro">{step.micro}</p>
                 </article>
               ))}
             </div>
@@ -1344,181 +1318,127 @@ export default function HomePage() {
         }
         .how-premium-wrap {
           position: relative;
-          border-radius: 26px;
+          border-radius: 22px;
           border: 1px solid #ddd6fe;
           background:
-            radial-gradient(900px 260px at 50% -8%, rgba(124, 58, 237, 0.12), transparent 62%),
-            linear-gradient(160deg, #f8fafc 0%, #ffffff 45%, #faf5ff 100%);
-          padding: clamp(1.45rem, 3.8vw, 2.3rem);
-          box-shadow: 0 24px 58px rgba(76, 29, 149, 0.08);
+            radial-gradient(760px 220px at 50% -8%, rgba(124, 58, 237, 0.1), transparent 62%),
+            linear-gradient(160deg, #fafcff 0%, #ffffff 50%, #faf5ff 100%);
+          padding: clamp(1.3rem, 3.4vw, 2rem);
+          box-shadow: 0 18px 42px rgba(76, 29, 149, 0.07);
           overflow: hidden;
         }
         .how-premium-head {
           text-align: center;
-          max-width: 650px;
+          max-width: 760px;
           margin: 0 auto;
         }
         .how-eyebrow {
           margin: 0 0 0.5rem;
-          font-size: 0.72rem;
+          font-size: 0.7rem;
           font-weight: 700;
-          letter-spacing: 0.12em;
+          letter-spacing: 0.1em;
           text-transform: uppercase;
           color: #7c3aed;
         }
         .how-title {
           margin: 0;
-          font-size: clamp(1.45rem, 3.4vw, 2rem);
-          line-height: 1.14;
+          font-size: clamp(1.3rem, 3vw, 1.8rem);
+          line-height: 1.16;
           letter-spacing: -0.03em;
           font-weight: 800;
           color: #0f172a;
         }
         .how-subtitle {
           margin: 0.8rem auto 0;
-          max-width: 44ch;
-          font-size: clamp(0.9rem, 2.2vw, 1rem);
+          max-width: 62ch;
+          font-size: clamp(0.9rem, 2vw, 0.98rem);
+          line-height: 1.55;
           color: #64748b;
         }
         .how-timeline {
-          display: none;
+          margin: clamp(1rem, 2.4vw, 1.35rem) auto 0;
+          width: min(880px, 92%);
+          height: 1px;
+          background: linear-gradient(90deg, rgba(196,181,253,0) 0%, rgba(196,181,253,0.75) 20%, rgba(196,181,253,0.75) 80%, rgba(196,181,253,0) 100%);
         }
         .how-grid {
-          margin-top: clamp(1.2rem, 3.5vw, 1.8rem);
+          margin-top: clamp(1rem, 2.8vw, 1.45rem);
           display: grid;
-          gap: 0.95rem;
+          gap: 0.9rem;
           grid-template-columns: 1fr;
         }
         .how-card {
           position: relative;
-          border-radius: 18px;
+          border-radius: 16px;
           border: 1px solid #e9d5ff;
-          background: rgba(255, 255, 255, 0.86);
+          background: rgba(255, 255, 255, 0.92);
           box-shadow:
-            0 10px 30px rgba(15, 23, 42, 0.06),
+            0 8px 22px rgba(15, 23, 42, 0.05),
             inset 0 1px 0 rgba(255, 255, 255, 0.95);
-          padding: clamp(1rem, 2.5vw, 1.2rem);
-          min-height: 212px;
+          padding: clamp(0.95rem, 2.2vw, 1.15rem);
+          min-height: 170px;
           display: flex;
           flex-direction: column;
-          transition: transform .24s ease, box-shadow .24s ease, border-color .24s ease;
+          transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
         }
         .how-card:hover {
           transform: translateY(-3px);
           border-color: #c4b5fd;
           box-shadow:
-            0 18px 42px rgba(91, 33, 182, 0.14),
+            0 14px 34px rgba(91, 33, 182, 0.12),
             inset 0 1px 0 rgba(255, 255, 255, 0.95);
         }
         .how-card-top {
           display: flex;
           align-items: center;
-          justify-content: space-between;
-          gap: 0.6rem;
-          margin-bottom: 0.7rem;
+          justify-content: flex-start;
+          gap: 0.45rem;
+          margin-bottom: 0.75rem;
         }
         .how-step {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          min-width: 2.2rem;
-          padding: 0.16rem 0.48rem;
+          display: inline-block;
           border-radius: 999px;
-          border: 1px solid #c4b5fd;
-          background: #f5f3ff;
-          color: #6d28d9;
-          font-size: 0.72rem;
+          border: 1px solid #d8b4fe;
+          background: #faf5ff;
+          padding: 0.22rem 0.52rem;
+          font-size: 0.68rem;
           font-weight: 800;
-          letter-spacing: 0.08em;
+          color: #7c3aed;
+          letter-spacing: 0.06em;
         }
         .how-icon {
-          width: 2.15rem;
-          height: 2.15rem;
-          border-radius: 10px;
-          border: 1px solid #ddd6fe;
-          background: #faf5ff;
-          display: grid;
-          place-items: center;
-          font-size: 1.05rem;
+          display: none;
         }
         .how-card-title {
-          margin: 0;
-          font-size: 1.01rem;
+          margin: 0 0 0.35rem;
+          font-size: 1rem;
           line-height: 1.3;
-          font-weight: 750;
+          font-weight: 760;
           color: #111827;
         }
         .how-card-line {
-          margin: 0.46rem 0 0;
-          font-size: 0.89rem;
+          margin: 0;
+          font-size: 0.88rem;
           line-height: 1.5;
           color: #64748b;
         }
-        .how-micro {
-          margin-top: 0.85rem;
-          border-radius: 11px;
-          border: 1px solid #ede9fe;
-          background: #f8fafc;
-          padding: 0.5rem;
-        }
-        .how-micro-compose {
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
-          gap: 0.35rem;
-        }
-        .how-micro-compose span {
-          display: block;
-          height: 26px;
-          border-radius: 7px;
-          border: 1px solid #ddd6fe;
-          background: #fff;
-        }
-        .how-micro-qr {
-          display: grid;
-          place-items: center;
-        }
-        .how-micro-qr > div {
-          width: 42px;
-          height: 42px;
-          border-radius: 8px;
-          border: 1px solid #d8b4fe;
-          background:
-            repeating-linear-gradient(90deg, #7c3aed 0 2px, transparent 2px 4px),
-            repeating-linear-gradient(0deg, #7c3aed 0 2px, transparent 2px 4px);
-          opacity: 0.85;
-        }
-        .how-micro-bars span {
-          display: block;
-          height: 7px;
-          border-radius: 999px;
-          margin-bottom: 0.32rem;
-          background: linear-gradient(90deg, #a78bfa 0%, #7c3aed 100%);
-        }
+        .how-micro,
+        .how-micro-compose,
+        .how-micro-qr,
+        .how-micro-bars,
         .how-card-micro {
-          margin: auto 0 0;
-          padding-top: 0.75rem;
-          font-size: 0.73rem;
-          font-weight: 600;
-          letter-spacing: 0.02em;
-          color: #7c3aed;
+          display: none;
         }
-        @media (min-width: 820px) {
+        @media (min-width: 1200px) {
           .how-grid {
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1.05rem;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.95rem;
           }
-          .how-timeline {
-            position: absolute;
-            display: block;
-            left: clamp(2rem, 6vw, 3.2rem);
-            right: clamp(2rem, 6vw, 3.2rem);
-            top: clamp(11.1rem, 19vw, 12.2rem);
-            height: 2px;
-            background: linear-gradient(90deg, rgba(167, 139, 250, 0.16), rgba(124, 58, 237, 0.55), rgba(167, 139, 250, 0.16));
-            z-index: 0;
-          }
-          .how-card {
-            z-index: 1;
+        }
+        @media (min-width: 760px) and (max-width: 1199px) {
+          .how-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.95rem;
           }
         }
         .live-premium-wrap {
