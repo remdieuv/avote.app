@@ -49,190 +49,51 @@ const sectionY = {
 };
 
 function HeroMockup() {
-  const choiceBtn = {
-    padding: "0.55rem 0.65rem",
-    borderRadius: "10px",
-    border: "1px solid #e2e8f0",
-    fontSize: "0.78rem",
-    fontWeight: 600,
-    color: "#334155",
-    background: "#f8fafc",
-    textAlign: "left",
-  };
-
   return (
     <div className="hero-mockup-wrap" aria-hidden>
-      {/* Carte QR */}
-      <div
-        style={{
-          position: "absolute",
-          left: "0",
-          top: "12%",
-          width: "5.5rem",
-          height: "5.5rem",
-          borderRadius: "12px",
-          background: "#fff",
-          border: "1px solid #e2e8f0",
-          boxShadow: "0 12px 28px rgba(15, 23, 42, 0.12)",
-          padding: "0.45rem",
-          zIndex: 2,
-        }}
-      >
-        <div
-          style={{
-            width: "100%",
-            height: "100%",
-            borderRadius: "6px",
-            background:
-              "repeating-linear-gradient(90deg, #0f172a 0px, #0f172a 3px, transparent 3px, transparent 5px)," +
-              "repeating-linear-gradient(0deg, #0f172a 0px, #0f172a 3px, transparent 3px, transparent 5px)",
-            backgroundBlendMode: "multiply",
-            opacity: 0.92,
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            inset: "28%",
-            background: "#fff",
-            borderRadius: "4px",
-            border: "2px solid #0f172a",
-          }}
-        />
+      <div className="hero-qr-card">
+        <div className="hero-qr-grid" />
       </div>
 
-      {/* Téléphone */}
-      <div
-        style={{
-          position: "relative",
-          zIndex: 1,
-          margin: "0 auto",
-          width: "min(100%, 242px)",
-          borderRadius: "2rem",
-          padding: "0.45rem",
-          background: "linear-gradient(145deg, #334155 0%, #1e293b 100%)",
-          boxShadow:
-            "0 24px 48px rgba(15, 23, 42, 0.22), 0 0 0 1px rgba(255,255,255,0.06) inset",
-        }}
-      >
-        <div
-          style={{
-            height: "22px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: "0.35rem",
-          }}
-        >
-          <div
-            style={{
-              width: "58px",
-              height: "5px",
-              borderRadius: "99px",
-              background: "rgba(255,255,255,0.12)",
-            }}
-          />
+      <div className="hero-phone">
+        <div className="hero-phone-top">
+          <div className="hero-phone-notch" />
         </div>
-        <div
-          style={{
-            borderRadius: "1.35rem",
-            background: "linear-gradient(180deg, #f8fafc 0%, #fff 100%)",
-            padding: "1rem 0.85rem 1.1rem",
-            minHeight: "280px",
-            border: "1px solid #e2e8f0",
-          }}
-        >
-          <p
-            style={{
-              margin: "0 0 1rem",
-              fontSize: "0.88rem",
-              fontWeight: 700,
-              color: "#0f172a",
-              lineHeight: 1.35,
-            }}
-          >
-            Quelle session ouvrez-vous en premier ?
+        <div className="hero-phone-screen">
+          <p className="hero-phone-question">
+            Quel sujet voulez-vous aborder maintenant ?
           </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
-            <div style={{ ...choiceBtn, borderColor: "#c4b5fd", background: "#f5f3ff" }}>
-              ▣ UX &amp; design
-            </div>
-            <div style={choiceBtn}>□ Data &amp; live</div>
-            <div style={choiceBtn}>□ Q&amp;R publique</div>
+          <div className="hero-phone-choices">
+            <button type="button" className="hero-choice hero-choice-active">
+              Produit
+            </button>
+            <button type="button" className="hero-choice">Marketing</button>
+            <button type="button" className="hero-choice">IA</button>
           </div>
-          <p
-            style={{
-              margin: "1rem 0 0",
-              fontSize: "0.68rem",
-              color: "#94a3b8",
-              textAlign: "center",
-            }}
-          >
-            Rejoignez via QR · Avote
+          <button type="button" className="hero-phone-cta">Tester en live</button>
+          <p className="hero-phone-foot">
+            Sans application. Sans inscription pour voter.
           </p>
         </div>
       </div>
 
-      {/* Encart résultats mini */}
-      <div
-        style={{
-          position: "absolute",
-          right: "0",
-          bottom: "8%",
-          width: "9rem",
-          borderRadius: "12px",
-          background: "#fff",
-          border: "1px solid #e9d5ff",
-          boxShadow: "0 14px 32px rgba(91, 33, 182, 0.15)",
-          padding: "0.65rem 0.75rem",
-          zIndex: 3,
-        }}
-      >
-        <p
-          style={{
-            margin: "0 0 0.45rem",
-            fontSize: "0.62rem",
-            fontWeight: 700,
-            color: "#6d28d9",
-            textTransform: "uppercase",
-            letterSpacing: "0.06em",
-          }}
-        >
-          Live
-        </p>
+      <div className="hero-live-card">
+        <div className="hero-live-head">
+          <span className="hero-live-dot" />
+          LIVE
+        </div>
         {[
-          { label: "UX", w: "72%" },
-          { label: "Data", w: "21%" },
-          { label: "Q&R", w: "7%" },
+          { label: "Produit", pct: 42, w: "42%" },
+          { label: "Marketing", pct: 33, w: "33%" },
+          { label: "IA", pct: 25, w: "25%" },
         ].map((row) => (
-          <div key={row.label} style={{ marginBottom: "0.35rem" }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                fontSize: "0.62rem",
-                color: "#64748b",
-                marginBottom: "2px",
-              }}
-            >
+          <div key={row.label} className="hero-live-row">
+            <div className="hero-live-line">
               <span>{row.label}</span>
+              <span>{row.pct}%</span>
             </div>
-            <div
-              style={{
-                height: "5px",
-                borderRadius: "99px",
-                background: "#f1f5f9",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  width: row.w,
-                  height: "100%",
-                  borderRadius: "99px",
-                  background: "linear-gradient(90deg, #a78bfa, #7c3aed)",
-                }}
-              />
+            <div className="hero-live-track">
+              <div className="hero-live-fill" style={{ width: row.w }} />
             </div>
           </div>
         ))}
@@ -769,44 +630,23 @@ export default function HomePage() {
         {/* Hero */}
         <section id="hero" className="landing-hero" style={{ ...sectionY }}>
           <div className="landing-hero-text">
-            <h1
-              style={{
-                fontSize: "clamp(1.75rem, 5vw, 2.45rem)",
-                fontWeight: 800,
-                margin: "0 0 1rem",
-                letterSpacing: "-0.03em",
-                lineHeight: 1.12,
-                textAlign: "left",
-              }}
-            >
-              Le vote en direct, simple et instantané
-            </h1>
-            <p
-              style={{
-                fontSize: "clamp(1rem, 2.4vw, 1.12rem)",
-                color: "#475569",
-                margin: "0 0 1.75rem",
-                maxWidth: "28rem",
-                textAlign: "left",
-              }}
-            >
-              Faites participer votre audience via QR code en quelques secondes
+            <span className="hero-eyebrow">Vote interactif en direct</span>
+            <h1 className="hero-title">Faites voter votre audience en direct.</h1>
+            <p className="hero-subtitle">
+              Un QR code, quelques secondes pour répondre, et des résultats
+              affichés instantanément sur écran.
             </p>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "0.75rem",
-                justifyContent: "flex-start",
-              }}
-            >
-              <Link href="/admin" style={btnPrimary}>
-                Créer un événement
+            <div className="hero-cta-row">
+              <Link href="/join/demo" style={btnPrimary}>
+                Tester en live
               </Link>
-              <Link href="/join/demo" style={btnSecondary}>
-                Voir une démo
+              <Link href="/admin" style={btnSecondary}>
+                Créer un événement gratuit
               </Link>
             </div>
+            <p className="hero-reassurance">
+              Sans application. Sans inscription pour voter.
+            </p>
           </div>
           <div className="landing-hero-visual">
             <HeroMockup />
@@ -1175,49 +1015,304 @@ export default function HomePage() {
       </footer>
 
       <style>{`
+        .landing-hero {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: clamp(2rem, 5vw, 3rem);
+          align-items: center;
+        }
+        .landing-hero-text {
+          text-align: left;
+        }
+        .hero-eyebrow {
+          display: inline-flex;
+          align-items: center;
+          padding: 0.28rem 0.68rem;
+          border-radius: 999px;
+          border: 1px solid #ddd6fe;
+          background: rgba(255, 255, 255, 0.9);
+          color: #6d28d9;
+          font-size: 0.72rem;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          margin-bottom: 0.95rem;
+        }
+        .hero-title {
+          margin: 0;
+          font-size: clamp(2rem, 5.4vw, 3.25rem);
+          line-height: 1.05;
+          letter-spacing: -0.04em;
+          font-weight: 830;
+          color: #0f172a;
+          max-width: 16ch;
+        }
+        .hero-subtitle {
+          margin: 1rem 0 0;
+          max-width: 48ch;
+          font-size: clamp(1rem, 2vw, 1.14rem);
+          color: #475569;
+          line-height: 1.6;
+        }
+        .hero-cta-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.75rem;
+          margin-top: 1.35rem;
+        }
+        .hero-reassurance {
+          margin: 0.78rem 0 0;
+          font-size: 0.86rem;
+          color: #64748b;
+          font-weight: 520;
+        }
+        .landing-hero-visual {
+          width: 100%;
+        }
         .hero-mockup-wrap {
           position: relative;
-          min-height: 320px;
-          padding: 1.5rem 0 3.5rem;
+          min-height: 420px;
+          width: min(100%, 520px);
+          margin-left: auto;
+          margin-right: auto;
           display: flex;
           align-items: center;
           justify-content: center;
+          isolation: isolate;
         }
-        @media (min-width: 900px) {
+        .hero-mockup-wrap::before {
+          content: "";
+          position: absolute;
+          width: 72%;
+          aspect-ratio: 1 / 1;
+          border-radius: 999px;
+          background: radial-gradient(circle, rgba(124, 58, 237, 0.22), rgba(124, 58, 237, 0));
+          filter: blur(8px);
+          z-index: 0;
+        }
+        .hero-phone {
+          position: relative;
+          z-index: 2;
+          width: min(84vw, 290px);
+          border-radius: 2rem;
+          padding: 0.46rem;
+          background: linear-gradient(145deg, #0f172a 0%, #334155 100%);
+          box-shadow:
+            0 34px 60px rgba(15, 23, 42, 0.24),
+            0 0 0 1px rgba(255, 255, 255, 0.14) inset;
+        }
+        .hero-phone-top {
+          height: 22px;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+        }
+        .hero-phone-notch {
+          width: 68px;
+          height: 6px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.18);
+        }
+        .hero-phone-screen {
+          border-radius: 1.4rem;
+          border: 1px solid #e2e8f0;
+          background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+          padding: 1rem 0.9rem 0.95rem;
+          min-height: 320px;
+          display: flex;
+          flex-direction: column;
+        }
+        .hero-phone-question {
+          margin: 0;
+          font-size: 0.94rem;
+          line-height: 1.35;
+          font-weight: 750;
+          color: #0f172a;
+        }
+        .hero-phone-choices {
+          margin-top: 0.82rem;
+          display: grid;
+          gap: 0.45rem;
+        }
+        .hero-choice {
+          width: 100%;
+          text-align: left;
+          border: 1px solid #e2e8f0;
+          background: #f8fafc;
+          color: #334155;
+          border-radius: 12px;
+          padding: 0.54rem 0.62rem;
+          font-size: 0.8rem;
+          font-weight: 640;
+        }
+        .hero-choice-active {
+          border-color: #c4b5fd;
+          background: #f5f3ff;
+          color: #5b21b6;
+        }
+        .hero-phone-cta {
+          margin-top: auto;
+          border: 1px solid #6d28d9;
+          background: linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%);
+          color: #fff;
+          border-radius: 11px;
+          padding: 0.6rem 0.7rem;
+          font-size: 0.83rem;
+          font-weight: 760;
+          box-shadow: 0 10px 22px rgba(124, 58, 237, 0.24);
+        }
+        .hero-phone-foot {
+          margin: 0.55rem 0 0;
+          text-align: center;
+          font-size: 0.66rem;
+          color: #94a3b8;
+          line-height: 1.35;
+        }
+        .hero-live-card {
+          position: absolute;
+          right: 2%;
+          top: 56%;
+          transform: translateY(-50%);
+          z-index: 3;
+          width: min(44vw, 200px);
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.92);
+          border: 1px solid #e9d5ff;
+          box-shadow: 0 18px 36px rgba(91, 33, 182, 0.14);
+          backdrop-filter: blur(6px);
+          padding: 0.7rem 0.78rem;
+          animation: heroFloat 4.8s ease-in-out infinite;
+        }
+        .hero-live-head {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.32rem;
+          margin-bottom: 0.48rem;
+          font-size: 0.62rem;
+          font-weight: 800;
+          color: #6d28d9;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+        .hero-live-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #ef4444;
+          box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.45);
+          animation: heroPulse 2.4s ease-out infinite;
+        }
+        .hero-live-row {
+          margin-bottom: 0.34rem;
+        }
+        .hero-live-row:last-child {
+          margin-bottom: 0;
+        }
+        .hero-live-line {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 3px;
+          font-size: 0.67rem;
+          color: #64748b;
+        }
+        .hero-live-track {
+          height: 6px;
+          border-radius: 999px;
+          background: #f1f5f9;
+          overflow: hidden;
+        }
+        .hero-live-fill {
+          height: 100%;
+          border-radius: 999px;
+          background: linear-gradient(90deg, #a78bfa 0%, #7c3aed 100%);
+          animation: heroBars 1.2s ease-out;
+        }
+        .hero-qr-card {
+          position: absolute;
+          left: 4%;
+          top: 8%;
+          z-index: 4;
+          width: 92px;
+          height: 92px;
+          border-radius: 14px;
+          border: 1px solid #e2e8f0;
+          background: #fff;
+          box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+          padding: 0.5rem;
+        }
+        .hero-qr-grid {
+          width: 100%;
+          height: 100%;
+          border-radius: 8px;
+          background:
+            repeating-linear-gradient(90deg, #0f172a 0px, #0f172a 2px, transparent 2px, transparent 5px),
+            repeating-linear-gradient(0deg, #0f172a 0px, #0f172a 2px, transparent 2px, transparent 5px);
+          opacity: 0.88;
+        }
+        @keyframes heroPulse {
+          0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+          70% { box-shadow: 0 0 0 7px rgba(239, 68, 68, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        @keyframes heroFloat {
+          0%, 100% { transform: translateY(-50%); }
+          50% { transform: translateY(-54%); }
+        }
+        @keyframes heroBars {
+          from { transform: scaleX(0.25); transform-origin: left center; opacity: 0.6; }
+          to { transform: scaleX(1); transform-origin: left center; opacity: 1; }
+        }
+        @media (min-width: 980px) {
           .landing-hero {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
-            gap: 2.5rem 3rem;
-            align-items: center;
+            grid-template-columns: minmax(0, 1fr) minmax(420px, 520px);
+            gap: clamp(2.4rem, 4vw, 3.6rem);
           }
-          .landing-hero-text {
+        }
+        @media (max-width: 979px) {
+          .landing-hero {
             text-align: left;
           }
-          .hero-mockup-wrap {
-            min-height: 360px;
-            padding: 2rem 0.5rem 2rem 1rem;
+          .hero-title {
+            max-width: 18ch;
           }
         }
-        @media (max-width: 899px) {
+        @media (max-width: 760px) {
           .landing-hero {
             display: flex;
             flex-direction: column;
-            gap: 2.5rem;
-            text-align: center;
+            gap: 2rem;
           }
-          .landing-hero-text h1,
-          .landing-hero-text p {
-            text-align: center !important;
+          .hero-title,
+          .hero-subtitle,
+          .hero-reassurance {
+            text-align: left;
           }
-          .landing-hero-text > div {
-            justify-content: center !important;
+          .hero-cta-row {
+            justify-content: flex-start;
           }
           .hero-mockup-wrap {
-            max-width: 340px;
-            margin-left: auto;
-            margin-right: auto;
-            padding-left: 2rem;
-            padding-right: 2rem;
+            min-height: 360px;
+            width: 100%;
+            max-width: 380px;
+          }
+          .hero-phone {
+            width: min(86vw, 260px);
+          }
+          .hero-live-card {
+            right: 0;
+            top: auto;
+            bottom: 5%;
+            transform: none;
+            width: min(46vw, 178px);
+            animation: none;
+          }
+          .hero-qr-card {
+            left: 2%;
+            top: 6%;
+            width: 78px;
+            height: 78px;
+            padding: 0.42rem;
           }
         }
         .how-premium-wrap {
