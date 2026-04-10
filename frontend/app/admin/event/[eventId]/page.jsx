@@ -570,6 +570,20 @@ function PollCard({
           >
             Projeter les résultats finaux
           </button>
+          <button
+            type="button"
+            disabled={disableRevealQuiz}
+            onClick={() => onReveal?.(poll.id)}
+            title="Révèle la bonne réponse du quiz (uniquement vote fermé)."
+            style={{
+              ...btnAfficherResultats(disableRevealQuiz),
+              width: "100%",
+              padding: "0.38rem 0.5rem",
+              fontSize: "0.72rem",
+            }}
+          >
+            Révéler la réponse
+          </button>
           {quickAction ? (
             <button
               type="button"
