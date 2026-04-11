@@ -825,6 +825,118 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* Cas d’usage — projection rapide (4 scénarios) */}
+        <section style={sectionY} aria-labelledby="usecase-scenarios-heading">
+          <div className="usecase-scenarios-wrap">
+            <div className="usecase-scenarios-head">
+              <p className="usecase-scenarios-eyebrow">Cas d’usage</p>
+              <h2 id="usecase-scenarios-heading" className="usecase-scenarios-title">
+                Utilisé partout où votre audience compte.
+              </h2>
+              <p className="usecase-scenarios-subtitle">
+                Conférences, réunions, formations ou événements : faites participer
+                votre public en temps réel.
+              </p>
+            </div>
+            <div className="usecase-scenarios-grid">
+              <article className="usecase-scen-card">
+                <div className="usecase-scen-card-top">
+                  <span className="usecase-scen-icon" aria-hidden>
+                    🎤
+                  </span>
+                  <h3 className="usecase-scen-card-title">Conférences</h3>
+                </div>
+                <p className="usecase-scen-card-text">
+                  Posez une question à votre audience et affichez les résultats en
+                  direct sur grand écran.
+                </p>
+                <div className="usecase-scen-ui usecase-scen-ui-bars" aria-hidden>
+                  <div className="usecase-scen-ui-row">
+                    <span>A</span>
+                    <span>62%</span>
+                  </div>
+                  <div className="usecase-scen-track">
+                    <div className="usecase-scen-fill" style={{ width: "62%" }} />
+                  </div>
+                  <div className="usecase-scen-ui-row">
+                    <span>B</span>
+                    <span>28%</span>
+                  </div>
+                  <div className="usecase-scen-track">
+                    <div className="usecase-scen-fill usecase-scen-fill-soft" style={{ width: "28%" }} />
+                  </div>
+                </div>
+              </article>
+              <article className="usecase-scen-card">
+                <div className="usecase-scen-card-top">
+                  <span className="usecase-scen-icon" aria-hidden>
+                    🏢
+                  </span>
+                  <h3 className="usecase-scen-card-title">Réunions</h3>
+                </div>
+                <p className="usecase-scen-card-text">
+                  Prenez des décisions rapidement avec des votes visibles par toute
+                  l’équipe.
+                </p>
+                <div className="usecase-scen-ui usecase-scen-ui-vote" aria-hidden>
+                  <span className="usecase-scen-pill usecase-scen-pill-on">Pour</span>
+                  <span className="usecase-scen-pill">Contre</span>
+                  <span className="usecase-scen-pill usecase-scen-pill-muted">Abstention</span>
+                </div>
+              </article>
+              <article className="usecase-scen-card">
+                <div className="usecase-scen-card-top">
+                  <span className="usecase-scen-icon" aria-hidden>
+                    🎓
+                  </span>
+                  <h3 className="usecase-scen-card-title">Formations</h3>
+                </div>
+                <p className="usecase-scen-card-text">
+                  Transformez vos sessions en quiz interactifs pour capter
+                  l’attention.
+                </p>
+                <div className="usecase-scen-ui usecase-scen-ui-quiz" aria-hidden>
+                  <div className="usecase-scen-q">Q1 · Bonne réponse ?</div>
+                  <div className="usecase-scen-qopts">
+                    <span className="usecase-scen-qopt">A</span>
+                    <span className="usecase-scen-qopt usecase-scen-qopt-ok">B</span>
+                    <span className="usecase-scen-qopt">C</span>
+                  </div>
+                </div>
+              </article>
+              <article className="usecase-scen-card">
+                <div className="usecase-scen-card-top">
+                  <span className="usecase-scen-icon" aria-hidden>
+                    🎭
+                  </span>
+                  <h3 className="usecase-scen-card-title">Événements</h3>
+                </div>
+                <p className="usecase-scen-card-text">
+                  Animez votre public et créez de l’engagement en temps réel.
+                </p>
+                <div className="usecase-scen-ui usecase-scen-ui-live" aria-hidden>
+                  <div className="usecase-scen-live-badge">
+                    <span className="usecase-scen-live-dot" />
+                    LIVE
+                  </div>
+                  <div className="usecase-scen-track">
+                    <div className="usecase-scen-fill" style={{ width: "74%" }} />
+                  </div>
+                  <p className="usecase-scen-live-caption">Votes entrants…</p>
+                </div>
+              </article>
+            </div>
+            <div className="usecase-scenarios-cta">
+              <Link href="/join/demo" style={btnPrimary} className="hero-cta-primary">
+                Tester en live
+              </Link>
+              <Link href="/admin" style={btnSecondary} className="hero-cta-secondary">
+                Créer un événement gratuit
+              </Link>
+            </div>
+          </div>
+        </section>
+
         {/* Cas d’usage — version premium */}
         <section style={sectionY}>
           <div className="usecases-wrap">
@@ -1662,6 +1774,207 @@ export default function HomePage() {
           .results-dedicated-copy {
             padding-right: 0.5rem;
           }
+        }
+        .usecase-scenarios-wrap {
+          border-radius: 24px;
+          border: 1px solid #e2e8f0;
+          background:
+            radial-gradient(720px 200px at 12% -8%, rgba(124, 58, 237, 0.08), transparent 60%),
+            linear-gradient(165deg, #ffffff 0%, #f8fafc 50%, #faf5ff 100%);
+          box-shadow: 0 18px 44px rgba(15, 23, 42, 0.06);
+          padding: clamp(1.35rem, 3.8vw, 2.1rem);
+        }
+        .usecase-scenarios-head {
+          text-align: center;
+          max-width: 640px;
+          margin: 0 auto 1.25rem;
+        }
+        .usecase-scenarios-eyebrow {
+          margin: 0 0 0.45rem;
+          font-size: 0.72rem;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: #7c3aed;
+        }
+        .usecase-scenarios-title {
+          margin: 0;
+          font-size: clamp(1.25rem, 3vw, 1.85rem);
+          font-weight: 800;
+          line-height: 1.15;
+          letter-spacing: -0.03em;
+          color: #0f172a;
+        }
+        .usecase-scenarios-subtitle {
+          margin: 0.75rem auto 0;
+          max-width: 48ch;
+          font-size: clamp(0.88rem, 2vw, 0.98rem);
+          line-height: 1.55;
+          color: #64748b;
+        }
+        .usecase-scenarios-grid {
+          display: grid;
+          gap: 1rem;
+          grid-template-columns: 1fr;
+        }
+        @media (min-width: 640px) {
+          .usecase-scenarios-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
+        @media (min-width: 1100px) {
+          .usecase-scenarios-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 1.05rem;
+          }
+        }
+        .usecase-scen-card {
+          border-radius: 16px;
+          border: 1px solid #e2e8f0;
+          background: #ffffff;
+          padding: 1rem 1rem 0.95rem;
+          display: flex;
+          flex-direction: column;
+          gap: 0.55rem;
+          min-height: 100%;
+          transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+        }
+        .usecase-scen-card:hover {
+          border-color: #c4b5fd;
+          box-shadow: 0 12px 28px rgba(124, 58, 237, 0.1);
+          transform: translateY(-2px);
+        }
+        .usecase-scen-card-top {
+          display: flex;
+          align-items: center;
+          gap: 0.55rem;
+        }
+        .usecase-scen-icon {
+          font-size: 1.35rem;
+          line-height: 1;
+        }
+        .usecase-scen-card-title {
+          margin: 0;
+          font-size: 1rem;
+          font-weight: 800;
+          color: #0f172a;
+          letter-spacing: -0.02em;
+        }
+        .usecase-scen-card-text {
+          margin: 0;
+          font-size: 0.84rem;
+          line-height: 1.5;
+          color: #64748b;
+          flex: 1;
+        }
+        .usecase-scen-ui {
+          margin-top: 0.35rem;
+          padding-top: 0.65rem;
+          border-top: 1px solid #f1f5f9;
+        }
+        .usecase-scen-ui-bars .usecase-scen-ui-row {
+          display: flex;
+          justify-content: space-between;
+          font-size: 0.68rem;
+          font-weight: 700;
+          color: #475569;
+          margin-bottom: 0.2rem;
+        }
+        .usecase-scen-ui-bars .usecase-scen-ui-row + .usecase-scen-track {
+          margin-bottom: 0.45rem;
+        }
+        .usecase-scen-track {
+          height: 6px;
+          border-radius: 999px;
+          background: #f1f5f9;
+          overflow: hidden;
+        }
+        .usecase-scen-fill {
+          height: 100%;
+          border-radius: 999px;
+          background: linear-gradient(90deg, #7c3aed, #a78bfa);
+        }
+        .usecase-scen-fill-soft {
+          background: linear-gradient(90deg, #94a3b8, #cbd5e1);
+        }
+        .usecase-scen-ui-vote {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.35rem;
+        }
+        .usecase-scen-pill {
+          font-size: 0.65rem;
+          font-weight: 700;
+          padding: 0.28rem 0.55rem;
+          border-radius: 999px;
+          border: 1px solid #e2e8f0;
+          color: #64748b;
+          background: #f8fafc;
+        }
+        .usecase-scen-pill-on {
+          border-color: #a78bfa;
+          background: #f5f3ff;
+          color: #5b21b6;
+        }
+        .usecase-scen-pill-muted {
+          opacity: 0.65;
+        }
+        .usecase-scen-q {
+          font-size: 0.68rem;
+          font-weight: 700;
+          color: #475569;
+          margin-bottom: 0.4rem;
+        }
+        .usecase-scen-qopts {
+          display: flex;
+          gap: 0.35rem;
+        }
+        .usecase-scen-qopt {
+          width: 1.65rem;
+          height: 1.65rem;
+          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 0.72rem;
+          font-weight: 800;
+          color: #64748b;
+          background: #f8fafc;
+        }
+        .usecase-scen-qopt-ok {
+          border-color: #86efac;
+          background: #ecfdf5;
+          color: #166534;
+        }
+        .usecase-scen-live-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.35rem;
+          font-size: 0.62rem;
+          font-weight: 800;
+          letter-spacing: 0.06em;
+          color: #b91c1c;
+          margin-bottom: 0.45rem;
+        }
+        .usecase-scen-live-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #ef4444;
+          box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25);
+        }
+        .usecase-scen-live-caption {
+          margin: 0.35rem 0 0;
+          font-size: 0.65rem;
+          color: #94a3b8;
+        }
+        .usecase-scenarios-cta {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.65rem;
+          justify-content: center;
+          margin-top: 1.35rem;
         }
         .usecases-wrap {
           border-radius: 24px;
