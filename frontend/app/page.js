@@ -660,6 +660,28 @@ export default function HomePage() {
           </div>
         </section>
 
+        <section style={sectionY} aria-labelledby="landing-live-results-heading">
+          <div className="results-dedicated-wrap">
+            <div className="results-dedicated-copy">
+              <p className="results-eyebrow">Lecture instantanée</p>
+              <h2 id="landing-live-results-heading" className="results-title">
+                Vos résultats parlent en temps réel
+              </h2>
+              <p className="results-slogan">
+                Un vote, un impact visuel immédiat.
+              </p>
+              <p className="results-explain">
+                Dès qu’un participant répond, les barres s’actualisent en direct.
+                Régie, participants et écran voient la même dynamique au même moment.
+                Idéal pour maintenir l’attention et rythmer une session live.
+              </p>
+            </div>
+            <div className="results-dedicated-visual">
+              <LiveResultsCardCompact />
+            </div>
+          </div>
+        </section>
+
         {/* Comment ça marche */}
         <section id="how" style={sectionY}>
           <div className="how-premium-wrap">
@@ -800,28 +822,6 @@ export default function HomePage() {
             <LiveContestPreviewCard />
             <LiveLeadCapturePreviewCard />
             <LiveQuizPreviewCard />
-          </div>
-        </section>
-
-        <section style={sectionY} aria-labelledby="landing-live-results-heading">
-          <div className="results-dedicated-wrap">
-            <div className="results-dedicated-copy">
-              <p className="results-eyebrow">Lecture instantanée</p>
-              <h2 id="landing-live-results-heading" className="results-title">
-                Vos résultats parlent en temps réel
-              </h2>
-              <p className="results-slogan">
-                Un vote, un impact visuel immédiat.
-              </p>
-              <p className="results-explain">
-                Dès qu’un participant répond, les barres s’actualisent en direct.
-                Régie, participants et écran voient la même dynamique au même moment.
-                Idéal pour maintenir l’attention et rythmer une session live.
-              </p>
-            </div>
-            <div className="results-dedicated-visual">
-              <LiveResultsCardCompact />
-            </div>
           </div>
         </section>
 
