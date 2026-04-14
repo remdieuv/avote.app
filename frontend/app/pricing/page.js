@@ -59,15 +59,15 @@ const plans = [
     name: "GRATUIT",
     price: "0€",
     unit: "",
-    label: "Découvrir gratuitement",
-    cta: "Tester gratuitement",
+    label: "Découverte sans risque",
+    cta: "Démarrer gratuitement",
     href: "/join/demo",
     features: [
       "1 sondage actif",
       "50 votes max",
       "QR code + lien de participation",
-      "Resultats en direct",
-      "Branding Avote visible",
+      "Résultats en direct",
+      "Personnalisation visuelle Avote par défaut",
     ],
   },
   {
@@ -75,16 +75,16 @@ const plans = [
     name: "STARTER",
     price: "19€",
     unit: "/ événement",
-    label: "Lancer un vote simple",
+    label: "Lancer un vote clair et rapide",
     cta: "Choisir Starter",
     href: "/admin",
     features: [
-      "1 evenement",
+      "1 événement",
       "500 votes max",
       "QR code + lien court",
-      "Resultats en direct",
-      "Acces mobile optimise",
-      "Branding Avote visible",
+      "Résultats en direct",
+      "Accès mobile optimisé",
+      "Personnalisation visuelle Avote par défaut",
     ],
   },
   {
@@ -93,19 +93,18 @@ const plans = [
     price: "49€",
     unit: "/ événement",
     label: "Expérience live complète",
-    cta: "Choisir PRO",
+    cta: "Passer en PRO",
     href: "/admin",
     badge: "Le plus utilisé",
     featured: true,
     features: [
-      "1 evenement",
+      "1 événement",
       "5 000 votes",
       "QR code + lien court",
-      "Resultats en direct",
-      "Affichage ecran / projection / OBS",
+      "Résultats en direct",
+      "Projection en direct sur écran / OBS",
       "Personnalisation visuelle (logo, couleurs)",
-      "Statistiques detaillees",
-      "Export CSV",
+      "Statistiques détaillées + export des résultats",
     ],
   },
   {
@@ -113,16 +112,16 @@ const plans = [
     name: "PREMIUM",
     price: "99€",
     unit: "/ événement",
-    label: "Performance & image professionnelle",
+    label: "Capacité maximale et rendu pro",
     cta: "Choisir Premium",
     href: "/admin",
     features: [
-      "1 evenement",
+      "1 événement",
       "20 000 votes",
-      "Priorite serveur",
-      "Affichage ecran avance",
-      "Branding complet / white label",
-      "Rapport detaille post-evenement",
+      "Capacité renforcée pour les gros événements",
+      "Projection en direct sur écran / OBS",
+      "Personnalisation visuelle avancée (logo, couleurs, fond)",
+      "Statistiques détaillées + export des résultats",
       "Support prioritaire",
     ],
   },
@@ -131,12 +130,12 @@ const plans = [
 const compareRows = [
   { label: "Votes max", free: "50", starter: "500", pro: "5 000", premium: "20 000" },
   { label: "QR code", free: "Oui", starter: "Oui", pro: "Oui", premium: "Oui" },
-  { label: "Resultats live", free: "Oui", starter: "Oui", pro: "Oui", premium: "Oui" },
-  { label: "Affichage ecran", free: "-", starter: "-", pro: "Oui", premium: "Avance" },
-  { label: "Personnalisation visuelle", free: "-", starter: "-", pro: "Oui", premium: "Complete" },
-  { label: "Statistiques detaillees", free: "-", starter: "-", pro: "Oui", premium: "Oui" },
+  { label: "Résultats live", free: "Oui", starter: "Oui", pro: "Oui", premium: "Oui" },
+  { label: "Affichage écran", free: "-", starter: "-", pro: "Oui", premium: "Oui" },
+  { label: "Personnalisation visuelle", free: "Avote", starter: "Avote", pro: "Logo + couleurs", premium: "Avancée" },
+  { label: "Statistiques détaillées", free: "-", starter: "-", pro: "Oui", premium: "Oui" },
   { label: "Export CSV", free: "-", starter: "-", pro: "Oui", premium: "Oui" },
-  { label: "White label", free: "-", starter: "-", pro: "-", premium: "Oui" },
+  { label: "Suppression branding Avote", free: "-", starter: "-", pro: "-", premium: "Sur demande" },
   { label: "Support prioritaire", free: "-", starter: "-", pro: "-", premium: "Oui" },
 ];
 
@@ -225,6 +224,18 @@ export default function PricingPage() {
             {plans.map((plan) => (
               <PlanCard key={plan.key} plan={plan} />
             ))}
+          </div>
+          <div className="pricing-sub-plan" role="note" aria-label="Offre abonnement secondaire">
+            <p className="pricing-sub-plan-title">Vous organisez des événements régulièrement ?</p>
+            <ul>
+              <li>
+                <strong>PRO+ — 39€/mois</strong>
+              </li>
+              <li>1 événement PRO inclus / mois</li>
+              <li>Suppression du branding Avote</li>
+              <li>Historique complet</li>
+              <li>-20% sur les événements supplémentaires</li>
+            </ul>
           </div>
         </section>
 
@@ -502,6 +513,33 @@ export default function PricingPage() {
           justify-content: space-between;
           gap: 0.8rem;
           box-shadow: 0 10px 30px rgba(124, 58, 237, 0.1);
+        }
+        .pricing-sub-plan {
+          margin: 1rem auto 0;
+          max-width: 760px;
+          border-radius: 14px;
+          border: 1px solid #e2e8f0;
+          background: linear-gradient(160deg, #ffffff 0%, #f8fafc 100%);
+          padding: 0.8rem 0.95rem;
+        }
+        .pricing-sub-plan-title {
+          margin: 0;
+          font-size: 0.86rem;
+          font-weight: 800;
+          color: #334155;
+        }
+        .pricing-sub-plan ul {
+          margin: 0.5rem 0 0;
+          padding: 0;
+          list-style: none;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.45rem 0.7rem;
+          color: #475569;
+          font-size: 0.8rem;
+        }
+        .pricing-sub-plan li {
+          white-space: nowrap;
         }
         .pricing-offer-title {
           margin: 0;
