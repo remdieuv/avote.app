@@ -53,6 +53,12 @@ const btnSecondary = {
   boxShadow: "none",
 };
 
+const STRIPE_LINKS = {
+  starter: "https://buy.stripe.com/aFa9ATcvm2TSfZSbTVcfK02",
+  pro: "https://buy.stripe.com/9B628rbri664aFycXZcfK03",
+  premium: "https://buy.stripe.com/28EfZh8f6eCA8xqgabcfK00",
+};
+
 const plans = [
   {
     key: "free",
@@ -78,7 +84,7 @@ const plans = [
     unit: "/ événement",
     label: "Pour petits événements (jusqu’à 50–100 personnes)",
     cta: "Choisir Starter",
-    href: "/admin",
+    href: STRIPE_LINKS.starter,
     features: [
       "1 événement",
       "500 votes max",
@@ -96,7 +102,7 @@ const plans = [
     label: "Expérience live complète",
     sublabel: "Idéal pour événements publics et animations live",
     cta: "Choisir PRO",
-    href: "/admin",
+    href: STRIPE_LINKS.pro,
     badge: "Le plus utilisé",
     featured: true,
     features: [
@@ -116,7 +122,7 @@ const plans = [
     unit: "/ événement",
     label: "Pour gros événements (500+ participants)",
     cta: "Choisir Premium",
-    href: "/admin",
+    href: STRIPE_LINKS.premium,
     features: [
       "1 événement",
       "20 000 votes",
@@ -167,6 +173,7 @@ const faq = [
 ];
 
 function PlanCard({ plan }) {
+  const isExternal = /^https?:\/\//i.test(plan.href);
   return (
     <article className={`pricing-card ${plan.featured ? "featured" : ""}`}>
       <div className="pricing-card-head">
@@ -188,9 +195,15 @@ function PlanCard({ plan }) {
         ))}
       </ul>
       <div className="pricing-card-cta">
-        <Link href={plan.href} style={plan.featured ? btnPrimary : btnSecondary}>
-          {plan.cta}
-        </Link>
+        {isExternal ? (
+          <a href={plan.href} style={plan.featured ? btnPrimary : btnSecondary}>
+            {plan.cta}
+          </a>
+        ) : (
+          <Link href={plan.href} style={plan.featured ? btnPrimary : btnSecondary}>
+            {plan.cta}
+          </Link>
+        )}
       </div>
       {plan.key === "pro" ? (
         <p className="pricing-pro-discovery-tag">Premier événement à 9€</p>
@@ -236,6 +249,7 @@ export default function PricingPage() {
           <p className="pricing-social-proof">
             Déjà utilisé pour des événements en direct : soirées, conférences, entreprises.
           </p>
+          <p className="pricing-payment-note">Paiement sécurisé via Stripe</p>
           <div className="pricing-sub-plan" role="note" aria-label="Offre abonnement secondaire">
             <p className="pricing-sub-plan-title">Vous organisez des événements régulièrement ?</p>
             <ul>
@@ -538,6 +552,13 @@ export default function PricingPage() {
           text-align: center;
           font-size: 0.8rem;
           color: #64748b;
+        }
+        .pricing-payment-note {
+          margin: 0.32rem auto 0;
+          max-width: 760px;
+          text-align: center;
+          font-size: 0.74rem;
+          color: #94a3b8;
         }
         .pricing-offer {
           border-radius: 18px;
