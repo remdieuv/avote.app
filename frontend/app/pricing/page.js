@@ -54,7 +54,7 @@ const btnSecondary = {
 };
 
 const STRIPE_LINKS = {
-  starter: "https://buy.stripe.com/14A7sK0CM77b0eOgwNcMM00",
+  starter: "https://buy.stripe.com/test_4gM4gB1t5a0Vc4JgO07g400",
   pro: "https://buy.stripe.com/fZu8wOadmcrvd1A1BTcMM01",
   premium: "https://buy.stripe.com/9B600ifxG6371iS5S9cMM02",
 };
