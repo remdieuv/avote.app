@@ -1,0 +1,651 @@
+import Link from "next/link";
+import { LandingHeader } from "@/components/landing/LandingHeader";
+
+export const metadata = {
+  title: "Tarifs Avote | Vote interactif en direct",
+  description:
+    "Des tarifs simples pour vos événements en direct. Testez gratuitement Avote, puis choisissez l'offre adaptée à votre audience.",
+};
+
+const shell = {
+  fontFamily: "system-ui, sans-serif",
+  lineHeight: 1.55,
+  color: "#0f172a",
+  minHeight: "100vh",
+  display: "flex",
+  flexDirection: "column",
+  background: "linear-gradient(180deg, #f1f5f9 0%, #ffffff 38%, #faf5ff 100%)",
+};
+
+const inner = {
+  width: "100%",
+  maxWidth: "1100px",
+  margin: "0 auto",
+  padding: "1.25rem 1.25rem 4rem",
+  boxSizing: "border-box",
+};
+
+const sectionY = {
+  paddingTop: "clamp(2.8rem, 7vw, 4.4rem)",
+  paddingBottom: "clamp(2.8rem, 7vw, 4.4rem)",
+};
+
+const btnPrimary = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "0.75rem 1.2rem",
+  borderRadius: "10px",
+  border: "1px solid #6d28d9",
+  background: "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 55%, #6d28d9 100%)",
+  color: "#fff",
+  textDecoration: "none",
+  fontSize: "0.95rem",
+  fontWeight: 800,
+  boxShadow: "0 10px 24px rgba(109, 40, 217, 0.2)",
+};
+
+const btnSecondary = {
+  ...btnPrimary,
+  background: "#fff",
+  border: "1px solid #d8b4fe",
+  color: "#5b21b6",
+  boxShadow: "none",
+};
+
+const plans = [
+  {
+    key: "free",
+    name: "GRATUIT",
+    price: "0€",
+    unit: "",
+    label: "Découvrir gratuitement",
+    cta: "Tester gratuitement",
+    href: "/join/demo",
+    features: [
+      "1 sondage actif",
+      "50 votes max",
+      "QR code + lien de participation",
+      "Resultats en direct",
+      "Branding Avote visible",
+    ],
+  },
+  {
+    key: "starter",
+    name: "STARTER",
+    price: "19€",
+    unit: "/ événement",
+    label: "Lancer un vote simple",
+    cta: "Choisir Starter",
+    href: "/admin",
+    features: [
+      "1 evenement",
+      "500 votes max",
+      "QR code + lien court",
+      "Resultats en direct",
+      "Acces mobile optimise",
+      "Branding Avote visible",
+    ],
+  },
+  {
+    key: "pro",
+    name: "PRO",
+    price: "49€",
+    unit: "/ événement",
+    label: "Expérience live complète",
+    cta: "Choisir PRO",
+    href: "/admin",
+    badge: "Le plus utilisé",
+    featured: true,
+    features: [
+      "1 evenement",
+      "5 000 votes",
+      "QR code + lien court",
+      "Resultats en direct",
+      "Affichage ecran / projection / OBS",
+      "Personnalisation visuelle (logo, couleurs)",
+      "Statistiques detaillees",
+      "Export CSV",
+    ],
+  },
+  {
+    key: "premium",
+    name: "PREMIUM",
+    price: "99€",
+    unit: "/ événement",
+    label: "Performance & image professionnelle",
+    cta: "Choisir Premium",
+    href: "/admin",
+    features: [
+      "1 evenement",
+      "20 000 votes",
+      "Priorite serveur",
+      "Affichage ecran avance",
+      "Branding complet / white label",
+      "Rapport detaille post-evenement",
+      "Support prioritaire",
+    ],
+  },
+];
+
+const compareRows = [
+  { label: "Votes max", free: "50", starter: "500", pro: "5 000", premium: "20 000" },
+  { label: "QR code", free: "Oui", starter: "Oui", pro: "Oui", premium: "Oui" },
+  { label: "Resultats live", free: "Oui", starter: "Oui", pro: "Oui", premium: "Oui" },
+  { label: "Affichage ecran", free: "-", starter: "-", pro: "Oui", premium: "Avance" },
+  { label: "Personnalisation visuelle", free: "-", starter: "-", pro: "Oui", premium: "Complete" },
+  { label: "Statistiques detaillees", free: "-", starter: "-", pro: "Oui", premium: "Oui" },
+  { label: "Export CSV", free: "-", starter: "-", pro: "Oui", premium: "Oui" },
+  { label: "White label", free: "-", starter: "-", pro: "-", premium: "Oui" },
+  { label: "Support prioritaire", free: "-", starter: "-", pro: "-", premium: "Oui" },
+];
+
+const useCases = [
+  { icon: "🎤", title: "Conferences & keynotes", text: "Faites reagir votre public en direct sur grand ecran." },
+  { icon: "🏢", title: "Reunions d'equipe", text: "Accordez-vous vite avec des votes clairs et visibles." },
+  { icon: "🎓", title: "Formations & quiz", text: "Transformez vos sessions en experiences participatives." },
+  { icon: "🎉", title: "Soirees & evenements live", text: "Animez la salle avec un vote simple et instantane." },
+];
+
+const faq = [
+  {
+    q: "Puis-je tester gratuitement ?",
+    a: "Oui. Vous pouvez lancer un test immediatement avec l'offre gratuite.",
+  },
+  {
+    q: "Faut-il installer une application ?",
+    a: "Non. Vos participants votent via un scan QR code, sans application.",
+  },
+  {
+    q: "Puis-je personnaliser l'evenement ?",
+    a: "Oui, a partir de l'offre PRO vous pouvez ajouter logo et couleurs.",
+  },
+  {
+    q: "Quelle offre choisir pour un evenement public ?",
+    a: "PRO est le meilleur point d'equilibre. Premium convient aux gros volumes et besoins white label.",
+  },
+];
+
+function PlanCard({ plan }) {
+  return (
+    <article className={`pricing-card ${plan.featured ? "featured" : ""}`}>
+      <div className="pricing-card-head">
+        <p className="pricing-plan-name">{plan.name}</p>
+        {plan.badge ? <span className="pricing-plan-badge">{plan.badge}</span> : null}
+      </div>
+      <p className="pricing-plan-label">{plan.label}</p>
+      <p className="pricing-price">
+        <strong>{plan.price}</strong>
+        {plan.unit ? <span>{plan.unit}</span> : null}
+      </p>
+      <ul className="pricing-features">
+        {plan.features.map((feature) => (
+          <li key={feature}>{feature}</li>
+        ))}
+      </ul>
+      <div className="pricing-card-cta">
+        <Link href={plan.href} style={plan.featured ? btnPrimary : btnSecondary}>
+          {plan.cta}
+        </Link>
+      </div>
+    </article>
+  );
+}
+
+export default function PricingPage() {
+  return (
+    <div style={shell}>
+      <LandingHeader />
+
+      <main style={{ ...inner, flex: 1 }}>
+        <section style={sectionY} className="pricing-hero">
+          <div className="pricing-hero-wrap">
+            <p className="pricing-eyebrow">Tarifs Avote</p>
+            <h1 className="pricing-title">Des tarifs simples pour vos événements en direct</h1>
+            <p className="pricing-subtitle">
+              Testez gratuitement, lancez un événement en quelques minutes, puis choisissez
+              l&apos;offre adaptée à votre audience.
+            </p>
+            <div className="pricing-hero-cta">
+              <Link href="/join/demo" style={btnPrimary}>
+                Tester gratuitement
+              </Link>
+              <Link href="/admin" style={btnSecondary}>
+                Créer un événement
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        <section style={sectionY} aria-labelledby="pricing-cards-title">
+          <h2 id="pricing-cards-title" className="section-title">
+            Choisissez votre offre
+          </h2>
+          <div className="pricing-grid">
+            {plans.map((plan) => (
+              <PlanCard key={plan.key} plan={plan} />
+            ))}
+          </div>
+        </section>
+
+        <section style={{ ...sectionY, paddingTop: "0.4rem" }} aria-label="Offre decouverte">
+          <div className="pricing-offer">
+            <div>
+              <p className="pricing-offer-title">Offre découverte</p>
+              <p className="pricing-offer-text">
+                Premier événement à 9€ pour tester Avote en conditions réelles.
+              </p>
+            </div>
+            <Link href="/admin" style={btnPrimary}>
+              En profiter
+            </Link>
+          </div>
+        </section>
+
+        <section style={sectionY} aria-labelledby="pricing-compare-title">
+          <h2 id="pricing-compare-title" className="section-title">
+            Tableau comparatif
+          </h2>
+          <div className="pricing-table-wrap">
+            <table className="pricing-table">
+              <thead>
+                <tr>
+                  <th>Fonctionnalités</th>
+                  <th>Gratuit</th>
+                  <th>Starter</th>
+                  <th>PRO</th>
+                  <th>Premium</th>
+                </tr>
+              </thead>
+              <tbody>
+                {compareRows.map((row) => (
+                  <tr key={row.label}>
+                    <td>{row.label}</td>
+                    <td>{row.free}</td>
+                    <td>{row.starter}</td>
+                    <td>{row.pro}</td>
+                    <td>{row.premium}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section style={sectionY} aria-labelledby="pricing-usecases-title">
+          <h2 id="pricing-usecases-title" className="section-title">
+            Cas d&apos;usage fréquents
+          </h2>
+          <div className="usecase-grid">
+            {useCases.map((item) => (
+              <article key={item.title} className="usecase-item">
+                <span className="usecase-icon" aria-hidden>
+                  {item.icon}
+                </span>
+                <h3>{item.title}</h3>
+                <p>{item.text}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section style={sectionY} aria-labelledby="pricing-reassure-title">
+          <h2 id="pricing-reassure-title" className="section-title">
+            Réassurance
+          </h2>
+          <div className="reassure-grid">
+            <p>Sans application à installer</p>
+            <p>Accès en un scan</p>
+            <p>Résultats instantanés</p>
+            <p>Paiement simple et sans engagement</p>
+          </div>
+        </section>
+
+        <section style={sectionY} aria-labelledby="pricing-faq-title">
+          <h2 id="pricing-faq-title" className="section-title">
+            FAQ rapide
+          </h2>
+          <div className="faq-grid">
+            {faq.map((item) => (
+              <article key={item.q} className="faq-item">
+                <h3>{item.q}</h3>
+                <p>{item.a}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section style={sectionY} className="pricing-final">
+          <h2>Prêt à faire voter votre audience en direct ?</h2>
+          <div className="pricing-final-cta">
+            <Link href="/join/demo" style={btnPrimary}>
+              Tester Avote
+            </Link>
+            <Link href="/admin" style={btnSecondary}>
+              Créer un événement
+            </Link>
+          </div>
+        </section>
+      </main>
+
+      <footer
+        style={{
+          borderTop: "1px solid #e2e8f0",
+          padding: "1.5rem 1.25rem",
+          textAlign: "center",
+          fontSize: "0.875rem",
+          color: "#94a3b8",
+        }}
+      >
+        © {new Date().getFullYear()} Avote
+      </footer>
+
+      <style>{`
+        .pricing-hero-wrap {
+          border-radius: 24px;
+          border: 1px solid #ddd6fe;
+          background:
+            radial-gradient(820px 240px at 14% -12%, rgba(124, 58, 237, 0.12), transparent 60%),
+            linear-gradient(160deg, #ffffff 0%, #f8fafc 52%, #faf5ff 100%);
+          box-shadow: 0 18px 48px rgba(76, 29, 149, 0.08);
+          padding: clamp(1.35rem, 3.8vw, 2.4rem);
+          text-align: center;
+        }
+        .pricing-eyebrow {
+          margin: 0 0 0.48rem;
+          font-size: 0.72rem;
+          font-weight: 700;
+          letter-spacing: 0.11em;
+          text-transform: uppercase;
+          color: #7c3aed;
+        }
+        .pricing-title {
+          margin: 0;
+          font-size: clamp(1.5rem, 4.4vw, 2.5rem);
+          line-height: 1.08;
+          letter-spacing: -0.03em;
+          font-weight: 900;
+          color: #0f172a;
+        }
+        .pricing-subtitle {
+          margin: 0.9rem auto 0;
+          max-width: 64ch;
+          font-size: clamp(0.95rem, 2.2vw, 1.05rem);
+          color: #64748b;
+        }
+        .pricing-hero-cta {
+          display: flex;
+          gap: 0.7rem;
+          justify-content: center;
+          flex-wrap: wrap;
+          margin-top: 1.2rem;
+        }
+        .section-title {
+          margin: 0 0 1rem;
+          text-align: center;
+          font-size: clamp(1.2rem, 3vw, 1.7rem);
+          font-weight: 850;
+          letter-spacing: -0.02em;
+          color: #0f172a;
+        }
+        .pricing-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 0.9rem;
+        }
+        .pricing-card {
+          border-radius: 18px;
+          border: 1px solid #e2e8f0;
+          background: #fff;
+          box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+          padding: 1rem 1rem 0.95rem;
+          display: flex;
+          flex-direction: column;
+          min-height: 100%;
+          transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+        .pricing-card:hover {
+          transform: translateY(-2px);
+          border-color: #c4b5fd;
+          box-shadow: 0 16px 34px rgba(124, 58, 237, 0.12);
+        }
+        .pricing-card.featured {
+          border-color: #a78bfa;
+          background:
+            radial-gradient(220px 120px at 85% -10%, rgba(167, 139, 250, 0.24), transparent 60%),
+            linear-gradient(160deg, #ffffff 0%, #faf5ff 100%);
+          box-shadow: 0 18px 40px rgba(124, 58, 237, 0.16);
+        }
+        .pricing-card-head {
+          display: flex;
+          justify-content: space-between;
+          gap: 0.6rem;
+          align-items: center;
+        }
+        .pricing-plan-name {
+          margin: 0;
+          font-size: 0.78rem;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          color: #475569;
+        }
+        .pricing-plan-badge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0.24rem 0.5rem;
+          border-radius: 999px;
+          font-size: 0.68rem;
+          font-weight: 800;
+          color: #5b21b6;
+          border: 1px solid #c4b5fd;
+          background: #f5f3ff;
+          white-space: nowrap;
+        }
+        .pricing-plan-label {
+          margin: 0.35rem 0 0;
+          font-size: 0.88rem;
+          color: #64748b;
+          min-height: 2.6em;
+        }
+        .pricing-price {
+          margin: 0.72rem 0 0;
+          display: flex;
+          align-items: baseline;
+          gap: 0.28rem;
+        }
+        .pricing-price strong {
+          font-size: 1.6rem;
+          letter-spacing: -0.03em;
+          color: #0f172a;
+          font-weight: 900;
+        }
+        .pricing-price span {
+          font-size: 0.8rem;
+          color: #64748b;
+        }
+        .pricing-features {
+          margin: 0.85rem 0 0;
+          padding: 0;
+          list-style: none;
+          display: grid;
+          gap: 0.42rem;
+          color: #334155;
+          font-size: 0.83rem;
+          line-height: 1.45;
+          flex: 1;
+        }
+        .pricing-features li {
+          display: flex;
+          gap: 0.45rem;
+        }
+        .pricing-features li::before {
+          content: "•";
+          color: #7c3aed;
+          font-weight: 900;
+        }
+        .pricing-card-cta {
+          margin-top: 0.9rem;
+          display: flex;
+        }
+        .pricing-card-cta a {
+          width: 100%;
+        }
+        .pricing-offer {
+          border-radius: 18px;
+          border: 1px solid #c4b5fd;
+          background: linear-gradient(150deg, #f5f3ff 0%, #ffffff 100%);
+          padding: 1rem 1.05rem;
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.8rem;
+          box-shadow: 0 10px 30px rgba(124, 58, 237, 0.1);
+        }
+        .pricing-offer-title {
+          margin: 0;
+          font-size: 0.82rem;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          font-weight: 800;
+          color: #6d28d9;
+        }
+        .pricing-offer-text {
+          margin: 0.26rem 0 0;
+          color: #334155;
+          font-size: 0.93rem;
+        }
+        .pricing-table-wrap {
+          overflow-x: auto;
+          border: 1px solid #e2e8f0;
+          border-radius: 16px;
+          background: #fff;
+        }
+        .pricing-table {
+          width: 100%;
+          min-width: 680px;
+          border-collapse: collapse;
+          font-size: 0.82rem;
+        }
+        .pricing-table th,
+        .pricing-table td {
+          text-align: left;
+          padding: 0.68rem 0.75rem;
+          border-bottom: 1px solid #f1f5f9;
+        }
+        .pricing-table th {
+          font-size: 0.75rem;
+          text-transform: uppercase;
+          letter-spacing: 0.07em;
+          color: #475569;
+          background: #f8fafc;
+          position: sticky;
+          top: 0;
+          z-index: 1;
+        }
+        .pricing-table td:first-child {
+          font-weight: 700;
+          color: #1e293b;
+        }
+        .usecase-grid,
+        .reassure-grid,
+        .faq-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 0.8rem;
+        }
+        .usecase-item,
+        .reassure-grid p,
+        .faq-item {
+          margin: 0;
+          border: 1px solid #e2e8f0;
+          border-radius: 14px;
+          background: #fff;
+          box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+          padding: 0.85rem 0.9rem;
+        }
+        .usecase-item {
+          display: flex;
+          flex-direction: column;
+          gap: 0.36rem;
+        }
+        .usecase-icon {
+          width: 1.9rem;
+          height: 1.9rem;
+          border-radius: 999px;
+          background: #f5f3ff;
+          border: 1px solid #ddd6fe;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1rem;
+        }
+        .usecase-item h3,
+        .faq-item h3 {
+          margin: 0;
+          font-size: 0.95rem;
+          color: #0f172a;
+        }
+        .usecase-item p,
+        .faq-item p {
+          margin: 0;
+          color: #64748b;
+          font-size: 0.84rem;
+        }
+        .reassure-grid p {
+          text-align: center;
+          font-weight: 700;
+          color: #334155;
+          background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        }
+        .pricing-final {
+          border: 1px solid #ddd6fe;
+          border-radius: 20px;
+          text-align: center;
+          background: linear-gradient(135deg, #ede9fe 0%, #fae8ff 100%);
+          padding: clamp(1.4rem, 3.5vw, 2.4rem);
+        }
+        .pricing-final h2 {
+          margin: 0;
+          font-size: clamp(1.14rem, 2.6vw, 1.45rem);
+          color: #4c1d95;
+          letter-spacing: -0.02em;
+        }
+        .pricing-final-cta {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.7rem;
+          justify-content: center;
+          margin-top: 1rem;
+        }
+        @media (min-width: 640px) {
+          .usecase-grid,
+          .reassure-grid,
+          .faq-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .pricing-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .pricing-card {
+            padding: 1.08rem 1.08rem 1rem;
+          }
+        }
+        @media (min-width: 1040px) {
+          .pricing-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            align-items: stretch;
+          }
+          .usecase-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+          }
+          .reassure-grid,
+          .faq-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
