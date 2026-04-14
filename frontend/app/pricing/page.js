@@ -59,7 +59,8 @@ const plans = [
     name: "GRATUIT",
     price: "0€",
     unit: "",
-    label: "Découverte sans risque",
+    label: "Tester en conditions réelles",
+    sublabel: "Parfait pour un premier essai",
     cta: "Démarrer gratuitement",
     href: "/join/demo",
     features: [
@@ -75,7 +76,7 @@ const plans = [
     name: "STARTER",
     price: "19€",
     unit: "/ événement",
-    label: "Lancer un vote clair et rapide",
+    label: "Pour petits événements (jusqu’à 50–100 personnes)",
     cta: "Choisir Starter",
     href: "/admin",
     features: [
@@ -93,7 +94,8 @@ const plans = [
     price: "49€",
     unit: "/ événement",
     label: "Expérience live complète",
-    cta: "Passer en PRO",
+    sublabel: "Idéal pour événements publics et animations live",
+    cta: "Choisir PRO",
     href: "/admin",
     badge: "Le plus utilisé",
     featured: true,
@@ -112,7 +114,7 @@ const plans = [
     name: "PREMIUM",
     price: "99€",
     unit: "/ événement",
-    label: "Capacité maximale et rendu pro",
+    label: "Pour gros événements (500+ participants)",
     cta: "Choisir Premium",
     href: "/admin",
     features: [
@@ -132,9 +134,8 @@ const compareRows = [
   { label: "QR code", free: "Oui", starter: "Oui", pro: "Oui", premium: "Oui" },
   { label: "Résultats live", free: "Oui", starter: "Oui", pro: "Oui", premium: "Oui" },
   { label: "Affichage écran", free: "-", starter: "-", pro: "Oui", premium: "Oui" },
-  { label: "Personnalisation visuelle", free: "Avote", starter: "Avote", pro: "Logo + couleurs", premium: "Avancée" },
-  { label: "Statistiques détaillées", free: "-", starter: "-", pro: "Oui", premium: "Oui" },
-  { label: "Export CSV", free: "-", starter: "-", pro: "Oui", premium: "Oui" },
+  { label: "Logo et couleurs personnalisés", free: "Avote", starter: "Avote", pro: "Oui", premium: "Avancé" },
+  { label: "Statistiques détaillées + export des résultats", free: "-", starter: "-", pro: "Oui", premium: "Oui" },
   { label: "Suppression branding Avote", free: "-", starter: "-", pro: "-", premium: "Sur demande" },
   { label: "Support prioritaire", free: "-", starter: "-", pro: "-", premium: "Oui" },
 ];
@@ -173,10 +174,14 @@ function PlanCard({ plan }) {
         {plan.badge ? <span className="pricing-plan-badge">{plan.badge}</span> : null}
       </div>
       <p className="pricing-plan-label">{plan.label}</p>
+      {plan.sublabel ? <p className="pricing-plan-sublabel">{plan.sublabel}</p> : null}
       <p className="pricing-price">
         <strong>{plan.price}</strong>
         {plan.unit ? <span>{plan.unit}</span> : null}
       </p>
+      {plan.key === "pro" ? (
+        <p className="pricing-plan-proof">Le meilleur choix dans 90% des cas</p>
+      ) : null}
       <ul className="pricing-features">
         {plan.features.map((feature) => (
           <li key={feature}>{feature}</li>
@@ -187,6 +192,9 @@ function PlanCard({ plan }) {
           {plan.cta}
         </Link>
       </div>
+      {plan.key === "pro" ? (
+        <p className="pricing-pro-discovery-tag">Premier événement à 9€</p>
+      ) : null}
     </article>
   );
 }
@@ -225,6 +233,9 @@ export default function PricingPage() {
               <PlanCard key={plan.key} plan={plan} />
             ))}
           </div>
+          <p className="pricing-social-proof">
+            Déjà utilisé pour des événements en direct : soirées, conférences, entreprises.
+          </p>
           <div className="pricing-sub-plan" role="note" aria-label="Offre abonnement secondaire">
             <p className="pricing-sub-plan-title">Vous organisez des événements régulièrement ?</p>
             <ul>
@@ -459,6 +470,12 @@ export default function PricingPage() {
           color: #64748b;
           min-height: 2.6em;
         }
+        .pricing-plan-sublabel {
+          margin: 0.3rem 0 0;
+          font-size: 0.76rem;
+          color: #64748b;
+          line-height: 1.4;
+        }
         .pricing-price {
           margin: 0.72rem 0 0;
           display: flex;
@@ -474,6 +491,12 @@ export default function PricingPage() {
         .pricing-price span {
           font-size: 0.8rem;
           color: #64748b;
+        }
+        .pricing-plan-proof {
+          margin: 0.35rem 0 0;
+          font-size: 0.72rem;
+          color: #6b7280;
+          font-weight: 700;
         }
         .pricing-features {
           margin: 0.85rem 0 0;
@@ -501,6 +524,20 @@ export default function PricingPage() {
         }
         .pricing-card-cta a {
           width: 100%;
+        }
+        .pricing-pro-discovery-tag {
+          margin: 0.52rem 0 0;
+          font-size: 0.68rem;
+          font-weight: 700;
+          color: #6d28d9;
+          text-align: center;
+        }
+        .pricing-social-proof {
+          margin: 0.9rem auto 0;
+          max-width: 760px;
+          text-align: center;
+          font-size: 0.8rem;
+          color: #64748b;
         }
         .pricing-offer {
           border-radius: 18px;
