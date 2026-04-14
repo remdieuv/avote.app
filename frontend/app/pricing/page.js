@@ -54,9 +54,9 @@ const btnSecondary = {
 };
 
 const STRIPE_LINKS = {
-  starter: "https://buy.stripe.com/aFa9ATcvm2TSfZSbTVcfK02",
-  pro: "https://buy.stripe.com/9B628rbri664aFycXZcfK03",
-  premium: "https://buy.stripe.com/28EfZh8f6eCA8xqgabcfK00",
+  starter: "https://buy.stripe.com/9B600ifxG6371iS5S9cMM02",
+  pro: "https://buy.stripe.com/fZu8wOadmcrvd1A1BTcMM01",
+  premium: "https://buy.stripe.com/9B600ifxG6371iS5S9cMM02",
 };
 
 const plans = [
