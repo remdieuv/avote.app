@@ -28,7 +28,6 @@ export function LandingHeader() {
       logoHref="/"
       logoLabel="Avote"
       logoSrc="/avote-icon.png"
-      logoWordmarkSrc="/avote-logo.png"
       navItems={[{ href: "/pricing", label: "Tarifs", match: "exact" }]}
       mobileQuickItem={{ href: "/pricing", label: "Tarifs", match: "exact" }}
       rightSlot={
