@@ -62,36 +62,35 @@ const STRIPE_LINKS = {
 const plans = [
   {
     key: "free",
-    name: "GRATUIT",
+    name: "Gratuit",
     price: "0€",
     unit: "",
     label: "Tester en conditions réelles",
-    sublabel: "Parfait pour un premier essai",
     cta: "Démarrer gratuitement",
     href: "/join/demo",
     features: [
       "1 sondage actif",
-      "50 votes max",
+      "Jusqu'à 50 votes",
       "QR code + lien de participation",
       "Résultats en direct",
-      "Personnalisation visuelle Avote par défaut",
+      "Branding Avote par défaut",
     ],
   },
   {
     key: "starter",
-    name: "STARTER",
+    name: "Starter",
     price: "19€",
     unit: "/ événement",
-    label: "Pour petits événements (jusqu’à 50–100 personnes)",
+    label: "Pour petits événements",
     cta: "Choisir Starter",
     href: STRIPE_LINKS.starter,
     features: [
       "1 événement",
-      "500 votes max",
+      "Jusqu'à 100 participants",
       "QR code + lien court",
       "Résultats en direct",
       "Accès mobile optimisé",
-      "Personnalisation visuelle Avote par défaut",
+      "Branding Avote par défaut",
     ],
   },
   {
@@ -107,36 +106,64 @@ const plans = [
     featured: true,
     features: [
       "1 événement",
-      "5 000 votes",
+      "Jusqu'à 500 participants",
       "QR code + lien court",
       "Résultats en direct",
-      "Projection en direct sur écran / OBS",
+      "Projection écran / OBS",
       "Personnalisation visuelle (logo, couleurs)",
       "Statistiques détaillées + export des résultats",
     ],
   },
   {
     key: "premium",
-    name: "PREMIUM",
+    name: "Premium",
     price: "99€",
     unit: "/ événement",
-    label: "Pour gros événements (500+ participants)",
+    label: "Pour gros événements",
     cta: "Choisir Premium",
     href: STRIPE_LINKS.premium,
     features: [
       "1 événement",
-      "20 000 votes",
+      "Jusqu'à 2 000 participants",
       "Capacité renforcée pour les gros événements",
-      "Projection en direct sur écran / OBS",
-      "Personnalisation visuelle avancée (logo, couleurs, fond)",
+      "Projection écran / OBS",
+      "Personnalisation visuelle avancée",
       "Statistiques détaillées + export des résultats",
       "Support prioritaire",
     ],
   },
 ];
 
+const offerModes = [
+  {
+    key: "one-shot",
+    title: "Événement ponctuel",
+    text: "Vous avez un besoin unique ? Payez une seule fois, sans abonnement.",
+    points: [
+      "Paiement unique",
+      "Mise en ligne rapide",
+      "Idéal pour conférences, soirées, animations, réunions",
+    ],
+    cta: "Créer mon événement",
+    href: "/admin",
+    featured: true,
+  },
+  {
+    key: "subscription",
+    title: "Abonnement",
+    text: "Vous organisez des événements régulièrement ? Passez à une formule plus rentable.",
+    points: [
+      "Utilisation récurrente",
+      "Plus économique sur la durée",
+      "Idéal pour agences, entreprises, organisateurs réguliers",
+    ],
+    cta: "Voir les abonnements",
+    href: "#abonnement-pro",
+  },
+];
+
 const compareRows = [
-  { label: "Votes max", free: "50", starter: "500", pro: "5 000", premium: "20 000" },
+  { label: "Participants max", free: "≈ 50 votes", starter: "100", pro: "500", premium: "2 000" },
   { label: "QR code", free: "Oui", starter: "Oui", pro: "Oui", premium: "Oui" },
   { label: "Résultats live", free: "Oui", starter: "Oui", pro: "Oui", premium: "Oui" },
   { label: "Affichage écran", free: "-", starter: "-", pro: "Oui", premium: "Oui" },
@@ -223,8 +250,8 @@ export default function PricingPage() {
             <p className="pricing-eyebrow">Tarifs Avote</p>
             <h1 className="pricing-title">Des tarifs simples pour vos événements en direct</h1>
             <p className="pricing-subtitle">
-              Testez gratuitement, lancez un événement en quelques minutes, puis choisissez
-              l&apos;offre adaptée à votre audience.
+              Payez une seule fois pour un événement, ou choisissez un abonnement si vous
+              utilisez Avote régulièrement.
             </p>
             <div className="pricing-hero-cta">
               <Link href="/join/demo" style={btnPrimary}>
@@ -237,21 +264,48 @@ export default function PricingPage() {
           </div>
         </section>
 
+        <section style={{ ...sectionY, paddingTop: "0.6rem" }} aria-labelledby="pricing-modes-title">
+          <h2 id="pricing-modes-title" className="section-title">
+            Choisissez votre mode d&apos;utilisation
+          </h2>
+          <div className="pricing-mode-grid">
+            {offerModes.map((mode) => (
+              <article key={mode.key} className={`pricing-mode-card ${mode.featured ? "featured" : ""}`}>
+                <h3>{mode.title}</h3>
+                <p className="pricing-mode-text">{mode.text}</p>
+                <ul>
+                  {mode.points.map((point) => (
+                    <li key={point}>{point}</li>
+                  ))}
+                </ul>
+                <Link href={mode.href} style={mode.featured ? btnPrimary : btnSecondary}>
+                  {mode.cta}
+                </Link>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section style={sectionY} aria-labelledby="pricing-cards-title">
           <h2 id="pricing-cards-title" className="section-title">
-            Choisissez votre offre
+            Choisissez votre formule par événement
           </h2>
           <div className="pricing-grid">
             {plans.map((plan) => (
               <PlanCard key={plan.key} plan={plan} />
             ))}
           </div>
-          <p className="pricing-social-proof">
-            Déjà utilisé pour des événements en direct : soirées, conférences, entreprises.
-          </p>
-          <p className="pricing-payment-note">Paiement sécurisé via Stripe</p>
-          <div className="pricing-sub-plan" role="note" aria-label="Offre abonnement secondaire">
+          <div
+            id="abonnement-pro"
+            className="pricing-sub-plan"
+            role="note"
+            aria-label="Offre abonnement secondaire"
+          >
             <p className="pricing-sub-plan-title">Vous organisez des événements régulièrement ?</p>
+            <p className="pricing-sub-plan-text">
+              Passez à l&apos;abonnement Avote PRO pour créer plusieurs événements et profiter
+              d&apos;un coût plus avantageux.
+            </p>
             <ul>
               <li>
                 <strong>PRO+ — 39€/mois</strong>
@@ -259,9 +313,16 @@ export default function PricingPage() {
               <li>1 événement PRO inclus / mois</li>
               <li>Suppression du branding Avote</li>
               <li>Historique complet</li>
-              <li>-20% sur les événements supplémentaires</li>
+              <li>Remise sur les événements supplémentaires</li>
             </ul>
+            <Link href="/admin" style={btnSecondary}>
+              Découvrir l&apos;abonnement PRO
+            </Link>
           </div>
+          <p className="pricing-social-proof">
+            Déjà utilisé pour des conférences, soirées, animations et événements d&apos;entreprise.
+          </p>
+          <p className="pricing-payment-note">Paiement sécurisé avec Stripe.</p>
         </section>
 
         <section style={{ ...sectionY, paddingTop: "0.4rem" }} aria-label="Offre decouverte">
@@ -353,6 +414,9 @@ export default function PricingPage() {
 
         <section style={sectionY} className="pricing-final">
           <h2>Prêt à faire voter votre audience en direct ?</h2>
+          <p className="pricing-final-sub">
+            Lancez votre événement en quelques minutes, sans application à installer.
+          </p>
           <div className="pricing-final-cta">
             <Link href="/join/demo" style={btnPrimary}>
               Tester Avote
@@ -423,6 +487,60 @@ export default function PricingPage() {
           font-weight: 850;
           letter-spacing: -0.02em;
           color: #0f172a;
+        }
+        .pricing-mode-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 0.9rem;
+        }
+        .pricing-mode-card {
+          border-radius: 16px;
+          border: 1px solid #e2e8f0;
+          background: #fff;
+          box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+          padding: 1rem;
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+        .pricing-mode-card.featured {
+          border-color: #c4b5fd;
+          background:
+            radial-gradient(220px 120px at 90% -16%, rgba(196, 181, 253, 0.28), transparent 60%),
+            linear-gradient(160deg, #ffffff 0%, #faf5ff 100%);
+          box-shadow: 0 14px 30px rgba(124, 58, 237, 0.12);
+        }
+        .pricing-mode-card h3 {
+          margin: 0;
+          font-size: 1rem;
+          font-weight: 850;
+          letter-spacing: -0.02em;
+          color: #0f172a;
+        }
+        .pricing-mode-text {
+          margin: 0;
+          color: #64748b;
+          font-size: 0.84rem;
+          line-height: 1.45;
+        }
+        .pricing-mode-card ul {
+          margin: 0.1rem 0 0;
+          padding: 0;
+          list-style: none;
+          display: grid;
+          gap: 0.3rem;
+          font-size: 0.8rem;
+          color: #334155;
+          flex: 1;
+        }
+        .pricing-mode-card li {
+          display: flex;
+          gap: 0.45rem;
+        }
+        .pricing-mode-card li::before {
+          content: "•";
+          color: #7c3aed;
+          font-weight: 900;
         }
         .pricing-grid {
           display: grid;
@@ -586,6 +704,12 @@ export default function PricingPage() {
           font-weight: 800;
           color: #334155;
         }
+        .pricing-sub-plan-text {
+          margin: 0.35rem 0 0;
+          color: #64748b;
+          font-size: 0.8rem;
+          line-height: 1.45;
+        }
         .pricing-sub-plan ul {
           margin: 0.5rem 0 0;
           padding: 0;
@@ -598,6 +722,9 @@ export default function PricingPage() {
         }
         .pricing-sub-plan li {
           white-space: nowrap;
+        }
+        .pricing-sub-plan a {
+          margin-top: 0.7rem;
         }
         .pricing-offer-title {
           margin: 0;
@@ -708,6 +835,12 @@ export default function PricingPage() {
           color: #4c1d95;
           letter-spacing: -0.02em;
         }
+        .pricing-final-sub {
+          margin: 0.5rem auto 0;
+          max-width: 48ch;
+          color: #6b7280;
+          font-size: 0.86rem;
+        }
         .pricing-final-cta {
           display: flex;
           flex-wrap: wrap;
@@ -716,6 +849,9 @@ export default function PricingPage() {
           margin-top: 1rem;
         }
         @media (min-width: 640px) {
+          .pricing-mode-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
           .usecase-grid,
           .reassure-grid,
           .faq-grid {
