@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
  *  logoHref: string;
  *  logoLabel: string;
  *  logoSrc?: string | null;
+ *  logoWordmarkSrc?: string | null;
  *  navItems: Array<{ href: string; label: string; match?: "exact" | "prefix" | "none" }>;
  *  mobileQuickItem?: { href: string; label: string; match?: "exact" | "prefix" | "none" } | null;
  *  rightSlot: import("react").ReactNode;
@@ -18,6 +19,7 @@ export function AppHeaderShell({
   logoHref,
   logoLabel,
   logoSrc = null,
+  logoWordmarkSrc = null,
   navItems,
   mobileQuickItem = null,
   rightSlot,
@@ -45,10 +47,15 @@ export function AppHeaderShell({
       <div className="app-header-inner">
         <div className="app-header-left">
           <Link href={logoHref} className="app-header-logo">
-            {logoSrc ? (
-              <img src={logoSrc} alt="" className="app-header-logo-image" aria-hidden />
+            {logoWordmarkSrc ? (
+              <img src={logoWordmarkSrc} alt={logoLabel} className="app-header-logo-wordmark" />
             ) : null}
-            <span>{logoLabel}</span>
+            <span className={`app-header-logo-compact ${logoWordmarkSrc ? "with-wordmark" : ""}`}>
+              {logoSrc ? (
+                <img src={logoSrc} alt="" className="app-header-logo-image" aria-hidden />
+              ) : null}
+              <span>{logoLabel}</span>
+            </span>
           </Link>
         </div>
 
@@ -126,6 +133,20 @@ export function AppHeaderShell({
           box-shadow: 0 6px 16px rgba(124, 58, 237, 0.2);
           flex-shrink: 0;
         }
+        .app-header-logo-wordmark {
+          height: 1.55rem;
+          width: auto;
+          object-fit: contain;
+          display: block;
+        }
+        .app-header-logo-compact {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+        .app-header-logo-compact.with-wordmark {
+          display: none;
+        }
         .app-header-nav {
           display: flex;
           align-items: center;
@@ -177,6 +198,8 @@ export function AppHeaderShell({
           .app-header-nav { display: none; }
           .app-header-mobile-quick { display: inline-flex; }
           .app-header-logo { font-size: 0.96rem; }
+          .app-header-logo-wordmark { display: none; }
+          .app-header-logo-compact.with-wordmark { display: inline-flex; }
         }
       `}</style>
     </header>
