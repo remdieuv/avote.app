@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
  * @param {{
  *  logoHref: string;
  *  logoLabel: string;
+ *  logoSrc?: string | null;
  *  navItems: Array<{ href: string; label: string; match?: "exact" | "prefix" | "none" }>;
  *  mobileQuickItem?: { href: string; label: string; match?: "exact" | "prefix" | "none" } | null;
  *  rightSlot: import("react").ReactNode;
@@ -16,6 +17,7 @@ import { useEffect, useState } from "react";
 export function AppHeaderShell({
   logoHref,
   logoLabel,
+  logoSrc = null,
   navItems,
   mobileQuickItem = null,
   rightSlot,
@@ -43,7 +45,10 @@ export function AppHeaderShell({
       <div className="app-header-inner">
         <div className="app-header-left">
           <Link href={logoHref} className="app-header-logo">
-            {logoLabel}
+            {logoSrc ? (
+              <img src={logoSrc} alt="" className="app-header-logo-image" aria-hidden />
+            ) : null}
+            <span>{logoLabel}</span>
           </Link>
         </div>
 
@@ -104,11 +109,22 @@ export function AppHeaderShell({
           gap: 0.5rem;
         }
         .app-header-logo {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
           text-decoration: none;
           font-size: 1rem;
           font-weight: 900;
           letter-spacing: -0.03em;
           color: #0f172a;
+        }
+        .app-header-logo-image {
+          width: 1.65rem;
+          height: 1.65rem;
+          border-radius: 8px;
+          object-fit: cover;
+          box-shadow: 0 6px 16px rgba(124, 58, 237, 0.2);
+          flex-shrink: 0;
         }
         .app-header-nav {
           display: flex;
