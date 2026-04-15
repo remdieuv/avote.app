@@ -158,7 +158,7 @@ const offerModes = [
       "Idéal pour agences, entreprises, organisateurs réguliers",
     ],
     cta: "Voir les abonnements",
-    href: "#abonnement-pro",
+    href: "#subscriptions",
   },
 ];
 
@@ -373,7 +373,7 @@ export default function PricingPage() {
             ))}
           </div>
           <div
-            id="abonnement-pro"
+            id="subscriptions"
             className="pricing-sub-plan"
             role="note"
             aria-label="Offre abonnement secondaire"
