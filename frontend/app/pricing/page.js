@@ -162,15 +162,67 @@ const offerModes = [
   },
 ];
 
-const compareRows = [
-  { label: "Participants max", free: "≈ 50 votes", starter: "100", pro: "500", premium: "2 000" },
+const eventCompareRows = [
+  { label: "Prix", free: "0€", starter: "19€ / événement", pro: "49€ / événement", premium: "99€ / événement" },
+  { label: "Événements inclus", free: "1 sondage actif", starter: "1", pro: "1", premium: "1" },
+  { label: "Capacité incluse", free: "Test limité", starter: "Jusqu'à 100 participants", pro: "Jusqu'à 500 participants", premium: "Jusqu'à 2 000 participants" },
   { label: "QR code", free: "Oui", starter: "Oui", pro: "Oui", premium: "Oui" },
   { label: "Résultats live", free: "Oui", starter: "Oui", pro: "Oui", premium: "Oui" },
-  { label: "Affichage écran", free: "-", starter: "-", pro: "Oui", premium: "Oui" },
-  { label: "Logo et couleurs personnalisés", free: "Avote", starter: "Avote", pro: "Oui", premium: "Avancé" },
-  { label: "Statistiques détaillées + export des résultats", free: "-", starter: "-", pro: "Oui", premium: "Oui" },
-  { label: "Suppression branding Avote", free: "-", starter: "-", pro: "-", premium: "Sur demande" },
-  { label: "Support prioritaire", free: "-", starter: "-", pro: "-", premium: "Oui" },
+  { label: "Projection écran / OBS", free: "Non", starter: "Non", pro: "Oui", premium: "Oui" },
+  { label: "Personnalisation visuelle", free: "Avote", starter: "Avote", pro: "Logo + couleurs", premium: "Avancée" },
+  { label: "Statistiques détaillées + export", free: "Non", starter: "Non", pro: "Oui", premium: "Oui" },
+  { label: "Support", free: "Standard", starter: "Standard", pro: "Prioritaire", premium: "Prioritaire" },
+];
+
+const monthlyPlans = [
+  {
+    key: "pro-monthly",
+    name: "PRO Mensuel",
+    price: "39€",
+    unit: "/ mois",
+    badge: "Le plus rentable pour commencer",
+    featured: true,
+    cta: "Choisir PRO Mensuel",
+    href: "/admin",
+    features: [
+      "1 événement PRO inclus / mois",
+      "Jusqu'à 500 participants / événement",
+      "Suppression du branding Avote",
+      "Historique complet",
+      "Remise sur les événements supplémentaires",
+    ],
+  },
+  {
+    key: "business",
+    name: "Business",
+    price: "79€",
+    unit: "/ mois",
+    cta: "Choisir Business",
+    href: "/admin",
+    features: [
+      "3 événements inclus / mois",
+      "Jusqu'à 1 000 participants / événement",
+      "Projection écran / OBS",
+      "Personnalisation visuelle",
+      "Statistiques détaillées + export",
+      "Support prioritaire",
+    ],
+  },
+  {
+    key: "agency",
+    name: "Agence",
+    price: "149€",
+    unit: "/ mois",
+    cta: "Choisir Agence",
+    href: "/admin",
+    features: [
+      "10 événements inclus / mois",
+      "Jusqu'à 2 000 participants / événement",
+      "Gestion multi-événements",
+      "Branding avancé",
+      "Support prioritaire",
+    ],
+  },
 ];
 
 const useCases = [
@@ -235,6 +287,31 @@ function PlanCard({ plan }) {
       {plan.key === "pro" ? (
         <p className="pricing-pro-discovery-tag">Premier événement à 9€</p>
       ) : null}
+    </article>
+  );
+}
+
+function MonthlyPlanCard({ plan }) {
+  return (
+    <article className={`pricing-card monthly ${plan.featured ? "featured" : ""}`}>
+      <div className="pricing-card-head">
+        <p className="pricing-plan-name">{plan.name}</p>
+        {plan.badge ? <span className="pricing-plan-badge">{plan.badge}</span> : null}
+      </div>
+      <p className="pricing-price">
+        <strong>{plan.price}</strong>
+        <span>{plan.unit}</span>
+      </p>
+      <ul className="pricing-features">
+        {plan.features.map((feature) => (
+          <li key={feature}>{feature}</li>
+        ))}
+      </ul>
+      <div className="pricing-card-cta">
+        <Link href={plan.href} style={plan.featured ? btnPrimary : btnSecondary}>
+          {plan.cta}
+        </Link>
+      </div>
     </article>
   );
 }
@@ -306,18 +383,6 @@ export default function PricingPage() {
               Passez à l&apos;abonnement Avote PRO pour créer plusieurs événements et profiter
               d&apos;un coût plus avantageux.
             </p>
-            <ul>
-              <li>
-                <strong>PRO+ — 39€/mois</strong>
-              </li>
-              <li>1 événement PRO inclus / mois</li>
-              <li>Suppression du branding Avote</li>
-              <li>Historique complet</li>
-              <li>Remise sur les événements supplémentaires</li>
-            </ul>
-            <Link href="/admin" style={btnSecondary}>
-              Découvrir l&apos;abonnement PRO
-            </Link>
           </div>
           <p className="pricing-social-proof">
             Déjà utilisé pour des conférences, soirées, animations et événements d&apos;entreprise.
@@ -341,7 +406,7 @@ export default function PricingPage() {
 
         <section style={sectionY} aria-labelledby="pricing-compare-title">
           <h2 id="pricing-compare-title" className="section-title">
-            Tableau comparatif
+            Comparatif des offres par événement
           </h2>
           <div className="pricing-table-wrap">
             <table className="pricing-table">
@@ -355,7 +420,7 @@ export default function PricingPage() {
                 </tr>
               </thead>
               <tbody>
-                {compareRows.map((row) => (
+                {eventCompareRows.map((row) => (
                   <tr key={row.label}>
                     <td>{row.label}</td>
                     <td>{row.free}</td>
@@ -366,6 +431,20 @@ export default function PricingPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </section>
+
+        <section style={sectionY} aria-labelledby="pricing-monthly-title">
+          <h2 id="pricing-monthly-title" className="section-title">
+            Choisissez votre abonnement
+          </h2>
+          <p className="pricing-monthly-subtitle">
+            Vous organisez des événements régulièrement ? Passez à une formule plus rentable au mois.
+          </p>
+          <div className="pricing-monthly-grid">
+            {monthlyPlans.map((plan) => (
+              <MonthlyPlanCard key={plan.key} plan={plan} />
+            ))}
           </div>
         </section>
 
@@ -547,6 +626,18 @@ export default function PricingPage() {
           grid-template-columns: 1fr;
           gap: 0.9rem;
         }
+        .pricing-monthly-subtitle {
+          margin: -0.15rem auto 1rem;
+          max-width: 62ch;
+          text-align: center;
+          color: #64748b;
+          font-size: 0.9rem;
+        }
+        .pricing-monthly-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 0.9rem;
+        }
         .pricing-card {
           border-radius: 18px;
           border: 1px solid #e2e8f0;
@@ -557,6 +648,9 @@ export default function PricingPage() {
           flex-direction: column;
           min-height: 100%;
           transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+        .pricing-card.monthly {
+          background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
         }
         .pricing-card:hover {
           transform: translateY(-2px);
@@ -723,9 +817,6 @@ export default function PricingPage() {
         .pricing-sub-plan li {
           white-space: nowrap;
         }
-        .pricing-sub-plan a {
-          margin-top: 0.7rem;
-        }
         .pricing-offer-title {
           margin: 0;
           font-size: 0.82rem;
@@ -860,6 +951,9 @@ export default function PricingPage() {
           .pricing-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
+          .pricing-monthly-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
           .pricing-card {
             padding: 1.08rem 1.08rem 1rem;
           }
@@ -868,6 +962,9 @@ export default function PricingPage() {
           .pricing-grid {
             grid-template-columns: repeat(4, minmax(0, 1fr));
             align-items: stretch;
+          }
+          .pricing-monthly-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
           }
           .usecase-grid {
             grid-template-columns: repeat(4, minmax(0, 1fr));
