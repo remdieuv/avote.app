@@ -1604,6 +1604,17 @@ function BlocProjectionEcran({
         >
           Écran supplémentaire (B)
         </p>
+        <p
+          style={{
+            margin: "0 0 0.5rem 0",
+            fontSize: "0.72rem",
+            lineHeight: 1.35,
+            fontWeight: 600,
+            color: screenBConnected ? "#166534" : "#991b1b",
+          }}
+        >
+          {statutEcranB}
+        </p>
         <div className="proj-ecran-separated-grid">
           {["B"].map((sid) => (
             <div key={sid} className="proj-ecran-separated-card">

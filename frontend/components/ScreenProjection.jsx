@@ -325,12 +325,16 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
         } else {
           setLiveScene("results");
         }
-        if (typeof data.eventScreenDisplayState === "string") {
-          setDisplayState(data.eventScreenDisplayState.toLowerCase());
-        } else if (typeof data.eventDisplayState === "string") {
-          setDisplayState(data.eventDisplayState.toLowerCase());
-        } else {
-          setDisplayState(deriveDisplayFromLive(data.eventLiveState));
+        // Sur un écran ciblé (sid), ne pas écraser l'état piloté manuellement
+        // avec le displayState global venant du fetch.
+        if (!(normalizedScreenId && targetedDisplayRef.current)) {
+          if (typeof data.eventScreenDisplayState === "string") {
+            setDisplayState(data.eventScreenDisplayState.toLowerCase());
+          } else if (typeof data.eventDisplayState === "string") {
+            setDisplayState(data.eventDisplayState.toLowerCase());
+          } else {
+            setDisplayState(deriveDisplayFromLive(data.eventLiveState));
+          }
         }
         if (data.eventId) {
           setEventId(data.eventId);
@@ -661,7 +665,9 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
         }
       }
       const dsNow = String(payload.displayState || "").toLowerCase();
-      if (dsNow !== "black") {
+      // Pour un écran ciblé, un refetch global réécrase l'état séparé.
+      // On évite donc le loadPoll automatique sur les updates ciblées.
+      if (dsNow !== "black" && !sid) {
         void loadPoll({ silent: true });
       }
     }
