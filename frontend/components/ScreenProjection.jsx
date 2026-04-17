@@ -674,12 +674,14 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
       }
 
       setLiveScene(payload.liveState ?? null);
-      if (typeof payload.screenDisplayState === "string") {
-        setDisplayState(payload.screenDisplayState.toLowerCase());
-      } else if (typeof payload.displayState === "string") {
-        setDisplayState(payload.displayState.toLowerCase());
-      } else {
-        setDisplayState(deriveDisplayFromLive(payload.liveState));
+      if (!sid) {
+        if (typeof payload.screenDisplayState === "string") {
+          setDisplayState(payload.screenDisplayState.toLowerCase());
+        } else if (typeof payload.displayState === "string") {
+          setDisplayState(payload.displayState.toLowerCase());
+        } else {
+          setDisplayState(deriveDisplayFromLive(payload.liveState));
+        }
       }
 
       if (payload.poll) {
@@ -687,10 +689,12 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
         if (payload.poll.eventLiveState) {
           setLiveScene(payload.poll.eventLiveState);
         }
-        if (typeof payload.poll.eventScreenDisplayState === "string") {
-          setDisplayState(payload.poll.eventScreenDisplayState.toLowerCase());
-        } else if (typeof payload.poll.eventDisplayState === "string") {
-          setDisplayState(payload.poll.eventDisplayState.toLowerCase());
+        if (!sid) {
+          if (typeof payload.poll.eventScreenDisplayState === "string") {
+            setDisplayState(payload.poll.eventScreenDisplayState.toLowerCase());
+          } else if (typeof payload.poll.eventDisplayState === "string") {
+            setDisplayState(payload.poll.eventDisplayState.toLowerCase());
+          }
         }
         setError(null);
         setNoPollFromHttp404(false);
@@ -724,10 +728,12 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
       if (data.eventLiveState) {
         setLiveScene(data.eventLiveState);
       }
-      if (typeof data.eventScreenDisplayState === "string") {
-        setDisplayState(data.eventScreenDisplayState.toLowerCase());
-      } else if (typeof data.eventDisplayState === "string") {
-        setDisplayState(data.eventDisplayState.toLowerCase());
+      if (!sid) {
+        if (typeof data.eventScreenDisplayState === "string") {
+          setDisplayState(data.eventScreenDisplayState.toLowerCase());
+        } else if (typeof data.eventDisplayState === "string") {
+          setDisplayState(data.eventDisplayState.toLowerCase());
+        }
       }
       if (typeof data.eventVoteState === "string" && data.eventVoteState.trim()) {
         setEventVoteState(data.eventVoteState.toLowerCase());
