@@ -893,7 +893,6 @@ function BlocProjectionEcran({
 }) {
   const [clientPret, setClientPret] = useState(false);
   const [projectionMode, setProjectionMode] = useState("standard");
-  const [screenTarget, setScreenTarget] = useState("all");
   const [copiedScreenId, setCopiedScreenId] = useState(null);
 
   useEffect(() => {
@@ -912,23 +911,9 @@ function BlocProjectionEcran({
       setProjectionMode(val);
     }
   }, [slug]);
-  useEffect(() => {
-    if (typeof window === "undefined" || !slug) return;
-    try {
-      const saved = String(
-        window.localStorage.getItem(`avote_projection_screen_target_${slug}`) || "all",
-      ).trim();
-      if (saved === "all" || saved === "1" || saved === "2" || saved === "3") {
-        setScreenTarget(saved);
-      }
-    } catch {
-      // ignore
-    }
-  }, [slug]);
 
   const enc = encodeURIComponent(slug);
-  const sidPart = screenTarget !== "all" ? `&sid=${encodeURIComponent(screenTarget)}` : "";
-  const pathScreen = `/screen/${enc}?pm=${encodeURIComponent(projectionMode)}${sidPart}`;
+  const pathScreen = `/screen/${enc}?pm=${encodeURIComponent(projectionMode)}`;
   const pathScreenById = (id) =>
     `/screen/${enc}?pm=${encodeURIComponent(projectionMode)}&sid=${encodeURIComponent(id)}`;
   const projectionModeLabel =
@@ -971,22 +956,6 @@ function BlocProjectionEcran({
       window.setTimeout(() => setCopiedScreenId(null), 1800);
     } catch {
       // ignore
-    }
-  }
-  function setTarget(nextTarget) {
-    const safe =
-      String(nextTarget || "").trim() === "1" ||
-      String(nextTarget || "").trim() === "2" ||
-      String(nextTarget || "").trim() === "3"
-        ? String(nextTarget).trim()
-        : "all";
-    setScreenTarget(safe);
-    if (typeof window !== "undefined" && slug) {
-      try {
-        window.localStorage.setItem(`avote_projection_screen_target_${slug}`, safe);
-      } catch {
-        // ignore
-      }
     }
   }
 
@@ -1117,57 +1086,8 @@ function BlocProjectionEcran({
           marginBottom: "1.35rem",
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "0.45rem",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <span
-            style={{
-              fontSize: "0.72rem",
-              fontWeight: 700,
-              color: "#6b21a8",
-              marginRight: "0.15rem",
-            }}
-          >
-            Cible écran :
-          </span>
-          {[
-            { id: "all", label: "Tous" },
-            { id: "1", label: "1" },
-            { id: "2", label: "2" },
-            { id: "3", label: "3" },
-          ].map((target) => {
-            const on = screenTarget === target.id;
-            return (
-              <button
-                key={target.id}
-                type="button"
-                onClick={() => setTarget(target.id)}
-                style={{
-                  minWidth: target.id === "all" ? "3.35rem" : "2rem",
-                  height: "2rem",
-                  padding: target.id === "all" ? "0 0.65rem" : "0",
-                  borderRadius: "999px",
-                  border: on ? "1px solid #6d28d9" : "1px solid #d1d5db",
-                  background: on ? "#f5f3ff" : "#fff",
-                  color: on ? "#5b21b6" : "#475569",
-                  fontSize: "0.78rem",
-                  fontWeight: 800,
-                  cursor: "pointer",
-                }}
-              >
-                {target.label}
-              </button>
-            );
-          })}
-        </div>
         <button type="button" onClick={ouvrirEcran} style={btnOuvrir}>
-          {screenTarget === "all" ? "Ouvrir l’écran" : `Ouvrir l’écran ${screenTarget}`}
+          Ouvrir l’écran
         </button>
       </div>
 
@@ -1365,12 +1285,8 @@ function BlocProjectionEcran({
               type="button"
               disabled={busy || !activePollId}
               onClick={async () => {
-                if (screenTarget === "all") {
-                  const ok = await postAction(`/polls/${activePollId}/show-results`);
-                  if (ok) sendScreenAction("RESULTS", null);
-                } else {
-                  sendScreenAction("RESULTS", screenTarget);
-                }
+                const ok = await postAction(`/polls/${activePollId}/show-results`);
+                if (ok) sendScreenAction("RESULTS", null);
               }}
               style={{
                 ...btnOutlineSecondaire,
@@ -1396,12 +1312,8 @@ function BlocProjectionEcran({
               type="button"
               disabled={busy || !activePollId || d !== "results"}
               onClick={async () => {
-                if (screenTarget === "all") {
-                  const ok = await postAction(`/polls/${activePollId}/display-question`);
-                  if (ok) sendScreenAction("QUESTION", null);
-                } else {
-                  sendScreenAction("QUESTION", screenTarget);
-                }
+                const ok = await postAction(`/polls/${activePollId}/display-question`);
+                if (ok) sendScreenAction("QUESTION", null);
               }}
               style={{
                 ...btnOutlineSecondaire,
@@ -1602,9 +1514,9 @@ function BlocProjectionEcran({
           disabled={busy}
           onClick={() => {
             if (affichageNoir) {
-              sendScreenAction("WAITING", screenTarget === "all" ? null : screenTarget);
+              sendScreenAction("WAITING", null);
             } else {
-              sendScreenAction("BLACK", screenTarget === "all" ? null : screenTarget);
+              sendScreenAction("BLACK", null);
             }
           }}
           style={
