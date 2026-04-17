@@ -1254,6 +1254,7 @@ function BlocProjectionEcran({
 
       <div
         style={{
+          display: "none",
           marginBottom: "0.8rem",
           marginTop: "0.95rem",
           padding: desktop ? "0.8rem 0.95rem" : "0.72rem 0.8rem",
@@ -1562,6 +1563,113 @@ function BlocProjectionEcran({
             : "Masque la projection sans fermer le vote. État synchronisé avec l’API après chaque action."}
         </p>
       </div>
+      </div>
+
+      <div
+        style={{
+          marginTop: "0.95rem",
+          marginBottom: "0.8rem",
+          padding: desktop ? "0.8rem 0.95rem" : "0.72rem 0.8rem",
+          borderRadius: "10px",
+          background: "rgba(255,255,255,0.58)",
+          border: "1px solid rgba(91, 33, 182, 0.2)",
+        }}
+      >
+        <p
+          style={{
+            margin: "0 0 0.45rem 0",
+            fontSize: "0.65rem",
+            fontWeight: 700,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "#7c3aed",
+            opacity: 0.9,
+          }}
+        >
+          Écrans séparés (pilotage direct)
+        </p>
+        <div className="proj-ecran-separated-grid">
+          {["1", "2", "3"].map((sid) => (
+            <div key={sid} className="proj-ecran-separated-card">
+              <p className="proj-ecran-separated-title">Écran {sid}</p>
+              <div className="proj-ecran-separated-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = lienDiffusionAbsolu(pathScreenById(sid));
+                    if (url) window.open(url, "_blank", "noopener,noreferrer");
+                  }}
+                  style={{ ...btnOutlineSecondaire, padding: "0.45rem 0.6rem", fontSize: "0.74rem" }}
+                >
+                  Ouvrir
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void copierLienEcranCible(sid)}
+                  style={{ ...btnOutlineSecondaire, padding: "0.45rem 0.6rem", fontSize: "0.74rem" }}
+                >
+                  {copiedScreenId === sid ? "Copié" : "Copier"}
+                </button>
+              </div>
+              <div className="proj-ecran-separated-actions">
+                <button
+                  type="button"
+                  disabled={busy || !activePollId}
+                  onClick={() => sendScreenAction("QUESTION", sid)}
+                  style={{
+                    ...btnOutlineSecondaire,
+                    padding: "0.45rem 0.6rem",
+                    fontSize: "0.74rem",
+                    ...(busy || !activePollId ? secDisabled(true) : {}),
+                  }}
+                >
+                  Question
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || !activePollId}
+                  onClick={() => sendScreenAction("RESULTS", sid)}
+                  style={{
+                    ...btnOutlineSecondaire,
+                    padding: "0.45rem 0.6rem",
+                    fontSize: "0.74rem",
+                    ...(busy || !activePollId ? secDisabled(true) : {}),
+                  }}
+                >
+                  Résultats
+                </button>
+              </div>
+              <div className="proj-ecran-separated-actions">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => sendScreenAction("BLACK", sid)}
+                  style={{
+                    ...btnDangerNoir,
+                    padding: "0.45rem 0.6rem",
+                    fontSize: "0.74rem",
+                    ...(busy ? secDisabled(true) : {}),
+                  }}
+                >
+                  Noir
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => sendScreenAction("WAITING", sid)}
+                  style={{
+                    ...btnRevenirDirect,
+                    padding: "0.45rem 0.6rem",
+                    fontSize: "0.74rem",
+                    ...(busy ? secDisabled(true) : {}),
+                  }}
+                >
+                  Attente
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {chronoSection ? (
