@@ -862,6 +862,7 @@ function lienDiffusionAbsolu(path) {
  *   sendScreenAction: (type: "RESULTS" | "QUESTION" | "WAITING" | "BLACK", screenId?: string | null) => void;
  *   screenCount: number;
  *   screenBConnected: boolean;
+ *   screenBDisplayState?: string | null;
  *   desktop: boolean;
  *   chronoSection?: import("react").ReactNode;
  *   autoRotate: boolean;
@@ -883,6 +884,7 @@ function BlocProjectionEcran({
   sendScreenAction,
   screenCount,
   screenBConnected,
+  screenBDisplayState = null,
   desktop,
   chronoSection = null,
   autoRotate,
@@ -975,6 +977,42 @@ function BlocProjectionEcran({
   const statutEcranB = screenBConnected
     ? "🟢 Écran B connecté"
     : "🔴 Écran B non connecté";
+  const affichageStandardLabel =
+    DISPLAY_STATE_LABELS[d] ?? String(d || "waiting").toUpperCase();
+  const ecranBDisplayLower = String(screenBDisplayState || "").toLowerCase();
+  const affichageBLabel = screenBConnected
+    ? (DISPLAY_STATE_LABELS[ecranBDisplayLower] ??
+      String(ecranBDisplayLower || "waiting").toUpperCase())
+    : "Non connecté";
+  const styleBadgeAffichage = (state) => {
+    const s = String(state || "").toLowerCase();
+    if (s === "question") {
+      return {
+        color: "#166534",
+        background: "#dcfce7",
+        border: "1px solid #86efac",
+      };
+    }
+    if (s === "results") {
+      return {
+        color: "#1e3a8a",
+        background: "#dbeafe",
+        border: "1px solid #93c5fd",
+      };
+    }
+    if (s === "black") {
+      return {
+        color: "#fafaf9",
+        background: "#0c0a09",
+        border: "1px solid #292524",
+      };
+    }
+    return {
+      color: "#334155",
+      background: "#f1f5f9",
+      border: "1px solid #cbd5e1",
+    };
+  };
 
   const full = { width: "100%", boxSizing: "border-box" };
   const btnOuvrir = {
@@ -1172,6 +1210,31 @@ function BlocProjectionEcran({
         >
           Écran standard
         </p>
+      <p
+        style={{
+          margin: "0 0 0.6rem 0",
+          fontSize: "0.72rem",
+          lineHeight: 1.35,
+          fontWeight: 600,
+          color: "#334155",
+        }}
+      >
+        Affichage actuel :{" "}
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            padding: "0.12rem 0.45rem",
+            borderRadius: "999px",
+            fontWeight: 800,
+            fontSize: "0.7rem",
+            letterSpacing: "0.02em",
+            ...styleBadgeAffichage(d),
+          }}
+        >
+          {affichageStandardLabel}
+        </span>
+      </p>
       <div
         style={{
           display: "flex",
@@ -1291,6 +1354,31 @@ function BlocProjectionEcran({
           }}
         >
           {statutEcranB}
+        </p>
+        <p
+          style={{
+            margin: "0 0 0.5rem 0",
+            fontSize: "0.72rem",
+            lineHeight: 1.35,
+            fontWeight: 600,
+            color: "#334155",
+          }}
+        >
+          Affichage actuel :{" "}
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              padding: "0.12rem 0.45rem",
+              borderRadius: "999px",
+              fontWeight: 800,
+              fontSize: "0.7rem",
+              letterSpacing: "0.02em",
+              ...styleBadgeAffichage(screenBConnected ? ecranBDisplayLower : "waiting"),
+            }}
+          >
+            {affichageBLabel}
+          </span>
         </p>
         <div className="proj-ecran-separated-grid">
           {["B"].map((sid) => (
@@ -1787,7 +1875,7 @@ function BlocProjectionEcran({
         }
         @media (min-width: 640px) {
           .proj-ecran-separated-grid {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: minmax(0, 1fr);
           }
           .proj-ecran-secondaires {
             flex-direction: row;
@@ -3829,6 +3917,9 @@ export default function RegieEventPage() {
   /** Nombre de clients /screen connectés (socket room dédiée) */
   const [screenCount, setScreenCount] = useState(0);
   const [screenBConnected, setScreenBConnected] = useState(false);
+  const [screenBDisplayState, setScreenBDisplayState] = useState(
+    /** @type {"question" | "results" | "waiting" | "black"} */ ("waiting"),
+  );
   /** Alternance automatique question ↔ résultats (régie uniquement) */
   const [autoRotate, setAutoRotate] = useState(false);
   const [autoRotateQuestionSec, setAutoRotateQuestionSec] = useState(10);
@@ -4239,6 +4330,21 @@ export default function RegieEventPage() {
             ? connectedFromCount
             : false;
       setScreenBConnected(connected);
+      if (!connected) {
+        setScreenBDisplayState("waiting");
+      }
+    }
+
+    function onScreenUpdate(payload) {
+      if (!payload || String(payload.eventId) !== String(eventId)) return;
+      const sid = String(payload.screenId || "").trim().toLowerCase();
+      const dsRaw = String(payload.displayState || "").trim().toLowerCase();
+      if (!["question", "results", "waiting", "black"].includes(dsRaw)) return;
+      if (sid === "b") {
+        setScreenBDisplayState(
+          /** @type {"question" | "results" | "waiting" | "black"} */ (dsRaw),
+        );
+      }
     }
 
     function onLive(payload) {
@@ -4292,6 +4398,7 @@ export default function RegieEventPage() {
     socket.on("poll_updated", onPollUpdated);
     socket.on("screen:count", onScreenCount);
     socket.on("screen:presence", onScreenPresence);
+    socket.on("screen:update", onScreenUpdate);
 
     return () => {
       socketRef.current = null;
@@ -4304,6 +4411,7 @@ export default function RegieEventPage() {
       socket.off("poll_updated", onPollUpdated);
       socket.off("screen:count", onScreenCount);
       socket.off("screen:presence", onScreenPresence);
+      socket.off("screen:update", onScreenUpdate);
       socket.disconnect();
     };
   }, [eventId, fetchEvent, eventData?.activePollId]);
@@ -4334,6 +4442,14 @@ export default function RegieEventPage() {
     (type, screenId = null) => {
       setAutoRotate(false);
       if (!eventId) return;
+      if (String(screenId || "").trim().toLowerCase() === "b") {
+        const next = String(type || "").toLowerCase();
+        if (["question", "results", "waiting", "black"].includes(next)) {
+          setScreenBDisplayState(
+            /** @type {"question" | "results" | "waiting" | "black"} */ (next),
+          );
+        }
+      }
       socketRef.current?.emit("screen:action", { eventId, type, screenId: screenId || null });
     },
     [eventId],
@@ -6254,6 +6370,7 @@ export default function RegieEventPage() {
               sendScreenAction={sendScreenAction}
               screenCount={screenCount}
               screenBConnected={screenBConnected}
+              screenBDisplayState={screenBDisplayState}
               desktop={desktop}
               chronoSection={chronoProjectionInner}
               autoRotate={autoRotate}
