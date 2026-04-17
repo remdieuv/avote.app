@@ -1079,21 +1079,183 @@ function BlocProjectionEcran({
 
       <div
         style={{
+          marginBottom: "1.15rem",
+          padding: desktop ? "0.8rem 0.95rem" : "0.72rem 0.8rem",
+          borderRadius: "10px",
+          background: "rgba(255,255,255,0.58)",
+          border: "1px solid rgba(91, 33, 182, 0.2)",
+        }}
+      >
+        <p
+          style={{
+            margin: "0 0 0.45rem 0",
+            fontSize: "0.65rem",
+            fontWeight: 700,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "#7c3aed",
+            opacity: 0.9,
+          }}
+        >
+          Mode d'affichage projection
+        </p>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "0.45rem",
+          }}
+        >
+          {[
+            { id: "standard", label: "Standard" },
+            { id: "xlarge_qr", label: "Grande salle (QR XXL)" },
+            { id: "qr_fullscreen", label: "QR plein écran" },
+            { id: "results_focus", label: "Résultats focus" },
+          ].map((m) => {
+            const on = projectionMode === m.id;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => changeProjectionMode(m.id)}
+                style={{
+                  padding: "0.38rem 0.65rem",
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  borderRadius: "8px",
+                  border: on ? "1px solid #6d28d9" : "1px solid #d1d5db",
+                  background: on ? "#f5f3ff" : "#fff",
+                  color: on ? "#5b21b6" : "#475569",
+                  cursor: "pointer",
+                }}
+              >
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+        <p
+          style={{
+            margin: "0.45rem 0 0 0",
+            fontSize: "0.72rem",
+            color: "#64748b",
+            lineHeight: 1.35,
+          }}
+        >
+          Mode actif : <strong style={{ color: "#111827" }}>{projectionModeLabel}</strong>
+        </p>
+      </div>
+
+      <div
+        style={{
+          marginBottom: "1.1rem",
+          padding: desktop ? "0.9rem 0.95rem" : "0.78rem 0.82rem",
+          borderRadius: "12px",
+          background: "rgba(255,255,255,0.62)",
+          border: "1px solid rgba(91, 33, 182, 0.26)",
+        }}
+      >
+        <p
+          style={{
+            margin: "0 0 0.6rem 0",
+            fontSize: "0.66rem",
+            fontWeight: 800,
+            letterSpacing: "0.09em",
+            textTransform: "uppercase",
+            color: "#6d28d9",
+          }}
+        >
+          Écran standard
+        </p>
+      <div
+        style={{
           display: "flex",
           flexDirection: "column",
           gap: "0.7rem",
           justifyContent: "center",
-          marginBottom: "1.35rem",
+          marginBottom: "1.1rem",
         }}
       >
         <button type="button" onClick={ouvrirEcran} style={btnOuvrir}>
           Ouvrir l’écran
         </button>
       </div>
+      <div style={{ marginBottom: "1.05rem" }}>
+        <p
+          style={{
+            margin: "0 0 0.55rem 0",
+            fontSize: "0.65rem",
+            fontWeight: 700,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "#7c3aed",
+            opacity: 0.9,
+          }}
+        >
+          Contrôle de la scène
+        </p>
+        <div className="proj-ecran-secondaires">
+          <div className="proj-ecran-action">
+            <button
+              type="button"
+              disabled={busy || !activePollId}
+              onClick={async () => {
+                const ok = await postAction(`/polls/${activePollId}/show-results`);
+                if (ok) sendScreenAction("RESULTS", null);
+              }}
+              style={{
+                ...btnOutlineSecondaire,
+                ...secDisabled(busy || !activePollId),
+              }}
+            >
+              Afficher les résultats en direct
+            </button>
+            <p
+              style={{
+                margin: "0.35rem 0 0 0",
+                fontSize: "0.72rem",
+                lineHeight: 1.4,
+                color: "#64748b",
+                fontWeight: 500,
+              }}
+            >
+              Les votes continuent et les résultats évoluent en temps réel
+            </p>
+          </div>
+          <div className="proj-ecran-action">
+            <button
+              type="button"
+              disabled={busy || !activePollId || d !== "results"}
+              onClick={async () => {
+                const ok = await postAction(`/polls/${activePollId}/display-question`);
+                if (ok) sendScreenAction("QUESTION", null);
+              }}
+              style={{
+                ...btnOutlineSecondaire,
+                ...secDisabled(busy || !activePollId || d !== "results"),
+              }}
+            >
+              Afficher la question
+            </button>
+            <p
+              style={{
+                margin: "0.35rem 0 0 0",
+                fontSize: "0.72rem",
+                lineHeight: 1.4,
+                color: "#64748b",
+                fontWeight: 500,
+              }}
+            >
+              Les participants répondent depuis leur téléphone
+            </p>
+          </div>
+        </div>
+      </div>
 
       <div
         style={{
-          marginBottom: "1rem",
+          marginBottom: "0.8rem",
+          marginTop: "0.95rem",
           padding: desktop ? "0.8rem 0.95rem" : "0.72rem 0.8rem",
           borderRadius: "10px",
           background: "rgba(255,255,255,0.58)",
@@ -1194,167 +1356,6 @@ function BlocProjectionEcran({
               </div>
             </div>
           ))}
-        </div>
-      </div>
-      <div
-        style={{
-          marginBottom: "1.15rem",
-          padding: desktop ? "0.8rem 0.95rem" : "0.72rem 0.8rem",
-          borderRadius: "10px",
-          background: "rgba(255,255,255,0.58)",
-          border: "1px solid rgba(91, 33, 182, 0.2)",
-        }}
-      >
-        <p
-          style={{
-            margin: "0 0 0.45rem 0",
-            fontSize: "0.65rem",
-            fontWeight: 700,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: "#7c3aed",
-            opacity: 0.9,
-          }}
-        >
-          Mode d'affichage projection
-        </p>
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "0.45rem",
-          }}
-        >
-          {[
-            { id: "standard", label: "Standard" },
-            { id: "xlarge_qr", label: "Grande salle (QR XXL)" },
-            { id: "qr_fullscreen", label: "QR plein écran" },
-            { id: "results_focus", label: "Résultats focus" },
-          ].map((m) => {
-            const on = projectionMode === m.id;
-            return (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => changeProjectionMode(m.id)}
-                style={{
-                  padding: "0.38rem 0.65rem",
-                  fontSize: "0.75rem",
-                  fontWeight: 700,
-                  borderRadius: "8px",
-                  border: on ? "1px solid #6d28d9" : "1px solid #d1d5db",
-                  background: on ? "#f5f3ff" : "#fff",
-                  color: on ? "#5b21b6" : "#475569",
-                  cursor: "pointer",
-                }}
-              >
-                {m.label}
-              </button>
-            );
-          })}
-        </div>
-        <p
-          style={{
-            margin: "0.45rem 0 0 0",
-            fontSize: "0.72rem",
-            color: "#64748b",
-            lineHeight: 1.35,
-          }}
-        >
-          Mode actif : <strong style={{ color: "#111827" }}>{projectionModeLabel}</strong>
-        </p>
-      </div>
-
-      <div
-        style={{
-          marginBottom: "1.1rem",
-          padding: desktop ? "0.9rem 0.95rem" : "0.78rem 0.82rem",
-          borderRadius: "12px",
-          background: "rgba(255,255,255,0.62)",
-          border: "1px solid rgba(91, 33, 182, 0.26)",
-        }}
-      >
-        <p
-          style={{
-            margin: "0 0 0.6rem 0",
-            fontSize: "0.66rem",
-            fontWeight: 800,
-            letterSpacing: "0.09em",
-            textTransform: "uppercase",
-            color: "#6d28d9",
-          }}
-        >
-          Écran standard
-        </p>
-      <div style={{ marginBottom: "1.05rem" }}>
-        <p
-          style={{
-            margin: "0 0 0.55rem 0",
-            fontSize: "0.65rem",
-            fontWeight: 700,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: "#7c3aed",
-            opacity: 0.9,
-          }}
-        >
-          Contrôle de la scène
-        </p>
-        <div className="proj-ecran-secondaires">
-          <div className="proj-ecran-action">
-            <button
-              type="button"
-              disabled={busy || !activePollId}
-              onClick={async () => {
-                const ok = await postAction(`/polls/${activePollId}/show-results`);
-                if (ok) sendScreenAction("RESULTS", null);
-              }}
-              style={{
-                ...btnOutlineSecondaire,
-                ...secDisabled(busy || !activePollId),
-              }}
-            >
-              Afficher les résultats en direct
-            </button>
-            <p
-              style={{
-                margin: "0.35rem 0 0 0",
-                fontSize: "0.72rem",
-                lineHeight: 1.4,
-                color: "#64748b",
-                fontWeight: 500,
-              }}
-            >
-              Les votes continuent et les résultats évoluent en temps réel
-            </p>
-          </div>
-          <div className="proj-ecran-action">
-            <button
-              type="button"
-              disabled={busy || !activePollId || d !== "results"}
-              onClick={async () => {
-                const ok = await postAction(`/polls/${activePollId}/display-question`);
-                if (ok) sendScreenAction("QUESTION", null);
-              }}
-              style={{
-                ...btnOutlineSecondaire,
-                ...secDisabled(busy || !activePollId || d !== "results"),
-              }}
-            >
-              Afficher la question
-            </button>
-            <p
-              style={{
-                margin: "0.35rem 0 0 0",
-                fontSize: "0.72rem",
-                lineHeight: 1.4,
-                color: "#64748b",
-                fontWeight: 500,
-              }}
-            >
-              Les participants répondent depuis leur téléphone
-            </p>
-          </div>
         </div>
       </div>
 
