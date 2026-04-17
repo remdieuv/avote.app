@@ -1366,7 +1366,8 @@ function BlocProjectionEcran({
               disabled={busy || !activePollId}
               onClick={async () => {
                 if (screenTarget === "all") {
-                  await postAction(`/polls/${activePollId}/show-results`);
+                  const ok = await postAction(`/polls/${activePollId}/show-results`);
+                  if (ok) sendScreenAction("RESULTS", null);
                 } else {
                   sendScreenAction("RESULTS", screenTarget);
                 }
@@ -1396,7 +1397,8 @@ function BlocProjectionEcran({
               disabled={busy || !activePollId || d !== "results"}
               onClick={async () => {
                 if (screenTarget === "all") {
-                  await postAction(`/polls/${activePollId}/display-question`);
+                  const ok = await postAction(`/polls/${activePollId}/display-question`);
+                  if (ok) sendScreenAction("QUESTION", null);
                 } else {
                   sendScreenAction("QUESTION", screenTarget);
                 }
