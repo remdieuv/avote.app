@@ -119,6 +119,10 @@ function roomOverlayAlpha(strength) {
  */
 export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSurfaceChange }) {
   const searchParams = useSearchParams();
+  const screenIdLabel =
+    typeof screenId === "string" && /^[A-Za-z0-9_-]{1,24}$/.test(screenId)
+      ? screenId
+      : null;
   const [poll, setPoll] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -924,6 +928,30 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
           }}
         >
           {projectionModeHint}
+        </div>
+      ) : null}
+      {screenIdLabel ? (
+        <div
+          style={{
+            position: "fixed",
+            top: projectionModeHint
+              ? "clamp(2.1rem, 5.2vh, 2.6rem)"
+              : "clamp(0.55rem, 1.6vh, 0.85rem)",
+            right: "clamp(0.6rem, 1.8vw, 1rem)",
+            zIndex: 92,
+            fontSize: "clamp(0.62rem, 1.05vw, 0.72rem)",
+            fontWeight: 800,
+            letterSpacing: "0.05em",
+            color: "rgba(226, 232, 240, 0.95)",
+            padding: "0.2rem 0.45rem",
+            borderRadius: "999px",
+            background: "rgba(91, 33, 182, 0.52)",
+            border: "1px solid rgba(196, 181, 253, 0.45)",
+            pointerEvents: "none",
+            textTransform: "uppercase",
+          }}
+        >
+          Écran {screenIdLabel}
         </div>
       ) : null}
       {!poll || (ds !== "question" && ds !== "results") ? (

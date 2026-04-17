@@ -3570,6 +3570,8 @@ io.on("connection", (socket) => {
     const msg = { eventId, enabled, screenId };
     if (targetedRoom) {
       io.to(targetedRoom).emit("screen:auto_rotate", msg);
+      // Fallback robuste: passe aussi par la room event brute, filtrée côté client par screenId.
+      io.to(eventId).emit("screen:auto_rotate", msg);
     } else {
       io.to(eventId).emit("screen:auto_rotate", msg);
     }
@@ -3599,14 +3601,18 @@ io.on("connection", (socket) => {
       const ev = await prisma.event.findUnique({ where: { id: eventId } });
       if (!ev) return;
       if (targetedRoom) {
-        io.to(targetedRoom).emit("screen:update", {
+        const msg = {
           eventId,
           type,
           displayState: String(displayState).toLowerCase(),
           voteState: String(ev.voteState).toLowerCase(),
           pollId: ev.activePollId,
           screenId,
-        });
+        };
+        io.to(targetedRoom).emit("screen:update", msg);
+        // Fallback robuste: passe aussi par la room event brute, filtrée côté client par screenId.
+        io.to(eventId).emit("screen:update", msg);
+        io.to(roomPourEvent(eventId)).emit("screen:update", msg);
         return;
       }
       await prisma.event.update({
