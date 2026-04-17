@@ -1703,6 +1703,31 @@ function BlocProjectionEcran({
         >
           {statutEcranB}
         </p>
+        <p
+          style={{
+            margin: "0 0 0.5rem 0",
+            fontSize: "0.72rem",
+            lineHeight: 1.35,
+            fontWeight: 600,
+            color: "#334155",
+          }}
+        >
+          Affichage actuel :{" "}
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              padding: "0.12rem 0.45rem",
+              borderRadius: "999px",
+              fontWeight: 800,
+              fontSize: "0.7rem",
+              letterSpacing: "0.02em",
+              ...styleBadgeAffichage(screenBConnected ? ecranBDisplayLower : "waiting"),
+            }}
+          >
+            {affichageBLabel}
+          </span>
+        </p>
         <div className="proj-ecran-separated-grid">
           {["B"].map((sid) => (
             <div key={sid} className="proj-ecran-separated-card">
