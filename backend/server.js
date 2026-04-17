@@ -181,6 +181,29 @@ async function emitScreenCountToAdmins(io, eventId) {
   }
 }
 
+/**
+ * @param {import("socket.io").Server} io
+ * @param {string} eventId
+ * @param {string} screenId
+ */
+async function emitScreenPresenceToAdmins(io, eventId, screenId) {
+  const id = String(eventId).trim();
+  const sid = normalizeScreenId(screenId);
+  if (!id || !sid) return;
+  try {
+    const sockets = await io.in(roomPourScreen(id, sid)).fetchSockets();
+    const count = sockets.length;
+    io.to(roomPourEvent(id)).emit("screen:presence", {
+      eventId: id,
+      screenId: sid,
+      count,
+      connected: count > 0,
+    });
+  } catch (e) {
+    console.error("screen:presence", e);
+  }
+}
+
 const QUESTION_TIMER_RESET = {
   questionTimerTotalSec: null,
   questionTimerAccumulatedSec: 0,
@@ -3510,6 +3533,7 @@ io.on("connection", (socket) => {
     const id = String(rawEventId);
     socket.join(roomPourEvent(id));
     void emitScreenCountToAdmins(io, id);
+    void emitScreenPresenceToAdmins(io, id, "b");
   });
 
   socket.on("leave_event", (rawEventId) => {
@@ -3536,6 +3560,7 @@ io.on("connection", (socket) => {
     }
     socket.data.screenEventId = eventId;
     void emitScreenCountToAdmins(io, eventId);
+    void emitScreenPresenceToAdmins(io, eventId, "b");
   });
 
   socket.on("screen:leave", (payload) => {
@@ -3553,6 +3578,7 @@ io.on("connection", (socket) => {
       socket.data.screenId = null;
     }
     void emitScreenCountToAdmins(io, eventId);
+    void emitScreenPresenceToAdmins(io, eventId, "b");
   });
 
   /**
@@ -3640,6 +3666,7 @@ io.on("connection", (socket) => {
     const id = socket.data.screenEventId;
     if (id) {
       void emitScreenCountToAdmins(io, id);
+      void emitScreenPresenceToAdmins(io, id, "b");
     }
   });
 });

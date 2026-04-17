@@ -861,6 +861,7 @@ function lienDiffusionAbsolu(path) {
  *   postAction: (path: string) => Promise<boolean>;
  *   sendScreenAction: (type: "RESULTS" | "QUESTION" | "WAITING" | "BLACK", screenId?: string | null) => void;
  *   screenCount: number;
+ *   screenBConnected: boolean;
  *   desktop: boolean;
  *   chronoSection?: import("react").ReactNode;
  *   autoRotate: boolean;
@@ -881,6 +882,7 @@ function BlocProjectionEcran({
   postAction,
   sendScreenAction,
   screenCount,
+  screenBConnected,
   desktop,
   chronoSection = null,
   autoRotate,
@@ -970,6 +972,9 @@ function BlocProjectionEcran({
       : screenCount === 1
         ? "🟢 1 écran connecté"
         : `🟢 ${screenCount} écrans connectés`;
+  const statutEcranB = screenBConnected
+    ? "🟢 Écran B connecté"
+    : "🔴 Écran B non connecté";
 
   const full = { width: "100%", boxSizing: "border-box" };
   const btnOuvrir = {
@@ -1275,6 +1280,17 @@ function BlocProjectionEcran({
           }}
         >
           Écran supplémentaire (B)
+        </p>
+        <p
+          style={{
+            margin: "0 0 0.5rem 0",
+            fontSize: "0.72rem",
+            lineHeight: 1.35,
+            fontWeight: 600,
+            color: screenBConnected ? "#166534" : "#991b1b",
+          }}
+        >
+          {statutEcranB}
         </p>
         <div className="proj-ecran-separated-grid">
           {["B"].map((sid) => (
@@ -3801,6 +3817,7 @@ export default function RegieEventPage() {
   const [mobileJoinPreviewOpen, setMobileJoinPreviewOpen] = useState(false);
   /** Nombre de clients /screen connectés (socket room dédiée) */
   const [screenCount, setScreenCount] = useState(0);
+  const [screenBConnected, setScreenBConnected] = useState(false);
   /** Alternance automatique question ↔ résultats (régie uniquement) */
   const [autoRotate, setAutoRotate] = useState(false);
   const [autoRotateQuestionSec, setAutoRotateQuestionSec] = useState(10);
@@ -4196,6 +4213,23 @@ export default function RegieEventPage() {
       );
     }
 
+    function onScreenPresence(payload) {
+      if (!payload || String(payload.eventId) !== String(eventId)) return;
+      const sid = String(payload.screenId || "").trim().toLowerCase();
+      if (sid !== "b") return;
+      const connectedFromCount =
+        typeof payload.count === "number" && Number.isFinite(payload.count)
+          ? payload.count > 0
+          : null;
+      const connected =
+        typeof payload.connected === "boolean"
+          ? payload.connected
+          : connectedFromCount != null
+            ? connectedFromCount
+            : false;
+      setScreenBConnected(connected);
+    }
+
     function onLive(payload) {
       if (!payload || String(payload.eventId) !== String(eventId)) return;
       loadPollAbortRef.current?.abort();
@@ -4246,6 +4280,7 @@ export default function RegieEventPage() {
     socket.on("event_live_updated", onLive);
     socket.on("poll_updated", onPollUpdated);
     socket.on("screen:count", onScreenCount);
+    socket.on("screen:presence", onScreenPresence);
 
     return () => {
       socketRef.current = null;
@@ -4257,6 +4292,7 @@ export default function RegieEventPage() {
       socket.off("event_live_updated", onLive);
       socket.off("poll_updated", onPollUpdated);
       socket.off("screen:count", onScreenCount);
+      socket.off("screen:presence", onScreenPresence);
       socket.disconnect();
     };
   }, [eventId, fetchEvent, eventData?.activePollId]);
@@ -6206,6 +6242,7 @@ export default function RegieEventPage() {
               postAction={postAction}
               sendScreenAction={sendScreenAction}
               screenCount={screenCount}
+              screenBConnected={screenBConnected}
               desktop={desktop}
               chronoSection={chronoProjectionInner}
               autoRotate={autoRotate}
