@@ -1265,7 +1265,28 @@ function BlocProjectionEcran({
         </p>
       </div>
 
-      <div style={{ marginBottom: "1.35rem" }}>
+      <div
+        style={{
+          marginBottom: "1.1rem",
+          padding: desktop ? "0.9rem 0.95rem" : "0.78rem 0.82rem",
+          borderRadius: "12px",
+          background: "rgba(255,255,255,0.62)",
+          border: "1px solid rgba(91, 33, 182, 0.26)",
+        }}
+      >
+        <p
+          style={{
+            margin: "0 0 0.6rem 0",
+            fontSize: "0.66rem",
+            fontWeight: 800,
+            letterSpacing: "0.09em",
+            textTransform: "uppercase",
+            color: "#6d28d9",
+          }}
+        >
+          Écran standard
+        </p>
+      <div style={{ marginBottom: "1.05rem" }}>
         <p
           style={{
             margin: "0 0 0.55rem 0",
@@ -1339,7 +1360,7 @@ function BlocProjectionEcran({
 
       <div
         style={{
-          marginTop: "1rem",
+          marginTop: "0",
           padding: desktop ? "0.85rem 1rem" : "0.75rem 0.85rem",
           borderRadius: "10px",
           background: "rgba(255,255,255,0.55)",
@@ -1502,7 +1523,7 @@ function BlocProjectionEcran({
 
       <div
         style={{
-          marginBottom: chronoSection ? "1.2rem" : 0,
+          marginBottom: chronoSection ? "0.95rem" : 0,
           padding: desktop ? "1.1rem 1rem" : "1rem 0.85rem",
           borderRadius: "12px",
           border: "1px dashed rgba(91, 33, 182, 0.35)",
@@ -1539,6 +1560,7 @@ function BlocProjectionEcran({
             ? "La salle est en noir (confirmé côté serveur). « Revenir au direct » enlève le noir puis affiche l’attente : vous devez choisir « Afficher la question » ou « Afficher les résultats » (le vote peut rester ouvert)."
             : "Masque la projection sans fermer le vote. État synchronisé avec l’API après chaque action."}
         </p>
+      </div>
       </div>
 
       {chronoSection ? (
