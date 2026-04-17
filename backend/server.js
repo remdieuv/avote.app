@@ -146,6 +146,26 @@ function roomPourEvent(eventId) {
 }
 
 /**
+ * @param {string} eventId
+ * @param {string} screenId
+ */
+function roomPourScreen(eventId, screenId) {
+  return `screen_${eventId}__${screenId}`;
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {string | null}
+ */
+function normalizeScreenId(raw) {
+  if (raw == null) return null;
+  const id = String(raw).trim();
+  if (!id) return null;
+  if (!/^[A-Za-z0-9_-]{1,24}$/.test(id)) return null;
+  return id;
+}
+
+/**
  * Room écran = id événement brut (cuid), distinct de roomPourEvent (`event_…`).
  * @param {import("socket.io").Server} io
  */
@@ -3504,6 +3524,16 @@ io.on("connection", (socket) => {
         : "";
     if (!eventId) return;
     socket.join(eventId);
+    const screenId = normalizeScreenId(payload?.screenId);
+    if (screenId) {
+      const room = roomPourScreen(eventId, screenId);
+      socket.join(room);
+      socket.data.screenTargetRoom = room;
+      socket.data.screenId = screenId;
+    } else {
+      socket.data.screenTargetRoom = null;
+      socket.data.screenId = null;
+    }
     socket.data.screenEventId = eventId;
     void emitScreenCountToAdmins(io, eventId);
   });
@@ -3515,8 +3545,12 @@ io.on("connection", (socket) => {
         : "";
     if (!eventId) return;
     socket.leave(eventId);
+    const room = socket.data.screenTargetRoom;
+    if (room) socket.leave(room);
     if (socket.data.screenEventId === eventId) {
       socket.data.screenEventId = null;
+      socket.data.screenTargetRoom = null;
+      socket.data.screenId = null;
     }
     void emitScreenCountToAdmins(io, eventId);
   });
@@ -3530,9 +3564,15 @@ io.on("connection", (socket) => {
         ? payload.eventId.trim()
         : "";
     if (!eventId) return;
+    const screenId = normalizeScreenId(payload?.screenId);
+    const targetedRoom = screenId ? roomPourScreen(eventId, screenId) : null;
     const enabled = Boolean(payload?.enabled);
-    const msg = { eventId, enabled };
-    io.to(eventId).emit("screen:auto_rotate", msg);
+    const msg = { eventId, enabled, screenId };
+    if (targetedRoom) {
+      io.to(targetedRoom).emit("screen:auto_rotate", msg);
+    } else {
+      io.to(eventId).emit("screen:auto_rotate", msg);
+    }
     io.to(roomPourEvent(eventId)).emit("screen:auto_rotate", msg);
   });
 
@@ -3543,6 +3583,8 @@ io.on("connection", (socket) => {
         ? payload.eventId.trim()
         : "";
     const type = payload && payload.type != null ? String(payload.type) : "";
+    const screenId = normalizeScreenId(payload?.screenId);
+    const targetedRoom = screenId ? roomPourScreen(eventId, screenId) : null;
     if (!eventId || !type) return;
     const allowed = new Set(["RESULTS", "QUESTION", "WAITING", "BLACK"]);
     if (!allowed.has(type)) return;
@@ -3556,6 +3598,17 @@ io.on("connection", (socket) => {
     try {
       const ev = await prisma.event.findUnique({ where: { id: eventId } });
       if (!ev) return;
+      if (targetedRoom) {
+        io.to(targetedRoom).emit("screen:update", {
+          eventId,
+          type,
+          displayState: String(displayState).toLowerCase(),
+          voteState: String(ev.voteState).toLowerCase(),
+          pollId: ev.activePollId,
+          screenId,
+        });
+        return;
+      }
       await prisma.event.update({
         where: { id: eventId },
         data: { screenDisplayState: displayState },
@@ -3570,6 +3623,7 @@ io.on("connection", (socket) => {
         ).toLowerCase(),
         voteState: String(fresh.voteState).toLowerCase(),
         pollId: fresh.activePollId,
+        screenId: null,
       });
     } catch (e) {
       console.error("screen:action", e);

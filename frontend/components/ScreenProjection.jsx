@@ -112,11 +112,12 @@ function roomOverlayAlpha(strength) {
  * Projection salle : même flux live que /p/[slug], sans vote.
  * @param {{
  *   slugPublic: string;
+ *   screenId?: string | null;
  *   getPollUrl: () => string;
  *   onSurfaceChange?: (surface: "question" | "results" | "other") => void;
  * }} props
  */
-export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
+export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSurfaceChange }) {
   const searchParams = useSearchParams();
   const [poll, setPoll] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -608,6 +609,10 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
   useEffect(() => {
     const eid = eventId;
     const pid = pollId;
+    const sid =
+      typeof screenId === "string" && /^[A-Za-z0-9_-]{1,24}$/.test(screenId)
+        ? screenId
+        : null;
 
     if (!eid && !pid) return;
 
@@ -617,14 +622,25 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
 
     function rejoindreSalles() {
       if (eid) {
-        socket.emit("screen:join", { eventId: eid });
+        socket.emit("screen:join", { eventId: eid, screenId: sid });
         socket.emit("join_event", eid);
       }
       if (pid) socket.emit("join_poll", pid);
     }
 
+    function payloadMatchesScreen(payloadScreenId) {
+      const ps =
+        typeof payloadScreenId === "string" && payloadScreenId.trim()
+          ? payloadScreenId.trim()
+          : null;
+      if (!ps) return true;
+      if (!sid) return false;
+      return ps === sid;
+    }
+
     function onScreenUpdate(payload) {
       if (!payload || !eid || String(payload.eventId) !== String(eid)) return;
+      if (!payloadMatchesScreen(payload.screenId)) return;
       if (typeof payload.displayState === "string") {
         setDisplayState(payload.displayState.toLowerCase());
       }
@@ -737,6 +753,7 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
 
     function onScreenAutoRotate(payload) {
       if (!eid || String(payload?.eventId) !== String(eid)) return;
+      if (!payloadMatchesScreen(payload?.screenId)) return;
       setModeAutoProjection(Boolean(payload?.enabled));
     }
 
@@ -755,7 +772,7 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
 
     return () => {
       if (eid) {
-        socket.emit("screen:leave", { eventId: eid });
+        socket.emit("screen:leave", { eventId: eid, screenId: sid });
         socket.emit("leave_event", eid);
       }
       if (pid) socket.emit("leave_poll", pid);
@@ -767,7 +784,7 @@ export function ScreenProjection({ slugPublic, getPollUrl, onSurfaceChange }) {
       socket.off("event:customization_updated", onCustomizationUpdated);
       socket.disconnect();
     };
-  }, [eventId, pollId, loadPoll, fetchEventSlugMeta]);
+  }, [eventId, pollId, screenId, loadPoll, fetchEventSlugMeta]);
 
   const resultsVoteSignature =
     ds === "results" && poll

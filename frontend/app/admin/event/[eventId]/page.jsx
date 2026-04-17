@@ -859,7 +859,7 @@ function lienDiffusionAbsolu(path) {
  *   displayState: string;
  *   busy: boolean;
  *   postAction: (path: string) => Promise<boolean>;
- *   sendScreenAction: (type: "RESULTS" | "QUESTION" | "WAITING" | "BLACK") => void;
+ *   sendScreenAction: (type: "RESULTS" | "QUESTION" | "WAITING" | "BLACK", screenId?: string | null) => void;
  *   screenCount: number;
  *   desktop: boolean;
  *   chronoSection?: import("react").ReactNode;
@@ -893,6 +893,7 @@ function BlocProjectionEcran({
 }) {
   const [clientPret, setClientPret] = useState(false);
   const [projectionMode, setProjectionMode] = useState("standard");
+  const [screenTarget, setScreenTarget] = useState("all");
 
   useEffect(() => {
     if (typeof window !== "undefined") setClientPret(true);
@@ -910,9 +911,23 @@ function BlocProjectionEcran({
       setProjectionMode(val);
     }
   }, [slug]);
+  useEffect(() => {
+    if (typeof window === "undefined" || !slug) return;
+    try {
+      const saved = String(
+        window.localStorage.getItem(`avote_projection_screen_target_${slug}`) || "all",
+      ).trim();
+      if (saved === "all" || saved === "1" || saved === "2" || saved === "3") {
+        setScreenTarget(saved);
+      }
+    } catch {
+      // ignore
+    }
+  }, [slug]);
 
   const enc = encodeURIComponent(slug);
-  const pathScreen = `/screen/${enc}?pm=${encodeURIComponent(projectionMode)}`;
+  const sidPart = screenTarget !== "all" ? `&sid=${encodeURIComponent(screenTarget)}` : "";
+  const pathScreen = `/screen/${enc}?pm=${encodeURIComponent(projectionMode)}${sidPart}`;
   const projectionModeLabel =
     projectionMode === "qr_fullscreen"
       ? "QR plein écran"
@@ -943,6 +958,22 @@ function BlocProjectionEcran({
   function ouvrirEcran() {
     const url = lienDiffusionAbsolu(pathScreen);
     if (url) window.open(url, "_blank", "noopener,noreferrer");
+  }
+  function setTarget(nextTarget) {
+    const safe =
+      String(nextTarget || "").trim() === "1" ||
+      String(nextTarget || "").trim() === "2" ||
+      String(nextTarget || "").trim() === "3"
+        ? String(nextTarget).trim()
+        : "all";
+    setScreenTarget(safe);
+    if (typeof window !== "undefined" && slug) {
+      try {
+        window.localStorage.setItem(`avote_projection_screen_target_${slug}`, safe);
+      } catch {
+        // ignore
+      }
+    }
   }
 
   const d = String(displayStateProp || deriveRegieDisplayFallback(liveState)).toLowerCase();
@@ -1066,12 +1097,63 @@ function BlocProjectionEcran({
       <div
         style={{
           display: "flex",
+          flexDirection: "column",
+          gap: "0.7rem",
           justifyContent: "center",
           marginBottom: "1.35rem",
         }}
       >
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "0.45rem",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <span
+            style={{
+              fontSize: "0.72rem",
+              fontWeight: 700,
+              color: "#6b21a8",
+              marginRight: "0.15rem",
+            }}
+          >
+            Cible écran :
+          </span>
+          {[
+            { id: "all", label: "Tous" },
+            { id: "1", label: "1" },
+            { id: "2", label: "2" },
+            { id: "3", label: "3" },
+          ].map((target) => {
+            const on = screenTarget === target.id;
+            return (
+              <button
+                key={target.id}
+                type="button"
+                onClick={() => setTarget(target.id)}
+                style={{
+                  minWidth: target.id === "all" ? "3.35rem" : "2rem",
+                  height: "2rem",
+                  padding: target.id === "all" ? "0 0.65rem" : "0",
+                  borderRadius: "999px",
+                  border: on ? "1px solid #6d28d9" : "1px solid #d1d5db",
+                  background: on ? "#f5f3ff" : "#fff",
+                  color: on ? "#5b21b6" : "#475569",
+                  fontSize: "0.78rem",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                }}
+              >
+                {target.label}
+              </button>
+            );
+          })}
+        </div>
         <button type="button" onClick={ouvrirEcran} style={btnOuvrir}>
-          Ouvrir l’écran
+          {screenTarget === "all" ? "Ouvrir l’écran" : `Ouvrir l’écran ${screenTarget}`}
         </button>
       </div>
       <div
@@ -1163,7 +1245,11 @@ function BlocProjectionEcran({
               type="button"
               disabled={busy || !activePollId}
               onClick={async () => {
-                await postAction(`/polls/${activePollId}/show-results`);
+                if (screenTarget === "all") {
+                  await postAction(`/polls/${activePollId}/show-results`);
+                } else {
+                  sendScreenAction("RESULTS", screenTarget);
+                }
               }}
               style={{
                 ...btnOutlineSecondaire,
@@ -1189,7 +1275,11 @@ function BlocProjectionEcran({
               type="button"
               disabled={busy || !activePollId || d !== "results"}
               onClick={async () => {
-                await postAction(`/polls/${activePollId}/display-question`);
+                if (screenTarget === "all") {
+                  await postAction(`/polls/${activePollId}/display-question`);
+                } else {
+                  sendScreenAction("QUESTION", screenTarget);
+                }
               }}
               style={{
                 ...btnOutlineSecondaire,
@@ -1390,9 +1480,9 @@ function BlocProjectionEcran({
           disabled={busy}
           onClick={() => {
             if (affichageNoir) {
-              sendScreenAction("WAITING");
+              sendScreenAction("WAITING", screenTarget === "all" ? null : screenTarget);
             } else {
-              sendScreenAction("BLACK");
+              sendScreenAction("BLACK", screenTarget === "all" ? null : screenTarget);
             }
           }}
           style={
@@ -3993,11 +4083,14 @@ export default function RegieEventPage() {
   }, [eventData?.description]);
 
   const sendScreenAction = useCallback(
-    /** @param {"RESULTS" | "QUESTION" | "WAITING" | "BLACK"} type */
-    (type) => {
+    /**
+     * @param {"RESULTS" | "QUESTION" | "WAITING" | "BLACK"} type
+     * @param {string | null | undefined} screenId
+     */
+    (type, screenId = null) => {
       setAutoRotate(false);
       if (!eventId) return;
-      socketRef.current?.emit("screen:action", { eventId, type });
+      socketRef.current?.emit("screen:action", { eventId, type, screenId: screenId || null });
     },
     [eventId],
   );

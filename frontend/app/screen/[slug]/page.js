@@ -15,6 +15,8 @@ export default function ProjectionSallePage() {
   const projectionMode = String(searchParams?.get("pm") || "standard")
     .trim()
     .toLowerCase();
+  const screenIdRaw = String(searchParams?.get("sid") || "").trim();
+  const screenId = /^[A-Za-z0-9_-]{1,24}$/.test(screenIdRaw) ? screenIdRaw : null;
 
   const getPollUrl = useMemo(() => {
     return () => {
@@ -45,6 +47,7 @@ export default function ProjectionSallePage() {
     <>
       <ScreenProjection
         slugPublic={slug}
+        screenId={screenId}
         getPollUrl={getPollUrl}
         onSurfaceChange={setSurface}
       />
