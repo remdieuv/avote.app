@@ -140,6 +140,8 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
   const [chronoTick, setChronoTick] = useState(0);
   /** Synchro régie : affichage discret sur /screen */
   const [modeAutoProjection, setModeAutoProjection] = useState(false);
+  /** Si un écran ciblé reçoit une commande dédiée, on évite qu'un event global l'écrase. */
+  const targetedDisplayRef = useRef(/** @type {string | null} */ (null));
   /** Branding salle (GET /events/slug + socket event:customization_updated) */
   const [roomCustomization, setRoomCustomization] = useState(null);
   /** Vote / auto-reveal événement quand le JSON poll n’est pas affiché (socket, meta slug). */
@@ -646,7 +648,17 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
       if (!payload || !eid || String(payload.eventId) !== String(eid)) return;
       if (!payloadMatchesScreen(payload.screenId)) return;
       if (typeof payload.displayState === "string") {
-        setDisplayState(payload.displayState.toLowerCase());
+        const dsIncoming = payload.displayState.toLowerCase();
+        setDisplayState(dsIncoming);
+        const ps =
+          typeof payload.screenId === "string" && payload.screenId.trim()
+            ? payload.screenId.trim()
+            : null;
+        if (sid && ps && ps === sid) {
+          targetedDisplayRef.current = dsIncoming;
+        } else if (!ps) {
+          targetedDisplayRef.current = null;
+        }
       }
       const dsNow = String(payload.displayState || "").toLowerCase();
       if (dsNow !== "black") {
@@ -678,7 +690,7 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
       }
 
       setLiveScene(payload.liveState ?? null);
-      if (!sid) {
+      if (!(sid && targetedDisplayRef.current)) {
         if (typeof payload.screenDisplayState === "string") {
           setDisplayState(payload.screenDisplayState.toLowerCase());
         } else if (typeof payload.displayState === "string") {
@@ -693,7 +705,7 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
         if (payload.poll.eventLiveState) {
           setLiveScene(payload.poll.eventLiveState);
         }
-        if (!sid) {
+        if (!(sid && targetedDisplayRef.current)) {
           if (typeof payload.poll.eventScreenDisplayState === "string") {
             setDisplayState(payload.poll.eventScreenDisplayState.toLowerCase());
           } else if (typeof payload.poll.eventDisplayState === "string") {
@@ -732,7 +744,7 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
       if (data.eventLiveState) {
         setLiveScene(data.eventLiveState);
       }
-      if (!sid) {
+      if (!(sid && targetedDisplayRef.current)) {
         if (typeof data.eventScreenDisplayState === "string") {
           setDisplayState(data.eventScreenDisplayState.toLowerCase());
         } else if (typeof data.eventDisplayState === "string") {
