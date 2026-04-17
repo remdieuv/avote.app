@@ -894,6 +894,7 @@ function BlocProjectionEcran({
   const [clientPret, setClientPret] = useState(false);
   const [projectionMode, setProjectionMode] = useState("standard");
   const [screenTarget, setScreenTarget] = useState("all");
+  const [copiedScreenId, setCopiedScreenId] = useState(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") setClientPret(true);
@@ -928,6 +929,8 @@ function BlocProjectionEcran({
   const enc = encodeURIComponent(slug);
   const sidPart = screenTarget !== "all" ? `&sid=${encodeURIComponent(screenTarget)}` : "";
   const pathScreen = `/screen/${enc}?pm=${encodeURIComponent(projectionMode)}${sidPart}`;
+  const pathScreenById = (id) =>
+    `/screen/${enc}?pm=${encodeURIComponent(projectionMode)}&sid=${encodeURIComponent(id)}`;
   const projectionModeLabel =
     projectionMode === "qr_fullscreen"
       ? "QR plein écran"
@@ -958,6 +961,17 @@ function BlocProjectionEcran({
   function ouvrirEcran() {
     const url = lienDiffusionAbsolu(pathScreen);
     if (url) window.open(url, "_blank", "noopener,noreferrer");
+  }
+  async function copierLienEcranCible(id) {
+    const url = lienDiffusionAbsolu(pathScreenById(id));
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedScreenId(id);
+      window.setTimeout(() => setCopiedScreenId(null), 1800);
+    } catch {
+      // ignore
+    }
   }
   function setTarget(nextTarget) {
     const safe =
@@ -1155,6 +1169,112 @@ function BlocProjectionEcran({
         <button type="button" onClick={ouvrirEcran} style={btnOuvrir}>
           {screenTarget === "all" ? "Ouvrir l’écran" : `Ouvrir l’écran ${screenTarget}`}
         </button>
+      </div>
+
+      <div
+        style={{
+          marginBottom: "1rem",
+          padding: desktop ? "0.8rem 0.95rem" : "0.72rem 0.8rem",
+          borderRadius: "10px",
+          background: "rgba(255,255,255,0.58)",
+          border: "1px solid rgba(91, 33, 182, 0.2)",
+        }}
+      >
+        <p
+          style={{
+            margin: "0 0 0.45rem 0",
+            fontSize: "0.65rem",
+            fontWeight: 700,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "#7c3aed",
+            opacity: 0.9,
+          }}
+        >
+          Écrans séparés (pilotage direct)
+        </p>
+        <div className="proj-ecran-separated-grid">
+          {["1", "2", "3"].map((sid) => (
+            <div key={sid} className="proj-ecran-separated-card">
+              <p className="proj-ecran-separated-title">Écran {sid}</p>
+              <div className="proj-ecran-separated-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = lienDiffusionAbsolu(pathScreenById(sid));
+                    if (url) window.open(url, "_blank", "noopener,noreferrer");
+                  }}
+                  style={{ ...btnOutlineSecondaire, padding: "0.45rem 0.6rem", fontSize: "0.74rem" }}
+                >
+                  Ouvrir
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void copierLienEcranCible(sid)}
+                  style={{ ...btnOutlineSecondaire, padding: "0.45rem 0.6rem", fontSize: "0.74rem" }}
+                >
+                  {copiedScreenId === sid ? "Copié" : "Copier"}
+                </button>
+              </div>
+              <div className="proj-ecran-separated-actions">
+                <button
+                  type="button"
+                  disabled={busy || !activePollId}
+                  onClick={() => sendScreenAction("QUESTION", sid)}
+                  style={{
+                    ...btnOutlineSecondaire,
+                    padding: "0.45rem 0.6rem",
+                    fontSize: "0.74rem",
+                    ...(busy || !activePollId ? secDisabled(true) : {}),
+                  }}
+                >
+                  Question
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || !activePollId}
+                  onClick={() => sendScreenAction("RESULTS", sid)}
+                  style={{
+                    ...btnOutlineSecondaire,
+                    padding: "0.45rem 0.6rem",
+                    fontSize: "0.74rem",
+                    ...(busy || !activePollId ? secDisabled(true) : {}),
+                  }}
+                >
+                  Résultats
+                </button>
+              </div>
+              <div className="proj-ecran-separated-actions">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => sendScreenAction("BLACK", sid)}
+                  style={{
+                    ...btnDangerNoir,
+                    padding: "0.45rem 0.6rem",
+                    fontSize: "0.74rem",
+                    ...(busy ? secDisabled(true) : {}),
+                  }}
+                >
+                  Noir
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => sendScreenAction("WAITING", sid)}
+                  style={{
+                    ...btnRevenirDirect,
+                    padding: "0.45rem 0.6rem",
+                    fontSize: "0.74rem",
+                    ...(busy ? secDisabled(true) : {}),
+                  }}
+                >
+                  Attente
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
       <div
         style={{
@@ -1551,6 +1671,35 @@ function BlocProjectionEcran({
       ) : null}
 
       <style>{`
+        .proj-ecran-separated-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 0.55rem;
+          margin-bottom: 0.15rem;
+        }
+        .proj-ecran-separated-card {
+          border: 1px solid #ddd6fe;
+          border-radius: 10px;
+          background: #fff;
+          padding: 0.6rem;
+          display: flex;
+          flex-direction: column;
+          gap: 0.38rem;
+        }
+        .proj-ecran-separated-title {
+          margin: 0;
+          font-size: 0.76rem;
+          font-weight: 800;
+          color: #4c1d95;
+        }
+        .proj-ecran-separated-actions {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 0.38rem;
+        }
+        .proj-ecran-separated-actions > button {
+          width: 100%;
+        }
         .proj-ecran-secondaires {
           display: flex;
           flex-direction: column;
@@ -1565,6 +1714,9 @@ function BlocProjectionEcran({
           width: 100%;
         }
         @media (min-width: 640px) {
+          .proj-ecran-separated-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
           .proj-ecran-secondaires {
             flex-direction: row;
             flex-wrap: nowrap;
