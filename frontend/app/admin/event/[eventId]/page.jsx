@@ -1274,12 +1274,12 @@ function BlocProjectionEcran({
             opacity: 0.9,
           }}
         >
-          Écrans séparés (pilotage direct)
+          Écran supplémentaire (B)
         </p>
         <div className="proj-ecran-separated-grid">
-          {["1", "2", "3"].map((sid) => (
+          {["B"].map((sid) => (
             <div key={sid} className="proj-ecran-separated-card">
-              <p className="proj-ecran-separated-title">Écran {sid}</p>
+              <p className="proj-ecran-separated-title">Écran supplémentaire ({sid})</p>
               <div className="proj-ecran-separated-actions">
                 <button
                   type="button"
@@ -1586,12 +1586,12 @@ function BlocProjectionEcran({
             opacity: 0.9,
           }}
         >
-          Écrans séparés (pilotage direct)
+          Écran supplémentaire (B)
         </p>
         <div className="proj-ecran-separated-grid">
-          {["1", "2", "3"].map((sid) => (
+          {["B"].map((sid) => (
             <div key={sid} className="proj-ecran-separated-card">
-              <p className="proj-ecran-separated-title">Écran {sid}</p>
+              <p className="proj-ecran-separated-title">Écran supplémentaire ({sid})</p>
               <div className="proj-ecran-separated-actions">
                 <button
                   type="button"
