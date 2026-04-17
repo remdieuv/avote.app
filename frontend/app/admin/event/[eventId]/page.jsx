@@ -951,6 +951,17 @@ function BlocProjectionEcran({
     const url = lienDiffusionAbsolu(pathScreen);
     if (url) window.open(url, "_blank", "noopener,noreferrer");
   }
+  async function copierLienEcranStandard() {
+    const url = lienDiffusionAbsolu(pathScreen);
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedScreenId("standard");
+      window.setTimeout(() => setCopiedScreenId(null), 1800);
+    } catch {
+      // ignore
+    }
+  }
   async function copierLienEcranCible(id) {
     const url = lienDiffusionAbsolu(pathScreenById(id));
     if (!url) return;
@@ -1238,14 +1249,39 @@ function BlocProjectionEcran({
       <div
         style={{
           display: "flex",
-          flexDirection: "column",
+          flexDirection: desktop ? "row" : "column",
           gap: "0.7rem",
           justifyContent: "center",
           marginBottom: "1.1rem",
+          alignItems: "center",
         }}
       >
-        <button type="button" onClick={ouvrirEcran} style={btnOuvrir}>
+        <button
+          type="button"
+          onClick={ouvrirEcran}
+          style={{
+            ...btnOuvrir,
+            marginLeft: 0,
+            marginRight: 0,
+            flex: desktop ? "1 1 auto" : "0 0 auto",
+          }}
+        >
           Ouvrir l’écran
+        </button>
+        <button
+          type="button"
+          onClick={() => void copierLienEcranStandard()}
+          style={{
+            ...btnOutlineSecondaire,
+            width: desktop ? "auto" : "100%",
+            minWidth: desktop ? "9rem" : undefined,
+            padding: desktop ? "0.88rem 1.1rem" : "0.75rem 1rem",
+            borderRadius: "12px",
+            fontWeight: 700,
+            flexShrink: 0,
+          }}
+        >
+          {copiedScreenId === "standard" ? "Copié" : "Copier"}
         </button>
       </div>
       <div style={{ marginBottom: "1.05rem" }}>
@@ -1466,6 +1502,47 @@ function BlocProjectionEcran({
 
       <div
         style={{
+          marginBottom: "0.95rem",
+          padding: desktop ? "1.1rem 1rem" : "1rem 0.85rem",
+          borderRadius: "12px",
+          border: "1px dashed rgba(91, 33, 182, 0.35)",
+          background: "rgba(255,255,255,0.4)",
+        }}
+      >
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            if (affichageNoir) {
+              sendScreenAction("WAITING", null);
+            } else {
+              sendScreenAction("BLACK", null);
+            }
+          }}
+          style={
+            affichageNoir
+              ? { ...btnRevenirDirect, ...secDisabled(busy) }
+              : { ...btnDangerNoir, ...secDisabled(busy) }
+          }
+        >
+          {affichageNoir ? "Revenir au direct" : "Écran noir"}
+        </button>
+        <p
+          style={{
+            margin: "0.45rem 0 0 0",
+            fontSize: "0.7rem",
+            color: "#64748b",
+            lineHeight: 1.35,
+          }}
+        >
+          {affichageNoir
+            ? "La salle est en noir (confirmé côté serveur). « Revenir au direct » enlève le noir puis affiche l’attente : vous devez choisir « Afficher la question » ou « Afficher les résultats » (le vote peut rester ouvert)."
+            : "Masque la projection sans fermer le vote. État synchronisé avec l’API après chaque action."}
+        </p>
+      </div>
+
+      <div
+        style={{
           marginTop: "0",
           padding: desktop ? "0.85rem 1rem" : "0.75rem 0.85rem",
           borderRadius: "10px",
@@ -1627,46 +1704,6 @@ function BlocProjectionEcran({
         </p>
       </div>
 
-      <div
-        style={{
-          marginBottom: chronoSection ? "0.95rem" : 0,
-          padding: desktop ? "1.1rem 1rem" : "1rem 0.85rem",
-          borderRadius: "12px",
-          border: "1px dashed rgba(91, 33, 182, 0.35)",
-          background: "rgba(255,255,255,0.4)",
-        }}
-      >
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => {
-            if (affichageNoir) {
-              sendScreenAction("WAITING", null);
-            } else {
-              sendScreenAction("BLACK", null);
-            }
-          }}
-          style={
-            affichageNoir
-              ? { ...btnRevenirDirect, ...secDisabled(busy) }
-              : { ...btnDangerNoir, ...secDisabled(busy) }
-          }
-        >
-          {affichageNoir ? "Revenir au direct" : "Écran noir"}
-        </button>
-        <p
-          style={{
-            margin: "0.45rem 0 0 0",
-            fontSize: "0.7rem",
-            color: "#64748b",
-            lineHeight: 1.35,
-          }}
-        >
-          {affichageNoir
-            ? "La salle est en noir (confirmé côté serveur). « Revenir au direct » enlève le noir puis affiche l’attente : vous devez choisir « Afficher la question » ou « Afficher les résultats » (le vote peut rester ouvert)."
-            : "Masque la projection sans fermer le vote. État synchronisé avec l’API après chaque action."}
-        </p>
-      </div>
       </div>
 
       <div
