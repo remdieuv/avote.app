@@ -119,10 +119,11 @@ function roomOverlayAlpha(strength) {
  */
 export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSurfaceChange }) {
   const searchParams = useSearchParams();
-  const screenIdLabel =
+  const normalizedScreenId =
     typeof screenId === "string" && /^[A-Za-z0-9_-]{1,24}$/.test(screenId)
-      ? screenId
+      ? screenId.trim().toLowerCase()
       : null;
+  const screenIdLabel = normalizedScreenId ? normalizedScreenId.toUpperCase() : null;
   const [poll, setPoll] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -615,10 +616,7 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
   useEffect(() => {
     const eid = eventId;
     const pid = pollId;
-    const sid =
-      typeof screenId === "string" && /^[A-Za-z0-9_-]{1,24}$/.test(screenId)
-        ? screenId
-        : null;
+    const sid = normalizedScreenId;
 
     if (!eid && !pid) return;
 
@@ -637,7 +635,7 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
     function payloadMatchesScreen(payloadScreenId) {
       const ps =
         typeof payloadScreenId === "string" && payloadScreenId.trim()
-          ? payloadScreenId.trim()
+          ? payloadScreenId.trim().toLowerCase()
           : null;
       if (!ps) return true;
       if (!sid) return false;
@@ -806,7 +804,7 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
       socket.off("event:customization_updated", onCustomizationUpdated);
       socket.disconnect();
     };
-  }, [eventId, pollId, screenId, loadPoll, fetchEventSlugMeta]);
+  }, [eventId, pollId, normalizedScreenId, loadPoll, fetchEventSlugMeta]);
 
   const resultsVoteSignature =
     ds === "results" && poll

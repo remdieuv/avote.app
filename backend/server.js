@@ -162,7 +162,7 @@ function normalizeScreenId(raw) {
   const id = String(raw).trim();
   if (!id) return null;
   if (!/^[A-Za-z0-9_-]{1,24}$/.test(id)) return null;
-  return id;
+  return id.toLowerCase();
 }
 
 /**
