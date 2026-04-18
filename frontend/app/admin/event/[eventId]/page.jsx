@@ -3744,6 +3744,7 @@ function SidebarRegieDesktop(props) {
         width: "min(260px, 100%)",
         maxWidth: "260px",
         height: "100%",
+        minHeight: 0,
         overflowY: "auto",
         boxSizing: "border-box",
         padding: "1.2rem 0.9rem",
@@ -3754,8 +3755,21 @@ function SidebarRegieDesktop(props) {
         gap: "1rem",
       }}
     >
-      <RegieSidebarInner {...inner} />
-      {pollsBlock}
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: "1rem",
+          width: "100%",
+        }}
+      >
+        <div style={{ flexShrink: 0 }}>
+          <RegieSidebarInner {...inner} />
+        </div>
+        {pollsBlock}
+      </div>
     </aside>
   );
 }
@@ -4931,7 +4945,10 @@ export default function RegieEventPage() {
         marginTop: "0.15rem",
         paddingTop: "0.95rem",
         borderTop: "1px solid #e5e7eb",
-        flexShrink: 0,
+        flex: 1,
+        minHeight: 0,
+        display: "flex",
+        flexDirection: "column",
       }}
     >
       <p
@@ -4968,7 +4985,8 @@ export default function RegieEventPage() {
       </button>
       <div
         style={{
-          maxHeight: "min(46vh, 400px)",
+          flex: 1,
+          minHeight: 0,
           overflowY: "auto",
           paddingRight: "4px",
           display: "flex",
