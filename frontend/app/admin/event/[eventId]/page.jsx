@@ -2707,6 +2707,8 @@ const btnGhost = {
 };
 
 const REGIE_PREVIEW_JOIN_LS_PREFIX = "avote_regie_preview_join_";
+/** Colonne gauche réduite (desktop) — persistant par événement */
+const REGIE_LEFT_COLLAPSED_LS_PREFIX = "avote_regie_left_collapsed_";
 const LEADS_LAST_SEEN_LS_PREFIX = "avote_leads_seen_at_";
 
 /**
@@ -3731,10 +3733,11 @@ function RegieSidebarInner({
  *   previewJoinOpen?: boolean;
  *   onTogglePreviewJoin?: () => void;
  *   onOpenJoinPreviewMobile?: () => void;
+ *   onRequestCollapse?: () => void;
  * }} props
  */
 function SidebarRegieDesktop(props) {
-  const { pollsBlock, ...inner } = props;
+  const { pollsBlock, onRequestCollapse, ...inner } = props;
   return (
     <aside
       style={{
@@ -3755,6 +3758,28 @@ function SidebarRegieDesktop(props) {
         gap: "1rem",
       }}
     >
+      {typeof onRequestCollapse === "function" ? (
+        <button
+          type="button"
+          onClick={onRequestCollapse}
+          title="Masquer la colonne gauche pour plus d’espace au centre"
+          aria-label="Réduire la colonne gauche"
+          style={{
+            flexShrink: 0,
+            width: "100%",
+            padding: "0.4rem 0.55rem",
+            borderRadius: "8px",
+            border: "1px solid #e5e7eb",
+            background: "#f8fafc",
+            color: "#475569",
+            fontSize: "0.72rem",
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          ⟨ Réduire le panneau
+        </button>
+      ) : null}
       <div
         style={{
           flex: 1,
@@ -3990,6 +4015,8 @@ export default function RegieEventPage() {
   /** Aperçu /join intégré (desktop split) — persistant par événement */
   const [previewJoinOpen, setPreviewJoinOpen] = useState(false);
   const [mobileJoinPreviewOpen, setMobileJoinPreviewOpen] = useState(false);
+  /** Desktop : colonne gauche (questions + liens) repliée */
+  const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
   /** Nombre de clients /screen connectés (socket room dédiée) */
   const [screenCount, setScreenCount] = useState(0);
   const [screenBConnected, setScreenBConnected] = useState(false);
@@ -4156,6 +4183,18 @@ export default function RegieEventPage() {
         REGIE_PREVIEW_JOIN_LS_PREFIX + eventId,
       );
       setPreviewJoinOpen(v === "1");
+    } catch {
+      /* ignore */
+    }
+  }, [eventId]);
+
+  useEffect(() => {
+    if (!eventId || typeof window === "undefined") return;
+    try {
+      const v = window.localStorage.getItem(
+        REGIE_LEFT_COLLAPSED_LS_PREFIX + eventId,
+      );
+      setLeftSidebarCollapsed(v === "1");
     } catch {
       /* ignore */
     }
@@ -4351,6 +4390,26 @@ export default function RegieEventPage() {
       }
       return next;
     });
+  }, [eventId]);
+
+  const collapseLeftSidebar = useCallback(() => {
+    setLeftSidebarCollapsed(true);
+    if (!eventId || typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(REGIE_LEFT_COLLAPSED_LS_PREFIX + eventId, "1");
+    } catch {
+      /* ignore */
+    }
+  }, [eventId]);
+
+  const expandLeftSidebar = useCallback(() => {
+    setLeftSidebarCollapsed(false);
+    if (!eventId || typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(REGIE_LEFT_COLLAPSED_LS_PREFIX + eventId, "0");
+    } catch {
+      /* ignore */
+    }
   }, [eventId]);
 
   useEffect(() => {
@@ -5720,8 +5779,9 @@ export default function RegieEventPage() {
             desktop
               ? {
                   display: "grid",
-                  gridTemplateColumns:
-                    "minmax(220px, 270px) minmax(360px, 1fr) minmax(252px, 300px)",
+                  gridTemplateColumns: leftSidebarCollapsed
+                    ? "2.75rem minmax(360px, 1fr) minmax(252px, 300px)"
+                    : "minmax(220px, 270px) minmax(360px, 1fr) minmax(252px, 300px)",
                   gap: "1.25rem",
                   padding: "1.25rem 1.5rem",
                   width: "100%",
@@ -5738,7 +5798,51 @@ export default function RegieEventPage() {
                 }
           }
         >
-          {desktop ? (
+          {desktop && leftSidebarCollapsed ? (
+            <div
+              style={{
+                position: "sticky",
+                top: 0,
+                alignSelf: "stretch",
+                width: "2.75rem",
+                minWidth: "2.75rem",
+                flexShrink: 0,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "flex-start",
+                padding: "0.65rem 0.2rem",
+                background: "#fff",
+                borderRight: "1px solid #e5e7eb",
+                boxSizing: "border-box",
+              }}
+            >
+              <button
+                type="button"
+                onClick={expandLeftSidebar}
+                title="Afficher la colonne gauche (questions, liens)"
+                aria-expanded={false}
+                aria-label="Déplier la colonne gauche"
+                style={{
+                  padding: "0.55rem 0.3rem",
+                  borderRadius: "10px",
+                  border: "1px solid #c4b5fd",
+                  background: "linear-gradient(180deg, #faf5ff 0%, #f5f3ff 100%)",
+                  color: "#5b21b6",
+                  fontWeight: 800,
+                  fontSize: "0.7rem",
+                  cursor: "pointer",
+                  writingMode: "vertical-rl",
+                  textOrientation: "mixed",
+                  letterSpacing: "0.08em",
+                  lineHeight: 1.25,
+                  minHeight: "6.5rem",
+                }}
+              >
+                Déplier
+              </button>
+            </div>
+          ) : desktop ? (
             <SidebarRegieDesktop
               title={eventData.title}
               slug={eventData.slug}
@@ -5757,6 +5861,7 @@ export default function RegieEventPage() {
               previewJoinOpen={previewJoinOpen}
               onTogglePreviewJoin={togglePreviewJoin}
               newLeadCount={newLeadCount}
+              onRequestCollapse={collapseLeftSidebar}
             />
           ) : null}
 
