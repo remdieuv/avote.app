@@ -3740,10 +3740,10 @@ function SidebarRegieDesktop(props) {
       style={{
         position: "sticky",
         top: 0,
-        alignSelf: "start",
+        alignSelf: "stretch",
         width: "min(260px, 100%)",
         maxWidth: "260px",
-        maxHeight: "100vh",
+        height: "100%",
         overflowY: "auto",
         boxSizing: "border-box",
         padding: "1.2rem 0.9rem",
@@ -5707,7 +5707,7 @@ export default function RegieEventPage() {
                   gap: "1.25rem",
                   padding: "1.25rem 1.5rem",
                   width: "100%",
-                  alignItems: "start",
+                  alignItems: "stretch",
                   boxSizing: "border-box",
                 }
               : {
