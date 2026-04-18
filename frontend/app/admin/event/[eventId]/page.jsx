@@ -2967,12 +2967,15 @@ function RegiePublicPreviewPanel({
 
 /**
  * Option auto-reveal : délai après fermeture du vote avant passage écran résultats.
+ * @param {{ embedded?: boolean; embeddedDividerAbove?: boolean }} props
  */
 function RegieAutoRevealCard({
   eventId,
   autoReveal,
   autoRevealDelaySec,
   onSaved,
+  embedded = false,
+  embeddedDividerAbove = true,
 }) {
   const [enabled, setEnabled] = useState(Boolean(autoReveal));
   const [delaySec, setDelaySec] = useState(
@@ -3019,28 +3022,8 @@ function RegieAutoRevealCard({
 
   if (!eventId) return null;
 
-  return (
-    <div
-      style={{
-        ...CARD,
-        padding: "0.65rem 0.75rem",
-        display: "flex",
-        flexDirection: "column",
-        gap: "0.5rem",
-      }}
-    >
-      <p
-        style={{
-          margin: 0,
-          fontSize: "0.62rem",
-          fontWeight: 800,
-          letterSpacing: "0.06em",
-          color: "#6b7280",
-          textTransform: "uppercase",
-        }}
-      >
-        Affichage salle
-      </p>
+  const inner = (
+    <>
       <label
         style={{
           display: "flex",
@@ -3111,6 +3094,38 @@ function RegieAutoRevealCard({
         activé, un compte à rebours s’affiche puis les résultats — annulé si vous
         enchaînez manuellement (noir, question, etc.).
       </p>
+    </>
+  );
+
+  if (embedded) {
+    const divider = embeddedDividerAbove;
+    return (
+      <div
+        style={{
+          marginTop: divider ? "0.55rem" : 0,
+          paddingTop: divider ? "0.55rem" : 0,
+          borderTop: divider ? "1px solid rgba(199, 210, 254, 0.65)" : "none",
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.5rem",
+        }}
+      >
+        {inner}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        ...CARD,
+        padding: "0.65rem 0.75rem",
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.5rem",
+      }}
+    >
+      {inner}
     </div>
   );
 }
@@ -3200,8 +3215,9 @@ function RegieSidebarInner({
         </p>
       </div>
 
-      {slug &&
-      (joinPreviewDesktop ? onTogglePreviewJoin : onOpenJoinPreviewMobile) ? (
+      {((slug &&
+        (joinPreviewDesktop ? onTogglePreviewJoin : onOpenJoinPreviewMobile)) ||
+        eventId) ? (
         <div
           style={{
             ...CARD,
@@ -3225,50 +3241,62 @@ function RegieSidebarInner({
           >
             Ma salle
           </p>
-          <p
-            style={{
-              margin: 0,
-              fontSize: "0.68rem",
-              color: "#64748b",
-              lineHeight: 1.4,
-            }}
-          >
-            Aperçu de la page participant (join), pas l’écran de projection.
-          </p>
-          <button
-            type="button"
-            onClick={() =>
-              joinPreviewDesktop
-                ? onTogglePreviewJoin?.()
-                : onOpenJoinPreviewMobile?.()
-            }
-            style={{
-              width: "100%",
-              padding: "0.45rem 0.6rem",
-              fontSize: "0.78rem",
-              fontWeight: 700,
-              borderRadius: "9px",
-              border: "1px solid #c7d2fe",
-              background: "linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%)",
-              color: "#312e81",
-              cursor: "pointer",
-            }}
-          >
-            {joinPreviewDesktop
-              ? previewJoinOpen
-                ? "Masquer l’aperçu public"
-                : "Aperçu public"
-              : "Aperçu public"}
-          </button>
+          {slug &&
+          (joinPreviewDesktop ? onTogglePreviewJoin : onOpenJoinPreviewMobile) ? (
+            <>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "0.68rem",
+                  color: "#64748b",
+                  lineHeight: 1.4,
+                }}
+              >
+                Aperçu de la page participant (join), pas l’écran de projection.
+              </p>
+              <button
+                type="button"
+                onClick={() =>
+                  joinPreviewDesktop
+                    ? onTogglePreviewJoin?.()
+                    : onOpenJoinPreviewMobile?.()
+                }
+                style={{
+                  width: "100%",
+                  padding: "0.45rem 0.6rem",
+                  fontSize: "0.78rem",
+                  fontWeight: 700,
+                  borderRadius: "9px",
+                  border: "1px solid #c7d2fe",
+                  background:
+                    "linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%)",
+                  color: "#312e81",
+                  cursor: "pointer",
+                }}
+              >
+                {joinPreviewDesktop
+                  ? previewJoinOpen
+                    ? "Masquer l’aperçu public"
+                    : "Aperçu public"
+                  : "Aperçu public"}
+              </button>
+            </>
+          ) : null}
+          <RegieAutoRevealCard
+            embedded
+            embeddedDividerAbove={Boolean(
+              slug &&
+                (joinPreviewDesktop
+                  ? onTogglePreviewJoin
+                  : onOpenJoinPreviewMobile),
+            )}
+            eventId={eventId}
+            autoReveal={autoReveal}
+            autoRevealDelaySec={autoRevealDelaySec}
+            onSaved={onAutoRevealSaved}
+          />
         </div>
       ) : null}
-
-      <RegieAutoRevealCard
-        eventId={eventId}
-        autoReveal={autoReveal}
-        autoRevealDelaySec={autoRevealDelaySec}
-        onSaved={onAutoRevealSaved}
-      />
     </>
   );
 }
