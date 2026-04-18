@@ -3141,13 +3141,13 @@ function RegieAutoRevealCard({
 function RegieSidebarInner({
   title,
   slug,
-  descriptionText,
-  descriptionStored = null,
+  descriptionText: _descriptionText,
+  descriptionStored: _descriptionStored = null,
   eventId = null,
-  onDescriptionSaved,
-  stateLabel,
-  liveState,
-  sceneBadge = null,
+  onDescriptionSaved: _onDescriptionSaved,
+  stateLabel: _stateLabel,
+  liveState: _liveState,
+  sceneBadge: _sceneBadge = null,
   onCloseDrawer,
   autoReveal = false,
   autoRevealDelaySec = 5,
@@ -3156,489 +3156,48 @@ function RegieSidebarInner({
   previewJoinOpen = false,
   onTogglePreviewJoin,
   onOpenJoinPreviewMobile,
-  newLeadCount = 0,
+  newLeadCount: _newLeadCount = 0,
 }) {
-  const [editingDesc, setEditingDesc] = useState(false);
-  const [draftDesc, setDraftDesc] = useState("");
-  const [savingDesc, setSavingDesc] = useState(false);
-  const [descError, setDescError] = useState(null);
-
-  const [editingTitle, setEditingTitle] = useState(false);
-  const [draftTitle, setDraftTitle] = useState("");
-  const [savingTitle, setSavingTitle] = useState(false);
-  const [titleError, setTitleError] = useState(null);
-
-  const badge =
-    sceneBadge ??
-    getEventUxSceneBadge({ liveState: normalizeRegieLiveStateForUx(liveState) });
-  const secondary = {
-    fontSize: "0.78rem",
-    color: "#64748b",
-    lineHeight: 1.45,
-    margin: 0,
-  };
-
-  const hasCustomDescription =
-    typeof descriptionStored === "string" && descriptionStored.trim() !== "";
-
-  function ouvrirEditionDescription() {
-    setDraftDesc(hasCustomDescription ? descriptionStored.trim() : "");
-    setDescError(null);
-    setEditingDesc(true);
-  }
-
-  function ouvrirEditionTitre() {
-    setDraftTitle((title || "").trim());
-    setTitleError(null);
-    setEditingTitle(true);
-  }
-
-  async function enregistrerTitre() {
-    if (!eventId || !onDescriptionSaved) return;
-    const trimmed = draftTitle.trim();
-    if (trimmed === "") {
-      setTitleError("Le titre ne peut pas être vide.");
-      return;
-    }
-    setSavingTitle(true);
-    setTitleError(null);
-    try {
-      const res = await adminFetch(`${apiBaseBrowser()}/events/${eventId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: trimmed.slice(0, 200),
-        }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(body.error || `Erreur ${res.status}`);
-      }
-      setEditingTitle(false);
-      await onDescriptionSaved();
-    } catch (e) {
-      setTitleError(e.message || "Enregistrement impossible.");
-    } finally {
-      setSavingTitle(false);
-    }
-  }
-
-  async function enregistrerDescription() {
-    if (!eventId || !onDescriptionSaved) return;
-    setSavingDesc(true);
-    setDescError(null);
-    try {
-      const trimmed = draftDesc.trim();
-      const res = await adminFetch(`${apiBaseBrowser()}/events/${eventId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          description: trimmed === "" ? null : trimmed.slice(0, 2000),
-        }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(body.error || `Erreur ${res.status}`);
-      }
-      setEditingDesc(false);
-      await onDescriptionSaved();
-    } catch (e) {
-      setDescError(e.message || "Enregistrement impossible.");
-    } finally {
-      setSavingDesc(false);
-    }
-  }
-
   return (
     <>
-      <header
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.5rem",
-        }}
-      >
-        <div
+      {onCloseDrawer ? (
+        <header
           style={{
             display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "0.5rem 0.75rem",
+            flexDirection: "column",
+            gap: "0.5rem",
           }}
         >
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem 0.75rem", alignItems: "center" }}>
-            <Link
-              href="/"
-              style={{
-                color: "#2563eb",
-                fontWeight: 600,
-                fontSize: "0.875rem",
-                textDecoration: "none",
-              }}
-            >
-              ← Accueil
-            </Link>
-            <Link
-              href="/admin/events"
-              style={{
-                color: "#7c3aed",
-                fontWeight: 600,
-                fontSize: "0.875rem",
-                textDecoration: "none",
-              }}
-            >
-              Mes événements
-            </Link>
-            {eventId ? (
-              <Link
-                href={`/admin/event/${encodeURIComponent(eventId)}/leads`}
-                style={{
-                  color: "#166534",
-                  fontWeight: 700,
-                  fontSize: "0.875rem",
-                  textDecoration: "none",
-                }}
-              >
-                Leads
-                {newLeadCount > 0 ? (
-                  <span
-                    style={{
-                      marginLeft: "0.35rem",
-                      display: "inline-flex",
-                      minWidth: "1.1rem",
-                      height: "1.1rem",
-                      borderRadius: "999px",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: "0 0.3rem",
-                      background: "#dcfce7",
-                      border: "1px solid #86efac",
-                      color: "#166534",
-                      fontSize: "0.66rem",
-                      fontWeight: 800,
-                      lineHeight: 1,
-                    }}
-                    aria-label={`${newLeadCount} nouveaux leads`}
-                    title={`${newLeadCount} nouveaux leads`}
-                  >
-                    {newLeadCount > 99 ? "99+" : newLeadCount}
-                  </span>
-                ) : null}
-              </Link>
-            ) : null}
-          </div>
-          {onCloseDrawer ? (
-            <button type="button" onClick={onCloseDrawer} style={btnGhost}>
-              Fermer
-            </button>
-          ) : null}
-        </div>
-      </header>
-
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.4rem",
-        }}
-      >
-        <p
-          style={{
-            margin: 0,
-            fontSize: "0.65rem",
-            fontWeight: 700,
-            letterSpacing: "0.08em",
-            color: "#6b7280",
-            textTransform: "uppercase",
-          }}
-        >
-          Régie
-        </p>
-        {!editingTitle ? (
-          <p
-            style={{
-              margin: 0,
-              fontSize: "0.98rem",
-              fontWeight: 800,
-              color: "#111827",
-              lineHeight: 1.3,
-              letterSpacing: "-0.02em",
-            }}
-          >
-            {title || "Événement"}
-          </p>
-        ) : (
           <div
             style={{
               display: "flex",
-              flexDirection: "column",
-              gap: "0.45rem",
+              justifyContent: "flex-end",
             }}
           >
-            <label
-              htmlFor="regie-title-edit"
-              style={{
-                fontSize: "0.72rem",
-                fontWeight: 600,
-                color: "#475569",
-              }}
-            >
-              Titre de l’événement
-            </label>
-            <input
-              id="regie-title-edit"
-              type="text"
-              value={draftTitle}
-              onChange={(e) => setDraftTitle(e.target.value)}
-              disabled={savingTitle}
-              maxLength={200}
-              autoComplete="off"
-              style={{
-                width: "100%",
-                boxSizing: "border-box",
-                padding: "0.45rem 0.55rem",
-                fontSize: "0.8125rem",
-                fontWeight: 700,
-                borderRadius: "8px",
-                border: "1px solid #cbd5e1",
-                fontFamily: "inherit",
-              }}
-            />
-            {titleError ? (
-              <p
-                style={{
-                  color: "#b91c1c",
-                  fontSize: "0.72rem",
-                  margin: 0,
-                }}
-                role="alert"
-              >
-                {titleError}
-              </p>
-            ) : null}
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "0.4rem",
-              }}
-            >
-              <button
-                type="button"
-                disabled={savingTitle}
-                onClick={() => void enregistrerTitre()}
-                style={btnPrimary(savingTitle)}
-              >
-                Enregistrer
-              </button>
-              <button
-                type="button"
-                disabled={savingTitle}
-                onClick={() => {
-                  setEditingTitle(false);
-                  setTitleError(null);
-                }}
-                style={btnGhost}
-              >
-                Annuler
-              </button>
-            </div>
+            <button type="button" onClick={onCloseDrawer} style={btnGhost}>
+              Fermer
+            </button>
           </div>
-        )}
-        {slug ? (
-          <code
-            style={{
-              display: "block",
-              margin: 0,
-              fontSize: "0.7rem",
-              color: "#64748b",
-              fontFamily: "ui-monospace, monospace",
-              wordBreak: "break-all",
-            }}
-          >
-            {slug}
-          </code>
-        ) : null}
-        {eventId && onDescriptionSaved && !editingTitle ? (
-          <button
-            type="button"
-            onClick={ouvrirEditionTitre}
-            style={{
-              ...btnGhost,
-              fontSize: "0.75rem",
-              alignSelf: "flex-start",
-            }}
-          >
-            Modifier le titre
-          </button>
-        ) : null}
-      </div>
+        </header>
+      ) : null}
 
       <div
         style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.4rem",
+          marginBottom: "0.65rem",
         }}
       >
-        <p style={{ ...secondary, margin: 0 }}>{descriptionText}</p>
         <p
           style={{
-            fontSize: "0.7rem",
-            color: "#94a3b8",
             margin: 0,
-            lineHeight: 1.35,
+            fontSize: "1rem",
+            fontWeight: 800,
+            color: "#111827",
+            lineHeight: 1.3,
+            letterSpacing: "-0.02em",
           }}
         >
-          {hasCustomDescription
-            ? "Description enregistrée pour cet événement."
-            : "Aucune description en base : texte d’aide par défaut ci-dessus."}
+          {title || "Événement"}
         </p>
-        {eventId && onDescriptionSaved ? (
-          !editingDesc ? (
-            <button
-              type="button"
-              onClick={ouvrirEditionDescription}
-              style={{
-                ...btnGhost,
-                fontSize: "0.75rem",
-                alignSelf: "flex-start",
-              }}
-            >
-              {hasCustomDescription
-                ? "Modifier la description"
-                : "Ajouter une description"}
-            </button>
-          ) : (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.45rem",
-              }}
-            >
-              <label
-                htmlFor="regie-desc-edit"
-                style={{
-                  fontSize: "0.72rem",
-                  fontWeight: 600,
-                  color: "#475569",
-                }}
-              >
-                Texte affiché dans la régie
-              </label>
-              <textarea
-                id="regie-desc-edit"
-                value={draftDesc}
-                onChange={(e) => setDraftDesc(e.target.value)}
-                disabled={savingDesc}
-                maxLength={2000}
-                rows={3}
-                placeholder="Ex. Soirée quiz — votez depuis votre mobile."
-                style={{
-                  width: "100%",
-                  boxSizing: "border-box",
-                  padding: "0.45rem 0.55rem",
-                  fontSize: "0.8125rem",
-                  borderRadius: "8px",
-                  border: "1px solid #cbd5e1",
-                  fontFamily: "inherit",
-                  resize: "vertical",
-                  minHeight: "4rem",
-                }}
-              />
-              {descError ? (
-                <p
-                  style={{
-                    color: "#b91c1c",
-                    fontSize: "0.72rem",
-                    margin: 0,
-                  }}
-                  role="alert"
-                >
-                  {descError}
-                </p>
-              ) : null}
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "0.4rem",
-                }}
-              >
-                <button
-                  type="button"
-                  disabled={savingDesc}
-                  onClick={() => void enregistrerDescription()}
-                  style={btnPrimary(savingDesc)}
-                >
-                  Enregistrer
-                </button>
-                <button
-                  type="button"
-                  disabled={savingDesc}
-                  onClick={() => {
-                    setEditingDesc(false);
-                    setDescError(null);
-                  }}
-                  style={btnGhost}
-                >
-                  Annuler
-                </button>
-              </div>
-              <p style={{ fontSize: "0.68rem", color: "#94a3b8", margin: 0 }}>
-                Laisser vide puis enregistrer pour revenir au texte par défaut.
-              </p>
-            </div>
-          )
-        ) : null}
-      </div>
-
-      <div
-        style={{
-          ...CARD,
-          padding: "0.65rem 0.75rem",
-          background: "#fafafa",
-          borderColor: "#e5e7eb",
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.4rem",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: "0.35rem",
-          }}
-        >
-          <span
-            style={{
-              fontSize: "0.62rem",
-              fontWeight: 800,
-              letterSpacing: "0.06em",
-              padding: "0.18rem 0.45rem",
-              borderRadius: "6px",
-              background: badge.bg,
-              color: badge.color,
-              border: `1px solid ${badge.border}`,
-            }}
-          >
-            {badge.label}
-          </span>
-          <span
-            style={{
-              fontSize: "0.72rem",
-              fontWeight: 700,
-              color: "#374151",
-              lineHeight: 1.3,
-            }}
-          >
-            {stateLabel}
-          </span>
-        </div>
       </div>
 
       {slug &&
