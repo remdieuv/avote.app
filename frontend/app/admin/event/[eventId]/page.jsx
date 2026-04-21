@@ -4051,15 +4051,6 @@ export default function RegieEventPage() {
     }
   }, [eventId]);
 
-  const scrollToOverlayPanel = useCallback(() => {
-    if (typeof document === "undefined") return;
-    const el =
-      document.getElementById("overlay-stream-top") ||
-      document.getElementById("regie-overlay-panel");
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
-  }, []);
-
   useEffect(() => {
     if (!eventData) {
       eventPollIdsRef.current = new Set();
@@ -5965,21 +5956,6 @@ export default function RegieEventPage() {
                   </div>
                 ) : null}
               </aside>
-              <button
-                type="button"
-                onClick={scrollToOverlayPanel}
-                style={{
-                  ...btnGhost,
-                  width: "100%",
-                  fontSize: "0.72rem",
-                  fontWeight: 700,
-                  borderColor: "#67e8f9",
-                  background: "#ecfeff",
-                  color: "#155e75",
-                }}
-              >
-                Overlay
-              </button>
             </div>
 
             <div
