@@ -5857,10 +5857,10 @@ export default function RegieEventPage() {
                     border: "1px solid #fecaca",
                     background: "#fff5f5",
                     borderRadius: "10px",
-                    padding: "0.5rem",
+                    padding: "0.6rem",
                     display: "grid",
-                    gridTemplateColumns: "1fr",
-                    gap: "0.35rem",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+                    gap: "0.45rem",
                   }}
                 >
                   <button
@@ -5875,13 +5875,14 @@ export default function RegieEventPage() {
                     }}
                     style={{
                       ...btnGhost,
-                      width: "100%",
+                      minHeight: "2.6rem",
                       borderColor: "#d1d5db",
                       color: "#111827",
                       fontWeight: 700,
+                      fontSize: "0.78rem",
                     }}
                   >
-                    {voteIsOpen ? "Fermer le vote" : "Ouvrir le vote"}
+                    {voteIsOpen ? "⏸ Fermer vote" : "▶ Ouvrir vote"}
                   </button>
                   <button
                     type="button"
@@ -5896,14 +5897,15 @@ export default function RegieEventPage() {
                     }}
                     style={{
                       ...btnGhost,
-                      width: "100%",
+                      minHeight: "2.6rem",
                       borderColor: "#bfdbfe",
                       background: "#eff6ff",
                       color: "#1e3a8a",
                       fontWeight: 700,
+                      fontSize: "0.78rem",
                     }}
                   >
-                    Afficher la question
+                    📄 Question
                   </button>
                   <button
                     type="button"
@@ -5918,14 +5920,15 @@ export default function RegieEventPage() {
                     }}
                     style={{
                       ...btnGhost,
-                      width: "100%",
+                      minHeight: "2.6rem",
                       borderColor: "#c7d2fe",
                       background: "#eef2ff",
                       color: "#3730a3",
                       fontWeight: 700,
+                      fontSize: "0.78rem",
                     }}
                   >
-                    Afficher les résultats
+                    📊 Résultats
                   </button>
                   <button
                     type="button"
@@ -5938,56 +5941,99 @@ export default function RegieEventPage() {
                     }}
                     style={{
                       ...btnGhost,
-                      width: "100%",
+                      minHeight: "2.6rem",
                       borderColor: "#fca5a5",
                       background: "#fff1f2",
                       color: "#9f1239",
                       fontWeight: 700,
+                      fontSize: "0.78rem",
                     }}
                   >
                     {String(displayStateUi || "").toLowerCase() === "black"
-                      ? "Revenir au direct"
-                      : "Écran noir"}
+                      ? "↩ Retour direct"
+                      : "⏹ Écran noir"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canGoNext}
+                    onClick={() =>
+                      void postAction(`/events/${eventId}/next-poll`, "Question suivante diffusee")
+                    }
+                    style={{
+                      ...btnDanger(!canGoNext),
+                      minHeight: "2.6rem",
+                      fontSize: "0.8rem",
+                    }}
+                  >
+                    ⏭ Question suivante
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || eventFinished}
+                    onClick={async () => {
+                      if (typeof window === "undefined") return;
+                      const ok = window.confirm(
+                        "Terminer l’événement maintenant ? Cette action clôture l’événement.",
+                      );
+                      if (!ok) return;
+                      const confirmWord = window.prompt(
+                        "Confirmation de sécurité : tapez TERMINER pour confirmer.",
+                        "",
+                      );
+                      if (String(confirmWord || "").trim().toUpperCase() !== "TERMINER") return;
+                      await postAction(`/events/${eventId}/finish`, "Evenement termine");
+                    }}
+                    style={{
+                      ...btnFinish(busy || eventFinished),
+                      minHeight: "2.6rem",
+                      fontSize: "0.8rem",
+                    }}
+                  >
+                    ⏹ Terminer
                   </button>
                 </div>
               ) : null}
-              <button
-                type="button"
-                disabled={!canGoNext}
-                onClick={() =>
-                  void postAction(`/events/${eventId}/next-poll`, "Question suivante diffusee")
-                }
-                style={{
-                  ...btnDanger(!canGoNext),
-                  width: desktop ? "100%" : "100%",
-                  whiteSpace: desktop ? "nowrap" : undefined,
-                }}
-              >
-                Question suivante
-              </button>
-              <button
-                type="button"
-                disabled={busy || eventFinished}
-                onClick={async () => {
-                  if (typeof window === "undefined") return;
-                  const ok = window.confirm(
-                    "Terminer l’événement maintenant ? Cette action clôture l’événement.",
-                  );
-                  if (!ok) return;
-                  const confirmWord = window.prompt(
-                    "Confirmation de sécurité : tapez TERMINER pour confirmer.",
-                    "",
-                  );
-                  if (String(confirmWord || "").trim().toUpperCase() !== "TERMINER") return;
-                  await postAction(`/events/${eventId}/finish`, "Evenement termine");
-                }}
-                style={{
-                  ...btnFinish(busy || eventFinished),
-                  width: desktop ? "100%" : "100%",
-                }}
-              >
-                Terminer l'événement
-              </button>
+              {regieQuickActionsMode ? null : (
+                <>
+                  <button
+                    type="button"
+                    disabled={!canGoNext}
+                    onClick={() =>
+                      void postAction(`/events/${eventId}/next-poll`, "Question suivante diffusee")
+                    }
+                    style={{
+                      ...btnDanger(!canGoNext),
+                      width: desktop ? "100%" : "100%",
+                      whiteSpace: desktop ? "nowrap" : undefined,
+                    }}
+                  >
+                    Question suivante
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || eventFinished}
+                    onClick={async () => {
+                      if (typeof window === "undefined") return;
+                      const ok = window.confirm(
+                        "Terminer l’événement maintenant ? Cette action clôture l’événement.",
+                      );
+                      if (!ok) return;
+                      const confirmWord = window.prompt(
+                        "Confirmation de sécurité : tapez TERMINER pour confirmer.",
+                        "",
+                      );
+                      if (String(confirmWord || "").trim().toUpperCase() !== "TERMINER") return;
+                      await postAction(`/events/${eventId}/finish`, "Evenement termine");
+                    }}
+                    style={{
+                      ...btnFinish(busy || eventFinished),
+                      width: desktop ? "100%" : "100%",
+                    }}
+                  >
+                    Terminer l'événement
+                  </button>
+                </>
+              )}
               {regieQuickActionsMode ? null : (
                 <div
                   style={{
