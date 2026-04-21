@@ -5689,19 +5689,21 @@ export default function RegieEventPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: desktop ? "minmax(0, 1fr) minmax(280px, 340px)" : "1fr",
-                gap: "0.65rem",
+                gridTemplateColumns: desktop ? "minmax(0, 1fr) minmax(260px, 320px)" : "1fr",
+                gap: desktop ? "0.55rem 0.65rem" : "0.65rem",
                 alignItems: "start",
               }}
             >
               <section
                 style={{
                   ...CARD,
-                  padding: compactTopPanel ? "0.85rem 0.95rem" : "1rem 1.15rem",
+                  padding: compactTopPanel ? "0.8rem 0.9rem" : "0.9rem 1rem",
                   border: statePanel.border,
                   background: statePanel.background,
                   borderLeft: `5px solid ${statePanel.accent}`,
                   boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+                  gridColumn: desktop ? "1 / 2" : "1 / -1",
+                  minWidth: 0,
                 }}
               >
               <p
@@ -5833,7 +5835,17 @@ export default function RegieEventPage() {
               </p>
             </section>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem", minWidth: 0 }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.45rem",
+                minWidth: 0,
+                gridColumn: desktop ? "2 / 3" : "1 / -1",
+                gridRow: desktop ? "1 / span 2" : "auto",
+                alignSelf: "start",
+              }}
+            >
               <aside
                 style={{
                   ...CARD,
@@ -5956,6 +5968,8 @@ export default function RegieEventPage() {
                 gap: "0.35rem",
                 width: "100%",
                 minWidth: 0,
+                gridColumn: desktop ? "1 / 2" : "1 / -1",
+                alignSelf: "start",
               }}
             >
               <button
