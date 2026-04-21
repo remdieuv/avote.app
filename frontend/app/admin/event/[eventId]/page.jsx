@@ -2709,7 +2709,7 @@ const btnGhost = {
 const REGIE_PREVIEW_JOIN_LS_PREFIX = "avote_regie_preview_join_";
 /** Colonne gauche réduite (desktop) — persistant par événement */
 const REGIE_LEFT_COLLAPSED_LS_PREFIX = "avote_regie_left_collapsed_";
-const REGIE_COMPACT_MODE_LS_PREFIX = "avote_regie_compact_mode_";
+const REGIE_QUICK_ACTIONS_MODE_LS_PREFIX = "avote_regie_quick_actions_mode_";
 const LEADS_LAST_SEEN_LS_PREFIX = "avote_leads_seen_at_";
 
 /**
@@ -3605,7 +3605,7 @@ export default function RegieEventPage() {
   const [mobileJoinPreviewOpen, setMobileJoinPreviewOpen] = useState(false);
   /** Desktop : colonne gauche (questions + liens) repliée */
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
-  const [regieCompactMode, setRegieCompactMode] = useState(false);
+  const [regieQuickActionsMode, setRegieQuickActionsMode] = useState(false);
   /** Nombre de clients /screen connectés (socket room dédiée) */
   const [screenCount, setScreenCount] = useState(0);
   const [screenBConnected, setScreenBConnected] = useState(false);
@@ -3795,9 +3795,9 @@ export default function RegieEventPage() {
     if (!eventId || typeof window === "undefined") return;
     try {
       const v = window.localStorage.getItem(
-        REGIE_COMPACT_MODE_LS_PREFIX + eventId,
+        REGIE_QUICK_ACTIONS_MODE_LS_PREFIX + eventId,
       );
-      setRegieCompactMode(v === "1");
+      setRegieQuickActionsMode(v === "1");
     } catch {
       /* ignore */
     }
@@ -4015,13 +4015,13 @@ export default function RegieEventPage() {
     }
   }, [eventId]);
 
-  const toggleRegieCompactMode = useCallback(() => {
-    setRegieCompactMode((prev) => {
+  const toggleRegieQuickActionsMode = useCallback(() => {
+    setRegieQuickActionsMode((prev) => {
       const next = !prev;
       if (eventId && typeof window !== "undefined") {
         try {
           window.localStorage.setItem(
-            REGIE_COMPACT_MODE_LS_PREFIX + eventId,
+            REGIE_QUICK_ACTIONS_MODE_LS_PREFIX + eventId,
             next ? "1" : "0",
           );
         } catch {
@@ -4482,7 +4482,7 @@ export default function RegieEventPage() {
     String(displayStateUi).toUpperCase();
   const affichageEnAttente =
     String(displayStateUi || "").toLowerCase() === "waiting";
-  const compactTopPanel = regieCompactMode || !desktop;
+  const compactTopPanel = regieQuickActionsMode || !desktop;
   const socketStatusLabel = socketConnected
     ? "Sync live connectee"
     : socketReconnecting
@@ -4498,6 +4498,12 @@ export default function RegieEventPage() {
     : socketReconnecting
       ? "#92400e"
       : "#991b1b";
+  const canManageActivePoll = Boolean(activePollIdJs) && !busy && !eventFinished;
+  const voteIsOpen = voteStateUi === "open";
+  const canShowQuestionQuick =
+    canManageActivePoll && String(displayStateUi || "").toLowerCase() !== "question";
+  const canShowResultsQuick =
+    canManageActivePoll && String(displayStateUi || "").toLowerCase() !== "results";
 
   const activePollIdJs = eventData?.activePollId ?? null;
   autoRotateRef.current = autoRotate;
@@ -5832,19 +5838,120 @@ export default function RegieEventPage() {
             >
               <button
                 type="button"
-                onClick={toggleRegieCompactMode}
+                onClick={toggleRegieQuickActionsMode}
                 style={{
                   ...btnGhost,
                   width: "100%",
                   fontSize: "0.72rem",
                   fontWeight: 700,
-                  borderColor: regieCompactMode ? "#93c5fd" : "#e5e7eb",
-                  background: regieCompactMode ? "#eff6ff" : "#fff",
-                  color: regieCompactMode ? "#1e40af" : "#475569",
+                  borderColor: regieQuickActionsMode ? "#fca5a5" : "#e5e7eb",
+                  background: regieQuickActionsMode ? "#fef2f2" : "#fff",
+                  color: regieQuickActionsMode ? "#b91c1c" : "#475569",
                 }}
               >
-                {regieCompactMode ? "Mode normal" : "Mode compact"}
+                {regieQuickActionsMode ? "Action rapide activée" : "Action rapide"}
               </button>
+              {regieQuickActionsMode ? (
+                <div
+                  style={{
+                    marginTop: "0.2rem",
+                    border: "1px solid #fecaca",
+                    background: "#fff5f5",
+                    borderRadius: "10px",
+                    padding: "0.5rem",
+                    display: "grid",
+                    gridTemplateColumns: "1fr",
+                    gap: "0.35rem",
+                  }}
+                >
+                  <button
+                    type="button"
+                    disabled={!canManageActivePoll}
+                    onClick={async () => {
+                      if (!activePollIdJs) return;
+                      await postAction(
+                        `/polls/${activePollIdJs}/${voteIsOpen ? "close" : "open"}`,
+                        voteIsOpen ? "Vote ferme" : "Vote ouvert",
+                      );
+                    }}
+                    style={{
+                      ...btnGhost,
+                      width: "100%",
+                      borderColor: "#d1d5db",
+                      color: "#111827",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {voteIsOpen ? "Fermer le vote" : "Ouvrir le vote"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canShowQuestionQuick}
+                    onClick={async () => {
+                      if (!activePollIdJs) return;
+                      const ok = await postAction(
+                        `/polls/${activePollIdJs}/display-question`,
+                        "Question affichee",
+                      );
+                      if (ok) sendScreenAction("QUESTION", null);
+                    }}
+                    style={{
+                      ...btnGhost,
+                      width: "100%",
+                      borderColor: "#bfdbfe",
+                      background: "#eff6ff",
+                      color: "#1e3a8a",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Afficher la question
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canShowResultsQuick}
+                    onClick={async () => {
+                      if (!activePollIdJs) return;
+                      const ok = await postAction(
+                        `/polls/${activePollIdJs}/show-results`,
+                        "Resultats affiches",
+                      );
+                      if (ok) sendScreenAction("RESULTS", null);
+                    }}
+                    style={{
+                      ...btnGhost,
+                      width: "100%",
+                      borderColor: "#c7d2fe",
+                      background: "#eef2ff",
+                      color: "#3730a3",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Afficher les résultats
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      const isBlack = String(displayStateUi || "").toLowerCase() === "black";
+                      sendScreenAction(isBlack ? "WAITING" : "BLACK", null);
+                      setToastNotif(isBlack ? "Retour au direct" : "Ecran noir");
+                      window.setTimeout(() => setToastNotif(null), 2200);
+                    }}
+                    style={{
+                      ...btnGhost,
+                      width: "100%",
+                      borderColor: "#fca5a5",
+                      background: "#fff1f2",
+                      color: "#9f1239",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {String(displayStateUi || "").toLowerCase() === "black"
+                      ? "Revenir au direct"
+                      : "Écran noir"}
+                  </button>
+                </div>
+              ) : null}
               <button
                 type="button"
                 disabled={!canGoNext}
@@ -5882,18 +5989,19 @@ export default function RegieEventPage() {
               >
                 Terminer l'événement
               </button>
-              <div
-                style={{
-                  marginTop: "0.25rem",
-                  padding: "0.5rem 0.6rem",
-                  borderRadius: "10px",
-                  border: "1px solid #e5e7eb",
-                  background: "#fff",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.35rem",
-                }}
-              >
+              {regieQuickActionsMode ? null : (
+                <div
+                  style={{
+                    marginTop: "0.25rem",
+                    padding: "0.5rem 0.6rem",
+                    borderRadius: "10px",
+                    border: "1px solid #e5e7eb",
+                    background: "#fff",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.35rem",
+                  }}
+                >
                 <p
                   style={{
                     margin: 0,
@@ -5989,7 +6097,8 @@ export default function RegieEventPage() {
                     })}
                   </div>
                 ) : null}
-              </div>
+                </div>
+              )}
             </div>
           </div>
 
