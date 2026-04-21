@@ -4032,6 +4032,13 @@ export default function RegieEventPage() {
     });
   }, [eventId]);
 
+  const scrollToOverlayPanel = useCallback(() => {
+    if (typeof document === "undefined") return;
+    const el = document.getElementById("regie-overlay-panel");
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+  }, []);
+
   useEffect(() => {
     if (!eventData) {
       eventPollIdsRef.current = new Set();
@@ -5949,6 +5956,21 @@ export default function RegieEventPage() {
               >
                 {regieQuickActionsMode ? "Action rapide activée" : "Action rapide"}
               </button>
+              <button
+                type="button"
+                onClick={scrollToOverlayPanel}
+                style={{
+                  ...btnGhost,
+                  width: "100%",
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                  borderColor: "#67e8f9",
+                  background: "#ecfeff",
+                  color: "#155e75",
+                }}
+              >
+                Overlay
+              </button>
               {regieQuickActionsMode ? (
                 <div
                   style={{
@@ -6479,16 +6501,18 @@ export default function RegieEventPage() {
             </div>
           </div>
           {desktop && eventData.slug ? (
-            <SidebarPartageDroit
-              slug={eventData.slug}
-              liveState={liveState}
-              stateLabel={stateLabel}
-              sceneBadge={sceneBadge}
-              onOverlayCopied={() => {
-                setToastNotif("Lien overlay copié");
-                window.setTimeout(() => setToastNotif(null), 3200);
-              }}
-            />
+            <div id="regie-overlay-panel">
+              <SidebarPartageDroit
+                slug={eventData.slug}
+                liveState={liveState}
+                stateLabel={stateLabel}
+                sceneBadge={sceneBadge}
+                onOverlayCopied={() => {
+                  setToastNotif("Lien overlay copié");
+                  window.setTimeout(() => setToastNotif(null), 3200);
+                }}
+              />
+            </div>
           ) : null}
           {!desktop && eventData.slug ? (
             <RegiePreviewJoinDrawerMobile
