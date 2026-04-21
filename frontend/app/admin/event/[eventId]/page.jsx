@@ -5911,7 +5911,7 @@ export default function RegieEventPage() {
                       fontSize: "0.78rem",
                     }}
                   >
-                    📄 Question
+                    📄 Afficher question
                   </button>
                   <button
                     type="button"
@@ -5936,7 +5936,7 @@ export default function RegieEventPage() {
                       fontSize: "0.78rem",
                     }}
                   >
-                    📊 Résultats
+                    📊 Afficher résultats
                   </button>
                   <button
                     type="button"
