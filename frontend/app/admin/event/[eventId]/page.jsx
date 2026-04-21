@@ -2709,7 +2709,6 @@ const btnGhost = {
 const REGIE_PREVIEW_JOIN_LS_PREFIX = "avote_regie_preview_join_";
 /** Colonne gauche réduite (desktop) — persistant par événement */
 const REGIE_LEFT_COLLAPSED_LS_PREFIX = "avote_regie_left_collapsed_";
-const REGIE_QUICK_ACTIONS_MODE_LS_PREFIX = "avote_regie_quick_actions_mode_";
 const LEADS_LAST_SEEN_LS_PREFIX = "avote_leads_seen_at_";
 
 /**
@@ -3605,7 +3604,6 @@ export default function RegieEventPage() {
   const [mobileJoinPreviewOpen, setMobileJoinPreviewOpen] = useState(false);
   /** Desktop : colonne gauche (questions + liens) repliée */
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
-  const [regieQuickActionsMode, setRegieQuickActionsMode] = useState(false);
   /** Nombre de clients /screen connectés (socket room dédiée) */
   const [screenCount, setScreenCount] = useState(0);
   const [screenBConnected, setScreenBConnected] = useState(false);
@@ -3786,18 +3784,6 @@ export default function RegieEventPage() {
         REGIE_LEFT_COLLAPSED_LS_PREFIX + eventId,
       );
       setLeftSidebarCollapsed(v === "1");
-    } catch {
-      /* ignore */
-    }
-  }, [eventId]);
-
-  useEffect(() => {
-    if (!eventId || typeof window === "undefined") return;
-    try {
-      const v = window.localStorage.getItem(
-        REGIE_QUICK_ACTIONS_MODE_LS_PREFIX + eventId,
-      );
-      setRegieQuickActionsMode(v === "1");
     } catch {
       /* ignore */
     }
@@ -4013,23 +3999,6 @@ export default function RegieEventPage() {
     } catch {
       /* ignore */
     }
-  }, [eventId]);
-
-  const toggleRegieQuickActionsMode = useCallback(() => {
-    setRegieQuickActionsMode((prev) => {
-      const next = !prev;
-      if (eventId && typeof window !== "undefined") {
-        try {
-          window.localStorage.setItem(
-            REGIE_QUICK_ACTIONS_MODE_LS_PREFIX + eventId,
-            next ? "1" : "0",
-          );
-        } catch {
-          /* ignore */
-        }
-      }
-      return next;
-    });
   }, [eventId]);
 
   const scrollToOverlayPanel = useCallback(() => {
@@ -4489,7 +4458,7 @@ export default function RegieEventPage() {
     String(displayStateUi).toUpperCase();
   const affichageEnAttente =
     String(displayStateUi || "").toLowerCase() === "waiting";
-  const compactTopPanel = regieQuickActionsMode || !desktop;
+  const compactTopPanel = !desktop;
   const socketStatusLabel = socketConnected
     ? "Sync live connectee"
     : socketReconnecting
@@ -5972,23 +5941,7 @@ export default function RegieEventPage() {
                 alignSelf: "start",
               }}
             >
-              <button
-                type="button"
-                onClick={toggleRegieQuickActionsMode}
-                style={{
-                  ...btnGhost,
-                  width: "100%",
-                  fontSize: "0.72rem",
-                  fontWeight: 700,
-                  borderColor: regieQuickActionsMode ? "#fca5a5" : "#e5e7eb",
-                  background: regieQuickActionsMode ? "#fef2f2" : "#fff",
-                  color: regieQuickActionsMode ? "#b91c1c" : "#475569",
-                }}
-              >
-                {regieQuickActionsMode ? "Action rapide activée" : "Action rapide"}
-              </button>
-              {regieQuickActionsMode ? (
-                <div
+              <div
                   style={{
                     marginTop: "0.2rem",
                     border: "1px solid #e5e7eb",
@@ -6153,48 +6106,6 @@ export default function RegieEventPage() {
                     ⏹ Terminer
                   </button>
                 </div>
-              ) : null}
-              {regieQuickActionsMode ? null : (
-                <>
-                  <button
-                    type="button"
-                    disabled={!canGoNext}
-                    onClick={() =>
-                      void postAction(`/events/${eventId}/next-poll`, "Question suivante diffusee")
-                    }
-                    style={{
-                      ...btnDanger(!canGoNext),
-                      width: desktop ? "100%" : "100%",
-                      whiteSpace: desktop ? "nowrap" : undefined,
-                    }}
-                  >
-                    Question suivante
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy || eventFinished}
-                    onClick={async () => {
-                      if (typeof window === "undefined") return;
-                      const ok = window.confirm(
-                        "Terminer l’événement maintenant ? Cette action clôture l’événement.",
-                      );
-                      if (!ok) return;
-                      const confirmWord = window.prompt(
-                        "Confirmation de sécurité : tapez TERMINER pour confirmer.",
-                        "",
-                      );
-                      if (String(confirmWord || "").trim().toUpperCase() !== "TERMINER") return;
-                      await postAction(`/events/${eventId}/finish`, "Evenement termine");
-                    }}
-                    style={{
-                      ...btnFinish(busy || eventFinished),
-                      width: desktop ? "100%" : "100%",
-                    }}
-                  >
-                    Terminer l'événement
-                  </button>
-                </>
-              )}
             </div>
           </div>
 
