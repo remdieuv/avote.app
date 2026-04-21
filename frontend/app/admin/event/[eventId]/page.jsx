@@ -5833,109 +5833,110 @@ export default function RegieEventPage() {
               </p>
             </section>
 
-            <aside
-              style={{
-                ...CARD,
-                padding: "0.5rem 0.6rem",
-                borderColor: "#dbeafe",
-                background: "#f8fbff",
-                minWidth: 0,
-              }}
-            >
-              <p
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem", minWidth: 0 }}>
+              <aside
                 style={{
-                  margin: 0,
-                  fontSize: "0.72rem",
-                  color: "#64748b",
-                  fontWeight: 700,
+                  ...CARD,
+                  padding: "0.5rem 0.6rem",
+                  borderColor: "#dbeafe",
+                  background: "#f8fbff",
+                  minWidth: 0,
                 }}
               >
-                {totalQuestions > 0
-                  ? eventFinished
-                    ? "Événement terminé · toutes les questions ont été diffusées"
-                    : activeQuestionIndex >= 0
-                      ? `Question ${activeQuestionIndex + 1}/${totalQuestions}`
-                      : `Questions prêtes : ${totalQuestions}`
-                  : "Aucune question"}
-              </p>
-              {totalQuestions > 0 ? (
-                <div
+                <p
                   style={{
-                    marginTop: "0.35rem",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0.25rem",
-                    maxHeight: desktop ? "180px" : "130px",
-                    overflowY: "auto",
-                    paddingRight: "0.1rem",
+                    margin: 0,
+                    fontSize: "0.72rem",
+                    color: "#64748b",
+                    fontWeight: 700,
                   }}
                 >
-                  {pollsOrdered.map((p, idx) => {
-                    const isActive = idx === activeQuestionIndex;
-                    const status = String(p.status || "").toUpperCase();
-                    const done =
-                      eventFinished ||
-                      (!isActive &&
-                        ["CLOSED", "ARCHIVED"].includes(status) &&
-                        activeQuestionIndex > idx);
-                    return (
-                      <div
-                        key={p.id}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "0.4rem",
-                          fontSize: "0.72rem",
-                          color: isActive ? "#1e3a8a" : done ? "#475569" : "#64748b",
-                          fontWeight: isActive ? 700 : 500,
-                        }}
-                      >
-                        <span
+                  {totalQuestions > 0
+                    ? eventFinished
+                      ? "Événement terminé · toutes les questions ont été diffusées"
+                      : activeQuestionIndex >= 0
+                        ? `Question ${activeQuestionIndex + 1}/${totalQuestions}`
+                        : `Questions prêtes : ${totalQuestions}`
+                    : "Aucune question"}
+                </p>
+                {totalQuestions > 0 ? (
+                  <div
+                    style={{
+                      marginTop: "0.35rem",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.25rem",
+                      maxHeight: desktop ? "180px" : "130px",
+                      overflowY: "auto",
+                      paddingRight: "0.1rem",
+                    }}
+                  >
+                    {pollsOrdered.map((p, idx) => {
+                      const isActive = idx === activeQuestionIndex;
+                      const status = String(p.status || "").toUpperCase();
+                      const done =
+                        eventFinished ||
+                        (!isActive &&
+                          ["CLOSED", "ARCHIVED"].includes(status) &&
+                          activeQuestionIndex > idx);
+                      return (
+                        <div
+                          key={p.id}
                           style={{
-                            display: "inline-flex",
+                            display: "flex",
                             alignItems: "center",
-                            justifyContent: "center",
-                            minWidth: "1.25rem",
-                            height: "1.25rem",
-                            borderRadius: "999px",
-                            border: `1px solid ${
-                              isActive ? "#93c5fd" : done ? "#cbd5e1" : "#e5e7eb"
-                            }`,
-                            background: isActive
-                              ? "#eff6ff"
-                              : done
-                                ? "#f8fafc"
-                                : "#fff",
-                            color: isActive ? "#1e40af" : "#64748b",
-                            fontSize: "0.66rem",
-                            fontWeight: 800,
-                            lineHeight: 1,
+                            gap: "0.4rem",
+                            fontSize: "0.72rem",
+                            color: isActive ? "#1e3a8a" : done ? "#475569" : "#64748b",
+                            fontWeight: isActive ? 700 : 500,
                           }}
                         >
-                          {idx + 1}
-                        </span>
-                        <span
-                          style={{
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            flex: 1,
-                          }}
-                          title={p.question || p.title}
-                        >
-                          {p.question || p.title || `Question ${idx + 1}`}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : null}
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              minWidth: "1.25rem",
+                              height: "1.25rem",
+                              borderRadius: "999px",
+                              border: `1px solid ${
+                                isActive ? "#93c5fd" : done ? "#cbd5e1" : "#e5e7eb"
+                              }`,
+                              background: isActive
+                                ? "#eff6ff"
+                                : done
+                                  ? "#f8fafc"
+                                  : "#fff",
+                              color: isActive ? "#1e40af" : "#64748b",
+                              fontSize: "0.66rem",
+                              fontWeight: 800,
+                              lineHeight: 1,
+                            }}
+                          >
+                            {idx + 1}
+                          </span>
+                          <span
+                            style={{
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              flex: 1,
+                            }}
+                            title={p.question || p.title}
+                          >
+                            {p.question || p.title || `Question ${idx + 1}`}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </aside>
               <button
                 type="button"
                 onClick={scrollToOverlayPanel}
                 style={{
                   ...btnGhost,
-                  marginTop: "0.45rem",
                   width: "100%",
                   fontSize: "0.72rem",
                   fontWeight: 700,
@@ -5946,7 +5947,7 @@ export default function RegieEventPage() {
               >
                 Overlay
               </button>
-            </aside>
+            </div>
 
             <div
               style={{
