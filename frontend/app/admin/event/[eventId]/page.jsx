@@ -4498,14 +4498,13 @@ export default function RegieEventPage() {
     : socketReconnecting
       ? "#92400e"
       : "#991b1b";
+  const activePollIdJs = eventData?.activePollId ?? null;
   const canManageActivePoll = Boolean(activePollIdJs) && !busy && !eventFinished;
   const voteIsOpen = voteStateUi === "open";
   const canShowQuestionQuick =
     canManageActivePoll && String(displayStateUi || "").toLowerCase() !== "question";
   const canShowResultsQuick =
     canManageActivePoll && String(displayStateUi || "").toLowerCase() !== "results";
-
-  const activePollIdJs = eventData?.activePollId ?? null;
   autoRotateRef.current = autoRotate;
   pollIdRef.current = activePollIdJs;
   displayStateRefRegie.current = displayStateUi;
