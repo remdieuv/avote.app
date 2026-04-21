@@ -5677,9 +5677,8 @@ export default function RegieEventPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns:
-                  desktop && desktopSplitWide ? "1fr minmax(200px, 240px)" : "1fr",
-                gap: desktop && desktopSplitWide ? "1rem" : "0.65rem",
+                gridTemplateColumns: "1fr",
+                gap: "0.65rem",
                 alignItems: "start",
               }}
             >
@@ -5831,19 +5830,6 @@ export default function RegieEventPage() {
                 minWidth: 0,
               }}
             >
-              {desktop && desktopSplitWide ? (
-                <span
-                  style={{
-                    fontSize: "0.65rem",
-                    fontWeight: 700,
-                    color: "#6b7280",
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Avancer
-                </span>
-              ) : null}
               <button
                 type="button"
                 onClick={toggleRegieCompactMode}
