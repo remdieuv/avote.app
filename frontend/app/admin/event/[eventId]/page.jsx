@@ -2709,6 +2709,7 @@ const btnGhost = {
 const REGIE_PREVIEW_JOIN_LS_PREFIX = "avote_regie_preview_join_";
 /** Colonne gauche réduite (desktop) — persistant par événement */
 const REGIE_LEFT_COLLAPSED_LS_PREFIX = "avote_regie_left_collapsed_";
+const REGIE_COMPACT_MODE_LS_PREFIX = "avote_regie_compact_mode_";
 const LEADS_LAST_SEEN_LS_PREFIX = "avote_leads_seen_at_";
 
 /**
@@ -3604,9 +3605,12 @@ export default function RegieEventPage() {
   const [mobileJoinPreviewOpen, setMobileJoinPreviewOpen] = useState(false);
   /** Desktop : colonne gauche (questions + liens) repliée */
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
+  const [regieCompactMode, setRegieCompactMode] = useState(false);
   /** Nombre de clients /screen connectés (socket room dédiée) */
   const [screenCount, setScreenCount] = useState(0);
   const [screenBConnected, setScreenBConnected] = useState(false);
+  const [socketConnected, setSocketConnected] = useState(false);
+  const [socketReconnecting, setSocketReconnecting] = useState(false);
   const [screenBDisplayState, setScreenBDisplayState] = useState(
     /** @type {"question" | "results" | "waiting" | "black"} */ ("waiting"),
   );
@@ -3782,6 +3786,18 @@ export default function RegieEventPage() {
         REGIE_LEFT_COLLAPSED_LS_PREFIX + eventId,
       );
       setLeftSidebarCollapsed(v === "1");
+    } catch {
+      /* ignore */
+    }
+  }, [eventId]);
+
+  useEffect(() => {
+    if (!eventId || typeof window === "undefined") return;
+    try {
+      const v = window.localStorage.getItem(
+        REGIE_COMPACT_MODE_LS_PREFIX + eventId,
+      );
+      setRegieCompactMode(v === "1");
     } catch {
       /* ignore */
     }
@@ -3999,6 +4015,23 @@ export default function RegieEventPage() {
     }
   }, [eventId]);
 
+  const toggleRegieCompactMode = useCallback(() => {
+    setRegieCompactMode((prev) => {
+      const next = !prev;
+      if (eventId && typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem(
+            REGIE_COMPACT_MODE_LS_PREFIX + eventId,
+            next ? "1" : "0",
+          );
+        } catch {
+          /* ignore */
+        }
+      }
+      return next;
+    });
+  }, [eventId]);
+
   useEffect(() => {
     if (!eventData) {
       eventPollIdsRef.current = new Set();
@@ -4112,8 +4145,25 @@ export default function RegieEventPage() {
       void fetchEvent({ silent: true });
     }
 
-    socket.on("connect", joinSalles);
+    function onSocketConnect() {
+      setSocketConnected(true);
+      setSocketReconnecting(false);
+      joinSalles();
+    }
+    function onSocketDisconnect() {
+      setSocketConnected(false);
+    }
+    function onSocketConnectError() {
+      setSocketConnected(false);
+      setSocketReconnecting(true);
+    }
+
+    socket.on("connect", onSocketConnect);
+    socket.on("disconnect", onSocketDisconnect);
+    socket.on("connect_error", onSocketConnectError);
     if (socket.connected) {
+      setSocketConnected(true);
+      setSocketReconnecting(false);
       joinSalles();
     }
     socket.on("event_live_updated", onLive);
@@ -4128,7 +4178,9 @@ export default function RegieEventPage() {
       if (activePollId) {
         socket.emit("leave_poll", activePollId);
       }
-      socket.off("connect", joinSalles);
+      socket.off("connect", onSocketConnect);
+      socket.off("disconnect", onSocketDisconnect);
+      socket.off("connect_error", onSocketConnectError);
       socket.off("event_live_updated", onLive);
       socket.off("poll_updated", onPollUpdated);
       socket.off("screen:count", onScreenCount);
@@ -4187,7 +4239,7 @@ export default function RegieEventPage() {
   }, []);
 
   /** @returns {Promise<boolean>} */
-  async function postAction(path) {
+  async function postAction(path, successMessage = null) {
     setAutoRotate(false);
     setBusy(true);
     setActionError(null);
@@ -4200,6 +4252,10 @@ export default function RegieEventPage() {
         throw new Error(body.error || `Erreur ${res.status}`);
       }
       await fetchEvent({ silent: true });
+      if (successMessage) {
+        setToastNotif(successMessage);
+        window.setTimeout(() => setToastNotif(null), 2200);
+      }
       return true;
     } catch (e) {
       setActionError(e.message || "Action échouée.");
@@ -4387,6 +4443,7 @@ export default function RegieEventPage() {
       pollsOrdered.every((p) =>
         ["CLOSED", "ARCHIVED"].includes(String(p.status || "").toUpperCase()),
       ));
+  const canGoNext = !busy && !eventFinished && totalQuestions > 0;
 
   /** Ne jamais déduire « open » depuis liveState : lecture seule du champ API (+ défaut fermé si absent). */
   const rawVoteState = eventData?.voteState;
@@ -4425,6 +4482,22 @@ export default function RegieEventPage() {
     String(displayStateUi).toUpperCase();
   const affichageEnAttente =
     String(displayStateUi || "").toLowerCase() === "waiting";
+  const compactTopPanel = regieCompactMode || !desktop;
+  const socketStatusLabel = socketConnected
+    ? "Sync live connectee"
+    : socketReconnecting
+      ? "Reconnexion..."
+      : "Hors ligne";
+  const socketStatusBg = socketConnected
+    ? "#dcfce7"
+    : socketReconnecting
+      ? "#fef3c7"
+      : "#fee2e2";
+  const socketStatusColor = socketConnected
+    ? "#166534"
+    : socketReconnecting
+      ? "#92400e"
+      : "#991b1b";
 
   const activePollIdJs = eventData?.activePollId ?? null;
   autoRotateRef.current = autoRotate;
@@ -5613,7 +5686,7 @@ export default function RegieEventPage() {
               <section
                 style={{
                   ...CARD,
-                  padding: "1rem 1.15rem",
+                  padding: compactTopPanel ? "0.85rem 0.95rem" : "1rem 1.15rem",
                   border: statePanel.border,
                   background: statePanel.background,
                   borderLeft: `5px solid ${statePanel.accent}`,
@@ -5669,37 +5742,63 @@ export default function RegieEventPage() {
                 style={{
                   marginTop: "0.55rem",
                   display: "flex",
-                  flexDirection: "column",
-                  gap: "0.32rem",
-                  fontSize: "0.82rem",
-                  color: "#4b5563",
-                  lineHeight: 1.4,
+                  flexWrap: "wrap",
+                  gap: "0.38rem",
                 }}
               >
-                <p style={{ margin: 0 }}>
-                  <strong style={{ color: "#111827" }}>Vote :</strong>{" "}
-                  {voteLabel}
-                </p>
-                <p
+                <span
                   style={{
-                    margin: 0,
-                    ...(affichageEnAttente
-                      ? { color: "#b91c1c", fontWeight: 500 }
-                      : {}),
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.35rem",
+                    borderRadius: "999px",
+                    padding: "0.2rem 0.55rem",
+                    fontSize: "0.74rem",
+                    fontWeight: 700,
+                    border: "1px solid #cbd5e1",
+                    background: "#fff",
+                    color: "#0f172a",
                   }}
                 >
-                  <strong
-                    style={{
-                      color: affichageEnAttente ? "#991b1b" : "#111827",
-                    }}
-                  >
-                    Affichage :
-                  </strong>{" "}
+                  Vote : {voteLabel}
+                </span>
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.35rem",
+                    borderRadius: "999px",
+                    padding: "0.2rem 0.55rem",
+                    fontSize: "0.74rem",
+                    fontWeight: 700,
+                    border: `1px solid ${affichageEnAttente ? "#fecaca" : "#cbd5e1"}`,
+                    background: affichageEnAttente ? "#fef2f2" : "#fff",
+                    color: affichageEnAttente ? "#991b1b" : "#0f172a",
+                  }}
+                >
+                  Affichage :{" "}
                   {displayLabel}
-                </p>
+                </span>
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    borderRadius: "999px",
+                    padding: "0.2rem 0.55rem",
+                    fontSize: "0.74rem",
+                    fontWeight: 700,
+                    border: `1px solid ${socketConnected ? "#86efac" : socketReconnecting ? "#fcd34d" : "#fca5a5"}`,
+                    background: socketStatusBg,
+                    color: socketStatusColor,
+                  }}
+                >
+                  {socketStatusLabel}
+                </span>
+              </div>
+              {!compactTopPanel ? (
                 <p
                   style={{
-                    margin: 0,
+                    margin: "0.4rem 0 0 0",
                     fontSize: "0.72rem",
                     color: "#94a3b8",
                   }}
@@ -5707,11 +5806,11 @@ export default function RegieEventPage() {
                   Résumé technique :{" "}
                   <code style={{ fontSize: "0.68rem" }}>{liveState}</code>
                 </p>
-              </div>
+              ) : null}
               <p
                 style={{
                   margin: desktop ? "0.65rem 0 0 0" : "0.55rem 0 0 0",
-                  fontSize: desktop ? "0.95rem" : "0.9rem",
+                  fontSize: compactTopPanel ? "0.86rem" : desktop ? "0.95rem" : "0.9rem",
                   color: "#374151",
                   lineHeight: 1.45,
                 }}
@@ -5747,10 +5846,27 @@ export default function RegieEventPage() {
               ) : null}
               <button
                 type="button"
-                disabled={busy}
-                onClick={() => postAction(`/events/${eventId}/next-poll`)}
+                onClick={toggleRegieCompactMode}
                 style={{
-                  ...btnDanger(busy),
+                  ...btnGhost,
+                  width: "100%",
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                  borderColor: regieCompactMode ? "#93c5fd" : "#e5e7eb",
+                  background: regieCompactMode ? "#eff6ff" : "#fff",
+                  color: regieCompactMode ? "#1e40af" : "#475569",
+                }}
+              >
+                {regieCompactMode ? "Mode normal" : "Mode compact"}
+              </button>
+              <button
+                type="button"
+                disabled={!canGoNext}
+                onClick={() =>
+                  void postAction(`/events/${eventId}/next-poll`, "Question suivante diffusee")
+                }
+                style={{
+                  ...btnDanger(!canGoNext),
                   width: desktop ? "100%" : "100%",
                   whiteSpace: desktop ? "nowrap" : undefined,
                 }}
@@ -5760,13 +5876,18 @@ export default function RegieEventPage() {
               <button
                 type="button"
                 disabled={busy || eventFinished}
-                onClick={() => {
+                onClick={async () => {
                   if (typeof window === "undefined") return;
                   const ok = window.confirm(
                     "Terminer l’événement maintenant ? Cette action clôture l’événement.",
                   );
                   if (!ok) return;
-                  void postAction(`/events/${eventId}/finish`);
+                  const confirmWord = window.prompt(
+                    "Confirmation de sécurité : tapez TERMINER pour confirmer.",
+                    "",
+                  );
+                  if (String(confirmWord || "").trim().toUpperCase() !== "TERMINER") return;
+                  await postAction(`/events/${eventId}/finish`, "Evenement termine");
                 }}
                 style={{
                   ...btnFinish(busy || eventFinished),
@@ -5809,7 +5930,7 @@ export default function RegieEventPage() {
                       display: "flex",
                       flexDirection: "column",
                       gap: "0.25rem",
-                      maxHeight: desktop ? "130px" : "110px",
+                      maxHeight: compactTopPanel ? "96px" : desktop ? "130px" : "110px",
                       overflowY: "auto",
                       paddingRight: "0.1rem",
                     }}
