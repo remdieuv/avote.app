@@ -5854,90 +5854,16 @@ export default function RegieEventPage() {
                 <div
                   style={{
                     marginTop: "0.2rem",
-                    border: "1px solid #fecaca",
-                    background: "#fff5f5",
+                    border: "1px solid #e5e7eb",
+                    background: "#f8fafc",
                     borderRadius: "10px",
                     padding: "0.6rem",
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "center",
                     gap: "0.45rem",
                   }}
                 >
-                  <div
-                    style={{
-                      gridColumn: "1 / -1",
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: "0.35rem",
-                      marginBottom: "0.1rem",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "0.64rem",
-                        fontWeight: 700,
-                        padding: "0.12rem 0.4rem",
-                        borderRadius: "999px",
-                        border: "1px solid #86efac",
-                        background: "#f0fdf4",
-                        color: "#166534",
-                      }}
-                    >
-                      Vert: vote
-                    </span>
-                    <span
-                      style={{
-                        fontSize: "0.64rem",
-                        fontWeight: 700,
-                        padding: "0.12rem 0.4rem",
-                        borderRadius: "999px",
-                        border: "1px solid #93c5fd",
-                        background: "#eff6ff",
-                        color: "#1e3a8a",
-                      }}
-                    >
-                      Bleu: question
-                    </span>
-                    <span
-                      style={{
-                        fontSize: "0.64rem",
-                        fontWeight: 700,
-                        padding: "0.12rem 0.4rem",
-                        borderRadius: "999px",
-                        border: "1px solid #a5b4fc",
-                        background: "#eef2ff",
-                        color: "#3730a3",
-                      }}
-                    >
-                      Violet: resultats
-                    </span>
-                    <span
-                      style={{
-                        fontSize: "0.64rem",
-                        fontWeight: 700,
-                        padding: "0.12rem 0.4rem",
-                        borderRadius: "999px",
-                        border: "1px solid #94a3b8",
-                        background: "#1f2937",
-                        color: "#f8fafc",
-                      }}
-                    >
-                      Noir: ecran noir
-                    </span>
-                    <span
-                      style={{
-                        fontSize: "0.64rem",
-                        fontWeight: 700,
-                        padding: "0.12rem 0.4rem",
-                        borderRadius: "999px",
-                        border: "1px solid #f59e0b",
-                        background: "#fef3c7",
-                        color: "#78350f",
-                      }}
-                    >
-                      Ambre: terminer
-                    </span>
-                  </div>
                   <button
                     type="button"
                     disabled={!canManageActivePoll}
@@ -5951,12 +5877,13 @@ export default function RegieEventPage() {
                     style={{
                       ...btnGhost,
                       minHeight: "2.6rem",
-                      borderColor: voteIsOpen ? "#fdba74" : "#86efac",
-                      background: voteIsOpen ? "#fff7ed" : "#f0fdf4",
-                      color: voteIsOpen ? "#9a3412" : "#166534",
+                      minWidth: "128px",
+                      padding: "0.5rem 0.75rem",
+                      borderColor: "#cbd5e1",
+                      background: "#fff",
+                      color: "#0f172a",
                       fontWeight: 700,
                       fontSize: "0.78rem",
-                      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.7)",
                     }}
                   >
                     {voteIsOpen ? "⏸ Fermer vote" : "▶ Ouvrir vote"}
@@ -5975,12 +5902,13 @@ export default function RegieEventPage() {
                     style={{
                       ...btnGhost,
                       minHeight: "2.6rem",
+                      minWidth: "112px",
+                      padding: "0.5rem 0.75rem",
                       borderColor: "#93c5fd",
-                      background: "linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%)",
+                      background: "#eff6ff",
                       color: "#1e3a8a",
                       fontWeight: 700,
                       fontSize: "0.78rem",
-                      boxShadow: "0 1px 0 rgba(255,255,255,0.75) inset",
                     }}
                   >
                     📄 Question
@@ -5999,12 +5927,13 @@ export default function RegieEventPage() {
                     style={{
                       ...btnGhost,
                       minHeight: "2.6rem",
+                      minWidth: "112px",
+                      padding: "0.5rem 0.75rem",
                       borderColor: "#a5b4fc",
-                      background: "linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%)",
+                      background: "#eef2ff",
                       color: "#3730a3",
                       fontWeight: 700,
                       fontSize: "0.78rem",
-                      boxShadow: "0 1px 0 rgba(255,255,255,0.75) inset",
                     }}
                   >
                     📊 Résultats
@@ -6021,12 +5950,13 @@ export default function RegieEventPage() {
                     style={{
                       ...btnGhost,
                       minHeight: "2.6rem",
-                      borderColor: "#94a3b8",
-                      background: "linear-gradient(180deg, #1f2937 0%, #111827 100%)",
+                      minWidth: "112px",
+                      padding: "0.5rem 0.75rem",
+                      borderColor: "#334155",
+                      background: "#1e293b",
                       color: "#f8fafc",
                       fontWeight: 700,
                       fontSize: "0.78rem",
-                      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
                     }}
                   >
                     {String(displayStateUi || "").toLowerCase() === "black"
@@ -6042,16 +5972,17 @@ export default function RegieEventPage() {
                     style={{
                       ...btnDanger(!canGoNext),
                       minHeight: "2.6rem",
+                      minWidth: "142px",
+                      padding: "0.5rem 0.8rem",
                       fontSize: "0.8rem",
                       border: "1px solid #ef4444",
-                      background: canGoNext
-                        ? "linear-gradient(180deg, #ef4444 0%, #dc2626 100%)"
-                        : "#fee2e2",
+                      background: canGoNext ? "#dc2626" : "#fee2e2",
                       color: canGoNext ? "#fff" : "#7f1d1d",
                     }}
                   >
                     ⏭ Question suivante
                   </button>
+                  <div style={{ flex: 1, minWidth: "10px" }} />
                   <button
                     type="button"
                     disabled={busy || eventFinished}
@@ -6071,13 +6002,15 @@ export default function RegieEventPage() {
                     style={{
                       ...btnFinish(busy || eventFinished),
                       minHeight: "2.6rem",
+                      minWidth: "122px",
+                      padding: "0.5rem 0.8rem",
                       fontSize: "0.8rem",
-                      border: "1px solid #f59e0b",
+                      border: "1px solid #f97316",
                       background:
                         busy || eventFinished
-                          ? "#fef3c7"
-                          : "linear-gradient(180deg, #fef3c7 0%, #fde68a 100%)",
-                      color: busy || eventFinished ? "#92400e" : "#78350f",
+                          ? "#ffedd5"
+                          : "#fed7aa",
+                      color: busy || eventFinished ? "#9a3412" : "#7c2d12",
                     }}
                   >
                     ⏹ Terminer
