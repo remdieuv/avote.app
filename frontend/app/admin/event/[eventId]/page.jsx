@@ -2370,98 +2370,148 @@ function BlocOverlayStreamPresets({ slug, onCopied }) {
     }
   }
 
+  const principal = presets[0];
+  const secondaires = presets.slice(1);
+
   return (
     <div
       style={{
-        padding: "0.65rem 0",
+        padding: "0.7rem 0",
         borderBottom: "1px solid #e5e7eb",
-        margin: "0 0 0.15rem 0",
+        margin: "0 0 0.25rem 0",
       }}
+      id="overlay-stream-top"
     >
       <p
         style={{
           margin: "0 0 0.2rem 0",
-          fontSize: "0.62rem",
+          fontSize: "0.66rem",
           fontWeight: 700,
           letterSpacing: "0.07em",
           textTransform: "uppercase",
-          color: "#64748b",
+          color: "#155e75",
         }}
       >
-        Overlay stream
+        🎬 Overlay stream
       </p>
       <p
         style={{
-          margin: "0 0 0.55rem 0",
-          fontSize: "0.72rem",
+          margin: "0 0 0.5rem 0",
+          fontSize: "0.7rem",
           color: "#64748b",
           lineHeight: 1.35,
         }}
       >
-        Utilisable dans OBS, streaming ou affichage discret
+        Utilisable dans OBS, streaming ou affichage discret.
       </p>
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.5rem",
-        }}
-      >
-        {presets.map((p) => (
-          <div
-            key={p.id}
+      {principal ? (
+        <div
+          style={{
+            padding: "0.6rem 0.65rem",
+            borderRadius: "10px",
+            border: "1px solid #67e8f9",
+            background: "#ecfeff",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.4rem",
+          }}
+        >
+          <div>
+            <p style={{ margin: 0, fontSize: "0.8rem", fontWeight: 800, color: "#0f172a" }}>
+              {principal.label}
+            </p>
+            <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.68rem", color: "#0f766e" }}>
+              {principal.desc}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void copier(principal)}
             style={{
-              padding: "0.55rem 0.65rem",
-              borderRadius: "10px",
-              border: "1px solid #e2e8f0",
-              background: "#fafafa",
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.35rem",
+              alignSelf: "flex-start",
+              padding: "0.38rem 0.7rem",
+              fontSize: "0.76rem",
+              fontWeight: 700,
+              borderRadius: "8px",
+              border: "1px solid #22d3ee",
+              background: copiedId === principal.id ? "#dcfce7" : "#cffafe",
+              color: copiedId === principal.id ? "#166534" : "#0e7490",
+              cursor: "pointer",
             }}
           >
-            <div>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "0.78rem",
-                  fontWeight: 700,
-                  color: "#0f172a",
-                }}
-              >
-                {p.label}
-              </p>
-              <p
-                style={{
-                  margin: "0.2rem 0 0 0",
-                  fontSize: "0.68rem",
-                  color: "#64748b",
-                  lineHeight: 1.35,
-                }}
-              >
-                {p.desc}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => void copier(p)}
+            {copiedId === principal.id ? "Copié" : "Copier stream compact"}
+          </button>
+        </div>
+      ) : null}
+      <details style={{ marginTop: "0.5rem" }}>
+        <summary
+          style={{
+            cursor: "pointer",
+            fontSize: "0.72rem",
+            fontWeight: 700,
+            color: "#334155",
+            userSelect: "none",
+          }}
+        >
+          Autres presets overlay
+        </summary>
+        <div
+          style={{
+            marginTop: "0.45rem",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.45rem",
+          }}
+        >
+          {secondaires.map((p) => (
+            <div
+              key={p.id}
               style={{
-                alignSelf: "flex-start",
-                padding: "0.35rem 0.65rem",
-                fontSize: "0.74rem",
-                fontWeight: 600,
-                borderRadius: "8px",
-                border: "1px solid #99f6e4",
-                background: copiedId === p.id ? "#ecfdf5" : "#f0fdfa",
-                color: copiedId === p.id ? "#15803d" : "#0f766e",
-                cursor: "pointer",
+                padding: "0.5rem 0.6rem",
+                borderRadius: "10px",
+                border: "1px solid #e2e8f0",
+                background: "#fafafa",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.32rem",
               }}
             >
-              {copiedId === p.id ? "Copié" : "Copier le lien"}
-            </button>
-          </div>
-        ))}
-      </div>
+              <div>
+                <p style={{ margin: 0, fontSize: "0.76rem", fontWeight: 700, color: "#0f172a" }}>
+                  {p.label}
+                </p>
+                <p
+                  style={{
+                    margin: "0.18rem 0 0 0",
+                    fontSize: "0.67rem",
+                    color: "#64748b",
+                    lineHeight: 1.35,
+                  }}
+                >
+                  {p.desc}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void copier(p)}
+                style={{
+                  alignSelf: "flex-start",
+                  padding: "0.32rem 0.62rem",
+                  fontSize: "0.72rem",
+                  fontWeight: 600,
+                  borderRadius: "8px",
+                  border: "1px solid #bae6fd",
+                  background: copiedId === p.id ? "#ecfdf5" : "#f8fafc",
+                  color: copiedId === p.id ? "#15803d" : "#0369a1",
+                  cursor: "pointer",
+                }}
+              >
+                {copiedId === p.id ? "Copié" : "Copier le lien"}
+              </button>
+            </div>
+          ))}
+        </div>
+      </details>
       <p
         style={{
           margin: "0.55rem 0 0 0",
@@ -2659,6 +2709,7 @@ function SidebarPartageDroit({
           </p>
         </div>
       ) : null}
+      <BlocOverlayStreamPresets slug={slug} onCopied={onOverlayCopied} />
       <PanneauQrParticipant
         slug={slug}
         liveState={liveState}
@@ -2668,7 +2719,6 @@ function SidebarPartageDroit({
         sceneBadge={sceneBadge}
       />
       <CopierLienEcranLeger slug={slug} />
-      <BlocOverlayStreamPresets slug={slug} onCopied={onOverlayCopied} />
       <div
         style={{
           paddingTop: "0.55rem",
@@ -4003,7 +4053,9 @@ export default function RegieEventPage() {
 
   const scrollToOverlayPanel = useCallback(() => {
     if (typeof document === "undefined") return;
-    const el = document.getElementById("regie-overlay-panel");
+    const el =
+      document.getElementById("overlay-stream-top") ||
+      document.getElementById("regie-overlay-panel");
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
   }, []);
