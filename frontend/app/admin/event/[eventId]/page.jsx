@@ -5604,8 +5604,9 @@ export default function RegieEventPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: desktop ? "1fr auto" : "1fr",
-                gap: desktop ? "1rem" : "0.65rem",
+                gridTemplateColumns:
+                  desktop && desktopSplitWide ? "1fr minmax(200px, 240px)" : "1fr",
+                gap: desktop && desktopSplitWide ? "1rem" : "0.65rem",
                 alignItems: "start",
               }}
             >
@@ -5727,11 +5728,11 @@ export default function RegieEventPage() {
                 display: "flex",
                 flexDirection: "column",
                 gap: "0.35rem",
-                width: desktop ? "auto" : "100%",
-                minWidth: desktop ? "200px" : undefined,
+                width: "100%",
+                minWidth: 0,
               }}
             >
-              {desktop ? (
+              {desktop && desktopSplitWide ? (
                 <span
                   style={{
                     fontSize: "0.65rem",
