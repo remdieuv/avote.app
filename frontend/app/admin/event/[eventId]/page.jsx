@@ -5682,7 +5682,7 @@ export default function RegieEventPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr",
+                gridTemplateColumns: desktop ? "minmax(0, 1fr) minmax(280px, 340px)" : "1fr",
                 gap: "0.65rem",
                 alignItems: "start",
               }}
@@ -5825,6 +5825,105 @@ export default function RegieEventPage() {
                   : "Aucun contenu synchronisé pour l’instant."}
               </p>
             </section>
+
+            <aside
+              style={{
+                ...CARD,
+                padding: "0.5rem 0.6rem",
+                borderColor: "#dbeafe",
+                background: "#f8fbff",
+                minWidth: 0,
+              }}
+            >
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "0.72rem",
+                  color: "#64748b",
+                  fontWeight: 700,
+                }}
+              >
+                {totalQuestions > 0
+                  ? eventFinished
+                    ? "Événement terminé · toutes les questions ont été diffusées"
+                    : activeQuestionIndex >= 0
+                      ? `Question ${activeQuestionIndex + 1}/${totalQuestions}`
+                      : `Questions prêtes : ${totalQuestions}`
+                  : "Aucune question"}
+              </p>
+              {totalQuestions > 0 ? (
+                <div
+                  style={{
+                    marginTop: "0.35rem",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.25rem",
+                    maxHeight: desktop ? "180px" : "130px",
+                    overflowY: "auto",
+                    paddingRight: "0.1rem",
+                  }}
+                >
+                  {pollsOrdered.map((p, idx) => {
+                    const isActive = idx === activeQuestionIndex;
+                    const status = String(p.status || "").toUpperCase();
+                    const done =
+                      eventFinished ||
+                      (!isActive &&
+                        ["CLOSED", "ARCHIVED"].includes(status) &&
+                        activeQuestionIndex > idx);
+                    return (
+                      <div
+                        key={p.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.4rem",
+                          fontSize: "0.72rem",
+                          color: isActive ? "#1e3a8a" : done ? "#475569" : "#64748b",
+                          fontWeight: isActive ? 700 : 500,
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            minWidth: "1.25rem",
+                            height: "1.25rem",
+                            borderRadius: "999px",
+                            border: `1px solid ${
+                              isActive ? "#93c5fd" : done ? "#cbd5e1" : "#e5e7eb"
+                            }`,
+                            background: isActive
+                              ? "#eff6ff"
+                              : done
+                                ? "#f8fafc"
+                                : "#fff",
+                            color: isActive ? "#1e40af" : "#64748b",
+                            fontSize: "0.66rem",
+                            fontWeight: 800,
+                            lineHeight: 1,
+                          }}
+                        >
+                          {idx + 1}
+                        </span>
+                        <span
+                          style={{
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            flex: 1,
+                          }}
+                          title={p.question || p.title}
+                        >
+                          {p.question || p.title || `Question ${idx + 1}`}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </aside>
 
             <div
               style={{
@@ -6057,116 +6156,6 @@ export default function RegieEventPage() {
                     Terminer l'événement
                   </button>
                 </>
-              )}
-              {regieQuickActionsMode ? null : (
-                <div
-                  style={{
-                    marginTop: "0.25rem",
-                    padding: "0.5rem 0.6rem",
-                    borderRadius: "10px",
-                    border: "1px solid #e5e7eb",
-                    background: "#fff",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0.35rem",
-                  }}
-                >
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "0.72rem",
-                    color: "#64748b",
-                    fontWeight: 700,
-                  }}
-                >
-                  {totalQuestions > 0
-                    ? eventFinished
-                      ? "Événement terminé · toutes les questions ont été diffusées"
-                      : activeQuestionIndex >= 0
-                        ? `Question ${activeQuestionIndex + 1}/${totalQuestions}`
-                        : `Questions prêtes : ${totalQuestions}`
-                    : "Aucune question"}
-                </p>
-                {totalQuestions > 0 ? (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "0.25rem",
-                      maxHeight: compactTopPanel ? "96px" : desktop ? "130px" : "110px",
-                      overflowY: "auto",
-                      paddingRight: "0.1rem",
-                    }}
-                  >
-                    {pollsOrdered.map((p, idx) => {
-                      const isActive = idx === activeQuestionIndex;
-                      const status = String(p.status || "").toUpperCase();
-                      const done =
-                        eventFinished ||
-                        (!isActive &&
-                          ["CLOSED", "ARCHIVED"].includes(status) &&
-                          activeQuestionIndex > idx);
-                      return (
-                        <div
-                          key={p.id}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.4rem",
-                            fontSize: "0.72rem",
-                            color: isActive
-                              ? "#1e3a8a"
-                              : done
-                                ? "#475569"
-                                : "#64748b",
-                            fontWeight: isActive ? 700 : 500,
-                          }}
-                        >
-                          <span
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              minWidth: "1.25rem",
-                              height: "1.25rem",
-                              borderRadius: "999px",
-                              border: `1px solid ${
-                                isActive
-                                  ? "#93c5fd"
-                                  : done
-                                    ? "#cbd5e1"
-                                    : "#e5e7eb"
-                              }`,
-                              background: isActive
-                                ? "#eff6ff"
-                                : done
-                                  ? "#f8fafc"
-                                  : "#fff",
-                              color: isActive ? "#1e40af" : "#64748b",
-                              fontSize: "0.66rem",
-                              fontWeight: 800,
-                              lineHeight: 1,
-                            }}
-                          >
-                            {idx + 1}
-                          </span>
-                          <span
-                            style={{
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              flex: 1,
-                            }}
-                            title={p.question || p.title}
-                          >
-                            {p.question || p.title || `Question ${idx + 1}`}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : null}
-                </div>
               )}
             </div>
           </div>
