@@ -5930,6 +5930,22 @@ export default function RegieEventPage() {
                   })}
                 </div>
               ) : null}
+              <button
+                type="button"
+                onClick={scrollToOverlayPanel}
+                style={{
+                  ...btnGhost,
+                  marginTop: "0.45rem",
+                  width: "100%",
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                  borderColor: "#67e8f9",
+                  background: "#ecfeff",
+                  color: "#155e75",
+                }}
+              >
+                Overlay
+              </button>
             </aside>
 
             <div
@@ -5955,21 +5971,6 @@ export default function RegieEventPage() {
                 }}
               >
                 {regieQuickActionsMode ? "Action rapide activée" : "Action rapide"}
-              </button>
-              <button
-                type="button"
-                onClick={scrollToOverlayPanel}
-                style={{
-                  ...btnGhost,
-                  width: "100%",
-                  fontSize: "0.72rem",
-                  fontWeight: 700,
-                  borderColor: "#67e8f9",
-                  background: "#ecfeff",
-                  color: "#155e75",
-                }}
-              >
-                Overlay
               </button>
               {regieQuickActionsMode ? (
                 <div
