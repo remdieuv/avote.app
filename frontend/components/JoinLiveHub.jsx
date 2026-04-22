@@ -1209,7 +1209,23 @@ export function JoinLiveHub({ slug }) {
               >
                 {historiqueQuestions.map((p) => (
                   <li key={p.id} style={{ marginBottom: "0.5rem" }}>
-                    {p.label}
+                    <span style={{ display: "block", marginBottom: "0.22rem" }}>
+                      {p.label}
+                    </span>
+                    {p.id !== "__active__" ? (
+                      <Link
+                        href={`/p/${encodeURIComponent(slug)}?poll=${encodeURIComponent(p.id)}`}
+                        style={{
+                          color: palette.link,
+                          fontSize: "0.76rem",
+                          fontWeight: 600,
+                          textDecoration: "underline",
+                          textUnderlineOffset: "3px",
+                        }}
+                      >
+                        Voir les résultats
+                      </Link>
+                    ) : null}
                   </li>
                 ))}
               </ol>
