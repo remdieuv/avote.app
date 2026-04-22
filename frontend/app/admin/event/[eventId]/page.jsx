@@ -4540,6 +4540,13 @@ export default function RegieEventPage() {
     canManageActivePoll && String(displayStateUi || "").toLowerCase() !== "question";
   const canShowResultsQuick =
     canManageActivePoll && String(displayStateUi || "").toLowerCase() !== "results";
+  const ecranLabel = activePoll
+    ? activePoll.question || activePoll.title
+    : eventFinished
+      ? "Événement terminé — aucune question active."
+      : affichageEnAttente
+        ? "Projection en attente — choisissez « Afficher la question » ou « Afficher les résultats »."
+        : "Aucun contenu synchronisé pour l’instant.";
   autoRotateRef.current = autoRotate;
   pollIdRef.current = activePollIdJs;
   displayStateRefRegie.current = displayStateUi;
@@ -5913,9 +5920,7 @@ export default function RegieEventPage() {
                 }}
               >
                 <strong style={{ color: "#111827" }}>À l’écran :</strong>{" "}
-                {activePoll
-                  ? activePoll.question || activePoll.title
-                  : "Aucun contenu synchronisé pour l’instant."}
+                {ecranLabel}
               </p>
               </div>
               <div

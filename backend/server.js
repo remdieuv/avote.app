@@ -1327,6 +1327,16 @@ app.get("/events/slug/:slug", async (req, res) => {
           pastPolls.push({ id: row.id, label });
         }
       }
+    } else if (pollsTotal > 0 && String(eventApres.liveState || "").toLowerCase() === "finished") {
+      // Fin d'événement: exposer tout l'historique des questions côté /join.
+      for (let i = 0; i < pollsOrdered.length; i++) {
+        const row = pollsOrdered[i];
+        const label =
+          (row.question && row.question.trim()) ||
+          (row.title && row.title.trim()) ||
+          `Question ${i + 1}`;
+        pastPolls.push({ id: row.id, label });
+      }
     }
     const pastPollLabels = pastPolls.map((p) => p.label);
 
