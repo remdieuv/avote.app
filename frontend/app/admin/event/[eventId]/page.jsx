@@ -1851,6 +1851,7 @@ function BlocProjectionEcran({
 
       {chronoSection ? (
         <div
+          id="regie-chrono-panel"
           style={{
             marginBottom: "0.75rem",
             padding: desktop ? "1.1rem 1.05rem" : "1rem 0.85rem",
@@ -4051,6 +4052,13 @@ export default function RegieEventPage() {
     }
   }, [eventId]);
 
+  const scrollToChronoPanel = useCallback(() => {
+    if (typeof document === "undefined") return;
+    const el = document.getElementById("regie-chrono-panel");
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+  }, []);
+
   useEffect(() => {
     if (!eventData) {
       eventPollIdsRef.current = new Set();
@@ -5912,6 +5920,22 @@ export default function RegieEventPage() {
                         ? "en pause"
                         : "prêt"}
                   </p>
+                  <button
+                    type="button"
+                    onClick={scrollToChronoPanel}
+                    style={{
+                      ...btnGhost,
+                      marginTop: "0.35rem",
+                      padding: "0.28rem 0.6rem",
+                      fontSize: "0.68rem",
+                      fontWeight: 700,
+                      borderColor: "#c4b5fd",
+                      background: "#f5f3ff",
+                      color: "#5b21b6",
+                    }}
+                  >
+                    Chrono
+                  </button>
                 </div>
               ) : null}
               </div>
