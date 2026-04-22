@@ -4526,7 +4526,8 @@ export default function RegieEventPage() {
       ? "#92400e"
       : "#991b1b";
   const activePollIdJs = eventData?.activePollId ?? null;
-  const canManageActivePoll = Boolean(activePollIdJs) && !busy && !eventFinished;
+  const canManageActivePoll = Boolean(activePollIdJs) && !busy;
+  const canToggleVote = Boolean(activePollIdJs) && !busy && !eventFinished;
   const voteIsOpen = voteStateUi === "open";
   const canShowQuestionQuick =
     canManageActivePoll && String(displayStateUi || "").toLowerCase() !== "question";
@@ -6076,7 +6077,7 @@ export default function RegieEventPage() {
                 >
                   <button
                     type="button"
-                    disabled={!canManageActivePoll}
+                    disabled={!canToggleVote}
                     onClick={async () => {
                       if (!activePollIdJs) return;
                       await postAction(
