@@ -3283,10 +3283,10 @@ function RegieSidebarInner({
           <p
             style={{
               margin: 0,
-              fontSize: "0.62rem",
+              fontSize: "0.68rem",
               fontWeight: 800,
               letterSpacing: "0.06em",
-              color: "#6b7280",
+              color: "#4338ca",
               textTransform: "uppercase",
             }}
           >
@@ -3331,6 +3331,26 @@ function RegieSidebarInner({
                     : "Aperçu public"
                   : "Aperçu public"}
               </button>
+              {eventId ? (
+                <Link
+                  href={`/admin/events/${encodeURIComponent(eventId)}/customization`}
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    textAlign: "center",
+                    padding: "0.43rem 0.6rem",
+                    fontSize: "0.77rem",
+                    fontWeight: 700,
+                    borderRadius: "9px",
+                    border: "1px solid #a5b4fc",
+                    background: "#f8fafc",
+                    color: "#4338ca",
+                    textDecoration: "none",
+                  }}
+                >
+                  Personnalisation de la salle
+                </Link>
+              ) : null}
             </>
           ) : null}
           <RegieAutoRevealCard
