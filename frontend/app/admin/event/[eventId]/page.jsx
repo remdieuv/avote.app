@@ -5876,17 +5876,16 @@ export default function RegieEventPage() {
                   : "Aucun contenu synchronisé pour l’instant."}
               </p>
               </div>
-              {desktop ? (
-                <div
-                  style={{
-                    minWidth: "170px",
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "center",
-                    alignItems: "flex-end",
-                    textAlign: "right",
-                  }}
-                >
+              <div
+                style={{
+                  minWidth: desktop ? "170px" : "110px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "center",
+                  alignItems: desktop ? "flex-end" : "flex-start",
+                  textAlign: desktop ? "right" : "left",
+                }}
+              >
                   <p
                     style={{
                       margin: 0,
@@ -5902,7 +5901,7 @@ export default function RegieEventPage() {
                   <p
                     style={{
                       margin: "0.2rem 0 0 0",
-                      fontSize: "2.05rem",
+                      fontSize: desktop ? "2.05rem" : "1.35rem",
                       fontWeight: 800,
                       lineHeight: 1.05,
                       color: "#3b0764",
@@ -5937,7 +5936,6 @@ export default function RegieEventPage() {
                     Chrono
                   </button>
                 </div>
-              ) : null}
               </div>
             </section>
 
