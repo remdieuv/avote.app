@@ -572,6 +572,15 @@ export function JoinLiveHub({ slug }) {
     }
     return `Question ${current} sur ${total}`;
   }, [pollsProgress]);
+  const historiqueQuestions = useMemo(() => {
+    const base = Array.isArray(pastPolls) ? pastPolls : [];
+    const activeLabel =
+      typeof activePollQuestion === "string" ? activePollQuestion.trim() : "";
+    if (!activeLabel) return base;
+    const exists = base.some((p) => String(p?.label || "").trim() === activeLabel);
+    if (exists) return base;
+    return [{ id: "__active__", label: activeLabel }, ...base];
+  }, [pastPolls, activePollQuestion]);
 
   const effectiveDescription = previewCustomization
     ? previewCustomization.description
@@ -1162,57 +1171,103 @@ export function JoinLiveHub({ slug }) {
           </div>
         ) : null}
 
-        {!loading && !error && pastPolls.length > 0 ? (
-          <details
-            style={{
-              width: "100%",
-              maxWidth: "36rem",
-              marginTop: "1.25rem",
-              textAlign: "left",
-            }}
-          >
-            <summary
+        {!loading && !error && historiqueQuestions.length > 0 ? (
+          scene === "finished" ? (
+            <section
               style={{
-                cursor: "pointer",
-                color: palette.link,
-                fontSize: "0.84rem",
-                fontWeight: 600,
-                listStyle: "none",
+                width: "100%",
+                maxWidth: "36rem",
+                marginTop: "1rem",
+                textAlign: "left",
+                borderRadius: "14px",
+                border: `1px solid ${palette.headerBorder}`,
+                background: palette.cardBg,
+                boxShadow: "0 8px 28px rgba(15,23,42,0.08)",
+                padding: "0.85rem 0.95rem",
+                boxSizing: "border-box",
               }}
             >
-              Questions déjà passées ({pastPolls.length})
-            </summary>
-            <ol
-              style={{
-                margin: "0.65rem 0 0 0",
-                paddingLeft: "1.2rem",
-                color: palette.muted,
-                fontSize: "0.8rem",
-                lineHeight: 1.45,
-                listStylePosition: "outside",
-              }}
-            >
-              {pastPolls.map((p) => (
-                <li key={p.id} style={{ marginBottom: "0.75rem" }}>
-                  <span style={{ display: "block", marginBottom: "0.3rem" }}>
+              <p
+                style={{
+                  margin: "0 0 0.5rem 0",
+                  fontSize: "0.78rem",
+                  fontWeight: 800,
+                  color: palette.fg2,
+                }}
+              >
+                Historique des questions ({historiqueQuestions.length})
+              </p>
+              <ol
+                style={{
+                  margin: 0,
+                  paddingLeft: "1.1rem",
+                  color: palette.muted,
+                  fontSize: "0.8rem",
+                  lineHeight: 1.45,
+                  listStylePosition: "outside",
+                }}
+              >
+                {historiqueQuestions.map((p) => (
+                  <li key={p.id} style={{ marginBottom: "0.5rem" }}>
                     {p.label}
-                  </span>
-                  <Link
-                    href={`/p/${encodeURIComponent(slug)}?poll=${encodeURIComponent(p.id)}`}
-                    style={{
-                      color: palette.link,
-                      fontSize: "0.78rem",
-                      fontWeight: 600,
-                      textDecoration: "underline",
-                      textUnderlineOffset: "3px",
-                    }}
-                  >
-                    Voir le sondage (résultats)
-                  </Link>
-                </li>
-              ))}
-            </ol>
-          </details>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          ) : (
+            <details
+              style={{
+                width: "100%",
+                maxWidth: "36rem",
+                marginTop: "1.25rem",
+                textAlign: "left",
+              }}
+            >
+              <summary
+                style={{
+                  cursor: "pointer",
+                  color: palette.link,
+                  fontSize: "0.84rem",
+                  fontWeight: 600,
+                  listStyle: "none",
+                }}
+              >
+                Questions déjà passées ({historiqueQuestions.length})
+              </summary>
+              <ol
+                style={{
+                  margin: "0.65rem 0 0 0",
+                  paddingLeft: "1.2rem",
+                  color: palette.muted,
+                  fontSize: "0.8rem",
+                  lineHeight: 1.45,
+                  listStylePosition: "outside",
+                }}
+              >
+                {historiqueQuestions.map((p) => (
+                  <li key={p.id} style={{ marginBottom: "0.75rem" }}>
+                    <span style={{ display: "block", marginBottom: "0.3rem" }}>
+                      {p.label}
+                    </span>
+                    {p.id !== "__active__" ? (
+                      <Link
+                        href={`/p/${encodeURIComponent(slug)}?poll=${encodeURIComponent(p.id)}`}
+                        style={{
+                          color: palette.link,
+                          fontSize: "0.78rem",
+                          fontWeight: 600,
+                          textDecoration: "underline",
+                          textUnderlineOffset: "3px",
+                        }}
+                      >
+                        Voir le sondage (résultats)
+                      </Link>
+                    ) : null}
+                  </li>
+                ))}
+              </ol>
+            </details>
+          )
         ) : null}
       </div>
 

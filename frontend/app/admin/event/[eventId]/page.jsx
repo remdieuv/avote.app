@@ -4504,9 +4504,16 @@ export default function RegieEventPage() {
 
   const voteLabel =
     VOTE_STATE_LABELS[voteStateUi] ?? String(voteStateUi).toUpperCase();
-  const displayLabel =
+  const displayLabelGlobal =
     DISPLAY_STATE_LABELS[displayStateUi] ??
     String(displayStateUi).toUpperCase();
+  const displayStateBUi = String(screenBDisplayState || "waiting").toLowerCase();
+  const displayLabelScreenB =
+    DISPLAY_STATE_LABELS[displayStateBUi] ?? String(displayStateBUi).toUpperCase();
+  const hasDisplayGap =
+    Boolean(screenBConnected) &&
+    ["question", "results", "waiting", "black"].includes(displayStateBUi) &&
+    displayStateBUi !== String(displayStateUi || "").toLowerCase();
   const affichageEnAttente =
     String(displayStateUi || "").toLowerCase() === "waiting";
   const compactTopPanel = !desktop;
@@ -5832,9 +5839,26 @@ export default function RegieEventPage() {
                     color: affichageEnAttente ? "#991b1b" : "#0f172a",
                   }}
                 >
-                  Affichage :{" "}
-                  {displayLabel}
+                      Affichage global :{" "}
+                      {displayLabelGlobal}
                 </span>
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.35rem",
+                        borderRadius: "999px",
+                        padding: "0.2rem 0.55rem",
+                        fontSize: "0.74rem",
+                        fontWeight: 700,
+                        border: "1px solid #bfdbfe",
+                        background: "#eff6ff",
+                        color: "#1e3a8a",
+                      }}
+                    >
+                      Écran B :{" "}
+                      {screenBConnected ? displayLabelScreenB : "Non connecté"}
+                    </span>
                 <span
                   style={{
                     display: "inline-flex",
@@ -5850,6 +5874,23 @@ export default function RegieEventPage() {
                 >
                   {socketStatusLabel}
                 </span>
+                    {hasDisplayGap ? (
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          borderRadius: "999px",
+                          padding: "0.2rem 0.55rem",
+                          fontSize: "0.74rem",
+                          fontWeight: 700,
+                          border: "1px solid #fed7aa",
+                          background: "#fff7ed",
+                          color: "#9a3412",
+                        }}
+                      >
+                        Écart global / écran B
+                      </span>
+                    ) : null}
               </div>
               {!compactTopPanel ? (
                 <p

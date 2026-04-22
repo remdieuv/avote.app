@@ -229,7 +229,7 @@ function computeEffectivePanel({
 
   if (enAttenteAutoReveal) return "reveal";
   if (ds === "results") return "results";
-  if (liveScene === "finished" || liveScene === "paused") return "empty";
+  if (liveScene === "paused") return "empty";
   if (ds === "waiting" && liveScene !== "finished") return "empty";
   return "question";
 }
@@ -905,7 +905,6 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
   if (
     !poll &&
     (ds === "waiting" ||
-      liveScene === "finished" ||
       liveScene === "paused" ||
       ds === "black")
   ) {
