@@ -1126,7 +1126,7 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
     );
   }
 
-  if (liveScene === "finished") {
+  if (liveScene === "finished" && (ds === "waiting" || !poll)) {
     return wrapOut(
       ds === "black",
       <main
