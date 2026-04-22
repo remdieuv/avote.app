@@ -4786,6 +4786,19 @@ export default function RegieEventPage() {
       : tm
         ? "Arrêté — prêt à relancer"
         : "Durée réglée avant lancement";
+  const chronoEtatLiveTexte = useMemo(() => {
+    if (secondesAfficheGrand == null) return "00:00";
+    const total = Math.max(0, Math.floor(secondesAfficheGrand));
+    const d = Math.floor(total / 86400);
+    const h = Math.floor((total % 86400) / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    if (d > 0) return `${d}j ${String(h).padStart(2, "0")}h`;
+    if (h > 0) {
+      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    }
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }, [secondesAfficheGrand]);
 
   const chronoAffichageLong = texteGrandChrono.includes(" j ");
 
@@ -5718,6 +5731,15 @@ export default function RegieEventPage() {
                   minWidth: 0,
                 }}
               >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "stretch",
+                  gap: "0.85rem",
+                }}
+              >
+              <div style={{ flex: 1, minWidth: 0 }}>
               <p
                 style={{
                   margin: "0 0 0.35rem 0",
@@ -5845,6 +5867,54 @@ export default function RegieEventPage() {
                   ? activePoll.question || activePoll.title
                   : "Aucun contenu synchronisé pour l’instant."}
               </p>
+              </div>
+              {desktop ? (
+                <div
+                  style={{
+                    minWidth: "170px",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "center",
+                    alignItems: "flex-end",
+                    textAlign: "right",
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "0.62rem",
+                      fontWeight: 700,
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      color: "#64748b",
+                    }}
+                  >
+                    Chrono scène
+                  </p>
+                  <p
+                    style={{
+                      margin: "0.2rem 0 0 0",
+                      fontSize: "2.05rem",
+                      fontWeight: 800,
+                      lineHeight: 1.05,
+                      color: "#3b0764",
+                      fontFamily: "ui-monospace, monospace",
+                      fontVariantNumeric: "tabular-nums",
+                      letterSpacing: "-0.03em",
+                    }}
+                  >
+                    {chronoEtatLiveTexte}
+                  </p>
+                  <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.68rem", color: "#6b7280" }}>
+                    {tm?.running && !tm?.isPaused
+                      ? "en cours"
+                      : tm?.isPaused
+                        ? "en pause"
+                        : "prêt"}
+                  </p>
+                </div>
+              ) : null}
+              </div>
             </section>
 
             <div
