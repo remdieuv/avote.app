@@ -165,6 +165,13 @@ export function JoinLiveHub({ slug }) {
     useState(null);
   /** Fond uni /join si pas d’image (#RRGGBB ou null côté API). */
   const [roomBackgroundColor, setRoomBackgroundColor] = useState(null);
+  const [infoSectionTitle, setInfoSectionTitle] = useState(null);
+  const [infoSectionText, setInfoSectionText] = useState(null);
+  const [infoPrimaryCtaLabel, setInfoPrimaryCtaLabel] = useState(null);
+  const [infoPrimaryCtaUrl, setInfoPrimaryCtaUrl] = useState(null);
+  const [infoSecondaryCtaLabel, setInfoSecondaryCtaLabel] = useState(null);
+  const [infoSecondaryCtaUrl, setInfoSecondaryCtaUrl] = useState(null);
+  const [infoShowOnFinished, setInfoShowOnFinished] = useState(true);
   const [prefersDark, setPrefersDark] = useState(true);
   /**
    * Surcharge visuelle depuis la page admin (iframe + postMessage), non persistée.
@@ -176,6 +183,13 @@ export function JoinLiveHub({ slug }) {
    *   themeMode: string | null;
    *   backgroundOverlayStrength: string | null;
    *   roomBackgroundColor: string | null;
+ *   infoSectionTitle: string | null;
+ *   infoSectionText: string | null;
+ *   infoPrimaryCtaLabel: string | null;
+ *   infoPrimaryCtaUrl: string | null;
+ *   infoSecondaryCtaLabel: string | null;
+ *   infoSecondaryCtaUrl: string | null;
+ *   infoShowOnFinished: boolean;
    * }}
    */
   const [previewCustomization, setPreviewCustomization] = useState(null);
@@ -205,6 +219,13 @@ export function JoinLiveHub({ slug }) {
       setThemeMode(null);
       setBackgroundOverlayStrength(null);
       setRoomBackgroundColor(null);
+      setInfoSectionTitle(null);
+      setInfoSectionText(null);
+      setInfoPrimaryCtaLabel(null);
+      setInfoPrimaryCtaUrl(null);
+      setInfoSecondaryCtaLabel(null);
+      setInfoSecondaryCtaUrl(null);
+      setInfoShowOnFinished(true);
       setPreviewCustomization(null);
       return;
     }
@@ -317,6 +338,34 @@ export function JoinLiveHub({ slug }) {
         ? rbc.trim()
         : null,
     );
+    const ist = data.infoSectionTitle;
+    const isx = data.infoSectionText;
+    const ipcl = data.infoPrimaryCtaLabel;
+    const ipcu = data.infoPrimaryCtaUrl;
+    const iscl = data.infoSecondaryCtaLabel;
+    const iscu = data.infoSecondaryCtaUrl;
+    const isof = data.infoShowOnFinished;
+    setInfoSectionTitle(
+      typeof ist === "string" && ist.trim() ? ist.trim() : null,
+    );
+    setInfoSectionText(typeof isx === "string" && isx.trim() ? isx.trim() : null);
+    setInfoPrimaryCtaLabel(
+      typeof ipcl === "string" && ipcl.trim() ? ipcl.trim() : null,
+    );
+    setInfoPrimaryCtaUrl(
+      typeof ipcu === "string" && /^https?:\/\/\S+$/i.test(ipcu.trim())
+        ? ipcu.trim()
+        : null,
+    );
+    setInfoSecondaryCtaLabel(
+      typeof iscl === "string" && iscl.trim() ? iscl.trim() : null,
+    );
+    setInfoSecondaryCtaUrl(
+      typeof iscu === "string" && /^https?:\/\/\S+$/i.test(iscu.trim())
+        ? iscu.trim()
+        : null,
+    );
+    setInfoShowOnFinished(typeof isof === "boolean" ? isof : true);
   }, [slug]);
 
   useEffect(() => {
@@ -392,6 +441,56 @@ export function JoinLiveHub({ slug }) {
                 /^#[0-9A-Fa-f]{6}$/.test(p.roomBackgroundColor)
               ? p.roomBackgroundColor
               : null,
+        infoSectionTitle:
+          p.infoSectionTitle === undefined
+            ? null
+            : typeof p.infoSectionTitle === "string"
+              ? p.infoSectionTitle
+              : p.infoSectionTitle == null
+                ? null
+                : String(p.infoSectionTitle),
+        infoSectionText:
+          p.infoSectionText === undefined
+            ? null
+            : typeof p.infoSectionText === "string"
+              ? p.infoSectionText
+              : p.infoSectionText == null
+                ? null
+                : String(p.infoSectionText),
+        infoPrimaryCtaLabel:
+          p.infoPrimaryCtaLabel === undefined
+            ? null
+            : typeof p.infoPrimaryCtaLabel === "string"
+              ? p.infoPrimaryCtaLabel
+              : p.infoPrimaryCtaLabel == null
+                ? null
+                : String(p.infoPrimaryCtaLabel),
+        infoPrimaryCtaUrl:
+          p.infoPrimaryCtaUrl === undefined || p.infoPrimaryCtaUrl === ""
+            ? null
+            : typeof p.infoPrimaryCtaUrl === "string" &&
+                /^https?:\/\/\S+$/i.test(p.infoPrimaryCtaUrl.trim())
+              ? p.infoPrimaryCtaUrl.trim()
+              : null,
+        infoSecondaryCtaLabel:
+          p.infoSecondaryCtaLabel === undefined
+            ? null
+            : typeof p.infoSecondaryCtaLabel === "string"
+              ? p.infoSecondaryCtaLabel
+              : p.infoSecondaryCtaLabel == null
+                ? null
+                : String(p.infoSecondaryCtaLabel),
+        infoSecondaryCtaUrl:
+          p.infoSecondaryCtaUrl === undefined || p.infoSecondaryCtaUrl === ""
+            ? null
+            : typeof p.infoSecondaryCtaUrl === "string" &&
+                /^https?:\/\/\S+$/i.test(p.infoSecondaryCtaUrl.trim())
+              ? p.infoSecondaryCtaUrl.trim()
+              : null,
+        infoShowOnFinished:
+          typeof p.infoShowOnFinished === "boolean"
+            ? p.infoShowOnFinished
+            : true,
       });
     }
 
@@ -603,6 +702,35 @@ export function JoinLiveHub({ slug }) {
   const effectiveRoomBackgroundColor = previewCustomization
     ? previewCustomization.roomBackgroundColor
     : roomBackgroundColor;
+  const effectiveInfoSectionTitle = previewCustomization
+    ? previewCustomization.infoSectionTitle
+    : infoSectionTitle;
+  const effectiveInfoSectionText = previewCustomization
+    ? previewCustomization.infoSectionText
+    : infoSectionText;
+  const effectiveInfoPrimaryCtaLabel = previewCustomization
+    ? previewCustomization.infoPrimaryCtaLabel
+    : infoPrimaryCtaLabel;
+  const effectiveInfoPrimaryCtaUrl = previewCustomization
+    ? previewCustomization.infoPrimaryCtaUrl
+    : infoPrimaryCtaUrl;
+  const effectiveInfoSecondaryCtaLabel = previewCustomization
+    ? previewCustomization.infoSecondaryCtaLabel
+    : infoSecondaryCtaLabel;
+  const effectiveInfoSecondaryCtaUrl = previewCustomization
+    ? previewCustomization.infoSecondaryCtaUrl
+    : infoSecondaryCtaUrl;
+  const effectiveInfoShowOnFinished = previewCustomization
+    ? previewCustomization.infoShowOnFinished
+    : infoShowOnFinished;
+  const showInfoSection =
+    !loading &&
+    !error &&
+    (scene !== "finished" || effectiveInfoShowOnFinished) &&
+    (effectiveInfoSectionTitle ||
+      effectiveInfoSectionText ||
+      (effectiveInfoPrimaryCtaLabel && effectiveInfoPrimaryCtaUrl) ||
+      (effectiveInfoSecondaryCtaLabel && effectiveInfoSecondaryCtaUrl));
 
   const isDark = resolveJoinRoomIsDark(effectiveThemeMode, prefersDark);
   const accent = joinRoomAccent(effectivePrimaryColor);
@@ -1126,6 +1254,99 @@ export function JoinLiveHub({ slug }) {
           >
             {progressionLigne}
           </p>
+        ) : null}
+        {showInfoSection ? (
+          <section
+            style={{
+              marginTop: "0.75rem",
+              borderRadius: "12px",
+              border: `1px solid ${palette.headerBorder}`,
+              background: palette.cardBg,
+              padding: "0.75rem 0.85rem",
+              boxSizing: "border-box",
+              maxWidth: "40rem",
+            }}
+          >
+            {effectiveInfoSectionTitle ? (
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "0.78rem",
+                  fontWeight: 800,
+                  color: palette.fg2,
+                }}
+              >
+                {effectiveInfoSectionTitle}
+              </p>
+            ) : null}
+            {effectiveInfoSectionText ? (
+              <p
+                style={{
+                  margin: effectiveInfoSectionTitle ? "0.32rem 0 0" : "0",
+                  fontSize: "0.8rem",
+                  lineHeight: 1.45,
+                  color: palette.muted,
+                }}
+              >
+                {effectiveInfoSectionText}
+              </p>
+            ) : null}
+            <div
+              style={{
+                marginTop:
+                  effectiveInfoSectionTitle || effectiveInfoSectionText
+                    ? "0.58rem"
+                    : 0,
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "0.5rem",
+              }}
+            >
+              {effectiveInfoPrimaryCtaLabel && effectiveInfoPrimaryCtaUrl ? (
+                <a
+                  href={effectiveInfoPrimaryCtaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "0.45rem 0.68rem",
+                    borderRadius: "9px",
+                    textDecoration: "none",
+                    fontSize: "0.78rem",
+                    fontWeight: 700,
+                    color: "#fff",
+                    background: palette.link,
+                  }}
+                >
+                  ↗ {effectiveInfoPrimaryCtaLabel}
+                </a>
+              ) : null}
+              {effectiveInfoSecondaryCtaLabel && effectiveInfoSecondaryCtaUrl ? (
+                <a
+                  href={effectiveInfoSecondaryCtaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "0.45rem 0.68rem",
+                    borderRadius: "9px",
+                    textDecoration: "none",
+                    fontSize: "0.78rem",
+                    fontWeight: 700,
+                    color: palette.fg2,
+                    border: `1px solid ${palette.headerBorder}`,
+                    background: palette.cardBg,
+                  }}
+                >
+                  ↗ {effectiveInfoSecondaryCtaLabel}
+                </a>
+              ) : null}
+            </div>
+          </section>
         ) : null}
       </header>
 

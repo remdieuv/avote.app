@@ -61,6 +61,13 @@ function eventCustomizationJson(event) {
       themeMode: null,
       backgroundOverlayStrength: null,
       roomBackgroundColor: null,
+      infoSectionTitle: null,
+      infoSectionText: null,
+      infoPrimaryCtaLabel: null,
+      infoPrimaryCtaUrl: null,
+      infoSecondaryCtaLabel: null,
+      infoSecondaryCtaUrl: null,
+      infoShowOnFinished: true,
     };
   }
   return {
@@ -71,6 +78,16 @@ function eventCustomizationJson(event) {
     themeMode: event.themeMode ?? null,
     backgroundOverlayStrength: event.backgroundOverlayStrength ?? null,
     roomBackgroundColor: event.roomBackgroundColor ?? null,
+    infoSectionTitle: event.infoSectionTitle ?? null,
+    infoSectionText: event.infoSectionText ?? null,
+    infoPrimaryCtaLabel: event.infoPrimaryCtaLabel ?? null,
+    infoPrimaryCtaUrl: event.infoPrimaryCtaUrl ?? null,
+    infoSecondaryCtaLabel: event.infoSecondaryCtaLabel ?? null,
+    infoSecondaryCtaUrl: event.infoSecondaryCtaUrl ?? null,
+    infoShowOnFinished:
+      typeof event.infoShowOnFinished === "boolean"
+        ? event.infoShowOnFinished
+        : true,
   };
 }
 
@@ -1014,6 +1031,16 @@ app.post("/events/:eventId/duplicate", requireAuth, async (req, res) => {
           themeMode: source.themeMode ?? null,
           backgroundOverlayStrength: source.backgroundOverlayStrength ?? null,
           roomBackgroundColor: source.roomBackgroundColor ?? null,
+          infoSectionTitle: source.infoSectionTitle ?? null,
+          infoSectionText: source.infoSectionText ?? null,
+          infoPrimaryCtaLabel: source.infoPrimaryCtaLabel ?? null,
+          infoPrimaryCtaUrl: source.infoPrimaryCtaUrl ?? null,
+          infoSecondaryCtaLabel: source.infoSecondaryCtaLabel ?? null,
+          infoSecondaryCtaUrl: source.infoSecondaryCtaUrl ?? null,
+          infoShowOnFinished:
+            typeof source.infoShowOnFinished === "boolean"
+              ? source.infoShowOnFinished
+              : true,
           slug,
           status: "PUBLISHED",
           liveState: "WAITING",
@@ -1523,6 +1550,25 @@ function normalizeAssetUrlInput(raw) {
   return undefined;
 }
 
+/**
+ * @param {unknown} raw
+ * @returns {string | null | undefined} undefined = invalide
+ */
+function normalizeExternalUrlInput(raw) {
+  if (raw === null) return null;
+  if (typeof raw !== "string") return undefined;
+  const t = raw.trim();
+  if (t === "") return null;
+  if (t.length > 2048) return undefined;
+  try {
+    const u = new URL(t);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return undefined;
+    return u.toString();
+  } catch {
+    return undefined;
+  }
+}
+
 app.patch("/events/:eventId/customization", requireAuth, async (req, res) => {
   try {
     const { eventId } = req.params;
@@ -1634,6 +1680,78 @@ app.patch("/events/:eventId/customization", requireAuth, async (req, res) => {
           .status(400)
           .json({ error: "backgroundOverlayStrength invalide." });
       }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, "infoSectionTitle")) {
+      const v = body.infoSectionTitle;
+      if (v === null) {
+        data.infoSectionTitle = null;
+      } else if (typeof v === "string") {
+        const t = v.trim();
+        data.infoSectionTitle = t === "" ? null : t.slice(0, 120);
+      } else {
+        return res.status(400).json({ error: "infoSectionTitle invalide." });
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, "infoSectionText")) {
+      const v = body.infoSectionText;
+      if (v === null) {
+        data.infoSectionText = null;
+      } else if (typeof v === "string") {
+        const t = v.trim();
+        data.infoSectionText = t === "" ? null : t.slice(0, 1200);
+      } else {
+        return res.status(400).json({ error: "infoSectionText invalide." });
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, "infoPrimaryCtaLabel")) {
+      const v = body.infoPrimaryCtaLabel;
+      if (v === null) {
+        data.infoPrimaryCtaLabel = null;
+      } else if (typeof v === "string") {
+        const t = v.trim();
+        data.infoPrimaryCtaLabel = t === "" ? null : t.slice(0, 80);
+      } else {
+        return res.status(400).json({ error: "infoPrimaryCtaLabel invalide." });
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, "infoSecondaryCtaLabel")) {
+      const v = body.infoSecondaryCtaLabel;
+      if (v === null) {
+        data.infoSecondaryCtaLabel = null;
+      } else if (typeof v === "string") {
+        const t = v.trim();
+        data.infoSecondaryCtaLabel = t === "" ? null : t.slice(0, 80);
+      } else {
+        return res.status(400).json({ error: "infoSecondaryCtaLabel invalide." });
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, "infoPrimaryCtaUrl")) {
+      const v = normalizeExternalUrlInput(body.infoPrimaryCtaUrl);
+      if (v === undefined) {
+        return res.status(400).json({ error: "infoPrimaryCtaUrl invalide." });
+      }
+      data.infoPrimaryCtaUrl = v;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, "infoSecondaryCtaUrl")) {
+      const v = normalizeExternalUrlInput(body.infoSecondaryCtaUrl);
+      if (v === undefined) {
+        return res.status(400).json({ error: "infoSecondaryCtaUrl invalide." });
+      }
+      data.infoSecondaryCtaUrl = v;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, "infoShowOnFinished")) {
+      const v = body.infoShowOnFinished;
+      if (typeof v !== "boolean") {
+        return res.status(400).json({ error: "infoShowOnFinished invalide." });
+      }
+      data.infoShowOnFinished = v;
     }
 
     if (Object.keys(data).length === 0) {

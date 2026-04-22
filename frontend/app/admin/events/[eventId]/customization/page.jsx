@@ -72,6 +72,13 @@ export default function EventCustomizationPage() {
   const [themeMode, setThemeMode] = useState("auto");
   const [backgroundOverlayStrength, setBackgroundOverlayStrength] =
     useState("medium");
+  const [infoSectionTitle, setInfoSectionTitle] = useState("");
+  const [infoSectionText, setInfoSectionText] = useState("");
+  const [infoPrimaryCtaLabel, setInfoPrimaryCtaLabel] = useState("");
+  const [infoPrimaryCtaUrl, setInfoPrimaryCtaUrl] = useState("");
+  const [infoSecondaryCtaLabel, setInfoSecondaryCtaLabel] = useState("");
+  const [infoSecondaryCtaUrl, setInfoSecondaryCtaUrl] = useState("");
+  const [infoShowOnFinished, setInfoShowOnFinished] = useState(true);
 
   const [baseline, setBaseline] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -107,6 +114,27 @@ export default function EventCustomizationPage() {
         /^#[0-9A-Fa-f]{6}$/.test(roomBackgroundColor.trim())
           ? roomBackgroundColor.trim()
           : null,
+      infoSectionTitle:
+        infoSectionTitle.trim() === "" ? null : infoSectionTitle.trim().slice(0, 120),
+      infoSectionText:
+        infoSectionText.trim() === "" ? null : infoSectionText.trim().slice(0, 1200),
+      infoPrimaryCtaLabel:
+        infoPrimaryCtaLabel.trim() === ""
+          ? null
+          : infoPrimaryCtaLabel.trim().slice(0, 80),
+      infoPrimaryCtaUrl:
+        /^https?:\/\/\S+$/i.test(infoPrimaryCtaUrl.trim())
+          ? infoPrimaryCtaUrl.trim()
+          : null,
+      infoSecondaryCtaLabel:
+        infoSecondaryCtaLabel.trim() === ""
+          ? null
+          : infoSecondaryCtaLabel.trim().slice(0, 80),
+      infoSecondaryCtaUrl:
+        /^https?:\/\/\S+$/i.test(infoSecondaryCtaUrl.trim())
+          ? infoSecondaryCtaUrl.trim()
+          : null,
+      infoShowOnFinished: Boolean(infoShowOnFinished),
     }),
     [
       description,
@@ -116,6 +144,13 @@ export default function EventCustomizationPage() {
       roomBackgroundColor,
       themeMode,
       backgroundOverlayStrength,
+      infoSectionTitle,
+      infoSectionText,
+      infoPrimaryCtaLabel,
+      infoPrimaryCtaUrl,
+      infoSecondaryCtaLabel,
+      infoSecondaryCtaUrl,
+      infoShowOnFinished,
     ],
   );
 
@@ -149,7 +184,14 @@ export default function EventCustomizationPage() {
       primaryColor !== baseline.primaryColor ||
       roomBackgroundColor !== baseline.roomBackgroundColor ||
       themeMode !== baseline.themeMode ||
-      backgroundOverlayStrength !== baseline.backgroundOverlayStrength
+      backgroundOverlayStrength !== baseline.backgroundOverlayStrength ||
+      infoSectionTitle !== baseline.infoSectionTitle ||
+      infoSectionText !== baseline.infoSectionText ||
+      infoPrimaryCtaLabel !== baseline.infoPrimaryCtaLabel ||
+      infoPrimaryCtaUrl !== baseline.infoPrimaryCtaUrl ||
+      infoSecondaryCtaLabel !== baseline.infoSecondaryCtaLabel ||
+      infoSecondaryCtaUrl !== baseline.infoSecondaryCtaUrl ||
+      infoShowOnFinished !== baseline.infoShowOnFinished
     );
   }, [
     baseline,
@@ -160,6 +202,13 @@ export default function EventCustomizationPage() {
     roomBackgroundColor,
     themeMode,
     backgroundOverlayStrength,
+    infoSectionTitle,
+    infoSectionText,
+    infoPrimaryCtaLabel,
+    infoPrimaryCtaUrl,
+    infoSecondaryCtaLabel,
+    infoSecondaryCtaUrl,
+    infoShowOnFinished,
   ]);
 
   const load = useCallback(async () => {
@@ -186,6 +235,13 @@ export default function EventCustomizationPage() {
       const tm = data.themeMode;
       const ov = data.backgroundOverlayStrength;
       const rbc = data.roomBackgroundColor;
+      const ist = data.infoSectionTitle;
+      const isx = data.infoSectionText;
+      const ipcl = data.infoPrimaryCtaLabel;
+      const ipcu = data.infoPrimaryCtaUrl;
+      const iscl = data.infoSecondaryCtaLabel;
+      const iscu = data.infoSecondaryCtaUrl;
+      const isof = data.infoShowOnFinished;
 
       setDescription(desc);
       setLogoUrl(typeof lu === "string" ? resolveApiAssetUrl(lu) : "");
@@ -210,6 +266,13 @@ export default function EventCustomizationPage() {
           ? rbc.trim()
           : "",
       );
+      setInfoSectionTitle(typeof ist === "string" ? ist : "");
+      setInfoSectionText(typeof isx === "string" ? isx : "");
+      setInfoPrimaryCtaLabel(typeof ipcl === "string" ? ipcl : "");
+      setInfoPrimaryCtaUrl(typeof ipcu === "string" ? ipcu : "");
+      setInfoSecondaryCtaLabel(typeof iscl === "string" ? iscl : "");
+      setInfoSecondaryCtaUrl(typeof iscu === "string" ? iscu : "");
+      setInfoShowOnFinished(typeof isof === "boolean" ? isof : true);
 
       setBaseline({
         description: desc,
@@ -231,6 +294,13 @@ export default function EventCustomizationPage() {
           typeof ov === "string" && ov.trim()
             ? String(ov).toLowerCase()
             : "medium",
+        infoSectionTitle: typeof ist === "string" ? ist : "",
+        infoSectionText: typeof isx === "string" ? isx : "",
+        infoPrimaryCtaLabel: typeof ipcl === "string" ? ipcl : "",
+        infoPrimaryCtaUrl: typeof ipcu === "string" ? ipcu : "",
+        infoSecondaryCtaLabel: typeof iscl === "string" ? iscl : "",
+        infoSecondaryCtaUrl: typeof iscu === "string" ? iscu : "",
+        infoShowOnFinished: typeof isof === "boolean" ? isof : true,
       });
     } catch (e) {
       setLoadError(e.message || "Chargement impossible.");
@@ -277,6 +347,8 @@ export default function EventCustomizationPage() {
     try {
       const pcTrim = primaryColor.trim();
       const rbcTrim = roomBackgroundColor.trim();
+      const ipUrlTrim = infoPrimaryCtaUrl.trim();
+      const isUrlTrim = infoSecondaryCtaUrl.trim();
       const payload = {
         description: description.trim() === "" ? null : description.trim(),
         logoUrl: logoUrl.trim() === "" ? null : logoUrl.trim(),
@@ -292,6 +364,31 @@ export default function EventCustomizationPage() {
               : null,
         themeMode: themeMode || null,
         backgroundOverlayStrength: backgroundOverlayStrength || null,
+        infoSectionTitle:
+          infoSectionTitle.trim() === "" ? null : infoSectionTitle.trim().slice(0, 120),
+        infoSectionText:
+          infoSectionText.trim() === "" ? null : infoSectionText.trim().slice(0, 1200),
+        infoPrimaryCtaLabel:
+          infoPrimaryCtaLabel.trim() === ""
+            ? null
+            : infoPrimaryCtaLabel.trim().slice(0, 80),
+        infoPrimaryCtaUrl:
+          ipUrlTrim === ""
+            ? null
+            : /^https?:\/\/\S+$/i.test(ipUrlTrim)
+              ? ipUrlTrim
+              : null,
+        infoSecondaryCtaLabel:
+          infoSecondaryCtaLabel.trim() === ""
+            ? null
+            : infoSecondaryCtaLabel.trim().slice(0, 80),
+        infoSecondaryCtaUrl:
+          isUrlTrim === ""
+            ? null
+            : /^https?:\/\/\S+$/i.test(isUrlTrim)
+              ? isUrlTrim
+              : null,
+        infoShowOnFinished: Boolean(infoShowOnFinished),
       };
       const res = await adminFetch(
         `${apiBaseBrowser()}/events/${eventId}/customization`,
@@ -321,6 +418,19 @@ export default function EventCustomizationPage() {
           : "",
         themeMode,
         backgroundOverlayStrength,
+        infoSectionTitle: infoSectionTitle.trim(),
+        infoSectionText: infoSectionText.trim(),
+        infoPrimaryCtaLabel: infoPrimaryCtaLabel.trim(),
+        infoPrimaryCtaUrl:
+          /^https?:\/\/\S+$/i.test(infoPrimaryCtaUrl.trim())
+            ? infoPrimaryCtaUrl.trim()
+            : "",
+        infoSecondaryCtaLabel: infoSecondaryCtaLabel.trim(),
+        infoSecondaryCtaUrl:
+          /^https?:\/\/\S+$/i.test(infoSecondaryCtaUrl.trim())
+            ? infoSecondaryCtaUrl.trim()
+            : "",
+        infoShowOnFinished: Boolean(infoShowOnFinished),
       });
     } catch (e) {
       setSaveError(e.message || "Enregistrement impossible.");
@@ -581,6 +691,202 @@ export default function EventCustomizationPage() {
                     </button>
                   ) : null}
                 </div>
+              </section>
+
+              <section style={card}>
+                <h2
+                  style={{
+                    margin: "0 0 0.85rem",
+                    fontSize: "0.72rem",
+                    fontWeight: 800,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    color: "#64748b",
+                  }}
+                >
+                  Infos & liens
+                </h2>
+                <p
+                  style={{
+                    margin: "0 0 0.75rem",
+                    fontSize: "0.77rem",
+                    color: "#64748b",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Bloc d’information affiché sur la salle participant `/join`.
+                </p>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.78rem",
+                    fontWeight: 600,
+                    color: "#475569",
+                    marginBottom: "0.35rem",
+                  }}
+                >
+                  Titre du bloc
+                </label>
+                <input
+                  type="text"
+                  value={infoSectionTitle}
+                  maxLength={120}
+                  onChange={(e) => setInfoSectionTitle(e.target.value)}
+                  placeholder="Infos pratiques"
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    padding: "0.5rem 0.65rem",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "0.88rem",
+                    marginBottom: "0.75rem",
+                  }}
+                />
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.78rem",
+                    fontWeight: 600,
+                    color: "#475569",
+                    marginBottom: "0.35rem",
+                  }}
+                >
+                  Texte court
+                </label>
+                <textarea
+                  value={infoSectionText}
+                  onChange={(e) => setInfoSectionText(e.target.value)}
+                  rows={3}
+                  maxLength={1200}
+                  placeholder="Ex: Consultez le programme, le règlement ou nos ressources."
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    padding: "0.55rem 0.65rem",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "0.88rem",
+                    resize: "vertical",
+                    fontFamily: "inherit",
+                    marginBottom: "0.75rem",
+                  }}
+                />
+                <div
+                  style={{
+                    border: "1px dashed #cbd5e1",
+                    borderRadius: "10px",
+                    padding: "0.65rem",
+                    marginBottom: "0.6rem",
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: "0 0 0.45rem",
+                      fontSize: "0.76rem",
+                      fontWeight: 700,
+                      color: "#475569",
+                    }}
+                  >
+                    Bouton principal
+                  </p>
+                  <input
+                    type="text"
+                    value={infoPrimaryCtaLabel}
+                    maxLength={80}
+                    onChange={(e) => setInfoPrimaryCtaLabel(e.target.value)}
+                    placeholder="Label (ex: Programme)"
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      padding: "0.47rem 0.6rem",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      fontSize: "0.84rem",
+                      marginBottom: "0.4rem",
+                    }}
+                  />
+                  <input
+                    type="url"
+                    value={infoPrimaryCtaUrl}
+                    onChange={(e) => setInfoPrimaryCtaUrl(e.target.value)}
+                    placeholder="https://..."
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      padding: "0.47rem 0.6rem",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      fontSize: "0.84rem",
+                    }}
+                  />
+                </div>
+                <div
+                  style={{
+                    border: "1px dashed #cbd5e1",
+                    borderRadius: "10px",
+                    padding: "0.65rem",
+                    marginBottom: "0.7rem",
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: "0 0 0.45rem",
+                      fontSize: "0.76rem",
+                      fontWeight: 700,
+                      color: "#475569",
+                    }}
+                  >
+                    Bouton secondaire (optionnel)
+                  </p>
+                  <input
+                    type="text"
+                    value={infoSecondaryCtaLabel}
+                    maxLength={80}
+                    onChange={(e) => setInfoSecondaryCtaLabel(e.target.value)}
+                    placeholder="Label (ex: Règlement)"
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      padding: "0.47rem 0.6rem",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      fontSize: "0.84rem",
+                      marginBottom: "0.4rem",
+                    }}
+                  />
+                  <input
+                    type="url"
+                    value={infoSecondaryCtaUrl}
+                    onChange={(e) => setInfoSecondaryCtaUrl(e.target.value)}
+                    placeholder="https://..."
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      padding: "0.47rem 0.6rem",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      fontSize: "0.84rem",
+                    }}
+                  />
+                </div>
+                <label
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    fontSize: "0.82rem",
+                    color: "#334155",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={infoShowOnFinished}
+                    onChange={(e) => setInfoShowOnFinished(e.target.checked)}
+                  />
+                  Afficher aussi après la fin de l’événement
+                </label>
               </section>
 
               <section style={card}>

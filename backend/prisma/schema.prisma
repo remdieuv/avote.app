@@ -97,6 +97,15 @@ model Event {
   backgroundOverlayStrength String?
   /** Fond uni (#RRGGBB) pour la salle /join lorsqu’aucune image de fond */
   roomBackgroundColor String?
+  /** Bloc infos/CTA optionnel affiché dans la salle publique */
+  infoSectionTitle String?
+  infoSectionText String?
+  infoPrimaryCtaLabel String?
+  infoPrimaryCtaUrl String?
+  infoSecondaryCtaLabel String?
+  infoSecondaryCtaUrl String?
+  /** Afficher les infos aussi quand l'événement est terminé */
+  infoShowOnFinished Boolean @default(true)
   slug         String      @unique
   status       EventStatus @default(DRAFT)
   liveState    LiveState   @default(WAITING)
