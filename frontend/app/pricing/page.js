@@ -408,14 +408,6 @@ export default function PricingPage() {
               <PlanCard key={plan.key} plan={plan} />
             ))}
           </div>
-          <section className="pricing-reassurance-section" aria-label="Garanties">
-          <div className="pricing-bottom-reassurance pricing-bottom-reassurance-inline">
-            <span>Aucun engagement</span>
-            <span>Paiement sécurisé avec Stripe</span>
-            <span>Test gratuit disponible</span>
-            <span>Fonctionne sans application</span>
-          </div>
-          </section>
         </section>
 
         <section style={sectionY} aria-labelledby="pricing-compare-title">
@@ -489,6 +481,15 @@ export default function PricingPage() {
             <Link href="/admin" style={btnPrimary}>
               Nous contacter
             </Link>
+          </div>
+        </section>
+
+        <section style={{ ...sectionY, paddingTop: "1rem", paddingBottom: "1rem" }}>
+          <div className="pricing-bottom-reassurance">
+            <span>Aucun engagement</span>
+            <span>Paiement sécurisé avec Stripe</span>
+            <span>Test gratuit disponible</span>
+            <span>Fonctionne sans application</span>
           </div>
         </section>
 
@@ -963,14 +964,6 @@ export default function PricingPage() {
           color: #64748b;
           font-size: 0.79rem;
           font-weight: 700;
-        }
-        .pricing-bottom-reassurance-inline {
-          margin: 0;
-        }
-        .pricing-reassurance-section {
-          margin-top: 1.2rem;
-          padding-top: 1rem;
-          border-top: 1px solid #e9d5ff;
         }
         @media (min-width: 640px) {
           .pricing-count-grid {
