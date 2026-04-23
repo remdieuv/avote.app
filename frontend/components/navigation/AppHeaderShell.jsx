@@ -105,7 +105,7 @@ export function AppHeaderShell({
           margin: 0 auto;
           min-height: 56px;
           display: grid;
-          grid-template-columns: auto 1fr auto;
+          grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
           align-items: center;
           gap: 0.75rem;
         }
@@ -114,6 +114,15 @@ export function AppHeaderShell({
           display: flex;
           align-items: center;
           gap: 0.5rem;
+        }
+        .app-header-left {
+          justify-self: start;
+          min-width: 0;
+        }
+        .app-header-right {
+          justify-self: end;
+          min-width: 0;
+          justify-content: flex-end;
         }
         .app-header-logo {
           display: inline-flex;
@@ -152,6 +161,8 @@ export function AppHeaderShell({
           align-items: center;
           justify-content: center;
           gap: 0.35rem;
+          justify-self: center;
+          min-width: 0;
         }
         .app-header-link,
         .app-header-mobile-quick {
@@ -185,6 +196,7 @@ export function AppHeaderShell({
             width: min(100%, 100vw);
             padding: 0 0.6rem;
             box-sizing: border-box;
+            grid-template-columns: auto 1fr auto;
           }
           .app-header-nav {
             justify-content: flex-start;
