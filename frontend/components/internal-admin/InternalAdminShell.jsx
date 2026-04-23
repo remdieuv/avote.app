@@ -122,7 +122,7 @@ export function InternalAdminShell({ children }) {
                 src="/avote-wordmark.png"
                 alt="AVOTE"
                 style={{
-                  height: "1.52rem",
+                  height: "1.95rem",
                   width: "auto",
                   objectFit: "contain",
                   display: "block",

@@ -143,7 +143,7 @@ export function AppHeaderShell({
           flex-shrink: 0;
         }
         .app-header-logo-wordmark {
-          height: 1.55rem;
+          height: 2rem;
           width: auto;
           object-fit: contain;
           display: block;
@@ -210,7 +210,7 @@ export function AppHeaderShell({
           .app-header-nav { display: none; }
           .app-header-mobile-quick { display: inline-flex; }
           .app-header-logo { font-size: 0.96rem; }
-          .app-header-logo-wordmark { height: 1.42rem; }
+          .app-header-logo-wordmark { height: 1.78rem; }
           .app-header-logo-compact.with-wordmark { display: none; }
         }
       `}</style>
