@@ -252,9 +252,11 @@ function PlanCard({ plan }) {
   return (
     <article className={`pricing-card ${plan.featured ? "featured" : ""}`}>
       <div className="pricing-card-top">
+        <div className="pricing-card-badge-row">
+          {plan.badge ? <span className="pricing-plan-badge">{plan.badge}</span> : <span className="pricing-plan-badge-placeholder" aria-hidden />}
+        </div>
         <div className="pricing-card-head">
           <p className="pricing-plan-name">{plan.name}</p>
-          {plan.badge ? <span className="pricing-plan-badge">{plan.badge}</span> : null}
         </div>
         <p className="pricing-plan-label">{plan.label}</p>
         <p className="pricing-plan-sublabel">{plan.sublabel || "\u00A0"}</p>
@@ -291,9 +293,11 @@ function PlanCard({ plan }) {
 function MonthlyPlanCard({ plan }) {
   return (
     <article className={`pricing-card monthly ${plan.featured ? "featured" : ""}`}>
+      <div className="pricing-card-badge-row">
+        {plan.badge ? <span className="pricing-plan-badge">{plan.badge}</span> : <span className="pricing-plan-badge-placeholder" aria-hidden />}
+      </div>
       <div className="pricing-card-head">
         <p className="pricing-plan-name">{plan.name}</p>
-        {plan.badge ? <span className="pricing-plan-badge">{plan.badge}</span> : null}
       </div>
       {plan.label ? <p className="pricing-plan-label">{plan.label}</p> : null}
       <div className="pricing-price-box">
@@ -704,10 +708,17 @@ export default function PricingPage() {
         }
         .pricing-card-head {
           display: flex;
-          justify-content: space-between;
+          justify-content: flex-start;
           gap: 0.6rem;
           align-items: center;
           min-height: 1.7rem;
+        }
+        .pricing-card-badge-row {
+          min-height: 1.7rem;
+          display: flex;
+          justify-content: flex-end;
+          align-items: center;
+          margin-bottom: 0.15rem;
         }
         .pricing-card-top {
           border: 1px solid #ede9fe;
@@ -741,6 +752,12 @@ export default function PricingPage() {
           border: 1px solid #c4b5fd;
           background: #f5f3ff;
           white-space: nowrap;
+        }
+        .pricing-plan-badge-placeholder {
+          display: inline-flex;
+          visibility: hidden;
+          min-width: 1px;
+          min-height: 1.2rem;
         }
         .pricing-plan-label {
           margin: 0.35rem 0 0;
