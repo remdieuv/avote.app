@@ -315,7 +315,7 @@ export function EventDashboardCard({
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr",
+                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
                 gap: "0.45rem",
               }}
             >
@@ -380,6 +380,25 @@ export function EventDashboardCard({
                     {newLeadCount > 99 ? "99+" : newLeadCount}
                   </span>
                 ) : null}
+              </Link>
+              <Link
+                href={`/admin/event/${ev.id}/analytics`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "0.55rem 0.95rem",
+                  fontSize: "0.84rem",
+                  fontWeight: 700,
+                  borderRadius: "10px",
+                  textDecoration: "none",
+                  border: "1px solid #bfdbfe",
+                  background: "#eff6ff",
+                  color: "#1d4ed8",
+                  textAlign: "center",
+                }}
+              >
+                Statistiques
               </Link>
             </div>
             <div
