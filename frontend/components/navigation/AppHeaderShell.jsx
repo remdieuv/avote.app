@@ -210,8 +210,8 @@ export function AppHeaderShell({
           .app-header-nav { display: none; }
           .app-header-mobile-quick { display: inline-flex; }
           .app-header-logo { font-size: 0.96rem; }
-          .app-header-logo-wordmark { display: none; }
-          .app-header-logo-compact.with-wordmark { display: inline-flex; }
+          .app-header-logo-wordmark { height: 1.42rem; }
+          .app-header-logo-compact.with-wordmark { display: none; }
         }
       `}</style>
     </header>

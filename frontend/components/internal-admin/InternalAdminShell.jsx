@@ -114,28 +114,20 @@ export function InternalAdminShell({ children }) {
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "0.5rem",
                 color: "#0f172a",
                 textDecoration: "none",
-                fontSize: "1rem",
-                fontWeight: 900,
-                letterSpacing: "-0.03em",
               }}
             >
               <img
-                src="/avote-icon.png"
-                alt=""
-                aria-hidden
+                src="/avote-wordmark.png"
+                alt="AVOTE"
                 style={{
-                  width: "1.65rem",
-                  height: "1.65rem",
-                  borderRadius: "8px",
-                  objectFit: "cover",
-                  flexShrink: 0,
-                  boxShadow: "0 6px 16px rgba(124, 58, 237, 0.2)",
+                  height: "1.52rem",
+                  width: "auto",
+                  objectFit: "contain",
+                  display: "block",
                 }}
               />
-              <span>AVOTE</span>
             </Link>
             <span style={{ fontSize: "0.78rem", color: "#64748b" }}>Back-office interne</span>
           </div>
