@@ -284,9 +284,9 @@ function PlanCard({ plan }) {
           </Link>
         )}
       </div>
-      {plan.key === "pro" ? (
-        <p className="pricing-pro-discovery-tag">Le meilleur choix dans 90% des cas</p>
-      ) : null}
+      <p className="pricing-pro-discovery-tag">
+        {plan.key === "pro" ? "Le meilleur choix dans 90% des cas" : "\u00A0"}
+      </p>
       </article>
     </div>
   );
@@ -842,6 +842,7 @@ export default function PricingPage() {
           font-weight: 700;
           color: #6b7280;
           text-align: center;
+          min-height: 1.15rem;
         }
         .pricing-social-proof {
           margin: 0.9rem auto 0;
