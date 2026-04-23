@@ -408,10 +408,12 @@ export default function PricingPage() {
               <PlanCard key={plan.key} plan={plan} />
             ))}
           </div>
-          <p className="pricing-social-proof">
-            Déjà utilisé pour des conférences, soirées, animations et événements d&apos;entreprise.
-          </p>
-          <p className="pricing-payment-note">Paiement sécurisé avec Stripe.</p>
+          <div className="pricing-bottom-reassurance pricing-bottom-reassurance-inline">
+            <span>Aucun engagement</span>
+            <span>Paiement sécurisé avec Stripe</span>
+            <span>Test gratuit disponible</span>
+            <span>Fonctionne sans application</span>
+          </div>
         </section>
 
         <section style={sectionY} aria-labelledby="pricing-compare-title">
@@ -488,14 +490,6 @@ export default function PricingPage() {
           </div>
         </section>
 
-        <section style={{ ...sectionY, paddingTop: "1rem", paddingBottom: "1rem" }}>
-          <div className="pricing-bottom-reassurance">
-            <span>Aucun engagement</span>
-            <span>Paiement sécurisé avec Stripe</span>
-            <span>Test gratuit disponible</span>
-            <span>Fonctionne sans application</span>
-          </div>
-        </section>
       </main>
 
       <footer
@@ -967,6 +961,9 @@ export default function PricingPage() {
           color: #64748b;
           font-size: 0.79rem;
           font-weight: 700;
+        }
+        .pricing-bottom-reassurance-inline {
+          margin: 1rem 0 0;
         }
         @media (min-width: 640px) {
           .pricing-count-grid {
