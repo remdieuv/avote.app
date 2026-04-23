@@ -2893,6 +2893,22 @@ function RegiePublicPreviewPanel({
               ) : null}
             </Link>
             <Link
+              href={`/admin/event/${encodeURIComponent(eventId)}/analytics`}
+              style={{
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                padding: "0.35rem 0.65rem",
+                borderRadius: "8px",
+                border: "1px solid #bfdbfe",
+                background: "#eff6ff",
+                color: "#1d4ed8",
+                textDecoration: "none",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Statistiques
+            </Link>
+            <Link
               href={`/admin/events/${encodeURIComponent(eventId)}/customization`}
               style={{
                 fontSize: "0.72rem",

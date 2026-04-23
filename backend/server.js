@@ -3669,6 +3669,220 @@ app.get("/events/:eventId/leads", requireAuth, async (req, res) => {
   }
 });
 
+app.get("/events/:eventId/analytics", requireAuth, async (req, res) => {
+  const eventId = String(req.params.eventId || "").trim();
+  try {
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true,
+        title: true,
+        polls: {
+          orderBy: { order: "asc" },
+          include: {
+            options: {
+              orderBy: { order: "asc" },
+              include: { _count: { select: { votes: true } } },
+            },
+            _count: { select: { votes: true } },
+          },
+        },
+      },
+    });
+    if (!event) {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+
+    const pollIds = Array.isArray(event.polls) ? event.polls.map((p) => p.id) : [];
+    let participantsUnique = 0;
+    /** @type {Map<string, number>} */
+    const participantsByPoll = new Map();
+
+    if (pollIds.length > 0) {
+      const eventVotes = await prisma.vote.findMany({
+        where: { pollId: { in: pollIds } },
+        select: { pollId: true, voterSessionId: true },
+      });
+      const sessionsEvent = new Set();
+      /** @type {Map<string, Set<string>>} */
+      const sessionsPoll = new Map();
+      for (const pid of pollIds) sessionsPoll.set(pid, new Set());
+      for (const v of eventVotes) {
+        sessionsEvent.add(v.voterSessionId);
+        const set = sessionsPoll.get(v.pollId);
+        if (set) set.add(v.voterSessionId);
+      }
+      participantsUnique = sessionsEvent.size;
+      for (const [pid, set] of sessionsPoll.entries()) {
+        participantsByPoll.set(pid, set.size);
+      }
+    }
+
+    const questions = event.polls.map((p, i) => {
+      const totalVotes = p._count?.votes ?? 0;
+      const participantsQuestion = participantsByPoll.get(p.id) ?? 0;
+      const responseRatePct =
+        participantsUnique > 0
+          ? Math.round((participantsQuestion / participantsUnique) * 1000) / 10
+          : 0;
+      const label =
+        (typeof p.question === "string" && p.question.trim()) ||
+        (typeof p.title === "string" && p.title.trim()) ||
+        `Question ${i + 1}`;
+      const options = Array.isArray(p.options)
+        ? p.options.map((o) => {
+            const votes = o._count?.votes ?? 0;
+            const pct = totalVotes > 0 ? Math.round((votes / totalVotes) * 1000) / 10 : 0;
+            return {
+              id: o.id,
+              label: o.label,
+              order: o.order,
+              voteCount: votes,
+              votePct: pct,
+            };
+          })
+        : [];
+      return {
+        id: p.id,
+        order: typeof p.order === "number" ? p.order : i,
+        label,
+        status: p.status,
+        voteCount: totalVotes,
+        participantsQuestion,
+        responseRatePct,
+        options,
+      };
+    });
+
+    const totalVotes = questions.reduce((acc, q) => acc + (q.voteCount || 0), 0);
+    const avgResponseRatePct =
+      questions.length > 0
+        ? Math.round(
+            (questions.reduce((acc, q) => acc + (q.responseRatePct || 0), 0) / questions.length) *
+              10,
+          ) / 10
+        : 0;
+
+    return res.json({
+      event: {
+        id: event.id,
+        title: event.title,
+      },
+      summary: {
+        questionsCount: questions.length,
+        participantsUnique,
+        totalVotes,
+        avgResponseRatePct,
+      },
+      questions,
+    });
+  } catch (e) {
+    console.error("events/:eventId/analytics", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+app.get("/events/:eventId/analytics/export.csv", requireAuth, async (req, res) => {
+  const eventId = String(req.params.eventId || "").trim();
+  try {
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        title: true,
+        polls: {
+          orderBy: { order: "asc" },
+          include: {
+            options: {
+              orderBy: { order: "asc" },
+              include: { _count: { select: { votes: true } } },
+            },
+            _count: { select: { votes: true } },
+          },
+        },
+      },
+    });
+    if (!event) {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+
+    const escapeCsv = (v) => {
+      const s = String(v ?? "");
+      if (/[;"\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    };
+
+    /** @type {string[]} */
+    const rows = [];
+    rows.push(
+      [
+        "event_title",
+        "question_order",
+        "question",
+        "question_status",
+        "option_order",
+        "option",
+        "votes",
+        "pct",
+      ].join(";"),
+    );
+    event.polls.forEach((p, i) => {
+      const qLabel =
+        (typeof p.question === "string" && p.question.trim()) ||
+        (typeof p.title === "string" && p.title.trim()) ||
+        `Question ${i + 1}`;
+      const totalVotes = p._count?.votes ?? 0;
+      if (!Array.isArray(p.options) || p.options.length === 0) {
+        rows.push(
+          [
+            escapeCsv(event.title),
+            String((typeof p.order === "number" ? p.order : i) + 1),
+            escapeCsv(qLabel),
+            escapeCsv(p.status),
+            "",
+            "",
+            "0",
+            "0",
+          ].join(";"),
+        );
+        return;
+      }
+      p.options.forEach((o, oi) => {
+        const votes = o._count?.votes ?? 0;
+        const pct = totalVotes > 0 ? Math.round((votes / totalVotes) * 1000) / 10 : 0;
+        rows.push(
+          [
+            escapeCsv(event.title),
+            String((typeof p.order === "number" ? p.order : i) + 1),
+            escapeCsv(qLabel),
+            escapeCsv(p.status),
+            String((typeof o.order === "number" ? o.order : oi) + 1),
+            escapeCsv(o.label),
+            String(votes),
+            String(pct),
+          ].join(";"),
+        );
+      });
+    });
+
+    const filename = `avote-analytics-${eventId}.csv`;
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    return res.send("\ufeff" + rows.join("\n"));
+  } catch (e) {
+    console.error("events/:eventId/analytics/export.csv", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
 const server = http.createServer(app);
 
 const io = new Server(server, {
