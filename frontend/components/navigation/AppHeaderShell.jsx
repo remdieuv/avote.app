@@ -101,7 +101,7 @@ export function AppHeaderShell({
           background: rgba(255, 255, 255, 0.96);
         }
         .app-header-inner {
-          width: min(1500px, 96vw);
+          width: min(1240px, 94vw);
           margin: 0 auto;
           min-height: 56px;
           display: grid;
