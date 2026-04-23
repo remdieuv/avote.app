@@ -77,10 +77,10 @@ const plans = [
     href: "/join/demo",
     features: [
       "1 sondage actif",
-      "Jusqu'à 50 votes",
+      "Jusqu'à 50 participations",
       "QR code + lien de participation",
       "Résultats en direct",
-      "Branding Avote par défaut",
+      "Branding Avote",
     ],
   },
   {
@@ -97,17 +97,17 @@ const plans = [
       "QR code + lien court",
       "Résultats en direct",
       "Accès mobile optimisé",
-      "Branding Avote par défaut",
+      "Branding Avote",
     ],
   },
   {
     key: "pro",
-    name: "PRO",
+    name: "Pro Événement",
     price: "49€",
     unit: "/ événement",
     label: "Expérience live complète",
     sublabel: "Idéal pour événements publics et animations live",
-    cta: "Choisir PRO",
+    cta: "Choisir Pro Événement",
     href: STRIPE_LINKS.pro,
     badge: "Le plus utilisé",
     featured: true,
@@ -126,7 +126,7 @@ const plans = [
     name: "Premium",
     price: "99€",
     unit: "/ événement",
-    label: "Pour gros événements",
+    label: "Pour gros événements ponctuels",
     cta: "Choisir Premium",
     href: STRIPE_LINKS.premium,
     features: [
@@ -191,7 +191,7 @@ const eventCompareRows = [
   { label: "QR code", free: "Oui", starter: "Oui", pro: "Oui", premium: "Oui" },
   { label: "Résultats live", free: "Oui", starter: "Oui", pro: "Oui", premium: "Oui" },
   { label: "Projection écran / OBS", free: "Non", starter: "Non", pro: "Oui", premium: "Oui" },
-  { label: "Personnalisation visuelle", free: "Avote", starter: "Avote", pro: "Logo + couleurs", premium: "Avancée" },
+  { label: "Personnalisation visuelle", free: "Branding Avote", starter: "Branding Avote", pro: "Logo + couleurs", premium: "Avancée" },
   { label: "Statistiques + export", free: "Non", starter: "Non", pro: "Oui", premium: "Oui" },
   { label: "Support", free: "Standard", starter: "Standard", pro: "Prioritaire", premium: "Prioritaire" },
 ];
@@ -199,12 +199,13 @@ const eventCompareRows = [
 const monthlyPlans = [
   {
     key: "pro-monthly",
-    name: "PRO Mensuel",
+    name: "Pro Abonnement",
     price: "39€",
     unit: "/ mois",
     badge: "Le plus rentable pour commencer",
     featured: true,
-    cta: "Choisir PRO Mensuel",
+    cta: "Choisir Pro Abonnement",
+    label: "Pour usage régulier",
     href: SUBSCRIPTION_LINKS.proMonthly,
     features: [
       "1 500 participations / mois",
@@ -214,6 +215,7 @@ const monthlyPlans = [
     ],
   },
   {
+    label: "Pour équipes et structures actives",
     key: "business",
     name: "Business",
     price: "79€",
@@ -229,6 +231,7 @@ const monthlyPlans = [
     ],
   },
   {
+    label: "Pour agences et multi-clients",
     key: "agency",
     name: "Agence",
     price: "149€",
@@ -288,6 +291,7 @@ function MonthlyPlanCard({ plan }) {
         <p className="pricing-plan-name">{plan.name}</p>
         {plan.badge ? <span className="pricing-plan-badge">{plan.badge}</span> : null}
       </div>
+      {plan.label ? <p className="pricing-plan-label">{plan.label}</p> : null}
       <p className="pricing-price">
         <strong>{plan.price}</strong>
         <span>{plan.unit}</span>
@@ -407,7 +411,7 @@ export default function PricingPage() {
                   <th>Fonctionnalités</th>
                   <th>Gratuit</th>
                   <th>Starter</th>
-                  <th>PRO</th>
+                  <th>Pro Événement</th>
                   <th>Premium</th>
                 </tr>
               </thead>
