@@ -12,6 +12,8 @@
 
 html {
   height: 100%;
+  /* Evite les micro-decalages horizontaux quand la scrollbar apparait/disparait. */
+  scrollbar-gutter: stable;
 }
 
 html,
