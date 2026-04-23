@@ -874,14 +874,14 @@ export default function AdminPage() {
           color: #0f172a;
         }
         .admin-create-shell {
-          width: min(1460px, 96vw);
+          width: min(1200px, 94vw);
           margin: 0 auto;
-          padding: 1rem 0.75rem 2rem;
+          padding: 24px 16px 40px;
           box-sizing: border-box;
         }
         .admin-create-hero {
           margin-bottom: 1rem;
-          margin-top: 0.5rem;
+          margin-top: 0;
           padding: 1.1rem 1.2rem;
           border: 1px solid #dbeafe;
           border-radius: 14px;

@@ -319,9 +319,9 @@ export default function MesLeadsPage() {
 
       <style>{`
         .leads-page-wrap {
-          max-width: 1220px;
+          max-width: 1200px;
           margin: 0 auto;
-          padding: clamp(1rem, 3vw, 1.9rem) clamp(0.85rem, 2vw, 1.25rem) 2.8rem;
+          padding: 24px 16px 40px;
           font-family: system-ui, "Segoe UI", sans-serif;
         }
         .leads-back-link {
