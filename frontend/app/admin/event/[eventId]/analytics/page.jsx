@@ -8,8 +8,8 @@ import { adminFetch, apiBaseBrowser } from "@/lib/config";
 const CARD = {
   background: "#fff",
   border: "1px solid #e2e8f0",
-  borderRadius: "14px",
-  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
+  borderRadius: "16px",
+  boxShadow: "0 10px 28px rgba(15, 23, 42, 0.06)",
 };
 
 export default function EventAnalyticsPage() {
@@ -46,9 +46,9 @@ export default function EventAnalyticsPage() {
   return (
     <div
       style={{
-        maxWidth: "1100px",
+        maxWidth: "1280px",
         margin: "0 auto",
-        padding: "clamp(1rem, 3vw, 1.75rem) clamp(0.75rem, 2vw, 1rem) 2.5rem",
+        padding: "clamp(1rem, 3vw, 2rem) clamp(0.8rem, 2.2vw, 1.2rem) 3rem",
         fontFamily: 'system-ui, "Segoe UI", sans-serif',
       }}
     >
@@ -76,11 +76,30 @@ export default function EventAnalyticsPage() {
         </Link>
       </div>
 
-      <header style={{ marginBottom: "1.1rem" }}>
+      <header
+        style={{
+          ...CARD,
+          padding: "clamp(0.9rem, 2.2vw, 1.2rem)",
+          marginBottom: "1rem",
+          background: "linear-gradient(180deg, #ffffff, #f8fbff)",
+        }}
+      >
+        <p
+          style={{
+            margin: "0 0 0.25rem 0",
+            color: "#64748b",
+            fontSize: "0.79rem",
+            fontWeight: 700,
+            letterSpacing: "0.03em",
+            textTransform: "uppercase",
+          }}
+        >
+          {data?.event?.title || "Événement"}
+        </p>
         <h1
           style={{
-            margin: "0 0 0.35rem 0",
-            fontSize: "clamp(1.3rem, 2.2vw, 1.55rem)",
+            margin: "0 0 0.4rem 0",
+            fontSize: "clamp(1.35rem, 2.4vw, 1.9rem)",
             fontWeight: 800,
             letterSpacing: "-0.03em",
             color: "#0f172a",
@@ -94,25 +113,26 @@ export default function EventAnalyticsPage() {
       </header>
 
       {eventId ? (
-        <a
-          href={`${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/analytics/export.csv`}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.45rem",
-            marginBottom: "1rem",
-            padding: "0.5rem 0.8rem",
-            borderRadius: "10px",
-            border: "1px solid #bfdbfe",
-            background: "#eff6ff",
-            color: "#1d4ed8",
-            fontWeight: 700,
-            fontSize: "0.85rem",
-            textDecoration: "none",
-          }}
-        >
-          Export CSV des résultats
-        </a>
+        <div style={{ marginBottom: "1rem" }}>
+          <a
+            href={`${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/analytics/export.csv`}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.45rem",
+              padding: "0.58rem 0.92rem",
+              borderRadius: "10px",
+              border: "1px solid #bfdbfe",
+              background: "#eff6ff",
+              color: "#1d4ed8",
+              fontWeight: 800,
+              fontSize: "0.86rem",
+              textDecoration: "none",
+            }}
+          >
+            Export CSV des résultats
+          </a>
+        </div>
       ) : null}
 
       {loading ? <p style={{ color: "#64748b" }}>Chargement…</p> : null}
@@ -127,9 +147,9 @@ export default function EventAnalyticsPage() {
           <section
             style={{
               display: "grid",
-              gap: "0.8rem",
-              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-              marginBottom: "1rem",
+              gap: "0.9rem",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              marginBottom: "1.05rem",
             }}
           >
             <Kpi label="Participants uniques" value={summary.participantsUnique ?? 0} />
@@ -143,7 +163,7 @@ export default function EventAnalyticsPage() {
 
           <div style={{ ...CARD, overflow: "hidden" }}>
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "860px" }}>
+              <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: "1060px" }}>
                 <thead>
                   <tr style={{ background: "#f8fafc" }}>
                     <Th>#</Th>
@@ -160,25 +180,32 @@ export default function EventAnalyticsPage() {
                       ? [...q.options].sort((a, b) => (b.voteCount || 0) - (a.voteCount || 0))[0]
                       : null;
                     return (
-                      <tr key={q.id || `${idx}`}>
+                      <tr key={q.id || `${idx}`} style={{ background: idx % 2 === 0 ? "#ffffff" : "#fcfdff" }}>
                         <Td>{(q.order ?? idx) + 1}</Td>
-                        <Td title={q.label}>{q.label || `Question ${idx + 1}`}</Td>
-                        <Td>{q.voteCount ?? 0}</Td>
-                        <Td>{Number(q.responseRatePct ?? 0).toLocaleString("fr-FR")} %</Td>
-                        <Td>
-                          {winner?.label ? `${winner.label} (${winner.voteCount ?? 0})` : "—"}
+                        <Td title={q.label}>
+                          <strong style={{ color: "#0f172a", fontWeight: 700 }}>
+                            {q.label || `Question ${idx + 1}`}
+                          </strong>
                         </Td>
                         <Td>
-                          {Array.isArray(q.options) && q.options.length > 0
-                            ? q.options
-                                .map(
-                                  (o) =>
-                                    `${o.label || "Option"}: ${o.voteCount ?? 0} (${Number(
-                                      o.votePct ?? 0,
-                                    ).toLocaleString("fr-FR")} %)`,
-                                )
-                                .join(" | ")
-                            : "—"}
+                          <strong>{q.voteCount ?? 0}</strong>
+                        </Td>
+                        <Td>
+                          <StatPill tone={(q.responseRatePct ?? 0) >= 60 ? "good" : (q.responseRatePct ?? 0) >= 30 ? "mid" : "low"}>
+                            {Number(q.responseRatePct ?? 0).toLocaleString("fr-FR")} %
+                          </StatPill>
+                        </Td>
+                        <Td>
+                          {winner?.label ? (
+                            <span style={{ color: "#0f172a", fontWeight: 700 }}>
+                              {winner.label} ({winner.voteCount ?? 0})
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </Td>
+                        <Td>
+                          <OptionsCell options={q.options} />
                         </Td>
                       </tr>
                     );
@@ -202,15 +229,21 @@ export default function EventAnalyticsPage() {
 
 function Kpi({ label, value }) {
   return (
-    <article style={{ ...CARD, padding: "0.8rem 0.95rem" }}>
-      <p style={{ margin: "0 0 0.2rem 0", color: "#64748b", fontSize: "0.78rem", fontWeight: 700 }}>
+    <article
+      style={{
+        ...CARD,
+        padding: "0.95rem 1.05rem",
+        background: "linear-gradient(180deg, #ffffff, #f8fafc)",
+      }}
+    >
+      <p style={{ margin: "0 0 0.32rem 0", color: "#64748b", fontSize: "0.8rem", fontWeight: 800 }}>
         {label}
       </p>
       <p
         style={{
           margin: 0,
           color: "#0f172a",
-          fontSize: "1.3rem",
+          fontSize: "1.48rem",
           lineHeight: 1.2,
           fontWeight: 800,
           letterSpacing: "-0.02em",
@@ -227,13 +260,17 @@ function Th({ children }) {
     <th
       style={{
         textAlign: "left",
-        padding: "0.72rem 0.85rem",
-        fontSize: "0.72rem",
-        fontWeight: 700,
-        color: "#64748b",
-        letterSpacing: "0.04em",
+        padding: "0.75rem 0.9rem",
+        fontSize: "0.71rem",
+        fontWeight: 800,
+        color: "#475569",
+        letterSpacing: "0.05em",
         textTransform: "uppercase",
         borderBottom: "1px solid #e2e8f0",
+        position: "sticky",
+        top: 0,
+        zIndex: 1,
+        background: "#f8fafc",
       }}
     >
       {children}
@@ -247,18 +284,82 @@ function Td({ children, colSpan, subtle, title: titleAttr }) {
       colSpan={colSpan}
       title={titleAttr}
       style={{
-        padding: "0.65rem 0.85rem",
-        fontSize: "0.86rem",
+        padding: "0.75rem 0.9rem",
+        fontSize: "0.87rem",
         color: subtle ? "#64748b" : "#0f172a",
         borderBottom: "1px solid #f1f5f9",
-        maxWidth: titleAttr ? "280px" : undefined,
+        maxWidth: titleAttr ? "360px" : undefined,
         overflow: titleAttr ? "hidden" : undefined,
         textOverflow: titleAttr ? "ellipsis" : undefined,
         whiteSpace: titleAttr ? "nowrap" : undefined,
         textAlign: colSpan ? "center" : undefined,
+        verticalAlign: "top",
       }}
     >
       {children}
     </td>
+  );
+}
+
+function StatPill({ children, tone = "mid" }) {
+  const ui =
+    tone === "good"
+      ? { bg: "#dcfce7", border: "#86efac", color: "#166534" }
+      : tone === "low"
+        ? { bg: "#fff1f2", border: "#fecdd3", color: "#be123c" }
+        : { bg: "#fef9c3", border: "#fde68a", color: "#854d0e" };
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minWidth: "4rem",
+        padding: "0.24rem 0.48rem",
+        borderRadius: "999px",
+        border: `1px solid ${ui.border}`,
+        background: ui.bg,
+        color: ui.color,
+        fontWeight: 800,
+        fontSize: "0.77rem",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function OptionsCell({ options }) {
+  if (!Array.isArray(options) || options.length === 0) return "—";
+  const top = [...options].sort((a, b) => (b.voteCount || 0) - (a.voteCount || 0))[0]?.id;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.32rem" }}>
+      {options.map((o, i) => (
+        <span
+          key={o?.id || i}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.25rem",
+            padding: "0.25rem 0.42rem",
+            borderRadius: "7px",
+            border: `1px solid ${o?.id === top ? "#bfdbfe" : "#e2e8f0"}`,
+            background: o?.id === top ? "#eff6ff" : "#f8fafc",
+            color: "#334155",
+            fontSize: "0.78rem",
+            lineHeight: 1.2,
+            fontWeight: o?.id === top ? 700 : 600,
+          }}
+          title={`${o?.label || "Option"}: ${o?.voteCount ?? 0} vote(s)`}
+        >
+          <span style={{ maxWidth: "190px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {o?.label || "Option"}
+          </span>
+          <span style={{ color: "#64748b", fontWeight: 700 }}>
+            {o?.voteCount ?? 0} ({Number(o?.votePct ?? 0).toLocaleString("fr-FR")} %)
+          </span>
+        </span>
+      ))}
+    </div>
   );
 }
