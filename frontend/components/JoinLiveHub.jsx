@@ -28,6 +28,7 @@ import {
   getLiveStateVisualTokens,
   stateBadgeTypography,
 } from "@/lib/liveStateVisual";
+import { ExperienceHeader } from "@/components/navigation/ExperienceHeader";
 
 /** @param {Record<string, unknown> | null | undefined} tm */
 function chronoRestantSecondes(tm) {
@@ -1176,71 +1177,15 @@ export function JoinLiveHub({ slug }) {
         }
       `}</style>
 
-      <header
-        style={{
-          flexShrink: 0,
-          padding: "clamp(0.85rem, 3vw, 1.15rem) clamp(1rem, 4vw, 1.75rem)",
-          borderBottom: `1px solid ${palette.headerBorder}`,
-          background: palette.headerBg,
-          backdropFilter: "blur(8px)",
-        }}
+      <ExperienceHeader
+        backHref="/"
+        backLabel="← Accueil"
+        title={eventTitle || "Événement live"}
+        subtitle={!loading && !error ? effectiveDescription : null}
+        logoUrl={effectiveLogoUrl}
+        palette={palette}
+        isDark={isDark}
       >
-        <p style={{ margin: 0, fontSize: "0.875rem" }}>
-          <Link href="/" style={{ color: palette.link, fontWeight: 600 }}>
-            ← Accueil
-          </Link>
-        </p>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.75rem",
-            marginTop: "0.5rem",
-            flexWrap: "wrap",
-          }}
-        >
-          {effectiveLogoUrl ? (
-            <img
-              src={effectiveLogoUrl}
-              alt=""
-              style={{
-                width: "2.5rem",
-                height: "2.5rem",
-                objectFit: "contain",
-                borderRadius: "10px",
-                background: isDark
-                  ? "rgba(255,255,255,0.06)"
-                  : "rgba(0,0,0,0.04)",
-              }}
-            />
-          ) : null}
-          <h1
-            style={{
-              margin: 0,
-              fontSize: "clamp(1.05rem, 3.2vw, 1.35rem)",
-              fontWeight: 800,
-              color: palette.fg,
-              letterSpacing: "-0.02em",
-              lineHeight: 1.35,
-              flex: "1 1 12rem",
-            }}
-          >
-            {eventTitle || "Événement live"}
-          </h1>
-        </div>
-        {!loading && !error && effectiveDescription ? (
-          <p
-            style={{
-              margin: "0.45rem 0 0 0",
-              fontSize: "0.82rem",
-              color: palette.muted,
-              lineHeight: 1.45,
-              maxWidth: "40rem",
-            }}
-          >
-            {effectiveDescription}
-          </p>
-        ) : null}
         {!loading && !error && progressionLigne ? (
           <p
             style={{
@@ -1348,7 +1293,7 @@ export function JoinLiveHub({ slug }) {
             </div>
           </section>
         ) : null}
-      </header>
+      </ExperienceHeader>
 
       <div className="join-live-zone" style={zoneMain}>
         {loading ? (

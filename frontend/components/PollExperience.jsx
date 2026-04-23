@@ -40,6 +40,7 @@ import {
   mergeCardBorderWithAccent,
   stateBadgeTypography,
 } from "@/lib/liveStateVisual";
+import { ExperienceHeader } from "@/components/navigation/ExperienceHeader";
 
 const API_POLLS = `${API_URL}/polls`;
 
@@ -1329,81 +1330,16 @@ export function PollExperience({
             }
           }
         `}</style>
-        <header
-          style={{
-            flexShrink: 0,
-            padding:
-              "clamp(0.85rem, 3vw, 1.15rem) clamp(1rem, 4vw, 1.75rem)",
-            borderBottom: `1px solid ${palette.headerBorder}`,
-            background: palette.headerBg,
-            backdropFilter: "blur(8px)",
-          }}
-        >
-          <p style={{ margin: 0, fontSize: "0.875rem" }}>
-            <Link
-              href={retourHref}
-              style={{
-                color: palette.link,
-                fontWeight: 600,
-                textDecoration: "none",
-              }}
-            >
-              {retourLabel}
-            </Link>
-          </p>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.75rem",
-              marginTop: "0.5rem",
-              flexWrap: "wrap",
-            }}
-          >
-            {roomLogoUrl ? (
-              <img
-                src={roomLogoUrl}
-                alt=""
-                style={{
-                  width: "2.5rem",
-                  height: "2.5rem",
-                  objectFit: "contain",
-                  borderRadius: "10px",
-                  flexShrink: 0,
-                  background: isDark
-                    ? "rgba(255,255,255,0.06)"
-                    : "rgba(0,0,0,0.04)",
-                }}
-              />
-            ) : null}
-            <h1
-              style={{
-                margin: 0,
-                fontSize: "clamp(1.05rem, 3.2vw, 1.35rem)",
-                fontWeight: 800,
-                color: palette.fg,
-                letterSpacing: "-0.02em",
-                lineHeight: 1.35,
-                flex: "1 1 12rem",
-                minWidth: 0,
-              }}
-            >
-              {eventTitleFromApi ?? titrePage}
-            </h1>
-          </div>
-          <p
-            style={{
-              margin: "0.45rem 0 0 0",
-              fontSize: "0.72rem",
-              fontWeight: 800,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              color: accent,
-            }}
-          >
-            Page votant
-          </p>
-        </header>
+        <ExperienceHeader
+          backHref={retourHref}
+          backLabel={retourLabel}
+          title={eventTitleFromApi ?? titrePage}
+          logoUrl={roomLogoUrl}
+          palette={palette}
+          isDark={isDark}
+          badgeText="Page votant"
+          badgeColor={accent}
+        />
 
         <div
           className="poll-live-zone"

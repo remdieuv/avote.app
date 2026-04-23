@@ -10,6 +10,7 @@ import {
   joinRoomAccent,
   resolveJoinRoomIsDark,
 } from "@/lib/joinRoomVisual";
+import { ExperienceHeader } from "@/components/navigation/ExperienceHeader";
 
 const QUESTION = "Quelle fonctionnalité préférez-vous ?";
 
@@ -140,45 +141,14 @@ export function JoinDemoExperience() {
           }
         }
       `}</style>
-      <header
-        style={{
-          flexShrink: 0,
-          padding: "clamp(0.85rem, 3vw, 1.15rem) clamp(1rem, 4vw, 1.75rem)",
-          borderBottom: `1px solid ${palette.headerBorder}`,
-          background: palette.headerBg,
-          backdropFilter: "blur(8px)",
-        }}
-      >
-        <p style={{ margin: 0, fontSize: "0.875rem" }}>
-          <Link href="/" style={{ color: palette.link, fontWeight: 600 }}>
-            ← Accueil
-          </Link>
-        </p>
-        <h1
-          style={{
-            margin: "0.5rem 0 0 0",
-            fontSize: "clamp(1.05rem, 3.2vw, 1.35rem)",
-            fontWeight: 800,
-            color: palette.fg,
-            letterSpacing: "-0.02em",
-            lineHeight: 1.35,
-          }}
-        >
-          Démo Avote
-        </h1>
-        <p
-          style={{
-            margin: "0.35rem 0 0 0",
-            fontSize: "0.88rem",
-            color: palette.muted,
-            lineHeight: 1.45,
-            maxWidth: "40rem",
-          }}
-        >
-          Voici à quoi ressemble une session côté participant — sans compte ni
-          installation.
-        </p>
-      </header>
+      <ExperienceHeader
+        backHref="/"
+        backLabel="← Accueil"
+        title="Démo Avote"
+        subtitle="Voici à quoi ressemble une session côté participant — sans compte ni installation."
+        palette={palette}
+        isDark={isDark}
+      />
 
       <div style={zoneMain}>
         <div style={panelBase}>
