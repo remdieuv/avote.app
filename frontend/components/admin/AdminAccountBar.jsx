@@ -7,7 +7,7 @@ export function AdminAccountBar() {
   return (
     <AppHeaderShell
       logoHref="/"
-      logoLabel="Avote"
+      logoLabel="AVOTE"
       logoSrc="/avote-icon.png"
       navItems={[
         { href: "/admin/events", label: "Mes événements", match: "prefix" },

@@ -26,7 +26,7 @@ export function LandingHeader() {
   return (
     <AppHeaderShell
       logoHref="/"
-      logoLabel="Avote"
+      logoLabel="AVOTE"
       logoSrc="/avote-icon.png"
       navItems={[{ href: "/pricing", label: "Tarifs", match: "exact" }]}
       mobileQuickItem={{ href: "/pricing", label: "Tarifs", match: "exact" }}
