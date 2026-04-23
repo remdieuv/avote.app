@@ -251,16 +251,20 @@ function PlanCard({ plan }) {
   const isExternal = /^https?:\/\//i.test(plan.href);
   return (
     <article className={`pricing-card ${plan.featured ? "featured" : ""}`}>
-      <div className="pricing-card-head">
-        <p className="pricing-plan-name">{plan.name}</p>
-        {plan.badge ? <span className="pricing-plan-badge">{plan.badge}</span> : null}
+      <div className="pricing-card-top">
+        <div className="pricing-card-head">
+          <p className="pricing-plan-name">{plan.name}</p>
+          {plan.badge ? <span className="pricing-plan-badge">{plan.badge}</span> : null}
+        </div>
+        <p className="pricing-plan-label">{plan.label}</p>
+        <p className="pricing-plan-sublabel">{plan.sublabel || "\u00A0"}</p>
+      <div className="pricing-price-box">
+        <p className="pricing-price">
+          <strong>{plan.price}</strong>
+          {plan.unit ? <span>{plan.unit}</span> : null}
+        </p>
       </div>
-      <p className="pricing-plan-label">{plan.label}</p>
-      <p className="pricing-plan-sublabel">{plan.sublabel || "\u00A0"}</p>
-      <p className="pricing-price">
-        <strong>{plan.price}</strong>
-        {plan.unit ? <span>{plan.unit}</span> : null}
-      </p>
+      </div>
       <ul className="pricing-features">
         {plan.features.map((feature) => (
           <li key={feature}>{feature}</li>
@@ -292,10 +296,12 @@ function MonthlyPlanCard({ plan }) {
         {plan.badge ? <span className="pricing-plan-badge">{plan.badge}</span> : null}
       </div>
       {plan.label ? <p className="pricing-plan-label">{plan.label}</p> : null}
-      <p className="pricing-price">
-        <strong>{plan.price}</strong>
-        <span>{plan.unit}</span>
-      </p>
+      <div className="pricing-price-box">
+        <p className="pricing-price">
+          <strong>{plan.price}</strong>
+          <span>{plan.unit}</span>
+        </p>
+      </div>
       <ul className="pricing-features">
         {plan.features.map((feature) => (
           <li key={feature}>{feature}</li>
@@ -703,6 +709,19 @@ export default function PricingPage() {
           align-items: center;
           min-height: 1.7rem;
         }
+        .pricing-card-top {
+          border: 1px solid #ede9fe;
+          background: linear-gradient(180deg, #ffffff 0%, #faf8ff 100%);
+          border-radius: 12px;
+          padding: 0.7rem 0.72rem 0.68rem;
+          min-height: 10.6rem;
+        }
+        .pricing-card.featured .pricing-card-top {
+          border-color: #d8b4fe;
+          background:
+            radial-gradient(220px 90px at 85% -20%, rgba(167, 139, 250, 0.14), transparent 70%),
+            linear-gradient(180deg, #ffffff 0%, #f8f2ff 100%);
+        }
         .pricing-plan-name {
           margin: 0;
           font-size: 0.78rem;
@@ -737,10 +756,20 @@ export default function PricingPage() {
           min-height: 2.2em;
         }
         .pricing-price {
-          margin: 0.72rem 0 0;
+          margin: 0;
           display: flex;
-          align-items: baseline;
+          align-items: flex-end;
           gap: 0.28rem;
+        }
+        .pricing-price-box {
+          margin: 0.72rem 0 0;
+          min-height: 4.15rem;
+          border-radius: 12px;
+          border: 1px solid #ddd6fe;
+          background: linear-gradient(180deg, #ffffff 0%, #faf5ff 100%);
+          padding: 0.65rem 0.75rem;
+          display: flex;
+          align-items: center;
         }
         .pricing-price strong {
           font-size: 1.6rem;
