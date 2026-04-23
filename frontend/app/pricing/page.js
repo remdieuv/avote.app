@@ -160,7 +160,7 @@ const offerModes = [
   {
     key: "one-shot",
     title: "Événement ponctuel",
-    text: "Vous avez un besoin unique ? Payez une seule fois, sans abonnement.",
+    text: "Vous avez un besoin unique ? Payez une seule fois, sans engagement mensuel.",
     points: [
       "Paiement unique",
       "Mise en ligne rapide",
@@ -172,8 +172,8 @@ const offerModes = [
   },
   {
     key: "subscription",
-    title: "Abonnement",
-    text: "Vous organisez des événements régulièrement ? Passez à une formule plus rentable.",
+    title: "Abonnement mensuel",
+    text: "Vous organisez des événements régulièrement ? Passez à une formule mensuelle plus rentable.",
     points: [
       "Utilisation récurrente",
       "Plus économique sur la durée",
@@ -256,7 +256,7 @@ function PlanCard({ plan }) {
         {plan.badge ? <span className="pricing-plan-badge">{plan.badge}</span> : null}
       </div>
       <p className="pricing-plan-label">{plan.label}</p>
-      {plan.sublabel ? <p className="pricing-plan-sublabel">{plan.sublabel}</p> : null}
+      <p className="pricing-plan-sublabel">{plan.sublabel || "\u00A0"}</p>
       <p className="pricing-price">
         <strong>{plan.price}</strong>
         {plan.unit ? <span>{plan.unit}</span> : null}
@@ -321,7 +321,7 @@ export default function PricingPage() {
             <p className="pricing-eyebrow">Tarifs Avote</p>
             <h1 className="pricing-title">Des tarifs simples pour vos événements en direct</h1>
             <p className="pricing-subtitle">
-              Payez une seule fois pour un événement, ou choisissez un abonnement si vous
+              Payez une seule fois pour un événement, ou choisissez un abonnement mensuel si vous
               utilisez Avote régulièrement.
             </p>
             <p className="pricing-micro-reassurance">
@@ -436,7 +436,7 @@ export default function PricingPage() {
               Vous organisez des événements régulièrement ?
             </h2>
             <p className="pricing-sub-plan-text">
-              Passez à un abonnement Avote pour profiter d&apos;un coût plus avantageux chaque mois.
+              Passez à un abonnement mensuel Avote pour profiter d&apos;un coût plus avantageux chaque mois.
             </p>
           </div>
         </section>
@@ -701,6 +701,7 @@ export default function PricingPage() {
           justify-content: space-between;
           gap: 0.6rem;
           align-items: center;
+          min-height: 1.7rem;
         }
         .pricing-plan-name {
           margin: 0;
@@ -726,13 +727,14 @@ export default function PricingPage() {
           margin: 0.35rem 0 0;
           font-size: 0.88rem;
           color: #64748b;
-          min-height: 2.6em;
+          min-height: 2.2em;
         }
         .pricing-plan-sublabel {
           margin: 0.3rem 0 0;
           font-size: 0.76rem;
           color: #64748b;
           line-height: 1.4;
+          min-height: 2.2em;
         }
         .pricing-price {
           margin: 0.72rem 0 0;
