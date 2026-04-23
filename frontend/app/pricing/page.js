@@ -250,11 +250,12 @@ const monthlyPlans = [
 function PlanCard({ plan }) {
   const isExternal = /^https?:\/\//i.test(plan.href);
   return (
-    <article className={`pricing-card ${plan.featured ? "featured" : ""}`}>
+    <div className="pricing-card-wrap">
+      <div className="pricing-card-badge-row external">
+        {plan.badge ? <span className="pricing-plan-badge">{plan.badge}</span> : <span className="pricing-plan-badge-placeholder" aria-hidden />}
+      </div>
+      <article className={`pricing-card ${plan.featured ? "featured" : ""}`}>
       <div className="pricing-card-top">
-        <div className="pricing-card-badge-row">
-          {plan.badge ? <span className="pricing-plan-badge">{plan.badge}</span> : <span className="pricing-plan-badge-placeholder" aria-hidden />}
-        </div>
         <div className="pricing-card-head">
           <p className="pricing-plan-name">{plan.name}</p>
         </div>
@@ -286,16 +287,18 @@ function PlanCard({ plan }) {
       {plan.key === "pro" ? (
         <p className="pricing-pro-discovery-tag">Le meilleur choix dans 90% des cas</p>
       ) : null}
-    </article>
+      </article>
+    </div>
   );
 }
 
 function MonthlyPlanCard({ plan }) {
   return (
-    <article className={`pricing-card monthly ${plan.featured ? "featured" : ""}`}>
-      <div className="pricing-card-badge-row">
+    <div className="pricing-card-wrap">
+      <div className="pricing-card-badge-row external">
         {plan.badge ? <span className="pricing-plan-badge">{plan.badge}</span> : <span className="pricing-plan-badge-placeholder" aria-hidden />}
       </div>
+      <article className={`pricing-card monthly ${plan.featured ? "featured" : ""}`}>
       <div className="pricing-card-head">
         <p className="pricing-plan-name">{plan.name}</p>
       </div>
@@ -316,7 +319,8 @@ function MonthlyPlanCard({ plan }) {
           {plan.cta}
         </Link>
       </div>
-    </article>
+      </article>
+    </div>
   );
 }
 
@@ -680,6 +684,10 @@ export default function PricingPage() {
           grid-template-columns: 1fr;
           gap: 0.9rem;
         }
+        .pricing-card-wrap {
+          display: flex;
+          flex-direction: column;
+        }
         .pricing-card {
           border-radius: 18px;
           border: 1px solid #e2e8f0;
@@ -719,6 +727,9 @@ export default function PricingPage() {
           justify-content: flex-end;
           align-items: center;
           margin-bottom: 0.15rem;
+        }
+        .pricing-card-badge-row.external {
+          margin-bottom: 0.35rem;
         }
         .pricing-card-top {
           border: 1px solid #ede9fe;
