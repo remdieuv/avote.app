@@ -68,7 +68,7 @@ export default function AdminInternalEventsPage() {
                   <td style={{ padding: "0.62rem", borderBottom: "1px solid #f1f5f9", fontSize: "0.85rem" }}>{e.pollCount}</td>
                   <td style={{ padding: "0.62rem", borderBottom: "1px solid #f1f5f9", fontSize: "0.85rem" }}>{e.leadCount}</td>
                   <td style={{ padding: "0.62rem", borderBottom: "1px solid #f1f5f9", fontSize: "0.82rem" }}>
-                    <Link href={`/admin/event/${encodeURIComponent(e.id)}`} style={{ color: "#1d4ed8", textDecoration: "none" }}>
+                    <Link href={`/admin-internal/events/${encodeURIComponent(e.id)}`} style={{ color: "#1d4ed8", textDecoration: "none" }}>
                       Ouvrir
                     </Link>
                   </td>

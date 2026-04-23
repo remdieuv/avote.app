@@ -1248,6 +1248,79 @@ app.get("/internal/events", requireAuth, requireAdmin, async (_req, res) => {
   }
 });
 
+app.get(
+  "/internal/events/:eventId",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { eventId } = req.params;
+      const event = await prisma.event.findUnique({
+        where: { id: eventId },
+        select: {
+          id: true,
+          title: true,
+          slug: true,
+          status: true,
+          liveState: true,
+          voteState: true,
+          displayState: true,
+          createdAt: true,
+          updatedAt: true,
+          user: { select: { id: true, email: true } },
+          _count: { select: { polls: true, leads: true } },
+          polls: {
+            orderBy: { order: "asc" },
+            select: {
+              id: true,
+              order: true,
+              status: true,
+              question: true,
+              title: true,
+              _count: { select: { votes: true } },
+            },
+          },
+        },
+      });
+      if (!event) {
+        return res.status(404).json({ error: "Événement introuvable." });
+      }
+      return res.json({
+        event: {
+          id: event.id,
+          title: event.title,
+          slug: event.slug,
+          status: event.status,
+          liveState: event.liveState,
+          voteState: event.voteState,
+          displayState: event.displayState,
+          createdAt: event.createdAt,
+          updatedAt: event.updatedAt,
+          ownerId: event.user?.id ?? null,
+          ownerEmail: event.user?.email ?? "N/A",
+          pollCount: event._count?.polls ?? 0,
+          leadCount: event._count?.leads ?? 0,
+          polls: Array.isArray(event.polls)
+            ? event.polls.map((p) => ({
+                id: p.id,
+                order: p.order,
+                status: p.status,
+                label:
+                  (typeof p.question === "string" && p.question.trim()) ||
+                  (typeof p.title === "string" && p.title.trim()) ||
+                  "Question",
+                voteCount: p._count?.votes ?? 0,
+              }))
+            : [],
+        },
+      });
+    } catch (e) {
+      console.error("internal/events/:eventId", e);
+      return res.status(500).json({ error: "Erreur serveur." });
+    }
+  },
+);
+
 app.get("/internal/leads", requireAuth, requireAdmin, async (req, res) => {
   const takeRaw = Number(req.query?.take ?? 300);
   const take = Number.isFinite(takeRaw)
