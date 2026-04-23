@@ -15,6 +15,10 @@ export function AdminAccountBar() {
         { href: "/admin", label: "Créer", match: "exact" },
       ]}
       mobileQuickItem={{ href: "/admin/events", label: "Mes événements", match: "prefix" }}
+      mobileMoreItems={[
+        { href: "/admin/leads", label: "Mes leads", match: "prefix" },
+        { href: "/admin", label: "Créer", match: "exact" },
+      ]}
       rightSlot={<AdminAccountMenu />}
     />
   );

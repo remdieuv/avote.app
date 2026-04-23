@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * @param {{
@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
  *  logoWordmarkSrc?: string | null;
  *  navItems: Array<{ href: string; label: string; match?: "exact" | "prefix" | "none" }>;
  *  mobileQuickItem?: { href: string; label: string; match?: "exact" | "prefix" | "none" } | null;
+ *  mobileMoreItems?: Array<{ href: string; label: string; match?: "exact" | "prefix" | "none" }> | null;
  *  rightSlot: import("react").ReactNode;
  * }} props
  */
@@ -22,10 +23,13 @@ export function AppHeaderShell({
   logoWordmarkSrc = null,
   navItems,
   mobileQuickItem = null,
+  mobileMoreItems = null,
   rightSlot,
 }) {
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const mobileMoreRef = useRef(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 6);
@@ -33,6 +37,26 @@ export function AppHeaderShell({
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  useEffect(() => {
+    setMobileMoreOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!mobileMoreOpen) return;
+    function onDocPointerDown(ev) {
+      const host = mobileMoreRef.current;
+      if (!host) return;
+      if (host.contains(ev.target)) return;
+      setMobileMoreOpen(false);
+    }
+    document.addEventListener("mousedown", onDocPointerDown);
+    document.addEventListener("touchstart", onDocPointerDown, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", onDocPointerDown);
+      document.removeEventListener("touchstart", onDocPointerDown);
+    };
+  }, [mobileMoreOpen]);
 
   const isActive = (item) => {
     if (!pathname) return false;
@@ -81,6 +105,33 @@ export function AppHeaderShell({
             >
               {mobileQuickItem.label}
             </Link>
+          ) : null}
+          {Array.isArray(mobileMoreItems) && mobileMoreItems.length > 0 ? (
+            <div className="app-header-mobile-more-wrap" ref={mobileMoreRef}>
+              <button
+                type="button"
+                className="app-header-mobile-more-trigger"
+                aria-expanded={mobileMoreOpen}
+                aria-haspopup="menu"
+                onClick={() => setMobileMoreOpen((v) => !v)}
+              >
+                Plus
+              </button>
+              {mobileMoreOpen ? (
+                <div className="app-header-mobile-more-menu" role="menu">
+                  {mobileMoreItems.map((item) => (
+                    <Link
+                      key={`${item.href}-${item.label}-mobile-more`}
+                      href={item.href}
+                      className={`app-header-mobile-more-link ${isActive(item) ? "active" : ""}`}
+                      role="menuitem"
+                    >
+                      {item.label}
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           ) : null}
           {rightSlot}
         </div>
@@ -191,6 +242,52 @@ export function AppHeaderShell({
           background: #f8fbff;
           color: #1d4ed8;
         }
+        .app-header-mobile-more-wrap {
+          position: relative;
+          display: none;
+        }
+        .app-header-mobile-more-trigger {
+          border: 1px solid #dbeafe;
+          background: #f8fbff;
+          color: #1d4ed8;
+          border-radius: 9px;
+          padding: 0.38rem 0.62rem;
+          font-size: 0.84rem;
+          font-weight: 700;
+          line-height: 1.2;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+        .app-header-mobile-more-menu {
+          position: absolute;
+          top: calc(100% + 0.35rem);
+          right: 0;
+          min-width: 9.75rem;
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 10px;
+          box-shadow: 0 14px 26px rgba(15, 23, 42, 0.14);
+          padding: 0.3rem;
+          z-index: 30;
+        }
+        .app-header-mobile-more-link {
+          display: block;
+          text-decoration: none;
+          color: #334155;
+          font-size: 0.84rem;
+          font-weight: 600;
+          border-radius: 8px;
+          padding: 0.45rem 0.55rem;
+        }
+        .app-header-mobile-more-link:hover {
+          background: #f8fafc;
+          color: #0f172a;
+        }
+        .app-header-mobile-more-link.active {
+          background: #e0e7ff;
+          color: #3730a3;
+          font-weight: 700;
+        }
         @media (max-width: 860px) {
           .app-header-inner {
             width: min(100%, 100vw);
@@ -209,6 +306,7 @@ export function AppHeaderShell({
         @media (max-width: 640px) {
           .app-header-nav { display: none; }
           .app-header-mobile-quick { display: inline-flex; }
+          .app-header-mobile-more-wrap { display: inline-flex; }
           .app-header-logo { font-size: 0.96rem; }
           .app-header-logo-wordmark { height: 1.78rem; }
           .app-header-logo-compact.with-wordmark { display: none; }
