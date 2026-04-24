@@ -422,6 +422,15 @@ export default function EventAnalyticsPage() {
                   top={Array.isArray(v2Data?.insights?.topEngagement) ? v2Data.insights.topEngagement : []}
                 />
               </section>
+              <section style={{ ...CARD, padding: "0.9rem", marginBottom: "1rem" }}>
+                <h3 style={sectionTitleStyle}>Actions recommandées prêtes à copier</h3>
+                <RecommendationsPanel
+                  timeline={Array.isArray(v2Data?.timeline?.series) ? v2Data.timeline.series : []}
+                  funnel={Array.isArray(v2Data?.funnel) ? v2Data.funnel : []}
+                  under={Array.isArray(v2Data?.insights?.underperforming) ? v2Data.insights.underperforming : []}
+                  top={Array.isArray(v2Data?.insights?.topEngagement) ? v2Data.insights.topEngagement : []}
+                />
+              </section>
             </>
           ) : null}
 
@@ -891,6 +900,142 @@ function InterpretationPanel({ timeline, funnel, under, top }) {
       ))}
     </div>
   );
+}
+
+function RecommendationsPanel({ timeline, funnel, under, top }) {
+  const [copiedIdx, setCopiedIdx] = useState(null);
+  const items = buildRecommendations({ timeline, funnel, under, top });
+
+  const copyText = async (text, idx) => {
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        throw new Error("Clipboard indisponible");
+      }
+      setCopiedIdx(idx);
+      window.setTimeout(() => setCopiedIdx((prev) => (prev === idx ? null : prev)), 1300);
+    } catch {
+      setCopiedIdx(null);
+    }
+  };
+
+  return (
+    <div style={{ display: "grid", gap: "0.55rem" }}>
+      {items.map((item, idx) => (
+        <article
+          key={idx}
+          style={{
+            border: "1px solid #e2e8f0",
+            borderRadius: "11px",
+            background: "#fff",
+            padding: "0.6rem 0.65rem",
+            display: "grid",
+            gap: "0.35rem",
+          }}
+        >
+          <p style={{ margin: 0, color: "#0f172a", fontSize: "0.82rem", fontWeight: 800 }}>
+            {item.action}
+          </p>
+          <p style={{ margin: 0, color: "#64748b", fontSize: "0.75rem", fontWeight: 600 }}>
+            Pourquoi : {item.why}
+          </p>
+          <div style={{ display: "flex", gap: "0.45rem", alignItems: "center", flexWrap: "wrap" }}>
+            <span
+              style={{
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                color: item.priority === "Haute" ? "#b91c1c" : item.priority === "Moyenne" ? "#92400e" : "#166534",
+                background:
+                  item.priority === "Haute" ? "#fff1f2" : item.priority === "Moyenne" ? "#fffbeb" : "#ecfdf5",
+                border:
+                  item.priority === "Haute" ? "1px solid #fecdd3" : item.priority === "Moyenne" ? "1px solid #fde68a" : "1px solid #86efac",
+                borderRadius: "999px",
+                padding: "0.18rem 0.45rem",
+              }}
+            >
+              Priorité {item.priority}
+            </span>
+            <span style={{ fontSize: "0.72rem", color: "#334155", fontWeight: 700 }}>
+              Impact attendu: {item.impact}
+            </span>
+            <button
+              type="button"
+              onClick={() => copyText(item.action, idx)}
+              style={{
+                marginLeft: "auto",
+                border: "1px solid #cbd5e1",
+                background: "#fff",
+                color: copiedIdx === idx ? "#166534" : "#334155",
+                borderRadius: "8px",
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                padding: "0.28rem 0.55rem",
+                cursor: "pointer",
+              }}
+            >
+              {copiedIdx === idx ? "Copié" : "Copier"}
+            </button>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function buildRecommendations({ timeline, funnel, under, top }) {
+  const recos = [];
+  const peak = Array.isArray(timeline) && timeline.length
+    ? [...timeline].sort((a, b) => Number(b?.voteCount || 0) - Number(a?.voteCount || 0))[0]
+    : null;
+  const worstDrop = Array.isArray(funnel) && funnel.length > 1
+    ? [...funnel].slice(1).sort((a, b) => Number(b?.dropOffPct || 0) - Number(a?.dropOffPct || 0))[0]
+    : null;
+  const weak = Array.isArray(under) && under.length ? under[0] : null;
+  const strong = Array.isArray(top) && top.length ? top[0] : null;
+
+  if (worstDrop && Number(worstDrop.dropOffPct || 0) >= 20) {
+    recos.push({
+      action: `Q${Number(worstDrop.order || 0) + 1}: simplifier l’intitulé (moins de 120 caractères) et limiter à 4 options maximum.`,
+      why: `drop-off détecté à ${Number(worstDrop.dropOffPct || 0).toLocaleString("fr-FR")}%.`,
+      impact: "+8 à +15 pts de participation",
+      priority: "Haute",
+    });
+  }
+  if (weak) {
+    recos.push({
+      action: `Repositionner Q${Number(weak.order || 0) + 1} après une question engageante, puis reformuler en version plus directe.`,
+      why: `taux mesuré à ${Number(weak.responseRatePct || 0).toLocaleString("fr-FR")}%, inférieur au reste.`,
+      impact: "+5 à +12 pts sur cette question",
+      priority: "Moyenne",
+    });
+  }
+  if (strong) {
+    recos.push({
+      action: `Dupliquer le pattern de Q${Number(strong.order || 0) + 1} (type ${String(strong.type || "question")}) sur 1 autre question faible.`,
+      why: `cette question atteint ${Number(strong.responseRatePct || 0).toLocaleString("fr-FR")}%.`,
+      impact: "hausse globale d’engagement",
+      priority: "Moyenne",
+    });
+  }
+  if (peak?.bucketStart) {
+    const t = new Date(peak.bucketStart).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+    recos.push({
+      action: `Planifier les questions clés autour de ${t} (fenêtre de forte attention).`,
+      why: `pic temporel observé (${peak.voteCount} votes sur ce créneau).`,
+      impact: "meilleure conversion des questions stratégiques",
+      priority: "Basse",
+    });
+  }
+  if (!recos.length) {
+    recos.push({
+      action: "Élargir la période de filtre et relancer l’analyse pour obtenir des recommandations exploitables.",
+      why: "signaux insuffisants sur l’échantillon actuel.",
+      impact: "diagnostic plus fiable",
+      priority: "Basse",
+    });
+  }
+  return recos.slice(0, 5);
 }
 
 function MiniPill({ children }) {
