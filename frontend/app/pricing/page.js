@@ -261,6 +261,8 @@ const launchPlan = {
   href: STRIPE_LINKS.pro,
   badge: "Offre de lancement",
   featured: true,
+  launchCard: true,
+  discoveryTag: "Premier événement à 19€ pour tester Avote. Puis 49€ / événement.",
   features: [
     "1 événement",
     "Jusqu'à 1 000 participations",
@@ -274,12 +276,18 @@ const launchPlan = {
 
 function PlanCard({ plan }) {
   const isExternal = /^https?:\/\//i.test(plan.href);
+  const discoveryText =
+    typeof plan.discoveryTag === "string"
+      ? plan.discoveryTag
+      : plan.key === "pro"
+        ? "Le meilleur choix dans 90% des cas"
+        : "\u00A0";
   return (
     <div className="pricing-card-wrap">
       <div className="pricing-card-badge-row external">
         {plan.badge ? <span className="pricing-plan-badge">{plan.badge}</span> : <span className="pricing-plan-badge-placeholder" aria-hidden />}
       </div>
-      <article className={`pricing-card ${plan.featured ? "featured" : ""}`}>
+      <article className={`pricing-card ${plan.featured ? "featured" : ""} ${plan.launchCard ? "launch-card" : ""}`}>
       <div className="pricing-card-top">
         <div className="pricing-card-head">
           <p className="pricing-plan-name">{plan.name}</p>
@@ -310,7 +318,7 @@ function PlanCard({ plan }) {
         )}
       </div>
       <p className="pricing-pro-discovery-tag">
-        {plan.key === "pro" ? "Le meilleur choix dans 90% des cas" : "\u00A0"}
+        {discoveryText}
       </p>
       </article>
     </div>
@@ -398,9 +406,6 @@ export default function PricingPage() {
             <div className="pricing-grid pricing-grid-launch">
               <PlanCard plan={launchPlan} />
             </div>
-            <p className="pricing-launch-note">
-              Premier événement à 19€ pour tester Avote. Puis 49€ / événement.
-            </p>
           </section>
         ) : (
           <>
@@ -720,21 +725,18 @@ export default function PricingPage() {
           max-width: 460px;
           margin: 0 auto;
         }
-        .pricing-grid.pricing-grid-launch .pricing-pro-discovery-tag {
+        .pricing-grid.pricing-grid-launch .pricing-card.launch-card {
+          padding-bottom: 1.1rem;
+        }
+        .pricing-grid.pricing-grid-launch .pricing-card.launch-card:hover {
+          transform: none;
+        }
+        .pricing-grid.pricing-grid-launch .pricing-card.launch-card .pricing-pro-discovery-tag {
           margin-top: 0.58rem;
           margin-bottom: 0;
-          padding: 0 0.65rem 0.35rem;
+          padding: 0 0.65rem 0.42rem;
           line-height: 1.3;
           text-align: left;
-        }
-        .pricing-launch-note {
-          margin: 0.85rem auto 0;
-          max-width: 58ch;
-          text-align: center;
-          font-size: 0.84rem;
-          color: #475569;
-          font-weight: 700;
-          padding-bottom: 0.45rem;
         }
         .pricing-section-subtitle {
           margin: -0.15rem auto 1rem;
