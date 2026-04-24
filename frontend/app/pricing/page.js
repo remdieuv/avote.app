@@ -366,7 +366,7 @@ export default function PricingPage() {
                 : "Payez une seule fois pour un événement, ou choisissez un abonnement mensuel si vous utilisez Avote régulièrement."}
             </p>
             <p className="pricing-micro-reassurance">
-              Aucun engagement. Paiement sécurisé avec Stripe. Test gratuit disponible.
+              Aucun engagement. Paiement sécurisé avec Stripe. Offre de lancement disponible.
             </p>
             <div className="pricing-hero-cta">
               {isLaunchMode ? (
@@ -542,7 +542,7 @@ export default function PricingPage() {
           <div className="pricing-bottom-reassurance">
             <span>Aucun engagement</span>
             <span>Paiement sécurisé avec Stripe</span>
-            <span>Test gratuit disponible</span>
+            <span>Premier événement à 19€</span>
             <span>Fonctionne sans application</span>
           </div>
         </section>
@@ -727,6 +727,7 @@ export default function PricingPage() {
           font-size: 0.84rem;
           color: #475569;
           font-weight: 700;
+          padding-bottom: 0.45rem;
         }
         .pricing-section-subtitle {
           margin: -0.15rem auto 1rem;
