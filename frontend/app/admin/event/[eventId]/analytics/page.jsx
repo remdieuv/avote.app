@@ -53,7 +53,7 @@ const inputStyle = {
 const sectionTitleStyle = {
   margin: "0 0 0.65rem 0",
   color: "#0f172a",
-  fontSize: "0.9rem",
+  fontSize: "0.93rem",
   fontWeight: 800,
 };
 
@@ -261,14 +261,22 @@ export default function EventAnalyticsPage() {
             />
           </section>
 
-          <section style={{ ...CARD, padding: "0.95rem", marginBottom: "1rem" }}>
+          <section
+            style={{
+              ...CARD,
+              padding: "1rem",
+              marginBottom: "1rem",
+              border: "1px solid #dbe6f5",
+              background: "linear-gradient(180deg, #ffffff, #f8fbff)",
+            }}
+          >
             <p style={{ margin: "0 0 0.75rem 0", fontWeight: 800, color: "#0f172a", fontSize: "0.95rem" }}>
               V2 - Analyse avancée
             </p>
             <div
               style={{
                 display: "grid",
-                gap: "0.55rem",
+                gap: "0.62rem",
                 gridTemplateColumns: "repeat(auto-fit, minmax(165px, 1fr))",
               }}
             >
@@ -336,8 +344,43 @@ export default function EventAnalyticsPage() {
                 />
               </FilterField>
             </div>
-            {eventId ? (
-              <div style={{ marginTop: "0.7rem" }}>
+            <div
+              style={{
+                marginTop: "0.78rem",
+                display: "flex",
+                gap: "0.5rem",
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterFrom("");
+                  setFilterTo("");
+                  setFilterPollId("ALL");
+                  setFilterType("ALL");
+                  setFilterStatus("ALL");
+                  setFilterLiveState("ALL");
+                  setUnderThresholdPct("30");
+                  setTopThresholdPct("60");
+                }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  padding: "0.45rem 0.72rem",
+                  borderRadius: "9px",
+                  border: "1px solid #cbd5e1",
+                  background: "#fff",
+                  color: "#334155",
+                  fontSize: "0.79rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Réinitialiser les filtres
+              </button>
+              {eventId ? (
                 <a
                   href={`${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/analytics/v2/export.csv?${new URLSearchParams({
                     ...(filterFrom ? { from: `${filterFrom}T00:00:00.000Z` } : {}),
@@ -363,8 +406,8 @@ export default function EventAnalyticsPage() {
                 >
                   Export CSV V2 (timeline + funnel + insights)
                 </a>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
             {v2Error ? (
               <p style={{ margin: "0.65rem 0 0 0", color: "#b91c1c", fontWeight: 700 }}>{v2Error}</p>
             ) : null}
@@ -373,7 +416,7 @@ export default function EventAnalyticsPage() {
           {v2Loading ? <p style={{ color: "#64748b", margin: "0 0 1rem 0" }}>Chargement analyse avancée…</p> : null}
           {!v2Loading && v2Data ? (
             <>
-              <section style={{ ...CARD, padding: "0.9rem", marginBottom: "0.95rem" }}>
+              <section style={{ ...CARD, padding: "0.95rem", marginBottom: "0.95rem", border: "1px solid #dbe6f5" }}>
                 <h3 style={sectionTitleStyle}>Courbe temporelle ({v2Data?.timeline?.bucketMinutes || 1} min)</h3>
                 <TimelineBars points={Array.isArray(v2Data?.timeline?.series) ? v2Data.timeline.series : []} />
               </section>
@@ -386,11 +429,11 @@ export default function EventAnalyticsPage() {
                   marginBottom: "1rem",
                 }}
               >
-                <div style={{ ...CARD, padding: "0.9rem" }}>
+                <div style={{ ...CARD, padding: "0.95rem", border: "1px solid #dbe6f5" }}>
                   <h3 style={sectionTitleStyle}>Funnel de participation</h3>
                   <FunnelList rows={Array.isArray(v2Data?.funnel) ? v2Data.funnel : []} />
                 </div>
-                <div style={{ ...CARD, padding: "0.9rem" }}>
+                <div style={{ ...CARD, padding: "0.95rem", border: "1px solid #dbe6f5" }}>
                   <h3 style={sectionTitleStyle}>Segmentation par type</h3>
                   <SegmentsList rows={Array.isArray(v2Data?.segments) ? v2Data.segments : []} />
                 </div>
@@ -404,16 +447,16 @@ export default function EventAnalyticsPage() {
                   marginBottom: "1rem",
                 }}
               >
-                <div style={{ ...CARD, padding: "0.9rem" }}>
+                <div style={{ ...CARD, padding: "0.95rem", border: "1px solid #dbe6f5" }}>
                   <h3 style={sectionTitleStyle}>Questions sous-performantes</h3>
                   <InsightsList rows={Array.isArray(v2Data?.insights?.underperforming) ? v2Data.insights.underperforming : []} />
                 </div>
-                <div style={{ ...CARD, padding: "0.9rem" }}>
+                <div style={{ ...CARD, padding: "0.95rem", border: "1px solid #dbe6f5" }}>
                   <h3 style={sectionTitleStyle}>Top engagement</h3>
                   <InsightsList rows={Array.isArray(v2Data?.insights?.topEngagement) ? v2Data.insights.topEngagement : []} />
                 </div>
               </section>
-              <section style={{ ...CARD, padding: "0.9rem", marginBottom: "1rem" }}>
+              <section style={{ ...CARD, padding: "0.95rem", marginBottom: "1rem", border: "1px solid #dbe6f5" }}>
                 <h3 style={sectionTitleStyle}>Lecture rapide & recommandations</h3>
                 <InterpretationPanel
                   timeline={Array.isArray(v2Data?.timeline?.series) ? v2Data.timeline.series : []}
@@ -422,7 +465,7 @@ export default function EventAnalyticsPage() {
                   top={Array.isArray(v2Data?.insights?.topEngagement) ? v2Data.insights.topEngagement : []}
                 />
               </section>
-              <section style={{ ...CARD, padding: "0.9rem", marginBottom: "1rem" }}>
+              <section style={{ ...CARD, padding: "0.95rem", marginBottom: "1rem", border: "1px solid #dbe6f5" }}>
                 <h3 style={sectionTitleStyle}>Actions recommandées prêtes à copier</h3>
                 <RecommendationsPanel
                   timeline={Array.isArray(v2Data?.timeline?.series) ? v2Data.timeline.series : []}
@@ -804,7 +847,17 @@ function FunnelList({ rows }) {
   return (
     <div style={{ display: "grid", gap: "0.45rem" }}>
       {rows.map((r, idx) => (
-        <div key={r?.questionId || idx} style={{ display: "grid", gap: "0.3rem" }}>
+        <div
+          key={r?.questionId || idx}
+          style={{
+            display: "grid",
+            gap: "0.32rem",
+            padding: "0.38rem 0.44rem",
+            border: "1px solid #e2e8f0",
+            borderRadius: "9px",
+            background: "#fff",
+          }}
+        >
           <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
             <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 700 }}>#{Number(r?.order ?? idx) + 1}</span>
             <strong style={{ fontSize: "0.8rem", color: "#0f172a", flex: 1 }}>{r?.label || `Question ${idx + 1}`}</strong>
@@ -831,10 +884,10 @@ function SegmentsList({ rows }) {
   return (
     <div style={{ display: "grid", gap: "0.5rem" }}>
       {rows.map((r, idx) => (
-        <div key={`${r?.type || idx}`} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", alignItems: "center", gap: "0.45rem", padding: "0.45rem 0.5rem", border: "1px solid #e2e8f0", borderRadius: "10px", background: "#fcfdff" }}>
+        <div key={`${r?.type || idx}`} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", alignItems: "center", gap: "0.45rem", padding: "0.5rem 0.56rem", border: "1px solid #dbe6f5", borderRadius: "10px", background: "#f9fbff" }}>
           <strong style={{ color: "#0f172a", fontSize: "0.8rem", textTransform: "capitalize" }}>{r?.type || "type"}</strong>
           <span style={{ color: "#334155", fontSize: "0.75rem", fontWeight: 700 }}>{r?.questions || 0} q.</span>
-          <span style={{ color: "#0f766e", fontSize: "0.75rem", fontWeight: 800 }}>
+          <span style={{ color: "#0f766e", fontSize: "0.75rem", fontWeight: 800, background: "#ecfdf5", border: "1px solid #86efac", padding: "0.14rem 0.38rem", borderRadius: "999px" }}>
             {Number(r?.avgResponseRatePct || 0).toLocaleString("fr-FR")} %
           </span>
         </div>
@@ -951,7 +1004,8 @@ function RecommendationsPanel({ timeline, funnel, under, top }) {
                 border:
                   item.priority === "Haute" ? "1px solid #fecdd3" : item.priority === "Moyenne" ? "1px solid #fde68a" : "1px solid #86efac",
                 borderRadius: "999px",
-                padding: "0.18rem 0.45rem",
+                padding: "0.2rem 0.52rem",
+                letterSpacing: "0.01em",
               }}
             >
               Priorité {item.priority}
