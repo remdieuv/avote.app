@@ -3787,6 +3787,291 @@ app.get("/events/:eventId/analytics", requireAuth, async (req, res) => {
   }
 });
 
+app.get("/events/:eventId/analytics/v2", requireAuth, async (req, res) => {
+  const eventId = String(req.params.eventId || "").trim();
+  try {
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+
+    const fromRaw = typeof req.query.from === "string" ? req.query.from.trim() : "";
+    const toRaw = typeof req.query.to === "string" ? req.query.to.trim() : "";
+    const pollId = typeof req.query.pollId === "string" ? req.query.pollId.trim() : "";
+    const typeFilter = typeof req.query.type === "string" ? req.query.type.trim().toUpperCase() : "";
+    const statusFilter =
+      typeof req.query.status === "string" ? req.query.status.trim().toUpperCase() : "";
+    const liveStateFilter =
+      typeof req.query.liveState === "string" ? req.query.liveState.trim().toUpperCase() : "";
+    const from = fromRaw ? new Date(fromRaw) : null;
+    const to = toRaw ? new Date(toRaw) : null;
+    if (from && Number.isNaN(from.getTime())) {
+      return res.status(400).json({ error: "Paramètre from invalide." });
+    }
+    if (to && Number.isNaN(to.getTime())) {
+      return res.status(400).json({ error: "Paramètre to invalide." });
+    }
+    if (from && to && from > to) {
+      return res.status(400).json({ error: "La période est invalide (from > to)." });
+    }
+
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true,
+        title: true,
+        liveState: true,
+        polls: {
+          orderBy: { order: "asc" },
+          select: {
+            id: true,
+            order: true,
+            title: true,
+            question: true,
+            type: true,
+            status: true,
+            leadEnabled: true,
+            _count: { select: { votes: true } },
+          },
+        },
+      },
+    });
+    if (!event) {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+
+    const normalizeQuestionType = (poll) => {
+      const t = String(poll?.type || "").toUpperCase();
+      if (t === "CONTEST_ENTRY") return "contest";
+      if (t === "QUIZ") return "quiz";
+      if (Boolean(poll?.leadEnabled)) return "lead";
+      if (t === "MULTIPLE_CHOICE") return "multiple";
+      return "single";
+    };
+
+    const liveStateNow = String(event.liveState || "").toUpperCase();
+    if (liveStateFilter && liveStateFilter !== "ALL" && liveStateFilter !== liveStateNow) {
+      return res.json({
+        event: { id: event.id, title: event.title, liveState: liveStateNow },
+        filters: { from: fromRaw || null, to: toRaw || null, pollId: pollId || null, type: typeFilter || null, status: statusFilter || null, liveState: liveStateFilter || null },
+        availableFilters: {
+          liveState: liveStateNow,
+          questions: event.polls.map((p, i) => ({
+            id: p.id,
+            order: typeof p.order === "number" ? p.order : i,
+            label:
+              (typeof p.question === "string" && p.question.trim()) ||
+              (typeof p.title === "string" && p.title.trim()) ||
+              `Question ${i + 1}`,
+            type: normalizeQuestionType(p),
+            status: String(p.status || "").toUpperCase(),
+          })),
+        },
+        timeline: [],
+        funnel: [],
+        segments: [],
+        insights: { underperforming: [], topEngagement: [] },
+      });
+    }
+
+    const filteredPolls = event.polls.filter((p) => {
+      const normalizedType = normalizeQuestionType(p);
+      const s = String(p.status || "").toUpperCase();
+      if (pollId && p.id !== pollId) return false;
+      if (typeFilter && typeFilter !== "ALL" && normalizedType.toUpperCase() !== typeFilter) return false;
+      if (statusFilter && statusFilter !== "ALL" && s !== statusFilter) return false;
+      return true;
+    });
+    const filteredPollIds = filteredPolls.map((p) => p.id);
+
+    if (!filteredPollIds.length) {
+      return res.json({
+        event: { id: event.id, title: event.title, liveState: liveStateNow },
+        filters: { from: fromRaw || null, to: toRaw || null, pollId: pollId || null, type: typeFilter || null, status: statusFilter || null, liveState: liveStateFilter || null },
+        availableFilters: {
+          liveState: liveStateNow,
+          questions: event.polls.map((p, i) => ({
+            id: p.id,
+            order: typeof p.order === "number" ? p.order : i,
+            label:
+              (typeof p.question === "string" && p.question.trim()) ||
+              (typeof p.title === "string" && p.title.trim()) ||
+              `Question ${i + 1}`,
+            type: normalizeQuestionType(p),
+            status: String(p.status || "").toUpperCase(),
+          })),
+        },
+        timeline: [],
+        funnel: [],
+        segments: [],
+        insights: { underperforming: [], topEngagement: [] },
+      });
+    }
+
+    const voteWhere = {
+      pollId: { in: filteredPollIds },
+      ...(from || to
+        ? {
+            createdAt: {
+              ...(from ? { gte: from } : {}),
+              ...(to ? { lte: to } : {}),
+            },
+          }
+        : {}),
+    };
+    const votes = await prisma.vote.findMany({
+      where: voteWhere,
+      select: { pollId: true, voterSessionId: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    /** @type {Map<string, Set<string>>} */
+    const sessionsByPoll = new Map();
+    for (const p of filteredPolls) sessionsByPoll.set(p.id, new Set());
+    const sessionsAll = new Set();
+    for (const v of votes) {
+      sessionsAll.add(v.voterSessionId);
+      const set = sessionsByPoll.get(v.pollId);
+      if (set) set.add(v.voterSessionId);
+    }
+    const participantsUnique = sessionsAll.size;
+    /** @type {Map<string, number>} */
+    const voteCountByPoll = new Map();
+    for (const v of votes) {
+      voteCountByPoll.set(v.pollId, (voteCountByPoll.get(v.pollId) || 0) + 1);
+    }
+
+    const firstVoteAt = votes[0]?.createdAt ? new Date(votes[0].createdAt) : null;
+    const lastVoteAt = votes[votes.length - 1]?.createdAt ? new Date(votes[votes.length - 1].createdAt) : null;
+    let bucketMin = 1;
+    if (firstVoteAt && lastVoteAt) {
+      const mins = Math.max(1, Math.ceil((lastVoteAt.getTime() - firstVoteAt.getTime()) / 60000));
+      if (mins > 180) bucketMin = 5;
+      if (mins > 600) bucketMin = 15;
+    }
+
+    /** @type {Map<string, number>} */
+    const timelineMap = new Map();
+    const bucketStartIso = (date) => {
+      const d = new Date(date);
+      d.setSeconds(0, 0);
+      const m = d.getMinutes();
+      d.setMinutes(Math.floor(m / bucketMin) * bucketMin);
+      return d.toISOString();
+    };
+    for (const v of votes) {
+      const k = bucketStartIso(v.createdAt);
+      timelineMap.set(k, (timelineMap.get(k) || 0) + 1);
+    }
+    const timeline = [...timelineMap.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([iso, voteCount]) => ({ bucketStart: iso, voteCount }));
+
+    const questionRows = filteredPolls.map((p, i) => {
+      const label =
+        (typeof p.question === "string" && p.question.trim()) ||
+        (typeof p.title === "string" && p.title.trim()) ||
+        `Question ${i + 1}`;
+      const participants = sessionsByPoll.get(p.id)?.size ?? 0;
+      const responseRatePct =
+        participantsUnique > 0 ? Math.round((participants / participantsUnique) * 1000) / 10 : 0;
+      return {
+        id: p.id,
+        order: typeof p.order === "number" ? p.order : i,
+        label,
+        type: normalizeQuestionType(p),
+        status: String(p.status || "").toUpperCase(),
+        voteCount: voteCountByPoll.get(p.id) || 0,
+        participants,
+        responseRatePct,
+      };
+    });
+
+    const funnel = questionRows
+      .sort((a, b) => a.order - b.order)
+      .map((q, i, arr) => {
+        const prev = i > 0 ? arr[i - 1].participants : q.participants;
+        const dropOffPct = i > 0 && prev > 0 ? Math.round(((prev - q.participants) / prev) * 1000) / 10 : 0;
+        return {
+          questionId: q.id,
+          order: q.order,
+          label: q.label,
+          participants: q.participants,
+          responseRatePct: q.responseRatePct,
+          dropOffPct: dropOffPct < 0 ? 0 : dropOffPct,
+        };
+      });
+
+    const segmentBase = new Map();
+    for (const q of questionRows) {
+      const key = q.type;
+      const item = segmentBase.get(key) || {
+        type: key,
+        questions: 0,
+        voteCount: 0,
+        participantsTotal: 0,
+        responseRateTotal: 0,
+      };
+      item.questions += 1;
+      item.voteCount += q.voteCount;
+      item.participantsTotal += q.participants;
+      item.responseRateTotal += q.responseRatePct;
+      segmentBase.set(key, item);
+    }
+    const segments = [...segmentBase.values()].map((s) => ({
+      type: s.type,
+      questions: s.questions,
+      voteCount: s.voteCount,
+      avgParticipants: s.questions > 0 ? Math.round((s.participantsTotal / s.questions) * 10) / 10 : 0,
+      avgResponseRatePct:
+        s.questions > 0 ? Math.round((s.responseRateTotal / s.questions) * 10) / 10 : 0,
+    }));
+
+    const sortedByRate = [...questionRows].sort((a, b) => a.responseRatePct - b.responseRatePct);
+    const take = Math.min(3, sortedByRate.length);
+    const underperforming = sortedByRate.slice(0, take);
+    const topEngagement = [...sortedByRate].reverse().slice(0, take);
+
+    return res.json({
+      event: { id: event.id, title: event.title, liveState: liveStateNow },
+      filters: {
+        from: fromRaw || null,
+        to: toRaw || null,
+        pollId: pollId || null,
+        type: typeFilter || null,
+        status: statusFilter || null,
+        liveState: liveStateFilter || null,
+      },
+      availableFilters: {
+        liveState: liveStateNow,
+        questions: event.polls.map((p, i) => ({
+          id: p.id,
+          order: typeof p.order === "number" ? p.order : i,
+          label:
+            (typeof p.question === "string" && p.question.trim()) ||
+            (typeof p.title === "string" && p.title.trim()) ||
+            `Question ${i + 1}`,
+          type: normalizeQuestionType(p),
+          status: String(p.status || "").toUpperCase(),
+        })),
+      },
+      timeline: {
+        bucketMinutes: bucketMin,
+        series: timeline,
+      },
+      funnel,
+      segments,
+      insights: {
+        underperforming,
+        topEngagement,
+      },
+    });
+  } catch (e) {
+    console.error("events/:eventId/analytics/v2", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
 app.get("/events/:eventId/analytics/export.csv", requireAuth, async (req, res) => {
   const eventId = String(req.params.eventId || "").trim();
   try {

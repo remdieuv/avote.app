@@ -12,6 +12,51 @@ const CARD = {
   boxShadow: "0 10px 28px rgba(15, 23, 42, 0.06)",
 };
 
+const TYPE_OPTIONS = [
+  { value: "ALL", label: "Tous types" },
+  { value: "SINGLE", label: "Single" },
+  { value: "MULTIPLE", label: "Multiple" },
+  { value: "LEAD", label: "Lead" },
+  { value: "CONTEST", label: "Contest" },
+  { value: "QUIZ", label: "Quiz" },
+];
+
+const STATUS_OPTIONS = [
+  { value: "ALL", label: "Tous états" },
+  { value: "DRAFT", label: "Brouillon" },
+  { value: "SCHEDULED", label: "Planifié" },
+  { value: "ACTIVE", label: "Actif" },
+  { value: "CLOSED", label: "Clôturé" },
+  { value: "ARCHIVED", label: "Archivé" },
+];
+
+const LIVE_OPTIONS = [
+  { value: "ALL", label: "Tous live" },
+  { value: "WAITING", label: "Attente" },
+  { value: "VOTING", label: "Vote" },
+  { value: "RESULTS", label: "Résultats" },
+  { value: "PAUSED", label: "Pause" },
+  { value: "FINISHED", label: "Terminé" },
+];
+
+const inputStyle = {
+  width: "100%",
+  border: "1px solid #dbe3ee",
+  background: "#fff",
+  borderRadius: "10px",
+  padding: "0.48rem 0.56rem",
+  color: "#0f172a",
+  fontSize: "0.82rem",
+  fontWeight: 600,
+};
+
+const sectionTitleStyle = {
+  margin: "0 0 0.65rem 0",
+  color: "#0f172a",
+  fontSize: "0.9rem",
+  fontWeight: 800,
+};
+
 export default function EventAnalyticsPage() {
   const params = useParams();
   const raw = params?.eventId;
@@ -21,6 +66,15 @@ export default function EventAnalyticsPage() {
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [v2Loading, setV2Loading] = useState(false);
+  const [v2Error, setV2Error] = useState(null);
+  const [v2Data, setV2Data] = useState(null);
+  const [filterFrom, setFilterFrom] = useState("");
+  const [filterTo, setFilterTo] = useState("");
+  const [filterPollId, setFilterPollId] = useState("ALL");
+  const [filterType, setFilterType] = useState("ALL");
+  const [filterStatus, setFilterStatus] = useState("ALL");
+  const [filterLiveState, setFilterLiveState] = useState("ALL");
 
   useEffect(() => {
     if (!eventId) return;
@@ -50,8 +104,40 @@ export default function EventAnalyticsPage() {
     return () => m.removeEventListener("change", apply);
   }, []);
 
+  useEffect(() => {
+    if (!eventId) return;
+    const params = new URLSearchParams();
+    if (filterFrom) params.set("from", `${filterFrom}T00:00:00.000Z`);
+    if (filterTo) params.set("to", `${filterTo}T23:59:59.999Z`);
+    if (filterPollId && filterPollId !== "ALL") params.set("pollId", filterPollId);
+    if (filterType && filterType !== "ALL") params.set("type", filterType);
+    if (filterStatus && filterStatus !== "ALL") params.set("status", filterStatus);
+    if (filterLiveState && filterLiveState !== "ALL") params.set("liveState", filterLiveState);
+    const qs = params.toString();
+    (async () => {
+      setV2Loading(true);
+      setV2Error(null);
+      try {
+        const res = await adminFetch(
+          `${apiBaseBrowser()}/events/${eventId}/analytics/v2${qs ? `?${qs}` : ""}`,
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || `Erreur ${res.status}`);
+        setV2Data(body);
+      } catch (e) {
+        setV2Data(null);
+        setV2Error(e.message || "Chargement V2 impossible.");
+      } finally {
+        setV2Loading(false);
+      }
+    })();
+  }, [eventId, filterFrom, filterLiveState, filterPollId, filterStatus, filterTo, filterType]);
+
   const summary = data?.summary ?? {};
   const questions = useMemo(() => (Array.isArray(data?.questions) ? data.questions : []), [data]);
+  const v2Questions = Array.isArray(v2Data?.availableFilters?.questions)
+    ? v2Data.availableFilters.questions
+    : [];
 
   return (
     <div
@@ -170,6 +256,112 @@ export default function EventAnalyticsPage() {
               value={`${Number(summary.avgResponseRatePct ?? 0).toLocaleString("fr-FR")} %`}
             />
           </section>
+
+          <section style={{ ...CARD, padding: "0.95rem", marginBottom: "1rem" }}>
+            <p style={{ margin: "0 0 0.75rem 0", fontWeight: 800, color: "#0f172a", fontSize: "0.95rem" }}>
+              V2 - Analyse avancée
+            </p>
+            <div
+              style={{
+                display: "grid",
+                gap: "0.55rem",
+                gridTemplateColumns: "repeat(auto-fit, minmax(165px, 1fr))",
+              }}
+            >
+              <FilterField label="Période (de)">
+                <input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} style={inputStyle} />
+              </FilterField>
+              <FilterField label="Période (à)">
+                <input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)} style={inputStyle} />
+              </FilterField>
+              <FilterField label="Question">
+                <select value={filterPollId} onChange={(e) => setFilterPollId(e.target.value)} style={inputStyle}>
+                  <option value="ALL">Toutes</option>
+                  {v2Questions.map((q) => (
+                    <option key={q.id} value={q.id}>
+                      #{Number(q.order ?? 0) + 1} - {q.label}
+                    </option>
+                  ))}
+                </select>
+              </FilterField>
+              <FilterField label="Type">
+                <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={inputStyle}>
+                  {TYPE_OPTIONS.map((x) => (
+                    <option key={x.value} value={x.value}>
+                      {x.label}
+                    </option>
+                  ))}
+                </select>
+              </FilterField>
+              <FilterField label="État question">
+                <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={inputStyle}>
+                  {STATUS_OPTIONS.map((x) => (
+                    <option key={x.value} value={x.value}>
+                      {x.label}
+                    </option>
+                  ))}
+                </select>
+              </FilterField>
+              <FilterField label="État live">
+                <select value={filterLiveState} onChange={(e) => setFilterLiveState(e.target.value)} style={inputStyle}>
+                  {LIVE_OPTIONS.map((x) => (
+                    <option key={x.value} value={x.value}>
+                      {x.label}
+                    </option>
+                  ))}
+                </select>
+              </FilterField>
+            </div>
+            {v2Error ? (
+              <p style={{ margin: "0.65rem 0 0 0", color: "#b91c1c", fontWeight: 700 }}>{v2Error}</p>
+            ) : null}
+          </section>
+
+          {v2Loading ? <p style={{ color: "#64748b", margin: "0 0 1rem 0" }}>Chargement analyse avancée…</p> : null}
+          {!v2Loading && v2Data ? (
+            <>
+              <section style={{ ...CARD, padding: "0.9rem", marginBottom: "0.95rem" }}>
+                <h3 style={sectionTitleStyle}>Courbe temporelle ({v2Data?.timeline?.bucketMinutes || 1} min)</h3>
+                <TimelineBars points={Array.isArray(v2Data?.timeline?.series) ? v2Data.timeline.series : []} />
+              </section>
+
+              <section
+                style={{
+                  display: "grid",
+                  gap: "0.9rem",
+                  gridTemplateColumns: isMobile ? "1fr" : "1.25fr 1fr",
+                  marginBottom: "1rem",
+                }}
+              >
+                <div style={{ ...CARD, padding: "0.9rem" }}>
+                  <h3 style={sectionTitleStyle}>Funnel de participation</h3>
+                  <FunnelList rows={Array.isArray(v2Data?.funnel) ? v2Data.funnel : []} />
+                </div>
+                <div style={{ ...CARD, padding: "0.9rem" }}>
+                  <h3 style={sectionTitleStyle}>Segmentation par type</h3>
+                  <SegmentsList rows={Array.isArray(v2Data?.segments) ? v2Data.segments : []} />
+                </div>
+              </section>
+
+              <section
+                style={{
+                  display: "grid",
+                  gap: "0.9rem",
+                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                  marginBottom: "1rem",
+                }}
+              >
+                <div style={{ ...CARD, padding: "0.9rem" }}>
+                  <h3 style={sectionTitleStyle}>Questions sous-performantes</h3>
+                  <InsightsList rows={Array.isArray(v2Data?.insights?.underperforming) ? v2Data.insights.underperforming : []} />
+                </div>
+                <div style={{ ...CARD, padding: "0.9rem" }}>
+                  <h3 style={sectionTitleStyle}>Top engagement</h3>
+                  <InsightsList rows={Array.isArray(v2Data?.insights?.topEngagement) ? v2Data.insights.topEngagement : []} />
+                </div>
+              </section>
+            </>
+          ) : null}
 
           {!isMobile ? (
             <div style={{ ...CARD, overflow: "hidden" }}>
@@ -495,6 +687,109 @@ function MobileQuestions({ questions }) {
         </article>
       ) : null}
     </section>
+  );
+}
+
+function FilterField({ label, children }) {
+  return (
+    <label style={{ display: "grid", gap: "0.3rem" }}>
+      <span style={{ color: "#64748b", fontWeight: 700, fontSize: "0.73rem" }}>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function TimelineBars({ points }) {
+  const max = Math.max(1, ...points.map((p) => Number(p?.voteCount || 0)));
+  if (!Array.isArray(points) || points.length === 0) {
+    return <p style={{ margin: 0, color: "#64748b", fontSize: "0.86rem" }}>Aucune donnée sur la période.</p>;
+  }
+  return (
+    <div style={{ display: "grid", gap: "0.45rem" }}>
+      {points.slice(-24).map((p, i) => {
+        const val = Number(p?.voteCount || 0);
+        const pct = Math.max(3, Math.round((val / max) * 100));
+        return (
+          <div key={`${p?.bucketStart || i}`} style={{ display: "grid", gridTemplateColumns: "88px 1fr 42px", alignItems: "center", gap: "0.5rem" }}>
+            <span style={{ fontSize: "0.74rem", color: "#64748b", fontWeight: 700 }}>
+              {p?.bucketStart ? new Date(p.bucketStart).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "--:--"}
+            </span>
+            <div style={{ height: "9px", borderRadius: "999px", background: "#eef2ff", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${pct}%`, background: "linear-gradient(90deg, #3b82f6, #1d4ed8)" }} />
+            </div>
+            <strong style={{ fontSize: "0.76rem", color: "#1e293b", textAlign: "right" }}>{val}</strong>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function FunnelList({ rows }) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return <p style={{ margin: 0, color: "#64748b", fontSize: "0.86rem" }}>Aucune question à analyser.</p>;
+  }
+  const max = Math.max(1, ...rows.map((r) => Number(r?.participants || 0)));
+  return (
+    <div style={{ display: "grid", gap: "0.45rem" }}>
+      {rows.map((r, idx) => (
+        <div key={r?.questionId || idx} style={{ display: "grid", gap: "0.3rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+            <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 700 }}>#{Number(r?.order ?? idx) + 1}</span>
+            <strong style={{ fontSize: "0.8rem", color: "#0f172a", flex: 1 }}>{r?.label || `Question ${idx + 1}`}</strong>
+            <span style={{ fontSize: "0.75rem", color: "#475569", fontWeight: 700 }}>{r?.participants || 0}</span>
+          </div>
+          <div style={{ height: "8px", borderRadius: "999px", background: "#f1f5f9", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${Math.max(3, Math.round(((r?.participants || 0) / max) * 100))}%`, background: "#0ea5e9" }} />
+          </div>
+          {idx > 0 ? (
+            <span style={{ fontSize: "0.72rem", color: "#be123c", fontWeight: 700 }}>
+              Drop-off: {Number(r?.dropOffPct || 0).toLocaleString("fr-FR")} %
+            </span>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SegmentsList({ rows }) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return <p style={{ margin: 0, color: "#64748b", fontSize: "0.86rem" }}>Aucune segmentation disponible.</p>;
+  }
+  return (
+    <div style={{ display: "grid", gap: "0.5rem" }}>
+      {rows.map((r, idx) => (
+        <div key={`${r?.type || idx}`} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", alignItems: "center", gap: "0.45rem", padding: "0.45rem 0.5rem", border: "1px solid #e2e8f0", borderRadius: "10px", background: "#fcfdff" }}>
+          <strong style={{ color: "#0f172a", fontSize: "0.8rem", textTransform: "capitalize" }}>{r?.type || "type"}</strong>
+          <span style={{ color: "#334155", fontSize: "0.75rem", fontWeight: 700 }}>{r?.questions || 0} q.</span>
+          <span style={{ color: "#0f766e", fontSize: "0.75rem", fontWeight: 800 }}>
+            {Number(r?.avgResponseRatePct || 0).toLocaleString("fr-FR")} %
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function InsightsList({ rows }) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return <p style={{ margin: 0, color: "#64748b", fontSize: "0.86rem" }}>Aucun insight pour ce filtre.</p>;
+  }
+  return (
+    <div style={{ display: "grid", gap: "0.5rem" }}>
+      {rows.map((r, idx) => (
+        <div key={r?.id || idx} style={{ border: "1px solid #e2e8f0", borderRadius: "10px", padding: "0.48rem 0.55rem", background: "#fff" }}>
+          <p style={{ margin: "0 0 0.25rem 0", color: "#0f172a", fontWeight: 700, fontSize: "0.8rem" }}>
+            #{Number(r?.order ?? idx) + 1} - {r?.label || "Question"}
+          </p>
+          <p style={{ margin: 0, color: "#64748b", fontSize: "0.74rem", fontWeight: 700 }}>
+            {r?.voteCount || 0} votes · {r?.participants || 0} participants ·{" "}
+            {Number(r?.responseRatePct || 0).toLocaleString("fr-FR")} %
+          </p>
+        </div>
+      ))}
+    </div>
   );
 }
 
