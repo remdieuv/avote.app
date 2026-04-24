@@ -300,7 +300,23 @@ export default function AdminAccountAnalyticsPage() {
                 <tbody>
                   {[...events].sort((a, b) => (b.participationRatePct || 0) - (a.participationRatePct || 0)).map((e) => (
                     <tr key={e.id}>
-                      <Td>{e.title}</Td>
+                      <Td>
+                        <div style={{ display: "grid", gap: "0.22rem" }}>
+                          <span>{e.title}</span>
+                          <Link
+                            href={`/admin/event/${encodeURIComponent(e.id)}/analytics`}
+                            style={{
+                              color: "#1d4ed8",
+                              textDecoration: "none",
+                              fontSize: "0.74rem",
+                              fontWeight: 700,
+                              width: "fit-content",
+                            }}
+                          >
+                            Voir les stats de cet événement
+                          </Link>
+                        </div>
+                      </Td>
                       <Td>{new Date(e.createdAt).toLocaleDateString("fr-FR")}</Td>
                       <Td>{e.pollCount}</Td>
                       <Td>{e.participants}</Td>
