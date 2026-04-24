@@ -4302,6 +4302,297 @@ app.get("/events/:eventId/analytics/v2/export.csv", requireAuth, async (req, res
   }
 });
 
+app.get("/analytics/account", requireAuth, async (req, res) => {
+  try {
+    const fromRaw = typeof req.query.from === "string" ? req.query.from.trim() : "";
+    const toRaw = typeof req.query.to === "string" ? req.query.to.trim() : "";
+    const from = fromRaw ? new Date(fromRaw) : null;
+    const to = toRaw ? new Date(toRaw) : null;
+    if (from && Number.isNaN(from.getTime())) {
+      return res.status(400).json({ error: "Paramètre from invalide." });
+    }
+    if (to && Number.isNaN(to.getTime())) {
+      return res.status(400).json({ error: "Paramètre to invalide." });
+    }
+    if (from && to && from > to) {
+      return res.status(400).json({ error: "La période est invalide (from > to)." });
+    }
+
+    const events = await prisma.event.findMany({
+      where: {
+        userId: req.userId,
+        ...(from || to
+          ? {
+              createdAt: {
+                ...(from ? { gte: from } : {}),
+                ...(to ? { lte: to } : {}),
+              },
+            }
+          : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        polls: {
+          select: {
+            id: true,
+            type: true,
+            leadEnabled: true,
+          },
+        },
+        leads: {
+          select: { id: true },
+        },
+      },
+    });
+
+    const pollIds = events.flatMap((e) => e.polls.map((p) => p.id));
+    const votes = pollIds.length
+      ? await prisma.vote.findMany({
+          where: {
+            pollId: { in: pollIds },
+            ...(from || to
+              ? {
+                  createdAt: {
+                    ...(from ? { gte: from } : {}),
+                    ...(to ? { lte: to } : {}),
+                  },
+                }
+              : {}),
+          },
+          select: { pollId: true, voterSessionId: true },
+        })
+      : [];
+
+    /** @type {Map<string, string>} */
+    const pollToEvent = new Map();
+    /** @type {Map<string, string>} */
+    const pollToType = new Map();
+    for (const ev of events) {
+      for (const p of ev.polls) {
+        pollToEvent.set(p.id, ev.id);
+        const t = String(p.type || "").toUpperCase();
+        const typeNormalized =
+          t === "CONTEST_ENTRY"
+            ? "contest"
+            : t === "QUIZ"
+              ? "quiz"
+              : p.leadEnabled
+                ? "lead"
+                : t === "MULTIPLE_CHOICE"
+                  ? "multiple"
+                  : "single";
+        pollToType.set(p.id, typeNormalized);
+      }
+    }
+
+    /** @type {Map<string, number>} */
+    const votesByEvent = new Map();
+    /** @type {Map<string, Set<string>>} */
+    const participantsByEvent = new Map();
+    /** @type {Map<string, {votes:number, sessions:Set<string>} >} */
+    const benchmarkByType = new Map();
+    for (const ev of events) participantsByEvent.set(ev.id, new Set());
+    for (const v of votes) {
+      const eid = pollToEvent.get(v.pollId);
+      if (!eid) continue;
+      votesByEvent.set(eid, (votesByEvent.get(eid) || 0) + 1);
+      participantsByEvent.get(eid)?.add(v.voterSessionId);
+      const type = pollToType.get(v.pollId) || "single";
+      const item = benchmarkByType.get(type) || { votes: 0, sessions: new Set() };
+      item.votes += 1;
+      item.sessions.add(v.voterSessionId);
+      benchmarkByType.set(type, item);
+    }
+
+    const eventRows = events.map((ev) => {
+      const participants = participantsByEvent.get(ev.id)?.size || 0;
+      const voteCount = votesByEvent.get(ev.id) || 0;
+      const leadsCount = Array.isArray(ev.leads) ? ev.leads.length : 0;
+      const participationRatePct =
+        participants > 0 ? Math.round((voteCount / participants) * 10) / 10 : 0;
+      const leadConversionPct =
+        participants > 0 ? Math.round((leadsCount / participants) * 1000) / 10 : 0;
+      return {
+        id: ev.id,
+        title: ev.title,
+        slug: ev.slug,
+        createdAt: ev.createdAt.toISOString(),
+        pollCount: ev.polls.length,
+        participants,
+        voteCount,
+        leadsCount,
+        participationRatePct,
+        leadConversionPct,
+      };
+    });
+
+    const totalEvents = eventRows.length;
+    const totalVotes = eventRows.reduce((s, e) => s + e.voteCount, 0);
+    const totalParticipants = eventRows.reduce((s, e) => s + e.participants, 0);
+    const totalLeads = eventRows.reduce((s, e) => s + e.leadsCount, 0);
+    const avgParticipationRatePct =
+      totalEvents > 0
+        ? Math.round((eventRows.reduce((s, e) => s + e.participationRatePct, 0) / totalEvents) * 10) /
+          10
+        : 0;
+    const avgLeadConversionPct =
+      totalEvents > 0
+        ? Math.round((eventRows.reduce((s, e) => s + e.leadConversionPct, 0) / totalEvents) * 10) / 10
+        : 0;
+
+    const bestPerformer = [...eventRows].sort((a, b) => b.participationRatePct - a.participationRatePct)[0] || null;
+
+    const monthlyMap = new Map();
+    for (const e of eventRows) {
+      const d = new Date(e.createdAt);
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+      const m = monthlyMap.get(key) || {
+        month: key,
+        eventsCount: 0,
+        votes: 0,
+        participants: 0,
+        leads: 0,
+      };
+      m.eventsCount += 1;
+      m.votes += e.voteCount;
+      m.participants += e.participants;
+      m.leads += e.leadsCount;
+      monthlyMap.set(key, m);
+    }
+    const monthlyEvolution = [...monthlyMap.values()].sort((a, b) => a.month.localeCompare(b.month));
+
+    const benchmarks = [...benchmarkByType.entries()].map(([type, x]) => ({
+      type,
+      avgVotesPerParticipant: x.sessions.size > 0 ? Math.round((x.votes / x.sessions.size) * 10) / 10 : 0,
+      participants: x.sessions.size,
+      votes: x.votes,
+    }));
+
+    return res.json({
+      filters: { from: fromRaw || null, to: toRaw || null },
+      summary: {
+        totalEvents,
+        totalVotes,
+        totalParticipants,
+        totalLeads,
+        avgParticipationRatePct,
+        avgLeadConversionPct,
+      },
+      bestPerformer,
+      monthlyEvolution,
+      benchmarks,
+      events: eventRows,
+    });
+  } catch (e) {
+    console.error("analytics/account", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+app.get("/analytics/account/export.csv", requireAuth, async (req, res) => {
+  try {
+    const fromRaw = typeof req.query.from === "string" ? req.query.from.trim() : "";
+    const toRaw = typeof req.query.to === "string" ? req.query.to.trim() : "";
+    const from = fromRaw ? new Date(fromRaw) : null;
+    const to = toRaw ? new Date(toRaw) : null;
+    const events = await prisma.event.findMany({
+      where: {
+        userId: req.userId,
+        ...(from || to
+          ? {
+              createdAt: {
+                ...(from ? { gte: from } : {}),
+                ...(to ? { lte: to } : {}),
+              },
+            }
+          : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        polls: { select: { id: true } },
+        leads: { select: { id: true } },
+      },
+    });
+    const pollIds = events.flatMap((e) => e.polls.map((p) => p.id));
+    const votes = pollIds.length
+      ? await prisma.vote.findMany({
+          where: {
+            pollId: { in: pollIds },
+            ...(from || to
+              ? {
+                  createdAt: {
+                    ...(from ? { gte: from } : {}),
+                    ...(to ? { lte: to } : {}),
+                  },
+                }
+              : {}),
+          },
+          select: { pollId: true, voterSessionId: true },
+        })
+      : [];
+    const pollToEvent = new Map();
+    for (const ev of events) for (const p of ev.polls) pollToEvent.set(p.id, ev.id);
+    const votesByEvent = new Map();
+    const participantsByEvent = new Map();
+    for (const ev of events) participantsByEvent.set(ev.id, new Set());
+    for (const v of votes) {
+      const eid = pollToEvent.get(v.pollId);
+      if (!eid) continue;
+      votesByEvent.set(eid, (votesByEvent.get(eid) || 0) + 1);
+      participantsByEvent.get(eid)?.add(v.voterSessionId);
+    }
+    const esc = (v) => {
+      const s = String(v ?? "");
+      if (/[;"\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    };
+    const rows = [];
+    rows.push(
+      [
+        "event_id",
+        "event_title",
+        "event_slug",
+        "created_at",
+        "poll_count",
+        "participants",
+        "votes",
+        "leads",
+        "participation_rate",
+        "lead_conversion_pct",
+      ].join(";"),
+    );
+    for (const ev of events) {
+      const participants = participantsByEvent.get(ev.id)?.size || 0;
+      const voteCount = votesByEvent.get(ev.id) || 0;
+      const leads = ev.leads.length;
+      const participationRate = participants > 0 ? Math.round((voteCount / participants) * 10) / 10 : 0;
+      const leadConversionPct =
+        participants > 0 ? Math.round((leads / participants) * 1000) / 10 : 0;
+      rows.push(
+        [
+          esc(ev.id),
+          esc(ev.title),
+          esc(ev.slug),
+          esc(ev.createdAt.toISOString()),
+          String(ev.polls.length),
+          String(participants),
+          String(voteCount),
+          String(leads),
+          String(participationRate),
+          String(leadConversionPct),
+        ].join(";"),
+      );
+    }
+    const filename = "avote-account-analytics.csv";
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    return res.send("\ufeff" + rows.join("\n"));
+  } catch (e) {
+    console.error("analytics/account/export.csv", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
 app.get("/events/:eventId/analytics/export.csv", requireAuth, async (req, res) => {
   const eventId = String(req.params.eventId || "").trim();
   try {
