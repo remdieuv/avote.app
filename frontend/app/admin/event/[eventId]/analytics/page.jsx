@@ -442,8 +442,30 @@ function MobileQuestions({ questions }) {
                 <StatPill tone={(q.responseRatePct ?? 0) >= 60 ? "good" : (q.responseRatePct ?? 0) >= 30 ? "mid" : "low"}>
                   {Number(q.responseRatePct ?? 0).toLocaleString("fr-FR")} %
                 </StatPill>
-                <span style={{ fontSize: "0.74rem", color: "#64748b", fontWeight: 700 }}>
+                <span
+                  style={{
+                    marginLeft: "auto",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.28rem",
+                    fontSize: "0.74rem",
+                    color: "#64748b",
+                    fontWeight: 700,
+                  }}
+                >
                   {isOpen ? "Masquer détail" : "Voir détail"}
+                  <span
+                    aria-hidden
+                    style={{
+                      display: "inline-block",
+                      fontSize: "0.82rem",
+                      lineHeight: 1,
+                      transform: isOpen ? "rotate(90deg)" : "rotate(0deg)",
+                      transition: "transform 180ms ease",
+                    }}
+                  >
+                    ▸
+                  </span>
                 </span>
               </div>
             </button>
