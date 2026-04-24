@@ -370,7 +370,12 @@ export default function PricingPage() {
             <h1 className="pricing-title">Des tarifs simples pour vos événements en direct</h1>
             <p className="pricing-subtitle">
               {isLaunchMode
-                ? "Une offre claire pour démarrer vite : 49€ / événement. Et pour le lancement, votre premier événement est à 19€."
+                ? (
+                  <>
+                    Une offre claire pour démarrer vite : 49€ / événement.{" "}
+                    <strong>Et pour le lancement, votre premier événement est à 19€.</strong>
+                  </>
+                )
                 : "Payez une seule fois pour un événement, ou choisissez un abonnement mensuel si vous utilisez Avote régulièrement."}
             </p>
             <p className="pricing-micro-reassurance">
@@ -737,6 +742,10 @@ export default function PricingPage() {
           padding: 0 0.65rem 0.42rem;
           line-height: 1.3;
           text-align: left;
+          font-size: 0.84rem;
+          font-weight: 800;
+          color: #1e293b;
+          letter-spacing: -0.01em;
         }
         .pricing-section-subtitle {
           margin: -0.15rem auto 1rem;
