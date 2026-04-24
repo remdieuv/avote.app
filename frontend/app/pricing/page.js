@@ -720,6 +720,13 @@ export default function PricingPage() {
           max-width: 460px;
           margin: 0 auto;
         }
+        .pricing-grid.pricing-grid-launch .pricing-card {
+          padding-bottom: 1.35rem;
+        }
+        .pricing-grid.pricing-grid-launch .pricing-pro-discovery-tag {
+          margin-top: 0.72rem;
+          line-height: 1.35;
+        }
         .pricing-launch-note {
           margin: 0.85rem auto 0;
           max-width: 58ch;
