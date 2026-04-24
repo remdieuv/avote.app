@@ -4304,6 +4304,10 @@ app.get("/events/:eventId/analytics/v2/export.csv", requireAuth, async (req, res
 
 const SHARE_TOKEN_SECRET = process.env.JWT_SECRET || "avote-dev-share-secret";
 
+function hashShareToken(token) {
+  return crypto.createHash("sha256").update(String(token || "")).digest("hex");
+}
+
 function signSharePayload(payload) {
   const encoded = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
   const sig = crypto.createHmac("sha256", SHARE_TOKEN_SECRET).update(encoded).digest("base64url");
@@ -4541,13 +4545,26 @@ app.post("/analytics/account/share-link", requireAuth, async (req, res) => {
       return res.status(400).json({ error: "La période est invalide (from > to)." });
     }
     const exp = Date.now() + expiresInHours * 60 * 60 * 1000;
+    const shareId = crypto.randomUUID();
     const token = signSharePayload({
+      sid: shareId,
       uid: req.userId,
       exp,
       from: fromRaw || null,
       to: toRaw || null,
     });
+    await prisma.accountReportShareToken.create({
+      data: {
+        id: shareId,
+        userId: req.userId,
+        tokenHash: hashShareToken(token),
+        expiresAt: new Date(exp),
+        fromDate: from ? from : null,
+        toDate: to ? to : null,
+      },
+    });
     return res.json({
+      shareId,
       token,
       expiresAt: new Date(exp).toISOString(),
       readonlyUrl: `/report/account/${encodeURIComponent(token)}`,
@@ -4565,17 +4582,105 @@ app.get("/analytics/account/shared/:token", async (req, res) => {
     if (!payload) {
       return res.status(401).json({ error: "Lien invalide ou expiré." });
     }
+    const sid = typeof payload.sid === "string" ? payload.sid.trim() : "";
+    if (!sid) {
+      return res.status(401).json({ error: "Lien invalide ou expiré." });
+    }
+    const share = await prisma.accountReportShareToken.findUnique({
+      where: { id: sid },
+      select: {
+        id: true,
+        userId: true,
+        tokenHash: true,
+        revokedAt: true,
+        expiresAt: true,
+        fromDate: true,
+        toDate: true,
+      },
+    });
+    if (!share) {
+      return res.status(401).json({ error: "Lien invalide ou expiré." });
+    }
+    if (share.revokedAt) {
+      return res.status(401).json({ error: "Lien révoqué." });
+    }
+    if (new Date(share.expiresAt).getTime() < Date.now()) {
+      return res.status(401).json({ error: "Lien expiré." });
+    }
+    if (share.tokenHash !== hashShareToken(token)) {
+      return res.status(401).json({ error: "Lien invalide ou expiré." });
+    }
     const from = payload.from ? new Date(payload.from) : null;
     const to = payload.to ? new Date(payload.to) : null;
-    const data = await buildAccountAnalyticsPayload(payload.uid, from, to);
+    const data = await buildAccountAnalyticsPayload(share.userId, from, to);
     return res.json({
       readonly: true,
-      expiresAt: new Date(payload.exp).toISOString(),
+      expiresAt: new Date(share.expiresAt).toISOString(),
       filters: { from: payload.from || null, to: payload.to || null },
       ...data,
     });
   } catch (e) {
     console.error("analytics/account/shared/:token", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+app.get("/analytics/account/share-links", requireAuth, async (req, res) => {
+  try {
+    const rows = await prisma.accountReportShareToken.findMany({
+      where: { userId: req.userId },
+      orderBy: { createdAt: "desc" },
+      take: 40,
+      select: {
+        id: true,
+        createdAt: true,
+        expiresAt: true,
+        revokedAt: true,
+        fromDate: true,
+        toDate: true,
+      },
+    });
+    return res.json({
+      links: rows.map((r) => ({
+        id: r.id,
+        createdAt: r.createdAt.toISOString(),
+        expiresAt: r.expiresAt.toISOString(),
+        revokedAt: r.revokedAt ? r.revokedAt.toISOString() : null,
+        from: r.fromDate ? r.fromDate.toISOString() : null,
+        to: r.toDate ? r.toDate.toISOString() : null,
+      })),
+    });
+  } catch (e) {
+    console.error("analytics/account/share-links", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+app.post("/analytics/account/share-links/:shareId/revoke", requireAuth, async (req, res) => {
+  try {
+    const shareId = String(req.params.shareId || "").trim();
+    if (!shareId) {
+      return res.status(400).json({ error: "Identifiant de partage invalide." });
+    }
+    const existing = await prisma.accountReportShareToken.findFirst({
+      where: {
+        id: shareId,
+        userId: req.userId,
+      },
+      select: { id: true, revokedAt: true },
+    });
+    if (!existing) {
+      return res.status(404).json({ error: "Lien introuvable." });
+    }
+    if (!existing.revokedAt) {
+      await prisma.accountReportShareToken.update({
+        where: { id: shareId },
+        data: { revokedAt: new Date() },
+      });
+    }
+    return res.json({ ok: true, id: shareId });
+  } catch (e) {
+    console.error("analytics/account/share-links/:shareId/revoke", e);
     return res.status(500).json({ error: "Erreur serveur." });
   }
 });

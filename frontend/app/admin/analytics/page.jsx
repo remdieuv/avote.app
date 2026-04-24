@@ -21,6 +21,8 @@ export default function AdminAccountAnalyticsPage() {
   const [shareLoading, setShareLoading] = useState(false);
   const [shareUrl, setShareUrl] = useState("");
   const [shareExpiresAt, setShareExpiresAt] = useState("");
+  const [shareLinks, setShareLinks] = useState([]);
+  const [revokeBusyId, setRevokeBusyId] = useState(null);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -43,6 +45,21 @@ export default function AdminAccountAnalyticsPage() {
       }
     })();
   }, [fromDate, toDate]);
+
+  const loadShareLinks = async () => {
+    try {
+      const res = await adminFetch(`${apiBaseBrowser()}/analytics/account/share-links`);
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || `Erreur ${res.status}`);
+      setShareLinks(Array.isArray(body.links) ? body.links : []);
+    } catch {
+      setShareLinks([]);
+    }
+  };
+
+  useEffect(() => {
+    void loadShareLinks();
+  }, []);
 
   const summary = data?.summary ?? {};
   const events = useMemo(() => (Array.isArray(data?.events) ? data.events : []), [data]);
@@ -75,12 +92,30 @@ export default function AdminAccountAnalyticsPage() {
       if (navigator?.clipboard?.writeText) {
         await navigator.clipboard.writeText(url);
       }
+      await loadShareLinks();
     } catch (e) {
       setShareUrl("");
       setShareExpiresAt("");
       setError(e.message || "Impossible de générer le lien.");
     } finally {
       setShareLoading(false);
+    }
+  };
+
+  const revokeShareLink = async (shareId) => {
+    setRevokeBusyId(shareId);
+    try {
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/analytics/account/share-links/${encodeURIComponent(shareId)}/revoke`,
+        { method: "POST" },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || `Erreur ${res.status}`);
+      await loadShareLinks();
+    } catch (e) {
+      setError(e.message || "Révocation impossible.");
+    } finally {
+      setRevokeBusyId(null);
     }
   };
 
@@ -137,6 +172,69 @@ export default function AdminAccountAnalyticsPage() {
             {shareExpiresAt ? new Date(shareExpiresAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "—"}.
           </p>
         ) : null}
+      </section>
+
+      <section style={{ ...CARD, padding: "0.9rem", marginBottom: "0.95rem" }}>
+        <h3 style={{ ...h3, marginBottom: "0.45rem" }}>Liens readonly actifs/récents</h3>
+        <div style={{ display: "grid", gap: "0.45rem" }}>
+          {shareLinks.map((x) => {
+            const expired = new Date(x.expiresAt).getTime() < Date.now();
+            const revoked = Boolean(x.revokedAt);
+            const state = revoked ? "Révoqué" : expired ? "Expiré" : "Actif";
+            return (
+              <article
+                key={x.id}
+                style={{
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "10px",
+                  padding: "0.5rem 0.6rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  flexWrap: "wrap",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "0.72rem",
+                    fontWeight: 800,
+                    padding: "0.18rem 0.46rem",
+                    borderRadius: "999px",
+                    color: revoked ? "#9f1239" : expired ? "#92400e" : "#166534",
+                    background: revoked ? "#fff1f2" : expired ? "#fffbeb" : "#ecfdf5",
+                    border: revoked ? "1px solid #fecdd3" : expired ? "1px solid #fde68a" : "1px solid #86efac",
+                  }}
+                >
+                  {state}
+                </span>
+                <span style={{ fontSize: "0.75rem", color: "#334155", fontWeight: 700 }}>
+                  Créé: {new Date(x.createdAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
+                </span>
+                <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 700 }}>
+                  Expire: {new Date(x.expiresAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
+                </span>
+                {!revoked ? (
+                  <button
+                    type="button"
+                    onClick={() => revokeShareLink(x.id)}
+                    disabled={Boolean(revokeBusyId)}
+                    style={{
+                      marginLeft: "auto",
+                      ...ghostBtnStyle,
+                      borderColor: "#fecaca",
+                      color: "#b91c1c",
+                    }}
+                  >
+                    {revokeBusyId === x.id ? "Révocation..." : "Révoquer"}
+                  </button>
+                ) : null}
+              </article>
+            );
+          })}
+          {shareLinks.length === 0 ? (
+            <p style={{ margin: 0, color: "#64748b", fontSize: "0.8rem" }}>Aucun lien de partage pour le moment.</p>
+          ) : null}
+        </div>
       </section>
 
       {loading ? <p style={{ color: "#64748b" }}>Chargement…</p> : null}

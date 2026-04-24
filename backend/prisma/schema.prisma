@@ -76,6 +76,7 @@ model User {
   updatedAt    DateTime     @updatedAt
   events       Event[]
   contestDraws ContestDraw[] @relation("ContestDrawCreatedBy")
+  reportShareTokens AccountReportShareToken[]
 }
 
 model Event {
@@ -240,4 +241,20 @@ model LeadCapture {
   @@index([eventId, createdAt])
   @@index([pollId, createdAt])
   @@unique([pollId, voterSessionId])
+}
+
+model AccountReportShareToken {
+  id         String   @id @default(cuid())
+  userId     String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  fromDate   DateTime?
+  toDate     DateTime?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, revokedAt, expiresAt])
 }
