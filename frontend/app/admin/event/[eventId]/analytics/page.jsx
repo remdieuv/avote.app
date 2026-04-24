@@ -75,6 +75,8 @@ export default function EventAnalyticsPage() {
   const [filterType, setFilterType] = useState("ALL");
   const [filterStatus, setFilterStatus] = useState("ALL");
   const [filterLiveState, setFilterLiveState] = useState("ALL");
+  const [underThresholdPct, setUnderThresholdPct] = useState("30");
+  const [topThresholdPct, setTopThresholdPct] = useState("60");
 
   useEffect(() => {
     if (!eventId) return;
@@ -113,6 +115,8 @@ export default function EventAnalyticsPage() {
     if (filterType && filterType !== "ALL") params.set("type", filterType);
     if (filterStatus && filterStatus !== "ALL") params.set("status", filterStatus);
     if (filterLiveState && filterLiveState !== "ALL") params.set("liveState", filterLiveState);
+    if (underThresholdPct) params.set("underThresholdPct", underThresholdPct);
+    if (topThresholdPct) params.set("topThresholdPct", topThresholdPct);
     const qs = params.toString();
     (async () => {
       setV2Loading(true);
@@ -131,7 +135,7 @@ export default function EventAnalyticsPage() {
         setV2Loading(false);
       }
     })();
-  }, [eventId, filterFrom, filterLiveState, filterPollId, filterStatus, filterTo, filterType]);
+  }, [eventId, filterFrom, filterLiveState, filterPollId, filterStatus, filterTo, filterType, topThresholdPct, underThresholdPct]);
 
   const summary = data?.summary ?? {};
   const questions = useMemo(() => (Array.isArray(data?.questions) ? data.questions : []), [data]);
@@ -311,7 +315,56 @@ export default function EventAnalyticsPage() {
                   ))}
                 </select>
               </FilterField>
+              <FilterField label="Seuil sous-perf (%)">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={underThresholdPct}
+                  onChange={(e) => setUnderThresholdPct(e.target.value)}
+                  style={inputStyle}
+                />
+              </FilterField>
+              <FilterField label="Seuil top (%)">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={topThresholdPct}
+                  onChange={(e) => setTopThresholdPct(e.target.value)}
+                  style={inputStyle}
+                />
+              </FilterField>
             </div>
+            {eventId ? (
+              <div style={{ marginTop: "0.7rem" }}>
+                <a
+                  href={`${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/analytics/v2/export.csv?${new URLSearchParams({
+                    ...(filterFrom ? { from: `${filterFrom}T00:00:00.000Z` } : {}),
+                    ...(filterTo ? { to: `${filterTo}T23:59:59.999Z` } : {}),
+                    ...(filterPollId !== "ALL" ? { pollId: filterPollId } : {}),
+                    ...(filterType !== "ALL" ? { type: filterType } : {}),
+                    ...(filterStatus !== "ALL" ? { status: filterStatus } : {}),
+                    ...(underThresholdPct ? { underThresholdPct } : {}),
+                    ...(topThresholdPct ? { topThresholdPct } : {}),
+                  }).toString()}`}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    padding: "0.45rem 0.72rem",
+                    borderRadius: "9px",
+                    border: "1px solid #cbd5e1",
+                    background: "#fff",
+                    color: "#334155",
+                    fontSize: "0.79rem",
+                    fontWeight: 700,
+                    textDecoration: "none",
+                  }}
+                >
+                  Export CSV V2 (timeline + funnel + insights)
+                </a>
+              </div>
+            ) : null}
             {v2Error ? (
               <p style={{ margin: "0.65rem 0 0 0", color: "#b91c1c", fontWeight: 700 }}>{v2Error}</p>
             ) : null}
@@ -359,6 +412,15 @@ export default function EventAnalyticsPage() {
                   <h3 style={sectionTitleStyle}>Top engagement</h3>
                   <InsightsList rows={Array.isArray(v2Data?.insights?.topEngagement) ? v2Data.insights.topEngagement : []} />
                 </div>
+              </section>
+              <section style={{ ...CARD, padding: "0.9rem", marginBottom: "1rem" }}>
+                <h3 style={sectionTitleStyle}>Lecture rapide & recommandations</h3>
+                <InterpretationPanel
+                  timeline={Array.isArray(v2Data?.timeline?.series) ? v2Data.timeline.series : []}
+                  funnel={Array.isArray(v2Data?.funnel) ? v2Data.funnel : []}
+                  under={Array.isArray(v2Data?.insights?.underperforming) ? v2Data.insights.underperforming : []}
+                  top={Array.isArray(v2Data?.insights?.topEngagement) ? v2Data.insights.topEngagement : []}
+                />
               </section>
             </>
           ) : null}
@@ -788,6 +850,44 @@ function InsightsList({ rows }) {
             {Number(r?.responseRatePct || 0).toLocaleString("fr-FR")} %
           </p>
         </div>
+      ))}
+    </div>
+  );
+}
+
+function InterpretationPanel({ timeline, funnel, under, top }) {
+  const peak = Array.isArray(timeline) && timeline.length
+    ? [...timeline].sort((a, b) => Number(b?.voteCount || 0) - Number(a?.voteCount || 0))[0]
+    : null;
+  const worstDrop = Array.isArray(funnel) && funnel.length > 1
+    ? [...funnel].slice(1).sort((a, b) => Number(b?.dropOffPct || 0) - Number(a?.dropOffPct || 0))[0]
+    : null;
+  const lines = [];
+  if (peak) {
+    lines.push(
+      `Pic de participation vers ${new Date(peak.bucketStart).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} (${peak.voteCount} votes).`,
+    );
+  }
+  if (worstDrop && Number(worstDrop.dropOffPct || 0) > 0) {
+    lines.push(
+      `Plus forte chute à la question #${Number(worstDrop.order || 0) + 1} (${Number(worstDrop.dropOffPct || 0).toLocaleString("fr-FR")} %).`,
+    );
+  }
+  if (Array.isArray(under) && under.length) {
+    lines.push(`À optimiser : ${under.slice(0, 2).map((q) => `#${Number(q.order || 0) + 1}`).join(", ")}.`);
+  }
+  if (Array.isArray(top) && top.length) {
+    lines.push(`Format performant : ${top.slice(0, 2).map((q) => `${q.type}`).join(" / ")}.`);
+  }
+  if (!lines.length) {
+    lines.push("Pas assez de signal sur la période filtrée. Élargissez la période ou retirez des filtres.");
+  }
+  return (
+    <div style={{ display: "grid", gap: "0.45rem" }}>
+      {lines.map((line, idx) => (
+        <p key={idx} style={{ margin: 0, color: "#334155", fontSize: "0.82rem", fontWeight: 600 }}>
+          - {line}
+        </p>
       ))}
     </div>
   );

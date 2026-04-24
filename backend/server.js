@@ -3803,6 +3803,16 @@ app.get("/events/:eventId/analytics/v2", requireAuth, async (req, res) => {
       typeof req.query.status === "string" ? req.query.status.trim().toUpperCase() : "";
     const liveStateFilter =
       typeof req.query.liveState === "string" ? req.query.liveState.trim().toUpperCase() : "";
+    const underThresholdRaw =
+      typeof req.query.underThresholdPct === "string" ? req.query.underThresholdPct.trim() : "";
+    const topThresholdRaw =
+      typeof req.query.topThresholdPct === "string" ? req.query.topThresholdPct.trim() : "";
+    const underThresholdPct = Number.isFinite(Number(underThresholdRaw))
+      ? Math.min(100, Math.max(0, Number(underThresholdRaw)))
+      : 30;
+    const topThresholdPct = Number.isFinite(Number(topThresholdRaw))
+      ? Math.min(100, Math.max(0, Number(topThresholdRaw)))
+      : 60;
     const from = fromRaw ? new Date(fromRaw) : null;
     const to = toRaw ? new Date(toRaw) : null;
     if (from && Number.isNaN(from.getTime())) {
@@ -4028,9 +4038,11 @@ app.get("/events/:eventId/analytics/v2", requireAuth, async (req, res) => {
     }));
 
     const sortedByRate = [...questionRows].sort((a, b) => a.responseRatePct - b.responseRatePct);
-    const take = Math.min(3, sortedByRate.length);
-    const underperforming = sortedByRate.slice(0, take);
-    const topEngagement = [...sortedByRate].reverse().slice(0, take);
+    const underperforming = sortedByRate.filter((q) => q.responseRatePct <= underThresholdPct).slice(0, 5);
+    const topEngagement = [...sortedByRate]
+      .reverse()
+      .filter((q) => q.responseRatePct >= topThresholdPct)
+      .slice(0, 5);
 
     return res.json({
       event: { id: event.id, title: event.title, liveState: liveStateNow },
@@ -4041,6 +4053,8 @@ app.get("/events/:eventId/analytics/v2", requireAuth, async (req, res) => {
         type: typeFilter || null,
         status: statusFilter || null,
         liveState: liveStateFilter || null,
+        underThresholdPct,
+        topThresholdPct,
       },
       availableFilters: {
         liveState: liveStateNow,
@@ -4068,6 +4082,222 @@ app.get("/events/:eventId/analytics/v2", requireAuth, async (req, res) => {
     });
   } catch (e) {
     console.error("events/:eventId/analytics/v2", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+app.get("/events/:eventId/analytics/v2/export.csv", requireAuth, async (req, res) => {
+  const eventId = String(req.params.eventId || "").trim();
+  try {
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    const fromRaw = typeof req.query.from === "string" ? req.query.from.trim() : "";
+    const toRaw = typeof req.query.to === "string" ? req.query.to.trim() : "";
+    const pollId = typeof req.query.pollId === "string" ? req.query.pollId.trim() : "";
+    const typeFilter = typeof req.query.type === "string" ? req.query.type.trim().toUpperCase() : "";
+    const statusFilter =
+      typeof req.query.status === "string" ? req.query.status.trim().toUpperCase() : "";
+    const underThresholdRaw =
+      typeof req.query.underThresholdPct === "string" ? req.query.underThresholdPct.trim() : "";
+    const topThresholdRaw =
+      typeof req.query.topThresholdPct === "string" ? req.query.topThresholdPct.trim() : "";
+    const underThresholdPct = Number.isFinite(Number(underThresholdRaw))
+      ? Math.min(100, Math.max(0, Number(underThresholdRaw)))
+      : 30;
+    const topThresholdPct = Number.isFinite(Number(topThresholdRaw))
+      ? Math.min(100, Math.max(0, Number(topThresholdRaw)))
+      : 60;
+    const from = fromRaw ? new Date(fromRaw) : null;
+    const to = toRaw ? new Date(toRaw) : null;
+
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        title: true,
+        polls: {
+          orderBy: { order: "asc" },
+          select: {
+            id: true,
+            order: true,
+            title: true,
+            question: true,
+            type: true,
+            status: true,
+            leadEnabled: true,
+          },
+        },
+      },
+    });
+    if (!event) {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+    const normalizeQuestionType = (poll) => {
+      const t = String(poll?.type || "").toUpperCase();
+      if (t === "CONTEST_ENTRY") return "contest";
+      if (t === "QUIZ") return "quiz";
+      if (Boolean(poll?.leadEnabled)) return "lead";
+      if (t === "MULTIPLE_CHOICE") return "multiple";
+      return "single";
+    };
+    const polls = event.polls.filter((p) => {
+      const normalizedType = normalizeQuestionType(p);
+      const s = String(p.status || "").toUpperCase();
+      if (pollId && p.id !== pollId) return false;
+      if (typeFilter && typeFilter !== "ALL" && normalizedType.toUpperCase() !== typeFilter) return false;
+      if (statusFilter && statusFilter !== "ALL" && s !== statusFilter) return false;
+      return true;
+    });
+    const pollIds = polls.map((p) => p.id);
+    const votes = pollIds.length
+      ? await prisma.vote.findMany({
+          where: {
+            pollId: { in: pollIds },
+            ...(from || to
+              ? {
+                  createdAt: {
+                    ...(from ? { gte: from } : {}),
+                    ...(to ? { lte: to } : {}),
+                  },
+                }
+              : {}),
+          },
+          select: { pollId: true, voterSessionId: true, createdAt: true },
+          orderBy: { createdAt: "asc" },
+        })
+      : [];
+    /** @type {Map<string, Set<string>>} */
+    const sessionsByPoll = new Map();
+    for (const p of polls) sessionsByPoll.set(p.id, new Set());
+    const sessionsAll = new Set();
+    /** @type {Map<string, number>} */
+    const voteCountByPoll = new Map();
+    for (const v of votes) {
+      sessionsAll.add(v.voterSessionId);
+      voteCountByPoll.set(v.pollId, (voteCountByPoll.get(v.pollId) || 0) + 1);
+      const set = sessionsByPoll.get(v.pollId);
+      if (set) set.add(v.voterSessionId);
+    }
+    const participantsUnique = sessionsAll.size;
+    const rowsByQuestion = polls.map((p, i) => {
+      const participants = sessionsByPoll.get(p.id)?.size ?? 0;
+      const responseRatePct =
+        participantsUnique > 0 ? Math.round((participants / participantsUnique) * 1000) / 10 : 0;
+      return {
+        id: p.id,
+        order: typeof p.order === "number" ? p.order : i,
+        label:
+          (typeof p.question === "string" && p.question.trim()) ||
+          (typeof p.title === "string" && p.title.trim()) ||
+          `Question ${i + 1}`,
+        type: normalizeQuestionType(p),
+        status: String(p.status || "").toUpperCase(),
+        voteCount: voteCountByPoll.get(p.id) || 0,
+        participants,
+        responseRatePct,
+      };
+    });
+    const funnel = [...rowsByQuestion].sort((a, b) => a.order - b.order).map((q, i, arr) => {
+      const prev = i > 0 ? arr[i - 1].participants : q.participants;
+      return {
+        ...q,
+        dropOffPct:
+          i > 0 && prev > 0 ? Math.max(0, Math.round(((prev - q.participants) / prev) * 1000) / 10) : 0,
+      };
+    });
+    const sortedByRate = [...rowsByQuestion].sort((a, b) => a.responseRatePct - b.responseRatePct);
+    const under = sortedByRate.filter((q) => q.responseRatePct <= underThresholdPct).slice(0, 5);
+    const top = [...sortedByRate]
+      .reverse()
+      .filter((q) => q.responseRatePct >= topThresholdPct)
+      .slice(0, 5);
+
+    const firstVoteAt = votes[0]?.createdAt ? new Date(votes[0].createdAt) : null;
+    const lastVoteAt = votes[votes.length - 1]?.createdAt ? new Date(votes[votes.length - 1].createdAt) : null;
+    let bucketMin = 1;
+    if (firstVoteAt && lastVoteAt) {
+      const mins = Math.max(1, Math.ceil((lastVoteAt.getTime() - firstVoteAt.getTime()) / 60000));
+      if (mins > 180) bucketMin = 5;
+      if (mins > 600) bucketMin = 15;
+    }
+    /** @type {Map<string, number>} */
+    const timelineMap = new Map();
+    const bucketStartIso = (date) => {
+      const d = new Date(date);
+      d.setSeconds(0, 0);
+      d.setMinutes(Math.floor(d.getMinutes() / bucketMin) * bucketMin);
+      return d.toISOString();
+    };
+    for (const v of votes) {
+      const k = bucketStartIso(v.createdAt);
+      timelineMap.set(k, (timelineMap.get(k) || 0) + 1);
+    }
+    const timeline = [...timelineMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
+    const escapeCsv = (v) => {
+      const s = String(v ?? "");
+      if (/[;"\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    };
+    const lines = [];
+    lines.push("section;event_title;question_order;question;type;status;metric;value;extra");
+    timeline.forEach(([iso, c]) => {
+      lines.push(
+        ["timeline", escapeCsv(event.title), "", "", "", "", escapeCsv(iso), String(c), `bucket=${bucketMin}m`].join(";"),
+      );
+    });
+    funnel.forEach((q) => {
+      lines.push(
+        [
+          "funnel",
+          escapeCsv(event.title),
+          String(Number(q.order) + 1),
+          escapeCsv(q.label),
+          escapeCsv(q.type),
+          escapeCsv(q.status),
+          "participants",
+          String(q.participants),
+          `dropOffPct=${q.dropOffPct};ratePct=${q.responseRatePct}`,
+        ].join(";"),
+      );
+    });
+    under.forEach((q) => {
+      lines.push(
+        [
+          "insight_under",
+          escapeCsv(event.title),
+          String(Number(q.order) + 1),
+          escapeCsv(q.label),
+          escapeCsv(q.type),
+          escapeCsv(q.status),
+          "responseRatePct",
+          String(q.responseRatePct),
+          `threshold<=${underThresholdPct}`,
+        ].join(";"),
+      );
+    });
+    top.forEach((q) => {
+      lines.push(
+        [
+          "insight_top",
+          escapeCsv(event.title),
+          String(Number(q.order) + 1),
+          escapeCsv(q.label),
+          escapeCsv(q.type),
+          escapeCsv(q.status),
+          "responseRatePct",
+          String(q.responseRatePct),
+          `threshold>=${topThresholdPct}`,
+        ].join(";"),
+      );
+    });
+    const filename = `avote-analytics-v2-${eventId}.csv`;
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    return res.send("\ufeff" + lines.join("\n"));
+  } catch (e) {
+    console.error("events/:eventId/analytics/v2/export.csv", e);
     return res.status(500).json({ error: "Erreur serveur." });
   }
 });
