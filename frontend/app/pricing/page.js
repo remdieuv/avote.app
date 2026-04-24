@@ -739,13 +739,16 @@ export default function PricingPage() {
         .pricing-grid.pricing-grid-launch .pricing-card.launch-card .pricing-pro-discovery-tag {
           margin-top: 0.58rem;
           margin-bottom: 0;
-          padding: 0 0.65rem 0.42rem;
+          padding: 0.5rem 0.62rem;
           line-height: 1.3;
-          text-align: left;
+          text-align: center;
           font-size: 0.84rem;
           font-weight: 800;
-          color: #1e293b;
+          color: #111827;
           letter-spacing: -0.01em;
+          border: 1px solid #ddd6fe;
+          background: linear-gradient(180deg, #faf5ff 0%, #f5f3ff 100%);
+          border-radius: 10px;
         }
         .pricing-section-subtitle {
           margin: -0.15rem auto 1rem;
