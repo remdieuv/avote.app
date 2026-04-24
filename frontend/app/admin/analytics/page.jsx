@@ -23,6 +23,7 @@ export default function AdminAccountAnalyticsPage() {
   const [shareExpiresAt, setShareExpiresAt] = useState("");
   const [shareLinks, setShareLinks] = useState([]);
   const [revokeBusyId, setRevokeBusyId] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -59,6 +60,15 @@ export default function AdminAccountAnalyticsPage() {
 
   useEffect(() => {
     void loadShareLinks();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const m = window.matchMedia("(max-width: 960px)");
+    const apply = () => setIsMobile(m.matches);
+    apply();
+    m.addEventListener("change", apply);
+    return () => m.removeEventListener("change", apply);
   }, []);
 
   const summary = data?.summary ?? {};
@@ -143,9 +153,11 @@ export default function AdminAccountAnalyticsPage() {
             <button type="button" onClick={() => { setFromDate(""); setToDate(""); }} style={ghostBtnStyle}>
               Réinitialiser
             </button>
-            <a href={exportHref} style={ghostBtnStyle}>
-              Export CSV multi-events
-            </a>
+            {!isMobile ? (
+              <a href={exportHref} style={ghostBtnStyle}>
+                Export CSV multi-events
+              </a>
+            ) : null}
           </div>
         </div>
         <div style={{ marginTop: "0.7rem", display: "flex", gap: "0.45rem", alignItems: "center", flexWrap: "wrap" }}>
@@ -160,6 +172,11 @@ export default function AdminAccountAnalyticsPage() {
           <button type="button" onClick={generateShareLink} style={ghostBtnStyle} disabled={shareLoading}>
             {shareLoading ? "Génération..." : "Générer lien readonly"}
           </button>
+          {isMobile ? (
+            <a href={exportHref} style={ghostBtnStyle}>
+              Export CSV multi-events
+            </a>
+          ) : null}
           {shareUrl ? (
             <a href={shareUrl} target="_blank" rel="noopener noreferrer" style={ghostBtnStyle}>
               Ouvrir rapport client
@@ -251,7 +268,7 @@ export default function AdminAccountAnalyticsPage() {
             <Kpi label="Moy. conversion lead" value={`${Number(summary.avgLeadConversionPct ?? 0).toLocaleString("fr-FR")} %`} />
           </section>
 
-          <section style={{ display: "grid", gap: "0.75rem", gridTemplateColumns: "1.3fr 1fr", marginBottom: "0.95rem" }}>
+          <section style={{ display: "grid", gap: "0.75rem", gridTemplateColumns: isMobile ? "1fr" : "1.3fr 1fr", marginBottom: "0.95rem" }}>
             <article style={{ ...CARD, padding: "0.85rem" }}>
               <h3 style={h3}>Évolution mensuelle</h3>
               <MonthlyBars rows={monthly} />
@@ -262,7 +279,7 @@ export default function AdminAccountAnalyticsPage() {
             </article>
           </section>
 
-          <section style={{ display: "grid", gap: "0.75rem", gridTemplateColumns: "1fr 1fr", marginBottom: "0.95rem" }}>
+          <section style={{ display: "grid", gap: "0.75rem", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", marginBottom: "0.95rem" }}>
             <article style={{ ...CARD, padding: "0.85rem" }}>
               <h3 style={h3}>Best performer</h3>
               {best ? (
@@ -282,9 +299,13 @@ export default function AdminAccountAnalyticsPage() {
             </article>
           </section>
 
-          <section style={{ ...CARD, overflow: "hidden" }}>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
+          {!isMobile ? (
+            <section style={{ ...CARD, overflow: "hidden" }}>
+              <p style={{ margin: "0.55rem 0.7rem 0.2rem", color: "#64748b", fontSize: "0.74rem", fontWeight: 700 }}>
+                Faites glisser horizontalement si nécessaire.
+              </p>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
                 <thead>
                   <tr style={{ background: "#f8fafc" }}>
                     <Th>Événement</Th>
@@ -330,9 +351,38 @@ export default function AdminAccountAnalyticsPage() {
                     <tr><Td colSpan={8}>Aucun événement dans cette période.</Td></tr>
                   ) : null}
                 </tbody>
-              </table>
-            </div>
-          </section>
+                </table>
+              </div>
+            </section>
+          ) : (
+            <section style={{ display: "grid", gap: "0.55rem" }}>
+              {[...events].sort((a, b) => (b.participationRatePct || 0) - (a.participationRatePct || 0)).map((e) => (
+                <article key={e.id} style={{ ...CARD, padding: "0.72rem" }}>
+                  <p style={{ margin: "0 0 0.28rem 0", color: "#0f172a", fontWeight: 800, fontSize: "0.88rem" }}>{e.title}</p>
+                  <p style={{ margin: "0 0 0.42rem 0", color: "#64748b", fontSize: "0.75rem", fontWeight: 700 }}>
+                    {new Date(e.createdAt).toLocaleDateString("fr-FR")} · {e.pollCount} questions
+                  </p>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.35rem", marginBottom: "0.45rem" }}>
+                    <MiniStat label="Participants" value={e.participants} />
+                    <MiniStat label="Votes" value={e.voteCount} />
+                    <MiniStat label="Leads" value={e.leadsCount} />
+                    <MiniStat label="Participation" value={Number(e.participationRatePct || 0).toLocaleString("fr-FR")} />
+                  </div>
+                  <Link
+                    href={`/admin/event/${encodeURIComponent(e.id)}/analytics`}
+                    style={{ ...ghostBtnStyle, justifyContent: "center", minHeight: "40px", width: "100%" }}
+                  >
+                    Voir les stats de cet événement
+                  </Link>
+                </article>
+              ))}
+              {events.length === 0 ? (
+                <article style={{ ...CARD, padding: "0.75rem", color: "#64748b", textAlign: "center" }}>
+                  Aucun événement dans cette période.
+                </article>
+              ) : null}
+            </section>
+          )}
         </>
       ) : null}
     </main>
@@ -363,4 +413,13 @@ function MonthlyBars({ rows }) {
 function BenchmarkList({ rows }) {
   if (!rows.length) return <p style={{ margin: 0, color: "#64748b" }}>Aucune donnée.</p>;
   return <div style={{ display: "grid", gap: "0.42rem" }}>{rows.map((r) => <div key={r.type} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: "0.45rem", alignItems: "center", padding: "0.4rem 0.45rem", border: "1px solid #e2e8f0", borderRadius: "9px" }}><strong style={{ fontSize: "0.8rem", textTransform: "capitalize" }}>{r.type}</strong><span style={{ fontSize: "0.74rem", color: "#64748b", fontWeight: 700 }}>{r.participants} p.</span><span style={{ fontSize: "0.74rem", color: "#0f766e", fontWeight: 800 }}>{Number(r.avgVotesPerParticipant || 0).toLocaleString("fr-FR")}</span></div>)}</div>;
+}
+
+function MiniStat({ label, value }) {
+  return (
+    <div style={{ border: "1px solid #e2e8f0", borderRadius: "8px", padding: "0.35rem 0.4rem", background: "#fcfdff" }}>
+      <p style={{ margin: "0 0 0.12rem 0", color: "#64748b", fontSize: "0.68rem", fontWeight: 700 }}>{label}</p>
+      <p style={{ margin: 0, color: "#0f172a", fontSize: "0.82rem", fontWeight: 800 }}>{value}</p>
+    </div>
+  );
 }
