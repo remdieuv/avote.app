@@ -20,6 +20,7 @@ export default function EventAnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     if (!eventId) return;
@@ -39,6 +40,15 @@ export default function EventAnalyticsPage() {
       }
     })();
   }, [eventId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const m = window.matchMedia("(max-width: 920px)");
+    const apply = () => setIsMobile(m.matches);
+    apply();
+    m.addEventListener("change", apply);
+    return () => m.removeEventListener("change", apply);
+  }, []);
 
   const summary = data?.summary ?? {};
   const questions = useMemo(() => (Array.isArray(data?.questions) ? data.questions : []), [data]);
@@ -161,9 +171,10 @@ export default function EventAnalyticsPage() {
             />
           </section>
 
-          <div style={{ ...CARD, overflow: "hidden" }}>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: "1060px" }}>
+          {!isMobile ? (
+            <div style={{ ...CARD, overflow: "hidden" }}>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: "1020px" }}>
                 <thead>
                   <tr style={{ background: "#f8fafc" }}>
                     <Th>#</Th>
@@ -205,7 +216,7 @@ export default function EventAnalyticsPage() {
                           )}
                         </Td>
                         <Td>
-                          <OptionsCell options={q.options} />
+                          <OptionsCell options={q.options} compact />
                         </Td>
                       </tr>
                     );
@@ -218,9 +229,12 @@ export default function EventAnalyticsPage() {
                     </tr>
                   ) : null}
                 </tbody>
-              </table>
+                </table>
+              </div>
             </div>
-          </div>
+          ) : (
+            <MobileQuestions questions={questions} />
+          )}
         </>
       ) : null}
     </div>
@@ -329,30 +343,33 @@ function StatPill({ children, tone = "mid" }) {
   );
 }
 
-function OptionsCell({ options }) {
+function OptionsCell({ options, compact = false }) {
   if (!Array.isArray(options) || options.length === 0) return "—";
-  const top = [...options].sort((a, b) => (b.voteCount || 0) - (a.voteCount || 0))[0]?.id;
+  const sorted = [...options].sort((a, b) => (b.voteCount || 0) - (a.voteCount || 0));
+  const top = sorted[0]?.id;
+  const shown = compact ? sorted.slice(0, 3) : sorted;
+  const hiddenCount = compact ? Math.max(0, sorted.length - shown.length) : 0;
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: "0.32rem" }}>
-      {options.map((o, i) => (
+      {shown.map((o, i) => (
         <span
           key={o?.id || i}
           style={{
             display: "inline-flex",
             alignItems: "center",
             gap: "0.25rem",
-            padding: "0.25rem 0.42rem",
+            padding: "0.23rem 0.4rem",
             borderRadius: "7px",
             border: `1px solid ${o?.id === top ? "#bfdbfe" : "#e2e8f0"}`,
             background: o?.id === top ? "#eff6ff" : "#f8fafc",
             color: "#334155",
-            fontSize: "0.78rem",
+            fontSize: "0.74rem",
             lineHeight: 1.2,
             fontWeight: o?.id === top ? 700 : 600,
           }}
           title={`${o?.label || "Option"}: ${o?.voteCount ?? 0} vote(s)`}
         >
-          <span style={{ maxWidth: "190px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span style={{ maxWidth: compact ? "120px" : "190px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {o?.label || "Option"}
           </span>
           <span style={{ color: "#64748b", fontWeight: 700 }}>
@@ -360,6 +377,121 @@ function OptionsCell({ options }) {
           </span>
         </span>
       ))}
+      {hiddenCount > 0 ? (
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            padding: "0.23rem 0.4rem",
+            borderRadius: "7px",
+            border: "1px dashed #cbd5e1",
+            background: "#fff",
+            color: "#64748b",
+            fontSize: "0.72rem",
+            fontWeight: 700,
+          }}
+        >
+          +{hiddenCount}
+        </span>
+      ) : null}
     </div>
+  );
+}
+
+function MobileQuestions({ questions }) {
+  const [openId, setOpenId] = useState(null);
+  return (
+    <section style={{ display: "grid", gap: "0.65rem" }}>
+      {questions.map((q, idx) => {
+        const id = q.id || String(idx);
+        const winner = Array.isArray(q.options)
+          ? [...q.options].sort((a, b) => (b.voteCount || 0) - (a.voteCount || 0))[0]
+          : null;
+        const isOpen = openId === id;
+        return (
+          <article key={id} style={{ ...CARD, padding: "0.72rem 0.78rem" }}>
+            <button
+              type="button"
+              onClick={() => setOpenId((prev) => (prev === id ? null : id))}
+              style={{
+                all: "unset",
+                cursor: "pointer",
+                display: "grid",
+                gap: "0.45rem",
+                width: "100%",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                <span style={{ fontSize: "0.73rem", color: "#64748b", fontWeight: 700 }}>
+                  #{(q.order ?? idx) + 1}
+                </span>
+                <strong
+                  style={{
+                    color: "#0f172a",
+                    fontSize: "0.87rem",
+                    lineHeight: 1.25,
+                    flex: 1,
+                    minWidth: 0,
+                  }}
+                >
+                  {q.label || `Question ${idx + 1}`}
+                </strong>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                <MiniPill>{q.voteCount ?? 0} votes</MiniPill>
+                <StatPill tone={(q.responseRatePct ?? 0) >= 60 ? "good" : (q.responseRatePct ?? 0) >= 30 ? "mid" : "low"}>
+                  {Number(q.responseRatePct ?? 0).toLocaleString("fr-FR")} %
+                </StatPill>
+                <span style={{ fontSize: "0.74rem", color: "#64748b", fontWeight: 700 }}>
+                  {isOpen ? "Masquer détail" : "Voir détail"}
+                </span>
+              </div>
+            </button>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateRows: isOpen ? "1fr" : "0fr",
+                opacity: isOpen ? 1 : 0,
+                transition: "grid-template-rows 220ms ease, opacity 180ms ease",
+              }}
+            >
+              <div style={{ overflow: "hidden" }}>
+                <div style={{ marginTop: "0.55rem", display: "grid", gap: "0.45rem" }}>
+                <p style={{ margin: 0, fontSize: "0.79rem", color: "#334155", fontWeight: 700 }}>
+                  Gagnante: {winner?.label ? `${winner.label} (${winner.voteCount ?? 0})` : "—"}
+                </p>
+                <OptionsCell options={q.options} />
+                </div>
+              </div>
+            </div>
+          </article>
+        );
+      })}
+      {questions.length === 0 ? (
+        <article style={{ ...CARD, padding: "0.85rem", color: "#64748b", textAlign: "center" }}>
+          Aucune donnée de vote disponible pour cet événement.
+        </article>
+      ) : null}
+    </section>
+  );
+}
+
+function MiniPill({ children }) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "0.21rem 0.43rem",
+        borderRadius: "999px",
+        border: "1px solid #e2e8f0",
+        background: "#f8fafc",
+        color: "#334155",
+        fontSize: "0.73rem",
+        fontWeight: 700,
+      }}
+    >
+      {children}
+    </span>
   );
 }
