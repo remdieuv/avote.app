@@ -66,6 +66,9 @@ const SUBSCRIPTION_LINKS = {
   agency: "/admin",
 };
 
+const PRICING_MODE =
+  process.env.NEXT_PUBLIC_PRICING_MODE === "full" ? "full" : "launch";
+
 const plans = [
   {
     key: "free",
@@ -247,6 +250,28 @@ const monthlyPlans = [
   },
 ];
 
+const launchPlan = {
+  key: "launch-pro-event",
+  name: "Offre Événement",
+  price: "49€",
+  unit: "/ événement",
+  label: "Prix de référence",
+  sublabel: "Offre de lancement",
+  cta: "Créer mon événement",
+  href: STRIPE_LINKS.pro,
+  badge: "Offre de lancement",
+  featured: true,
+  features: [
+    "1 événement",
+    "Jusqu'à 1 000 participations",
+    "QR code + lien court",
+    "Résultats en direct",
+    "Projection écran / OBS",
+    "Personnalisation visuelle (logo, couleurs)",
+    "Statistiques détaillées + export des résultats",
+  ],
+};
+
 function PlanCard({ plan }) {
   const isExternal = /^https?:\/\//i.test(plan.href);
   return (
@@ -325,6 +350,7 @@ function MonthlyPlanCard({ plan }) {
 }
 
 export default function PricingPage() {
+  const isLaunchMode = PRICING_MODE === "launch";
   return (
     <div style={shell}>
       <LandingHeader />
@@ -335,154 +361,182 @@ export default function PricingPage() {
             <p className="pricing-eyebrow">Tarifs Avote</p>
             <h1 className="pricing-title">Des tarifs simples pour vos événements en direct</h1>
             <p className="pricing-subtitle">
-              Payez une seule fois pour un événement, ou choisissez un abonnement mensuel si vous
-              utilisez Avote régulièrement.
+              {isLaunchMode
+                ? "Une offre claire pour démarrer vite : 49€ / événement. Et pour le lancement, votre premier événement est à 19€."
+                : "Payez une seule fois pour un événement, ou choisissez un abonnement mensuel si vous utilisez Avote régulièrement."}
             </p>
             <p className="pricing-micro-reassurance">
               Aucun engagement. Paiement sécurisé avec Stripe. Test gratuit disponible.
             </p>
             <div className="pricing-hero-cta">
-              <Link href="/join/demo" style={btnPrimary}>
-                Tester gratuitement
-              </Link>
-              <Link href="/admin" style={btnSecondary}>
-                Créer un événement
-              </Link>
+              {isLaunchMode ? (
+                <a href={launchPlan.href} style={btnPrimary}>
+                  Créer mon événement
+                </a>
+              ) : (
+                <>
+                  <Link href="/join/demo" style={btnPrimary}>
+                    Tester gratuitement
+                  </Link>
+                  <Link href="/admin" style={btnSecondary}>
+                    Créer un événement
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </section>
 
-        <section style={{ ...sectionY, paddingTop: "0.6rem" }} aria-labelledby="pricing-count-title">
-          <div className="pricing-count-wrap">
-            <h2 id="pricing-count-title" className="section-title">
-              Comment ça se compte ?
+        {isLaunchMode ? (
+          <section style={sectionY} aria-labelledby="pricing-launch-title">
+            <h2 id="pricing-launch-title" className="section-title">
+              Une seule offre pour démarrer
             </h2>
-            <p className="pricing-count-text">
-              Une participation correspond à une réponse envoyée par un participant.
+            <p className="pricing-section-subtitle">
+              Simple, clair, sans comparaison : vous comprenez, vous cliquez.
             </p>
-            <div className="pricing-count-grid">
-              {participationExamples.map((example) => (
-                <article key={example.title} className="pricing-count-card">
-                  <p className="pricing-count-card-title">{example.title}</p>
-                  <p className="pricing-count-card-value">{example.value}</p>
-                </article>
-              ))}
+            <div className="pricing-grid pricing-grid-launch">
+              <PlanCard plan={launchPlan} />
             </div>
-            <p className="pricing-count-note">
-              Le nombre réel dépend du nombre de personnes qui répondent pendant votre événement.
+            <p className="pricing-launch-note">
+              Premier événement à 19€ pour tester Avote. Puis 49€ / événement.
             </p>
-          </div>
-        </section>
-
-        <section style={{ ...sectionY, paddingTop: "0.6rem" }} aria-labelledby="pricing-modes-title">
-          <h2 id="pricing-modes-title" className="section-title">
-            Choisissez votre mode d&apos;utilisation
-          </h2>
-          <div className="pricing-mode-grid">
-            {offerModes.map((mode) => (
-              <article key={mode.key} className={`pricing-mode-card ${mode.featured ? "featured" : ""}`}>
-                <h3>{mode.title}</h3>
-                <p className="pricing-mode-text">{mode.text}</p>
-                <ul>
-                  {mode.points.map((point) => (
-                    <li key={point}>{point}</li>
+          </section>
+        ) : (
+          <>
+            <section style={{ ...sectionY, paddingTop: "0.6rem" }} aria-labelledby="pricing-count-title">
+              <div className="pricing-count-wrap">
+                <h2 id="pricing-count-title" className="section-title">
+                  Comment ça se compte ?
+                </h2>
+                <p className="pricing-count-text">
+                  Une participation correspond à une réponse envoyée par un participant.
+                </p>
+                <div className="pricing-count-grid">
+                  {participationExamples.map((example) => (
+                    <article key={example.title} className="pricing-count-card">
+                      <p className="pricing-count-card-title">{example.title}</p>
+                      <p className="pricing-count-card-value">{example.value}</p>
+                    </article>
                   ))}
-                </ul>
-                <Link href={mode.href} style={mode.featured ? btnPrimary : btnSecondary}>
-                  {mode.cta}
-                </Link>
-              </article>
-            ))}
-          </div>
-        </section>
+                </div>
+                <p className="pricing-count-note">
+                  Le nombre réel dépend du nombre de personnes qui répondent pendant votre événement.
+                </p>
+              </div>
+            </section>
 
-        <section style={sectionY} aria-labelledby="pricing-cards-title">
-          <h2 id="pricing-cards-title" className="section-title">
-            Choisissez votre formule par événement
-          </h2>
-          <p className="pricing-section-subtitle">
-            Pour un besoin ponctuel, payez une seule fois selon la taille de votre audience.
-          </p>
-          <div className="pricing-grid">
-            {plans.map((plan) => (
-              <PlanCard key={plan.key} plan={plan} />
-            ))}
-          </div>
-        </section>
-
-        <section style={sectionY} aria-labelledby="pricing-compare-title">
-          <h2 id="pricing-compare-title" className="section-title">
-            Comparatif des offres par événement
-          </h2>
-          <div className="pricing-table-wrap">
-            <table className="pricing-table">
-              <thead>
-                <tr>
-                  <th>Fonctionnalités</th>
-                  <th>Gratuit</th>
-                  <th>Starter</th>
-                  <th>Pro Événement</th>
-                  <th>Premium</th>
-                </tr>
-              </thead>
-              <tbody>
-                {eventCompareRows.map((row) => (
-                  <tr key={row.label}>
-                    <td>{row.label}</td>
-                    <td>{row.free}</td>
-                    <td>{row.starter}</td>
-                    <td>{row.pro}</td>
-                    <td>{row.premium}</td>
-                  </tr>
+            <section style={{ ...sectionY, paddingTop: "0.6rem" }} aria-labelledby="pricing-modes-title">
+              <h2 id="pricing-modes-title" className="section-title">
+                Choisissez votre mode d&apos;utilisation
+              </h2>
+              <div className="pricing-mode-grid">
+                {offerModes.map((mode) => (
+                  <article key={mode.key} className={`pricing-mode-card ${mode.featured ? "featured" : ""}`}>
+                    <h3>{mode.title}</h3>
+                    <p className="pricing-mode-text">{mode.text}</p>
+                    <ul>
+                      {mode.points.map((point) => (
+                        <li key={point}>{point}</li>
+                      ))}
+                    </ul>
+                    <Link href={mode.href} style={mode.featured ? btnPrimary : btnSecondary}>
+                      {mode.cta}
+                    </Link>
+                  </article>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+              </div>
+            </section>
 
-        <section style={{ ...sectionY, paddingTop: "0.6rem" }} aria-labelledby="pricing-transition-title">
-          <div id="subscriptions" className="pricing-sub-plan">
-            <h2 id="pricing-transition-title" className="pricing-sub-plan-title">
-              Vous organisez des événements régulièrement ?
-            </h2>
-            <p className="pricing-sub-plan-text">
-              Passez à un abonnement mensuel Avote pour profiter d&apos;un coût plus avantageux chaque mois.
-            </p>
-          </div>
-        </section>
+            <section style={sectionY} aria-labelledby="pricing-cards-title">
+              <h2 id="pricing-cards-title" className="section-title">
+                Choisissez votre formule par événement
+              </h2>
+              <p className="pricing-section-subtitle">
+                Pour un besoin ponctuel, payez une seule fois selon la taille de votre audience.
+              </p>
+              <div className="pricing-grid">
+                {plans.map((plan) => (
+                  <PlanCard key={plan.key} plan={plan} />
+                ))}
+              </div>
+            </section>
 
-        <section style={sectionY} aria-labelledby="pricing-monthly-title">
-          <h2 id="pricing-monthly-title" className="section-title">
-            Choisissez votre abonnement
-          </h2>
-          <p className="pricing-monthly-subtitle">
-            Pour un usage récurrent, bénéficiez d&apos;un tarif mensuel plus avantageux.
-          </p>
-          <div className="pricing-monthly-grid">
-            {monthlyPlans.map((plan) => (
-              <MonthlyPlanCard key={plan.key} plan={plan} />
-            ))}
-          </div>
-        </section>
+            <section style={sectionY} aria-labelledby="pricing-compare-title">
+              <h2 id="pricing-compare-title" className="section-title">
+                Comparatif des offres par événement
+              </h2>
+              <div className="pricing-table-wrap">
+                <table className="pricing-table">
+                  <thead>
+                    <tr>
+                      <th>Fonctionnalités</th>
+                      <th>Gratuit</th>
+                      <th>Starter</th>
+                      <th>Pro Événement</th>
+                      <th>Premium</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {eventCompareRows.map((row) => (
+                      <tr key={row.label}>
+                        <td>{row.label}</td>
+                        <td>{row.free}</td>
+                        <td>{row.starter}</td>
+                        <td>{row.pro}</td>
+                        <td>{row.premium}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
 
-        <section style={sectionY} className="pricing-final">
-          <h2>Vous prévoyez un très grand événement ?</h2>
-          <p className="pricing-final-sub">
-            Concert, stade, festival, grande opération publique : contactez-nous pour une offre
-            sur mesure adaptée à votre audience et à vos contraintes techniques.
-          </p>
-          <div className="pricing-reassure-grid">
-            <p>Capacité grande échelle</p>
-            <p>Accompagnement personnalisé</p>
-            <p>Infrastructure adaptée</p>
-            <p>Tarification sur devis</p>
-          </div>
-          <div className="pricing-final-cta">
-            <Link href="/admin" style={btnPrimary}>
-              Nous contacter
-            </Link>
-          </div>
-        </section>
+            <section style={{ ...sectionY, paddingTop: "0.6rem" }} aria-labelledby="pricing-transition-title">
+              <div id="subscriptions" className="pricing-sub-plan">
+                <h2 id="pricing-transition-title" className="pricing-sub-plan-title">
+                  Vous organisez des événements régulièrement ?
+                </h2>
+                <p className="pricing-sub-plan-text">
+                  Passez à un abonnement mensuel Avote pour profiter d&apos;un coût plus avantageux chaque mois.
+                </p>
+              </div>
+            </section>
+
+            <section style={sectionY} aria-labelledby="pricing-monthly-title">
+              <h2 id="pricing-monthly-title" className="section-title">
+                Choisissez votre abonnement
+              </h2>
+              <p className="pricing-monthly-subtitle">
+                Pour un usage récurrent, bénéficiez d&apos;un tarif mensuel plus avantageux.
+              </p>
+              <div className="pricing-monthly-grid">
+                {monthlyPlans.map((plan) => (
+                  <MonthlyPlanCard key={plan.key} plan={plan} />
+                ))}
+              </div>
+            </section>
+
+            <section style={sectionY} className="pricing-final">
+              <h2>Vous prévoyez un très grand événement ?</h2>
+              <p className="pricing-final-sub">
+                Concert, stade, festival, grande opération publique : contactez-nous pour une offre
+                sur mesure adaptée à votre audience et à vos contraintes techniques.
+              </p>
+              <div className="pricing-reassure-grid">
+                <p>Capacité grande échelle</p>
+                <p>Accompagnement personnalisé</p>
+                <p>Infrastructure adaptée</p>
+                <p>Tarification sur devis</p>
+              </div>
+              <div className="pricing-final-cta">
+                <Link href="/admin" style={btnPrimary}>
+                  Nous contacter
+                </Link>
+              </div>
+            </section>
+          </>
+        )}
 
         <section style={{ ...sectionY, paddingTop: "1rem", paddingBottom: "1rem" }}>
           <div className="pricing-bottom-reassurance">
@@ -661,6 +715,18 @@ export default function PricingPage() {
           display: grid;
           grid-template-columns: 1fr;
           gap: 0.9rem;
+        }
+        .pricing-grid.pricing-grid-launch {
+          max-width: 460px;
+          margin: 0 auto;
+        }
+        .pricing-launch-note {
+          margin: 0.85rem auto 0;
+          max-width: 58ch;
+          text-align: center;
+          font-size: 0.84rem;
+          color: #475569;
+          font-weight: 700;
         }
         .pricing-section-subtitle {
           margin: -0.15rem auto 1rem;
