@@ -17,6 +17,10 @@ export default function AdminAccountAnalyticsPage() {
   const [data, setData] = useState(null);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [shareHours, setShareHours] = useState("168");
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareUrl, setShareUrl] = useState("");
+  const [shareExpiresAt, setShareExpiresAt] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -51,6 +55,35 @@ export default function AdminAccountAnalyticsPage() {
     ...(toDate ? { to: `${toDate}T23:59:59.999Z` } : {}),
   }).toString()}`;
 
+  const generateShareLink = async () => {
+    setShareLoading(true);
+    try {
+      const res = await adminFetch(`${apiBaseBrowser()}/analytics/account/share-link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          expiresInHours: Number(shareHours || 168),
+          ...(fromDate ? { from: `${fromDate}T00:00:00.000Z` } : {}),
+          ...(toDate ? { to: `${toDate}T23:59:59.999Z` } : {}),
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || `Erreur ${res.status}`);
+      const url = `${window.location.origin}${body.readonlyUrl}`;
+      setShareUrl(url);
+      setShareExpiresAt(body.expiresAt || "");
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      }
+    } catch (e) {
+      setShareUrl("");
+      setShareExpiresAt("");
+      setError(e.message || "Impossible de générer le lien.");
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
   return (
     <main style={{ maxWidth: "1220px", margin: "0 auto", padding: "1rem 1rem 2.2rem", fontFamily: 'system-ui, "Segoe UI", sans-serif' }}>
       <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", marginBottom: "0.9rem", flexWrap: "wrap" }}>
@@ -80,6 +113,30 @@ export default function AdminAccountAnalyticsPage() {
             </a>
           </div>
         </div>
+        <div style={{ marginTop: "0.7rem", display: "flex", gap: "0.45rem", alignItems: "center", flexWrap: "wrap" }}>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", color: "#64748b", fontSize: "0.75rem", fontWeight: 700 }}>
+            Durée lien readonly
+            <select value={shareHours} onChange={(e) => setShareHours(e.target.value)} style={{ ...inputStyle, width: "auto", minWidth: "120px" }}>
+              <option value="24">24h</option>
+              <option value="168">7 jours</option>
+              <option value="720">30 jours</option>
+            </select>
+          </label>
+          <button type="button" onClick={generateShareLink} style={ghostBtnStyle} disabled={shareLoading}>
+            {shareLoading ? "Génération..." : "Générer lien readonly"}
+          </button>
+          {shareUrl ? (
+            <a href={shareUrl} target="_blank" rel="noopener noreferrer" style={ghostBtnStyle}>
+              Ouvrir rapport client
+            </a>
+          ) : null}
+        </div>
+        {shareUrl ? (
+          <p style={{ margin: "0.55rem 0 0 0", color: "#334155", fontSize: "0.78rem", fontWeight: 600 }}>
+            Lien copié. Expire le{" "}
+            {shareExpiresAt ? new Date(shareExpiresAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "—"}.
+          </p>
+        ) : null}
       </section>
 
       {loading ? <p style={{ color: "#64748b" }}>Chargement…</p> : null}
