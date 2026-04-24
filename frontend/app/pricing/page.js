@@ -1041,6 +1041,9 @@ export default function PricingPage() {
           .pricing-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
+          .pricing-grid.pricing-grid-launch {
+            grid-template-columns: 1fr;
+          }
           .pricing-monthly-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
@@ -1055,6 +1058,9 @@ export default function PricingPage() {
           .pricing-grid {
             grid-template-columns: repeat(4, minmax(0, 1fr));
             align-items: stretch;
+          }
+          .pricing-grid.pricing-grid-launch {
+            grid-template-columns: 1fr;
           }
           .pricing-monthly-grid {
             grid-template-columns: repeat(3, minmax(0, 1fr));
