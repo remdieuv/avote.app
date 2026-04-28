@@ -9,6 +9,7 @@ const multer = require("multer");
 const { Server } = require("socket.io");
 const cookieParser = require("cookie-parser");
 const { prisma } = require("./lib/prisma");
+const { uploadImageBufferToCloudinary } = require("./lib/cloudinary");
 const {
   hashPassword,
   verifyPassword,
@@ -94,31 +95,8 @@ function eventCustomizationJson(event) {
 const CUSTOM_THEME_MODES = new Set(["dark", "light", "auto"]);
 const CUSTOM_OVERLAY = new Set(["low", "medium", "strong"]);
 
-const uploadStorage = multer.diskStorage({
-  destination(req, _file, cb) {
-    const eventId = String(req.params.eventId || "").trim();
-    const dir = path.join(UPLOAD_ROOT, "events", eventId);
-    try {
-      fs.mkdirSync(dir, { recursive: true });
-    } catch (e) {
-      return cb(/** @type {Error} */ (e));
-    }
-    cb(null, dir);
-  },
-  filename(req, file, cb) {
-    const qk = String(req.query.kind || "").toLowerCase();
-    const kind = qk === "background" ? "bg" : "logo";
-    const ext = path.extname(file.originalname || "") || ".png";
-    const safeExt = /^\.(jpe?g|png|gif|webp)$/i.test(ext) ? ext : ".png";
-    cb(
-      null,
-      `${kind}-${Date.now()}-${crypto.randomBytes(4).toString("hex")}${safeExt}`,
-    );
-  },
-});
-
 const uploadMiddleware = multer({
-  storage: uploadStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 3 * 1024 * 1024 },
   fileFilter(_req, file, cb) {
     const ok = /^image\/(jpeg|png|gif|webp)$/i.test(file.mimetype);
@@ -1616,8 +1594,6 @@ function normalizeAssetUrlInput(raw) {
   if (t.length > 2048) return undefined;
   if (t.startsWith("/uploads/")) return t;
   if (/^https?:\/\//i.test(t)) {
-    const prefix = `${PUBLIC_API_ORIGIN}/uploads/`;
-    if (t.startsWith(prefix)) return t.slice(PUBLIC_API_ORIGIN.length);
     return t;
   }
   return undefined;
@@ -1873,17 +1849,18 @@ app.post("/events/:eventId/customization/upload", requireAuth, async (req, res) 
     if (!req.file) {
       return res.status(400).json({ error: "Fichier manquant (champ file)." });
     }
-    const rel = `/uploads/events/${eventId}/${req.file.filename}`;
-    const url = absolutizeStoredAssetUrl(rel);
-    return res.json({ url, path: rel });
+    const uploadResult = await uploadImageBufferToCloudinary({
+      buffer: req.file.buffer,
+      eventId,
+      kind: kindRaw === "background" ? "background" : "logo",
+    });
+    return res.json({ url: uploadResult.secureUrl, publicId: uploadResult.publicId });
   } catch (e) {
     if (e && typeof e === "object" && e.code === "LIMIT_FILE_SIZE") {
       return res.status(400).json({ error: "Fichier trop volumineux (max 3 Mo)." });
     }
     console.error(e);
-    return res
-      .status(400)
-      .json({ error: e?.message || "Upload impossible." });
+    return res.status(500).json({ error: e?.message || "Upload impossible." });
   }
 });
 
