@@ -684,6 +684,13 @@ export function JoinLiveHub({ slug }) {
     if (exists) return base;
     return [{ id: "__active__", label: activeLabel }, ...base];
   }, [pastPolls, activePollQuestion]);
+  const winningContestPolls = useMemo(
+    () =>
+      historiqueQuestions.filter(
+        (p) => p?.id && p.id !== "__active__" && Boolean(contestWinByPollId[p.id]),
+      ),
+    [historiqueQuestions, contestWinByPollId],
+  );
 
   useEffect(() => {
     if (!slug || !Array.isArray(historiqueQuestions) || historiqueQuestions.length === 0) {
@@ -1430,26 +1437,6 @@ export function JoinLiveHub({ slug }) {
                     <span style={{ display: "block", marginBottom: "0.22rem" }}>
                       {p.label}
                     </span>
-                    {contestWinByPollId[p.id] ? (
-                      <span
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          marginTop: "0.12rem",
-                          marginBottom: "0.36rem",
-                          padding: "0.18rem 0.5rem",
-                          borderRadius: "999px",
-                          fontSize: "0.73rem",
-                          fontWeight: 800,
-                          color: "#166534",
-                          background: "#dcfce7",
-                          border: "1px solid #86efac",
-                          boxShadow: "0 2px 8px rgba(22, 101, 52, 0.14)",
-                        }}
-                      >
-                        🎉 Félicitations, vous avez été tiré au sort !
-                      </span>
-                    ) : null}
                     {p.id !== "__active__" ? (
                       <Link
                         href={`/p/${encodeURIComponent(slug)}?poll=${encodeURIComponent(p.id)}`}
@@ -1468,6 +1455,42 @@ export function JoinLiveHub({ slug }) {
                   </li>
                 ))}
               </ol>
+              {winningContestPolls.length > 0 ? (
+                <div
+                  style={{
+                    marginTop: "0.75rem",
+                    borderTop: `1px solid ${palette.headerBorder}`,
+                    paddingTop: "0.68rem",
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "0.78rem",
+                      fontWeight: 800,
+                      color: "#16a34a",
+                    }}
+                  >
+                    🎉 Félicitations, vous avez été tiré au sort !
+                  </p>
+                  <Link
+                    href={`/p/${encodeURIComponent(slug)}?poll=${encodeURIComponent(
+                      winningContestPolls[0].id,
+                    )}`}
+                    style={{
+                      display: "inline-block",
+                      marginTop: "0.3rem",
+                      color: palette.link,
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      textDecoration: "underline",
+                      textUnderlineOffset: "3px",
+                    }}
+                  >
+                    Voir le résultat du tirage
+                  </Link>
+                </div>
+              ) : null}
             </section>
           ) : (
             <details
@@ -1504,26 +1527,6 @@ export function JoinLiveHub({ slug }) {
                     <span style={{ display: "block", marginBottom: "0.3rem" }}>
                       {p.label}
                     </span>
-                    {contestWinByPollId[p.id] ? (
-                      <span
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          marginTop: "0.14rem",
-                          marginBottom: "0.4rem",
-                          padding: "0.18rem 0.5rem",
-                          borderRadius: "999px",
-                          fontSize: "0.73rem",
-                          fontWeight: 800,
-                          color: "#166534",
-                          background: "#dcfce7",
-                          border: "1px solid #86efac",
-                          boxShadow: "0 2px 8px rgba(22, 101, 52, 0.14)",
-                        }}
-                      >
-                        🎉 Félicitations, vous avez été tiré au sort !
-                      </span>
-                    ) : null}
                     {p.id !== "__active__" ? (
                       <Link
                         href={`/p/${encodeURIComponent(slug)}?poll=${encodeURIComponent(p.id)}`}
@@ -1542,6 +1545,42 @@ export function JoinLiveHub({ slug }) {
                   </li>
                 ))}
               </ol>
+              {winningContestPolls.length > 0 ? (
+                <div
+                  style={{
+                    marginTop: "0.72rem",
+                    borderTop: `1px solid ${palette.headerBorder}`,
+                    paddingTop: "0.62rem",
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "0.78rem",
+                      fontWeight: 800,
+                      color: "#16a34a",
+                    }}
+                  >
+                    🎉 Félicitations, vous avez été tiré au sort !
+                  </p>
+                  <Link
+                    href={`/p/${encodeURIComponent(slug)}?poll=${encodeURIComponent(
+                      winningContestPolls[0].id,
+                    )}`}
+                    style={{
+                      display: "inline-block",
+                      marginTop: "0.3rem",
+                      color: palette.link,
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      textDecoration: "underline",
+                      textUnderlineOffset: "3px",
+                    }}
+                  >
+                    Voir le résultat du tirage
+                  </Link>
+                </div>
+              ) : null}
             </details>
           )
         ) : null}
