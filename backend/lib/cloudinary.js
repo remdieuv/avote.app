@@ -2,9 +2,9 @@ const crypto = require("crypto");
 const { Readable } = require("stream");
 const { v2: cloudinary } = require("cloudinary");
 
-const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || "";
-const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY || "";
-const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET || "";
+const CLOUDINARY_CLOUD_NAME = String(process.env.CLOUDINARY_CLOUD_NAME || "").trim();
+const CLOUDINARY_API_KEY = String(process.env.CLOUDINARY_API_KEY || "").trim();
+const CLOUDINARY_API_SECRET = String(process.env.CLOUDINARY_API_SECRET || "").trim();
 
 if (CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET) {
   cloudinary.config({
@@ -18,6 +18,11 @@ if (CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET) {
 function assertCloudinaryConfigured() {
   if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET) {
     throw new Error("Cloudinary non configuré (CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET).");
+  }
+  if (!/^[a-z0-9_-]+$/i.test(CLOUDINARY_CLOUD_NAME)) {
+    throw new Error(
+      "CLOUDINARY_CLOUD_NAME invalide (attendu: nom de cloud seul, sans URL, ex: demo).",
+    );
   }
 }
 

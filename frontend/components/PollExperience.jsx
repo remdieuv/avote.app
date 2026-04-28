@@ -2082,7 +2082,7 @@ export function PollExperience({
                         color: "#16a34a",
                       }}
                     >
-                      Felicitations, vous avez ete tire au sort !
+                      Félicitations, vous avez été tiré au sort !
                     </p>
                   ) : null}
                   {contestPublicWinners.length > 0 ? (
@@ -2103,7 +2103,7 @@ export function PollExperience({
                           color: palette.muted,
                         }}
                       >
-                        Gagnants tires
+                        Gagnants tirés
                       </p>
                       <ul style={{ margin: "0.45rem 0 0 1rem", padding: 0, color: palette.fg2 }}>
                         {contestPublicWinners.map((w) => (
@@ -2353,6 +2353,18 @@ export function PollExperience({
                   >
                     Participants inscrits : {contestEligibleCountFromPoll(poll)}
                   </p>
+                  {isContestWinnerMe ? (
+                    <p
+                      style={{
+                        margin: "0.6rem 0 0 0",
+                        fontSize: "0.86rem",
+                        fontWeight: 800,
+                        color: "#16a34a",
+                      }}
+                    >
+                      Félicitations, vous avez été tiré au sort !
+                    </p>
+                  ) : null}
                 </div>
               ) : (
               <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
