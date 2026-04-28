@@ -793,6 +793,17 @@ export default function AdminPage() {
                   </article>
                 ))}
               </div>
+
+              <div className="admin-questions-footer">
+                <button
+                  type="button"
+                  disabled={creating}
+                  onClick={ajouterQuestion}
+                  className="admin-add-question"
+                >
+                  + Ajouter une question
+                </button>
+              </div>
             </section>
 
             {formError ? (
@@ -1237,6 +1248,11 @@ export default function AdminPage() {
           font-size: 0.88rem;
           line-height: 1.45;
         }
+        .admin-questions-footer {
+          margin-top: 0.8rem;
+          display: flex;
+          justify-content: center;
+        }
         @media (min-width: 980px) {
           .admin-create-shell {
             width: min(1540px, 95vw);
@@ -1248,8 +1264,7 @@ export default function AdminPage() {
             gap: 1.1rem;
           }
           .admin-side-sticky {
-            position: sticky;
-            top: 1rem;
+            position: static;
           }
           .admin-create-cta.desktop { display: inline-flex; justify-content: center; }
           .admin-create-cta.mobile { display: none; }
