@@ -3520,6 +3520,10 @@ app.get("/me/leads", requireAuth, async (req, res) => {
       typeof req.query.eventId === "string" && req.query.eventId.trim()
         ? req.query.eventId.trim()
         : null;
+    const sourceFilterRaw =
+      typeof req.query.source === "string" ? req.query.source.trim().toLowerCase() : "";
+    const sourceFilter =
+      sourceFilterRaw === "lead" || sourceFilterRaw === "contest" ? sourceFilterRaw : null;
     const qRaw = typeof req.query.q === "string" ? req.query.q.trim() : "";
     const limitRaw = Number(req.query.limit ?? 500);
     const limit = Math.min(
@@ -3569,6 +3573,17 @@ app.get("/me/leads", requireAuth, async (req, res) => {
         },
       });
     }
+    if (sourceFilter === "lead") {
+      andParts.push({
+        poll: {
+          NOT: { type: "CONTEST_ENTRY" },
+        },
+      });
+    } else if (sourceFilter === "contest") {
+      andParts.push({
+        poll: { type: "CONTEST_ENTRY" },
+      });
+    }
     if (andParts.length) {
       where.AND = andParts;
     }
@@ -3584,7 +3599,7 @@ app.get("/me/leads", requireAuth, async (req, res) => {
         orderBy: { createdAt: "desc" },
         take: limit,
         include: {
-          poll: { select: { id: true, question: true, order: true } },
+          poll: { select: { id: true, question: true, order: true, type: true } },
           event: { select: { id: true, title: true } },
         },
       }),
@@ -3599,6 +3614,7 @@ app.get("/me/leads", requireAuth, async (req, res) => {
         pollId: x.pollId,
         pollOrder: x.poll?.order ?? null,
         pollQuestion: x.poll?.question ?? "",
+        pollType: x.poll?.type ?? null,
         firstName: x.firstName,
         phone: x.phone,
         email: x.email,

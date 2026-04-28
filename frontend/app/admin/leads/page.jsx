@@ -13,6 +13,7 @@ const CARD = {
 
 export default function MesLeadsPage() {
   const [eventId, setEventId] = useState("");
+  const [source, setSource] = useState("all");
   const [qInput, setQInput] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [from, setFrom] = useState("");
@@ -23,6 +24,7 @@ export default function MesLeadsPage() {
   const [limit, setLimit] = useState(500);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [copied, setCopied] = useState("");
   const debounceRef = useRef(null);
 
   const fetchLeads = useCallback(async () => {
@@ -30,6 +32,7 @@ export default function MesLeadsPage() {
     setError(null);
     const params = new URLSearchParams();
     if (eventId) params.set("eventId", eventId);
+    if (source !== "all") params.set("source", source);
     if (debouncedQ.trim()) params.set("q", debouncedQ.trim());
     if (from) params.set("from", from);
     if (to) params.set("to", to);
@@ -52,7 +55,7 @@ export default function MesLeadsPage() {
     } finally {
       setLoading(false);
     }
-  }, [eventId, debouncedQ, from, to]);
+  }, [eventId, source, debouncedQ, from, to]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -68,6 +71,12 @@ export default function MesLeadsPage() {
     void fetchLeads();
   }, [fetchLeads]);
 
+  useEffect(() => {
+    if (!copied) return undefined;
+    const t = window.setTimeout(() => setCopied(""), 1500);
+    return () => window.clearTimeout(t);
+  }, [copied]);
+
   function setPresetDays(days) {
     const end = new Date();
     const start = new Date();
@@ -79,6 +88,26 @@ export default function MesLeadsPage() {
   function clearDates() {
     setFrom("");
     setTo("");
+  }
+
+  function resetFilters() {
+    setEventId("");
+    setSource("all");
+    setQInput("");
+    setDebouncedQ("");
+    setFrom("");
+    setTo("");
+  }
+
+  async function copyValue(value, label) {
+    const safe = String(value || "").trim();
+    if (!safe || typeof window === "undefined" || !window.navigator?.clipboard) return;
+    try {
+      await window.navigator.clipboard.writeText(safe);
+      setCopied(label);
+    } catch {
+      setCopied("");
+    }
   }
 
   function exportCsv() {
@@ -202,6 +231,14 @@ export default function MesLeadsPage() {
             />
           </label>
           <label className="field-col">
+            <span>Source</span>
+            <select value={source} onChange={(e) => setSource(e.target.value)} className="field-input">
+              <option value="all">Toutes</option>
+              <option value="lead">Lead</option>
+              <option value="contest">Concours</option>
+            </select>
+          </label>
+          <label className="field-col">
             <span>Du</span>
             <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="field-input" />
           </label>
@@ -222,10 +259,14 @@ export default function MesLeadsPage() {
           <button type="button" onClick={clearDates} style={presetGhostStyle}>
             Toutes les dates
           </button>
+          <button type="button" onClick={resetFilters} style={presetGhostStyle}>
+            Réinitialiser filtres
+          </button>
         </div>
       </section>
 
       <p className="leads-hint">{loading ? "Chargement…" : shownHint}</p>
+      {copied ? <p style={{ margin: "0 0 0.6rem 0", fontSize: "0.82rem", color: "#16a34a", fontWeight: 700 }}>{copied} copié</p> : null}
       {error ? (
         <p role="alert" style={{ color: "#b91c1c", fontWeight: 600, margin: "0 0 1rem" }}>
           {error}
@@ -238,12 +279,13 @@ export default function MesLeadsPage() {
             <thead>
               <tr style={{ background: "#f8fafc" }}>
                 <Th>Date</Th>
+                <Th>Source</Th>
                 <Th>Événement</Th>
                 <Th>Question</Th>
                 <Th>Prénom</Th>
                 <Th>Téléphone</Th>
                 <Th>E-mail</Th>
-                <Th>Détail</Th>
+                <Th>Actions</Th>
               </tr>
             </thead>
             <tbody>
@@ -256,6 +298,9 @@ export default function MesLeadsPage() {
                     })}
                   </Td>
                   <Td>
+                    <LeadSourceBadge type={r.pollType} />
+                  </Td>
+                  <Td>
                     <span style={{ fontWeight: 600 }}>{r.eventTitle}</span>
                   </Td>
                   <Td subtle title={r.pollQuestion}>
@@ -265,11 +310,29 @@ export default function MesLeadsPage() {
                   <Td>{r.phone}</Td>
                   <Td subtle>{r.email || "—"}</Td>
                   <Td style={{ whiteSpace: "nowrap" }}>
-                    {r.eventId ? (
-                      <Link href={`/admin/event/${encodeURIComponent(r.eventId)}/leads`} className="leads-detail-link">
-                        Détail
-                      </Link>
-                    ) : null}
+                    <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", alignItems: "center" }}>
+                      <button
+                        style={miniActionBtn}
+                        type="button"
+                        onClick={() => copyValue(r.phone, "Téléphone")}
+                        disabled={!String(r.phone || "").trim()}
+                      >
+                        Copier tel
+                      </button>
+                      <button
+                        style={miniActionBtn}
+                        type="button"
+                        onClick={() => copyValue(r.email, "E-mail")}
+                        disabled={!String(r.email || "").trim()}
+                      >
+                        Copier e-mail
+                      </button>
+                      {r.eventId ? (
+                        <Link href={`/admin/event/${encodeURIComponent(r.eventId)}/leads`} className="leads-detail-link">
+                          Détail
+                        </Link>
+                      ) : null}
+                    </div>
                   </Td>
                 </tr>
               ))}
@@ -295,6 +358,9 @@ export default function MesLeadsPage() {
                 })}
               </p>
               <p className="mobile-card-event">{r.eventTitle}</p>
+              <div style={{ marginTop: "0.25rem" }}>
+                <LeadSourceBadge type={r.pollType} />
+              </div>
               <p className="mobile-card-question">
                 {r.pollQuestion || `Question ${Number(r.pollOrder ?? 0) + 1}`}
               </p>
@@ -303,11 +369,29 @@ export default function MesLeadsPage() {
                 <span>Téléphone: {r.phone}</span>
                 <span>E-mail: {r.email || "—"}</span>
               </div>
-              {r.eventId ? (
-                <Link href={`/admin/event/${encodeURIComponent(r.eventId)}/leads`} className="leads-detail-link">
-                  Voir le détail
-                </Link>
-              ) : null}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.45rem" }}>
+                <button
+                  style={miniActionBtn}
+                  type="button"
+                  onClick={() => copyValue(r.phone, "Téléphone")}
+                  disabled={!String(r.phone || "").trim()}
+                >
+                  Copier tel
+                </button>
+                <button
+                  style={miniActionBtn}
+                  type="button"
+                  onClick={() => copyValue(r.email, "E-mail")}
+                  disabled={!String(r.email || "").trim()}
+                >
+                  Copier e-mail
+                </button>
+                {r.eventId ? (
+                  <Link href={`/admin/event/${encodeURIComponent(r.eventId)}/leads`} className="leads-detail-link">
+                    Voir le détail
+                  </Link>
+                ) : null}
+              </div>
             </article>
           ))}
         </div>
@@ -460,7 +544,7 @@ export default function MesLeadsPage() {
         .leads-mobile-list { display: none; }
         @media (max-width: 920px) {
           .leads-kpi-grid { grid-template-columns: 1fr; }
-          .leads-filters-grid { grid-template-columns: 1fr 1fr; }
+          .leads-filters-grid { grid-template-columns: 1fr 1fr 1fr; }
         }
         @media (max-width: 720px) {
           .leads-head { align-items: flex-start; }
@@ -526,6 +610,44 @@ const presetGhostStyle = {
   background: "#fff",
   border: "1px dashed #cbd5e1",
 };
+
+const miniActionBtn = {
+  border: "1px solid #cbd5e1",
+  background: "#fff",
+  color: "#334155",
+  fontSize: "0.74rem",
+  fontWeight: 700,
+  borderRadius: "8px",
+  padding: "0.32rem 0.46rem",
+  cursor: "pointer",
+};
+
+function getLeadSource(type) {
+  return type === "CONTEST_ENTRY" ? "contest" : "lead";
+}
+
+function LeadSourceBadge({ type }) {
+  const source = getLeadSource(type);
+  const isContest = source === "contest";
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        borderRadius: "999px",
+        padding: "0.2rem 0.52rem",
+        fontSize: "0.7rem",
+        fontWeight: 800,
+        letterSpacing: "0.02em",
+        border: `1px solid ${isContest ? "#fdba74" : "#86efac"}`,
+        background: isContest ? "#fff7ed" : "#f0fdf4",
+        color: isContest ? "#9a3412" : "#166534",
+      }}
+    >
+      {isContest ? "Concours" : "Lead"}
+    </span>
+  );
+}
 
 function Th({ children }) {
   return (
