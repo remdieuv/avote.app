@@ -3625,7 +3625,7 @@ app.get("/events/:eventId/leads", requireAuth, async (req, res) => {
       where: { eventId },
       orderBy: { createdAt: "desc" },
       include: {
-        poll: { select: { id: true, question: true, order: true } },
+        poll: { select: { id: true, question: true, order: true, type: true } },
       },
     });
     return res.json(
@@ -3634,6 +3634,7 @@ app.get("/events/:eventId/leads", requireAuth, async (req, res) => {
         pollId: x.pollId,
         pollOrder: x.poll?.order ?? null,
         pollQuestion: x.poll?.question ?? "",
+        pollType: x.poll?.type ?? null,
         firstName: x.firstName,
         phone: x.phone,
         email: x.email,

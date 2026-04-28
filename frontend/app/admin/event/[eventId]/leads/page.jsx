@@ -24,6 +24,7 @@ export default function EventLeadsPage() {
   const [error, setError] = useState(null);
   const [query, setQuery] = useState("");
   const [questionFilter, setQuestionFilter] = useState("all");
+  const [sourceFilter, setSourceFilter] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [isMobile, setIsMobile] = useState(false);
@@ -95,7 +96,9 @@ export default function EventLeadsPage() {
         row.pollId || row.pollOrder || row.pollQuestion || row.id,
       );
       const questionOk = questionFilter === "all" || questionKey === questionFilter;
-      if (!text) return fromOk && toOk && questionOk;
+      const source = getLeadSource(row.pollType);
+      const sourceOk = sourceFilter === "all" || source === sourceFilter;
+      if (!text) return fromOk && toOk && questionOk && sourceOk;
       const haystack = [
         row.firstName || "",
         row.phone || "",
@@ -104,9 +107,9 @@ export default function EventLeadsPage() {
       ]
         .join(" ")
         .toLowerCase();
-      return fromOk && toOk && questionOk && haystack.includes(text);
+      return fromOk && toOk && questionOk && sourceOk && haystack.includes(text);
     });
-  }, [rows, query, questionFilter, fromDate, toDate]);
+  }, [rows, query, questionFilter, sourceFilter, fromDate, toDate]);
 
   const stats = useMemo(() => {
     const now = Date.now();
@@ -124,6 +127,7 @@ export default function EventLeadsPage() {
   function resetFilters() {
     setQuery("");
     setQuestionFilter("all");
+    setSourceFilter("all");
     setFromDate("");
     setToDate("");
   }
@@ -246,7 +250,7 @@ export default function EventLeadsPage() {
               marginBottom: "0.9rem",
               display: "grid",
               gap: "0.65rem",
-              gridTemplateColumns: isMobile ? "1fr" : "1.3fr 1fr 1fr 1fr auto",
+              gridTemplateColumns: isMobile ? "1fr" : "1.2fr 1fr 1fr 1fr 1fr auto",
               alignItems: "end",
             }}
           >
@@ -263,6 +267,16 @@ export default function EventLeadsPage() {
               options={[
                 { value: "all", label: "Toutes" },
                 ...uniqueQuestions.map((q) => ({ value: q.value, label: q.label })),
+              ]}
+            />
+            <SelectField
+              label="Source"
+              value={sourceFilter}
+              onChange={setSourceFilter}
+              options={[
+                { value: "all", label: "Toutes" },
+                { value: "lead", label: "Lead" },
+                { value: "contest", label: "Concours" },
               ]}
             />
             <InputField label="Du" type="date" value={fromDate} onChange={setFromDate} />
@@ -322,6 +336,7 @@ export default function EventLeadsPage() {
                   <thead>
                     <tr style={{ background: "#f8fafc" }}>
                       <Th>Date</Th>
+                      <Th>Source</Th>
                       <Th>Question</Th>
                       <Th>Prénom</Th>
                       <Th>Téléphone</Th>
@@ -333,6 +348,9 @@ export default function EventLeadsPage() {
                     {filteredRows.map((r) => (
                       <tr key={r.id}>
                         <Td>{formatDateTime(r.createdAt)}</Td>
+                        <Td>
+                          <LeadSourceBadge type={r.pollType} />
+                        </Td>
                         <Td title={r.pollQuestion}>
                           {r.pollQuestion || `Question ${Number(r.pollOrder ?? 0) + 1}`}
                         </Td>
@@ -363,7 +381,7 @@ export default function EventLeadsPage() {
                     ))}
                     {filteredRows.length === 0 ? (
                       <tr>
-                        <Td colSpan={6} subtle>
+                        <Td colSpan={7} subtle>
                           Aucun résultat avec ces filtres. Ajustez les critères ou attendez de
                           nouvelles réponses.
                         </Td>
@@ -385,10 +403,13 @@ export default function EventLeadsPage() {
                       marginBottom: "0.45rem",
                     }}
                   >
-                    <strong style={{ color: "#0f172a", fontSize: "0.92rem" }}>
-                      {r.firstName || "Sans prénom"}
-                    </strong>
-                    <span style={{ color: "#64748b", fontSize: "0.78rem" }}>
+                    <div style={{ display: "grid", gap: "0.25rem" }}>
+                      <strong style={{ color: "#0f172a", fontSize: "0.92rem" }}>
+                        {r.firstName || "Sans prénom"}
+                      </strong>
+                      <LeadSourceBadge type={r.pollType} />
+                    </div>
+                    <span style={{ color: "#64748b", fontSize: "0.78rem", textAlign: "right" }}>
                       {formatDateTime(r.createdAt)}
                     </span>
                   </div>
@@ -474,6 +495,33 @@ function MiniStat({ label, value }) {
         {value}
       </p>
     </div>
+  );
+}
+
+function getLeadSource(type) {
+  return type === "CONTEST_ENTRY" ? "contest" : "lead";
+}
+
+function LeadSourceBadge({ type }) {
+  const source = getLeadSource(type);
+  const isContest = source === "contest";
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        borderRadius: "999px",
+        padding: "0.2rem 0.52rem",
+        fontSize: "0.7rem",
+        fontWeight: 800,
+        letterSpacing: "0.02em",
+        border: `1px solid ${isContest ? "#fdba74" : "#86efac"}`,
+        background: isContest ? "#fff7ed" : "#f0fdf4",
+        color: isContest ? "#9a3412" : "#166534",
+      }}
+    >
+      {isContest ? "Concours" : "Lead"}
+    </span>
   );
 }
 
