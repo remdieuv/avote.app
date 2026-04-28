@@ -1435,14 +1435,16 @@ export function JoinLiveHub({ slug }) {
                         style={{
                           display: "inline-flex",
                           alignItems: "center",
-                          marginBottom: "0.26rem",
-                          padding: "0.14rem 0.42rem",
+                          marginTop: "0.12rem",
+                          marginBottom: "0.36rem",
+                          padding: "0.18rem 0.5rem",
                           borderRadius: "999px",
-                          fontSize: "0.72rem",
+                          fontSize: "0.73rem",
                           fontWeight: 800,
                           color: "#166534",
                           background: "#dcfce7",
                           border: "1px solid #86efac",
+                          boxShadow: "0 2px 8px rgba(22, 101, 52, 0.14)",
                         }}
                       >
                         🎉 Félicitations, vous avez été tiré au sort !
@@ -1452,6 +1454,7 @@ export function JoinLiveHub({ slug }) {
                       <Link
                         href={`/p/${encodeURIComponent(slug)}?poll=${encodeURIComponent(p.id)}`}
                         style={{
+                          display: "inline-block",
                           color: palette.link,
                           fontSize: "0.76rem",
                           fontWeight: 600,
@@ -1506,14 +1509,16 @@ export function JoinLiveHub({ slug }) {
                         style={{
                           display: "inline-flex",
                           alignItems: "center",
-                          marginBottom: "0.3rem",
-                          padding: "0.14rem 0.42rem",
+                          marginTop: "0.14rem",
+                          marginBottom: "0.4rem",
+                          padding: "0.18rem 0.5rem",
                           borderRadius: "999px",
-                          fontSize: "0.72rem",
+                          fontSize: "0.73rem",
                           fontWeight: 800,
                           color: "#166534",
                           background: "#dcfce7",
                           border: "1px solid #86efac",
+                          boxShadow: "0 2px 8px rgba(22, 101, 52, 0.14)",
                         }}
                       >
                         🎉 Félicitations, vous avez été tiré au sort !
@@ -1523,6 +1528,7 @@ export function JoinLiveHub({ slug }) {
                       <Link
                         href={`/p/${encodeURIComponent(slug)}?poll=${encodeURIComponent(p.id)}`}
                         style={{
+                          display: "inline-block",
                           color: palette.link,
                           fontSize: "0.78rem",
                           fontWeight: 600,
