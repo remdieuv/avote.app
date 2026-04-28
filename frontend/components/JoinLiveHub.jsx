@@ -29,6 +29,7 @@ import {
   stateBadgeTypography,
 } from "@/lib/liveStateVisual";
 import { ExperienceHeader } from "@/components/navigation/ExperienceHeader";
+import { getOrCreateVoterSessionId } from "@/lib/votes/voter-session";
 
 /** @param {Record<string, unknown> | null | undefined} tm */
 function chronoRestantSecondes(tm) {
@@ -154,6 +155,8 @@ export function JoinLiveHub({ slug }) {
   const [pollsProgress, setPollsProgress] = useState(null);
   /** @type {{ id: string; label: string }[]} */
   const [pastPolls, setPastPolls] = useState([]);
+  /** @type {Record<string, boolean>} */
+  const [contestWinByPollId, setContestWinByPollId] = useState({});
   const [hasVotedActivePoll, setHasVotedActivePoll] = useState(false);
   const [chronoTick, setChronoTick] = useState(0);
   /** Personnalisation salle (/admin/.../customization) */
@@ -681,6 +684,55 @@ export function JoinLiveHub({ slug }) {
     if (exists) return base;
     return [{ id: "__active__", label: activeLabel }, ...base];
   }, [pastPolls, activePollQuestion]);
+
+  useEffect(() => {
+    if (!slug || !Array.isArray(historiqueQuestions) || historiqueQuestions.length === 0) {
+      setContestWinByPollId({});
+      return;
+    }
+    const voterSessionId = getOrCreateVoterSessionId();
+    if (!voterSessionId) {
+      setContestWinByPollId({});
+      return;
+    }
+    const pollIds = historiqueQuestions
+      .map((p) => String(p?.id || "").trim())
+      .filter((id) => id && id !== "__active__");
+    if (pollIds.length === 0) {
+      setContestWinByPollId({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const next = {};
+      for (const pollId of pollIds) {
+        try {
+          const qs = new URLSearchParams({
+            pollId,
+            voterSessionId,
+          });
+          const res = await fetch(
+            `${API_URL}/p/${encodeURIComponent(slug)}/contest-status?${qs.toString()}`,
+            { cache: "no-store" },
+          );
+          if (!res.ok) continue;
+          const body = await res.json().catch(() => null);
+          if (!body) continue;
+          if (Boolean(body.isCurrentVoterWinner)) {
+            next[pollId] = true;
+          }
+        } catch {
+          // Ignore non-concours / indisponible
+        }
+      }
+      if (!cancelled) {
+        setContestWinByPollId(next);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [historiqueQuestions, slug]);
 
   const effectiveDescription = previewCustomization
     ? previewCustomization.description
@@ -1378,6 +1430,24 @@ export function JoinLiveHub({ slug }) {
                     <span style={{ display: "block", marginBottom: "0.22rem" }}>
                       {p.label}
                     </span>
+                    {contestWinByPollId[p.id] ? (
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          marginBottom: "0.26rem",
+                          padding: "0.14rem 0.42rem",
+                          borderRadius: "999px",
+                          fontSize: "0.72rem",
+                          fontWeight: 800,
+                          color: "#166534",
+                          background: "#dcfce7",
+                          border: "1px solid #86efac",
+                        }}
+                      >
+                        🎉 Félicitations, vous avez été tiré au sort !
+                      </span>
+                    ) : null}
                     {p.id !== "__active__" ? (
                       <Link
                         href={`/p/${encodeURIComponent(slug)}?poll=${encodeURIComponent(p.id)}`}
@@ -1431,6 +1501,24 @@ export function JoinLiveHub({ slug }) {
                     <span style={{ display: "block", marginBottom: "0.3rem" }}>
                       {p.label}
                     </span>
+                    {contestWinByPollId[p.id] ? (
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          marginBottom: "0.3rem",
+                          padding: "0.14rem 0.42rem",
+                          borderRadius: "999px",
+                          fontSize: "0.72rem",
+                          fontWeight: 800,
+                          color: "#166534",
+                          background: "#dcfce7",
+                          border: "1px solid #86efac",
+                        }}
+                      >
+                        🎉 Félicitations, vous avez été tiré au sort !
+                      </span>
+                    ) : null}
                     {p.id !== "__active__" ? (
                       <Link
                         href={`/p/${encodeURIComponent(slug)}?poll=${encodeURIComponent(p.id)}`}
