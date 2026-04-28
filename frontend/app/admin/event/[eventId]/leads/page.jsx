@@ -171,9 +171,9 @@ export default function EventLeadsPage() {
   return (
     <div
       style={{
-        maxWidth: "960px",
+        maxWidth: "1200px",
         margin: "0 auto",
-        padding: "clamp(1rem, 3vw, 1.75rem) clamp(0.75rem, 2vw, 1rem) 2.5rem",
+        padding: "24px 16px 40px",
         fontFamily: 'system-ui, "Segoe UI", sans-serif',
       }}
     >
@@ -330,7 +330,7 @@ export default function EventLeadsPage() {
                   style={{
                     width: "100%",
                     borderCollapse: "collapse",
-                    minWidth: "720px",
+                    minWidth: "980px",
                   }}
                 >
                   <thead>
