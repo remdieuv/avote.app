@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
 const LEADS_LAST_SEEN_LS_PREFIX = "avote_leads_seen_at_";
@@ -22,6 +22,12 @@ export default function EventLeadsPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [query, setQuery] = useState("");
+  const [questionFilter, setQuestionFilter] = useState("all");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [isMobile, setIsMobile] = useState(false);
+  const [copied, setCopied] = useState("");
 
   useEffect(() => {
     if (!eventId) return;
@@ -53,6 +59,110 @@ export default function EventLeadsPage() {
       }
     })();
   }, [eventId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(max-width: 860px)");
+    const sync = () => setIsMobile(Boolean(media.matches));
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    if (!copied) return undefined;
+    const timer = window.setTimeout(() => setCopied(""), 1500);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  const uniqueQuestions = useMemo(() => {
+    const map = new Map();
+    for (const row of rows) {
+      const key = row.pollId || row.pollOrder || row.pollQuestion || row.id;
+      const label = row.pollQuestion || `Question ${Number(row.pollOrder ?? 0) + 1}`;
+      if (!map.has(String(key))) map.set(String(key), label);
+    }
+    return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
+  }, [rows]);
+
+  const filteredRows = useMemo(() => {
+    const text = query.trim().toLowerCase();
+    return rows.filter((row) => {
+      const createdAt = row.createdAt ? new Date(row.createdAt) : null;
+      const fromOk = !fromDate || (createdAt && createdAt >= new Date(`${fromDate}T00:00:00`));
+      const toOk = !toDate || (createdAt && createdAt <= new Date(`${toDate}T23:59:59`));
+      const questionKey = String(
+        row.pollId || row.pollOrder || row.pollQuestion || row.id,
+      );
+      const questionOk = questionFilter === "all" || questionKey === questionFilter;
+      if (!text) return fromOk && toOk && questionOk;
+      const haystack = [
+        row.firstName || "",
+        row.phone || "",
+        row.email || "",
+        row.pollQuestion || "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      return fromOk && toOk && questionOk && haystack.includes(text);
+    });
+  }, [rows, query, questionFilter, fromDate, toDate]);
+
+  const stats = useMemo(() => {
+    const now = Date.now();
+    const dayAgo = now - 24 * 60 * 60 * 1000;
+    const total = filteredRows.length;
+    const last24h = filteredRows.filter((r) => {
+      const ts = new Date(r.createdAt || 0).getTime();
+      return Number.isFinite(ts) && ts >= dayAgo;
+    }).length;
+    const withEmail = filteredRows.filter((r) => String(r.email || "").trim()).length;
+    const emailRate = total ? Math.round((withEmail / total) * 100) : 0;
+    return { total, last24h, emailRate };
+  }, [filteredRows]);
+
+  function resetFilters() {
+    setQuery("");
+    setQuestionFilter("all");
+    setFromDate("");
+    setToDate("");
+  }
+
+  async function copyValue(value, label) {
+    const safe = String(value || "").trim();
+    if (!safe || typeof window === "undefined" || !window.navigator?.clipboard) return;
+    try {
+      await window.navigator.clipboard.writeText(safe);
+      setCopied(label);
+    } catch {
+      setCopied("");
+    }
+  }
+
+  function exportCsv() {
+    const header = ["Date", "Question", "Prenom", "Telephone", "Email"];
+    const lines = filteredRows.map((r) => [
+      formatDateTime(r.createdAt),
+      r.pollQuestion || `Question ${Number(r.pollOrder ?? 0) + 1}`,
+      r.firstName || "",
+      r.phone || "",
+      r.email || "",
+    ]);
+    const csv = [header, ...lines]
+      .map((line) =>
+        line
+          .map((value) => `"${String(value).replaceAll('"', '""')}"`)
+          .join(","),
+      )
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `leads-event-${eventId || "unknown"}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div
@@ -114,6 +224,80 @@ export default function EventLeadsPage() {
         </p>
       </header>
 
+      {!loading && !error ? (
+        <>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+              gap: "0.75rem",
+              marginBottom: "0.95rem",
+            }}
+          >
+            <MiniStat label="Leads affichés" value={String(stats.total)} />
+            <MiniStat label="Nouveaux (24h)" value={String(stats.last24h)} />
+            <MiniStat label="Taux e-mail" value={`${stats.emailRate}%`} />
+          </div>
+
+          <div
+            style={{
+              ...CARD,
+              padding: "0.9rem",
+              marginBottom: "0.9rem",
+              display: "grid",
+              gap: "0.65rem",
+              gridTemplateColumns: isMobile ? "1fr" : "1.3fr 1fr 1fr 1fr auto",
+              alignItems: "end",
+            }}
+          >
+            <InputField
+              label="Recherche"
+              placeholder="Prénom, téléphone, e-mail…"
+              value={query}
+              onChange={setQuery}
+            />
+            <SelectField
+              label="Question"
+              value={questionFilter}
+              onChange={setQuestionFilter}
+              options={[
+                { value: "all", label: "Toutes" },
+                ...uniqueQuestions.map((q) => ({ value: q.value, label: q.label })),
+              ]}
+            />
+            <InputField label="Du" type="date" value={fromDate} onChange={setFromDate} />
+            <InputField label="Au" type="date" value={toDate} onChange={setToDate} />
+            <button
+              onClick={resetFilters}
+              style={ghostButtonStyle}
+              type="button"
+              title="Réinitialiser les filtres"
+            >
+              Réinitialiser
+            </button>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "0.5rem",
+              alignItems: "center",
+              marginBottom: "0.95rem",
+            }}
+          >
+            <button type="button" style={primaryButtonStyle} onClick={exportCsv}>
+              Export CSV événement
+            </button>
+            {copied ? (
+              <span style={{ fontSize: "0.82rem", color: "#16a34a", fontWeight: 700 }}>
+                {copied} copié
+              </span>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+
       {loading ? (
         <p style={{ color: "#64748b" }}>Chargement…</p>
       ) : null}
@@ -124,57 +308,256 @@ export default function EventLeadsPage() {
       ) : null}
 
       {!loading && !error ? (
-        <div style={{ ...CARD, overflow: "hidden" }}>
-          <div style={{ overflowX: "auto" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                minWidth: "720px",
-              }}
-            >
-              <thead>
-                <tr style={{ background: "#f8fafc" }}>
-                  <Th>Date</Th>
-                  <Th>Question</Th>
-                  <Th>Prénom</Th>
-                  <Th>Téléphone</Th>
-                  <Th>E-mail</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id}>
-                    <Td>
-                      {new Date(r.createdAt).toLocaleString("fr-FR", {
-                        dateStyle: "short",
-                        timeStyle: "short",
-                      })}
-                    </Td>
-                    <Td title={r.pollQuestion}>
-                      {r.pollQuestion ||
-                        `Question ${Number(r.pollOrder ?? 0) + 1}`}
-                    </Td>
-                    <Td>{r.firstName}</Td>
-                    <Td>{r.phone}</Td>
-                    <Td subtle>{r.email || "—"}</Td>
-                  </tr>
-                ))}
-                {rows.length === 0 ? (
-                  <tr>
-                    <Td colSpan={5} subtle>
-                      Aucun lead pour cet événement.
-                    </Td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <>
+          {!isMobile ? (
+            <div style={{ ...CARD, overflow: "hidden" }}>
+              <div style={{ overflowX: "auto" }}>
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    minWidth: "720px",
+                  }}
+                >
+                  <thead>
+                    <tr style={{ background: "#f8fafc" }}>
+                      <Th>Date</Th>
+                      <Th>Question</Th>
+                      <Th>Prénom</Th>
+                      <Th>Téléphone</Th>
+                      <Th>E-mail</Th>
+                      <Th>Actions</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRows.map((r) => (
+                      <tr key={r.id}>
+                        <Td>{formatDateTime(r.createdAt)}</Td>
+                        <Td title={r.pollQuestion}>
+                          {r.pollQuestion || `Question ${Number(r.pollOrder ?? 0) + 1}`}
+                        </Td>
+                        <Td>{r.firstName}</Td>
+                        <Td>{r.phone || "—"}</Td>
+                        <Td subtle>{r.email || "—"}</Td>
+                        <Td>
+                          <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+                            <button
+                              style={miniActionBtn}
+                              type="button"
+                              onClick={() => copyValue(r.phone, "Téléphone")}
+                              disabled={!String(r.phone || "").trim()}
+                            >
+                              Copier tel
+                            </button>
+                            <button
+                              style={miniActionBtn}
+                              type="button"
+                              onClick={() => copyValue(r.email, "E-mail")}
+                              disabled={!String(r.email || "").trim()}
+                            >
+                              Copier e-mail
+                            </button>
+                          </div>
+                        </Td>
+                      </tr>
+                    ))}
+                    {filteredRows.length === 0 ? (
+                      <tr>
+                        <Td colSpan={6} subtle>
+                          Aucun résultat avec ces filtres. Ajustez les critères ou attendez de
+                          nouvelles réponses.
+                        </Td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gap: "0.7rem" }}>
+              {filteredRows.map((r) => (
+                <div key={r.id} style={{ ...CARD, padding: "0.8rem" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: "0.7rem",
+                      marginBottom: "0.45rem",
+                    }}
+                  >
+                    <strong style={{ color: "#0f172a", fontSize: "0.92rem" }}>
+                      {r.firstName || "Sans prénom"}
+                    </strong>
+                    <span style={{ color: "#64748b", fontSize: "0.78rem" }}>
+                      {formatDateTime(r.createdAt)}
+                    </span>
+                  </div>
+                  <p style={{ margin: "0 0 0.5rem 0", color: "#334155", fontSize: "0.86rem" }}>
+                    {r.pollQuestion || `Question ${Number(r.pollOrder ?? 0) + 1}`}
+                  </p>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr",
+                      gap: "0.35rem",
+                      fontSize: "0.83rem",
+                      color: "#334155",
+                    }}
+                  >
+                    <span>Téléphone: {r.phone || "—"}</span>
+                    <span>E-mail: {r.email || "—"}</span>
+                  </div>
+                  <div style={{ marginTop: "0.55rem", display: "flex", gap: "0.45rem" }}>
+                    <button
+                      style={miniActionBtn}
+                      type="button"
+                      onClick={() => copyValue(r.phone, "Téléphone")}
+                      disabled={!String(r.phone || "").trim()}
+                    >
+                      Copier tel
+                    </button>
+                    <button
+                      style={miniActionBtn}
+                      type="button"
+                      onClick={() => copyValue(r.email, "E-mail")}
+                      disabled={!String(r.email || "").trim()}
+                    >
+                      Copier e-mail
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {filteredRows.length === 0 ? (
+                <div style={{ ...CARD, padding: "1rem", textAlign: "center" }}>
+                  <p style={{ margin: 0, color: "#475569", fontWeight: 600 }}>
+                    Aucun lead ne correspond à vos filtres.
+                  </p>
+                  <p style={{ margin: "0.35rem 0 0", color: "#64748b", fontSize: "0.88rem" }}>
+                    Essayez une autre période ou retirez un filtre pour retrouver les contacts.
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          )}
+        </>
       ) : null}
     </div>
   );
 }
+
+function formatDateTime(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("fr-FR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+}
+
+function MiniStat({ label, value }) {
+  return (
+    <div style={{ ...CARD, padding: "0.75rem 0.8rem" }}>
+      <p
+        style={{
+          margin: "0 0 0.25rem 0",
+          color: "#64748b",
+          fontSize: "0.78rem",
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: "0.03em",
+        }}
+      >
+        {label}
+      </p>
+      <p style={{ margin: 0, color: "#0f172a", fontWeight: 800, fontSize: "1.18rem" }}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function InputField({ label, value, onChange, placeholder, type = "text" }) {
+  return (
+    <label style={{ display: "grid", gap: "0.35rem", minWidth: 0 }}>
+      <span style={{ fontSize: "0.78rem", color: "#64748b", fontWeight: 700 }}>{label}</span>
+      <input
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          border: "1px solid #cbd5e1",
+          borderRadius: "10px",
+          padding: "0.52rem 0.6rem",
+          fontSize: "0.86rem",
+          color: "#0f172a",
+          outline: "none",
+        }}
+      />
+    </label>
+  );
+}
+
+function SelectField({ label, value, onChange, options }) {
+  return (
+    <label style={{ display: "grid", gap: "0.35rem", minWidth: 0 }}>
+      <span style={{ fontSize: "0.78rem", color: "#64748b", fontWeight: 700 }}>{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          border: "1px solid #cbd5e1",
+          borderRadius: "10px",
+          padding: "0.52rem 0.6rem",
+          fontSize: "0.86rem",
+          color: "#0f172a",
+          outline: "none",
+          background: "#fff",
+        }}
+      >
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+const primaryButtonStyle = {
+  border: "none",
+  background: "linear-gradient(135deg, #4338ca, #6366f1)",
+  color: "#fff",
+  fontSize: "0.83rem",
+  fontWeight: 700,
+  borderRadius: "10px",
+  padding: "0.52rem 0.72rem",
+  cursor: "pointer",
+};
+
+const ghostButtonStyle = {
+  border: "1px solid #cbd5e1",
+  background: "#fff",
+  color: "#0f172a",
+  fontSize: "0.82rem",
+  fontWeight: 700,
+  borderRadius: "10px",
+  padding: "0.5rem 0.66rem",
+  cursor: "pointer",
+};
+
+const miniActionBtn = {
+  border: "1px solid #cbd5e1",
+  background: "#fff",
+  color: "#334155",
+  fontSize: "0.74rem",
+  fontWeight: 700,
+  borderRadius: "8px",
+  padding: "0.32rem 0.46rem",
+  cursor: "pointer",
+};
 
 function Th({ children }) {
   return (
