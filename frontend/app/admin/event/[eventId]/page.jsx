@@ -4297,6 +4297,19 @@ export default function RegieEventPage() {
             /** @type {"question" | "results" | "waiting" | "black"} */ (next),
           );
         }
+      } else {
+        // Fallback UX: mise à jour immédiate au clic pour la projection principale.
+        const next = String(type || "").toLowerCase();
+        if (["question", "results", "waiting", "black"].includes(next)) {
+          setEventData((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  screenDisplayState: next,
+                }
+              : prev,
+          );
+        }
       }
       socketRef.current?.emit("screen:action", { eventId, type, screenId: screenId || null });
     },
