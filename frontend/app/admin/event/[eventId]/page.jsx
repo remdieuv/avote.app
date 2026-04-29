@@ -4592,6 +4592,7 @@ export default function RegieEventPage() {
     canManageActivePoll && String(displayStateUi || "").toLowerCase() !== "question";
   const canShowResultsQuick =
     canManageActivePoll && String(displayStateUi || "").toLowerCase() !== "results";
+  const isScreenBlack = String(displayStateUi || "").toLowerCase() === "black";
   const ecranLabel = activePoll
     ? activePoll.question || activePoll.title
     : eventLocked
@@ -6397,9 +6398,8 @@ export default function RegieEventPage() {
                     type="button"
                     disabled={busy}
                     onClick={() => {
-                      const isBlack = String(displayStateUi || "").toLowerCase() === "black";
-                      sendScreenAction(isBlack ? "WAITING" : "BLACK", null);
-                      setToastNotif(isBlack ? "Retour au direct" : "Ecran noir");
+                      sendScreenAction(isScreenBlack ? "WAITING" : "BLACK", null);
+                      setToastNotif(isScreenBlack ? "Retour au direct" : "Ecran noir");
                       window.setTimeout(() => setToastNotif(null), 2200);
                     }}
                     style={{
@@ -6414,10 +6414,25 @@ export default function RegieEventPage() {
                       fontSize: "0.78rem",
                     }}
                   >
-                    {String(displayStateUi || "").toLowerCase() === "black"
+                    {isScreenBlack
                       ? "↩ Retour direct"
                       : "⏹ Écran noir"}
                   </button>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      borderRadius: "999px",
+                      padding: "0.2rem 0.55rem",
+                      fontSize: "0.72rem",
+                      fontWeight: 800,
+                      border: `1px solid ${isScreenBlack ? "#334155" : "#cbd5e1"}`,
+                      background: isScreenBlack ? "#111827" : "#f8fafc",
+                      color: isScreenBlack ? "#e2e8f0" : "#475569",
+                    }}
+                  >
+                    Écran noir : {isScreenBlack ? "actif" : "inactif"}
+                  </span>
                   <button
                     type="button"
                     disabled={!canGoNext}
@@ -6471,7 +6486,7 @@ export default function RegieEventPage() {
                     ⏹ Terminer
                   </button>
                 </div>
-                {String(displayStateUi || "").toLowerCase() === "black" ? (
+                {isScreenBlack ? (
                   <div
                     style={{
                       marginTop: "0.5rem",
