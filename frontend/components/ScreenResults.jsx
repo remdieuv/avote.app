@@ -93,6 +93,7 @@ function ScreenResultsNotation({
   voteOuvertResultats,
   barsAnimated,
 }) {
+  const isTestMode = poll?.eventIsLiveConsumed === false;
   const secondesChronoVote = useMemo(() => {
     void chronoTick;
     return chronoRestantSecondes(chronometreApi ?? null);
@@ -181,6 +182,54 @@ function ScreenResultsNotation({
 
   return (
     <main style={{ ...shell, textAlign: "left" }}>
+      {isTestMode ? (
+        <div
+          style={{
+            position: "fixed",
+            top: 14,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 2147483647,
+            pointerEvents: "none",
+            background: "rgba(0,0,0,0.55)",
+            color: "#f8fafc",
+            border: "1px solid rgba(148,163,184,0.35)",
+            borderRadius: 9999,
+            padding: "0.35rem 0.8rem",
+            fontWeight: 900,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            fontSize: "0.78rem",
+          }}
+          aria-hidden
+        >
+          MODE TEST
+        </div>
+      ) : null}
+      {isTestMode ? (
+        <p
+          style={{
+            margin: "0.35rem 0 0 0",
+            fontSize: "0.86rem",
+            color: "#94a3b8",
+            fontWeight: 700,
+          }}
+        >
+          Mode TEST actif : résultats et exports limités.
+        </p>
+      ) : null}
+      {isTestMode ? (
+        <p
+          style={{
+            margin: "0.35rem 0 0 0",
+            fontSize: "0.86rem",
+            color: "#94a3b8",
+            fontWeight: 700,
+          }}
+        >
+          Mode TEST actif : résultats et exports limités.
+        </p>
+      ) : null}
       <header
         style={{
           alignSelf: "stretch",
@@ -468,6 +517,7 @@ function ScreenResultsChoixClassiques({
   voteOuvertResultats,
   barsAnimated,
 }) {
+  const isTestMode = poll?.eventIsLiveConsumed === false;
   const secondesChronoVote = useMemo(() => {
     void chronoTick;
     return chronoRestantSecondes(chronometreApi ?? null);
@@ -577,6 +627,30 @@ function ScreenResultsChoixClassiques({
 
   return (
     <main style={{ ...shell, textAlign: "left" }}>
+      {isTestMode ? (
+        <div
+          style={{
+            position: "fixed",
+            top: 14,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 2147483647,
+            pointerEvents: "none",
+            background: "rgba(0,0,0,0.55)",
+            color: "#f8fafc",
+            border: "1px solid rgba(148,163,184,0.35)",
+            borderRadius: 9999,
+            padding: "0.35rem 0.8rem",
+            fontWeight: 900,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            fontSize: "0.78rem",
+          }}
+          aria-hidden
+        >
+          MODE TEST
+        </div>
+      ) : null}
       <header
         style={{
           alignSelf: "stretch",
@@ -802,8 +876,16 @@ function ScreenResultsChoixClassiques({
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {percentLabel}% · {optVotes} vote
-                    {optVotes !== 1 ? "s" : ""}
+                    {isTestMode ? (
+                      <>
+                        ≈ {optVotes} vote{optVotes !== 1 ? "s" : ""}
+                      </>
+                    ) : (
+                      <>
+                        {percentLabel}% · {optVotes} vote
+                        {optVotes !== 1 ? "s" : ""}
+                      </>
+                    )}
                   </span>
                 </div>
                 <div
@@ -913,8 +995,16 @@ function ScreenResultsChoixClassiques({
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {percentLabel}% · {optVotes} vote
-                  {optVotes !== 1 ? "s" : ""}
+                  {isTestMode ? (
+                    <>
+                      ≈ {optVotes} vote{optVotes !== 1 ? "s" : ""}
+                    </>
+                  ) : (
+                    <>
+                      {percentLabel}% · {optVotes} vote
+                      {optVotes !== 1 ? "s" : ""}
+                    </>
+                  )}
                 </span>
               </div>
               <div
@@ -950,6 +1040,7 @@ function ScreenResultsChoixClassiques({
 
 export function ScreenResults(props) {
   const poll = props?.poll;
+  const isTestMode = poll?.eventIsLiveConsumed === false;
   const isContestEntry = String(poll?.type || "").toUpperCase() === "CONTEST_ENTRY";
   const [contestWinners, setContestWinners] = useState([]);
   useEffect(() => {
@@ -988,6 +1079,30 @@ export function ScreenResults(props) {
     const participants = contestEligibleCountFromPoll(poll);
     return (
       <main style={{ ...props.shell, textAlign: "left" }}>
+        {isTestMode ? (
+          <div
+            style={{
+              position: "fixed",
+              top: 14,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 2147483647,
+              pointerEvents: "none",
+              background: "rgba(0,0,0,0.55)",
+              color: "#f8fafc",
+              border: "1px solid rgba(148,163,184,0.35)",
+              borderRadius: 9999,
+              padding: "0.35rem 0.8rem",
+              fontWeight: 900,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              fontSize: "0.78rem",
+            }}
+            aria-hidden
+          >
+            MODE TEST
+          </div>
+        ) : null}
         <header
           style={{
             alignSelf: "stretch",

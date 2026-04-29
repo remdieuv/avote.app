@@ -287,6 +287,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
   const finChronoRefetchEffectueRef = useRef(false);
   const panelFadeSkipRef = useRef(true);
   const pollId = poll?.id ?? null;
+  const isTestMode = poll?.eventIsLiveConsumed === false;
 
   useEffect(() => {
     if (typeof window === "undefined" || !slugPublic) return;
@@ -932,6 +933,42 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
       <main style={shell}>
         {wrapGlass(
           <>
+            {isTestMode ? (
+              <div
+                style={{
+                  position: "fixed",
+                  top: 14,
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  zIndex: 2147483647,
+                  pointerEvents: "none",
+                  background: "rgba(0,0,0,0.55)",
+                  color: "#f8fafc",
+                  border: "1px solid rgba(148,163,184,0.35)",
+                  borderRadius: 9999,
+                  padding: "0.35rem 0.8rem",
+                  fontWeight: 900,
+                  letterSpacing: "0.14em",
+                  textTransform: "uppercase",
+                  fontSize: "0.78rem",
+                }}
+                aria-hidden
+              >
+                MODE TEST
+                <div
+                  style={{
+                    marginTop: 4,
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    letterSpacing: "0.02em",
+                    textTransform: "none",
+                    color: "rgba(226,232,240,0.95)",
+                  }}
+                >
+                  Passez en mode réel pour une expérience complète.
+                </div>
+              </div>
+            ) : null}
             <p
               style={{
                 margin: "0 0 0.35rem 0",
@@ -977,6 +1014,42 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
       <main style={shell}>
         {wrapGlass(
           <>
+            {isTestMode ? (
+              <div
+                style={{
+                  position: "fixed",
+                  top: 14,
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  zIndex: 2147483647,
+                  pointerEvents: "none",
+                  background: "rgba(0,0,0,0.55)",
+                  color: "#f8fafc",
+                  border: "1px solid rgba(148,163,184,0.35)",
+                  borderRadius: 9999,
+                  padding: "0.35rem 0.8rem",
+                  fontWeight: 900,
+                  letterSpacing: "0.14em",
+                  textTransform: "uppercase",
+                  fontSize: "0.78rem",
+                }}
+                aria-hidden
+              >
+                MODE TEST
+                <div
+                  style={{
+                    marginTop: 4,
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    letterSpacing: "0.02em",
+                    textTransform: "none",
+                    color: "rgba(226,232,240,0.95)",
+                  }}
+                >
+                  Passez en mode réel pour une expérience complète.
+                </div>
+              </div>
+            ) : null}
             <p
               style={{
                 margin: "0 0 0.6rem 0",
@@ -1110,7 +1183,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
                           fontSize: `calc(${v.rowRem} * 0.92)`,
                         }}
                       >
-                        {percentRounded}% · {optVotes}
+                        {isTestMode ? `≈ ${optVotes}` : `${percentRounded}% · ${optVotes}`}
                       </span>
                     </div>
                     <div
@@ -1194,6 +1267,42 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
     <main style={shell}>
       {wrapGlass(
         <>
+          {isTestMode ? (
+            <div
+              style={{
+                position: "fixed",
+                top: 14,
+                left: "50%",
+                transform: "translateX(-50%)",
+                zIndex: 2147483647,
+                pointerEvents: "none",
+                background: "rgba(0,0,0,0.55)",
+                color: "#f8fafc",
+                border: "1px solid rgba(148,163,184,0.35)",
+                borderRadius: 9999,
+                padding: "0.35rem 0.8rem",
+                fontWeight: 900,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                fontSize: "0.78rem",
+              }}
+              aria-hidden
+            >
+              MODE TEST
+              <div
+                style={{
+                  marginTop: 4,
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                  letterSpacing: "0.02em",
+                  textTransform: "none",
+                  color: "rgba(226,232,240,0.95)",
+                }}
+              >
+                Passez en mode réel pour une expérience complète.
+              </div>
+            </div>
+          ) : null}
           <div
             style={{
               display: "flex",

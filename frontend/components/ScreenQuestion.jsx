@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { formatCountdownVerbose } from "@/lib/chronoFormat";
 import { getUxState } from "@/lib/liveStateUx";
+import { useEventMode } from "@/lib/useEventMode";
 
 /** @param {Record<string, unknown> | null | undefined} tm */
 function chronoRestantSecondes(tm) {
@@ -204,6 +205,8 @@ export function ScreenQuestion({
   fullScreenQr = false,
   compactChrono = false,
 }) {
+  const eventMode = useEventMode(poll);
+
   const secondesChronoVote = useMemo(() => {
     void chronoTick;
     return chronoRestantSecondes(chronometreApi ?? null);
@@ -243,6 +246,31 @@ export function ScreenQuestion({
           "clamp(0.65rem, 2.2vw, 1.35rem) clamp(0.85rem, 3vw, 1.75rem)",
       }}
     >
+      {eventMode.isTestMode ? (
+        <div
+          style={{
+            position: "fixed",
+            top: 14,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 2147483647,
+            pointerEvents: "none",
+            background: "rgba(0,0,0,0.55)",
+            color: "#f8fafc",
+            border: "1px solid rgba(148,163,184,0.35)",
+            borderRadius: 9999,
+            padding: "0.35rem 0.8rem",
+            fontWeight: 900,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            fontSize: "0.78rem",
+          }}
+          aria-hidden
+        >
+          MODE TEST
+        </div>
+      ) : null}
+
       <div
         style={{
           flexShrink: 0,
@@ -272,6 +300,24 @@ export function ScreenQuestion({
         >
           {votePill.label}
         </span>
+
+        {eventMode.isTestMode ? (
+          <p
+            style={{
+              margin: "0 0 clamp(0.55rem, 1.8vw, 1rem) 0",
+              fontSize: "clamp(0.78rem, 1.7vw, 1.02rem)",
+              fontWeight: 700,
+              color: "#94a3b8",
+              lineHeight: 1.25,
+              textWrap: "balance",
+              maxWidth: "42ch",
+            }}
+          >
+            Mode TEST actif : résultats et exports limités.
+            <br />
+            Passez en mode réel pour une expérience complète.
+          </p>
+        ) : null}
 
         <h1
           style={{

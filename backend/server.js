@@ -243,10 +243,25 @@ function questionTimerSnapshot(event) {
  * }} poll
  */
 function pollToJson(poll) {
+  const eventIsTestMode = poll?.event?.isLiveConsumed === false;
+  const eventDisplayStateUpper = String(poll?.event?.displayState || "").toUpperCase();
+  const maskResultsInTestMode = eventIsTestMode && eventDisplayStateUpper === "RESULTS";
+
   const voteCounts = {};
   for (const v of poll.votes) {
     voteCounts[v.optionId] = (voteCounts[v.optionId] || 0) + 1;
   }
+
+  // En mode TEST, on masque fortement la précision des résultats en "bucketisant"
+  // les votes bruts avant le calcul des pourcentages côté écran.
+  if (maskResultsInTestMode) {
+    const bucket = 10; // faible granularité = plus difficile d'exploiter via réseau
+    for (const k of Object.keys(voteCounts)) {
+      const raw = voteCounts[k] || 0;
+      voteCounts[k] = Math.round(raw / bucket) * bucket;
+    }
+  }
+
   return {
     id: poll.id,
     title: poll.title,
@@ -274,6 +289,8 @@ function pollToJson(poll) {
     eventScreenDisplayState: poll.event?.screenDisplayState
       ? String(poll.event.screenDisplayState).toLowerCase()
       : null,
+    eventIsLiveConsumed: poll.event?.isLiveConsumed ?? null,
+    eventIsLocked: poll.event?.isLocked ?? null,
     autoReveal: Boolean(poll.event?.autoReveal),
     autoRevealDelaySec: poll.event?.autoRevealDelaySec ?? 5,
     autoRevealShowResultsAt:
@@ -536,6 +553,8 @@ async function emitEventLiveUpdated(io, eventId) {
   io.to(roomPourEvent(eventId)).emit("event_live_updated", {
     eventId: event.id,
     slug: event.slug,
+    isLiveConsumed: event.isLiveConsumed,
+    isLocked: event.isLocked,
     liveState: event.liveState.toLowerCase(),
     voteState: String(event.voteState).toLowerCase(),
     displayState: String(event.displayState).toLowerCase(),
@@ -683,6 +702,14 @@ async function passerAuSondageSuivant(eventId) {
     return { ok: false, code: 404, message: "Événement introuvable." };
   }
 
+  const isTestMode = event.isLiveConsumed === false;
+  const forcedTestTimer = {
+    questionTimerTotalSec: 30,
+    questionTimerAccumulatedSec: 0,
+    questionTimerStartedAt: new Date(),
+    questionTimerIsPaused: false,
+  };
+
   await annulationAutoRevealProgrammee(eventId);
 
   const liste = event.polls.filter((p) => p.status !== "ARCHIVED");
@@ -726,7 +753,7 @@ async function passerAuSondageSuivant(eventId) {
       displayState: "QUESTION",
       liveState: "VOTING",
       autoRevealShowResultsAt: null,
-      ...QUESTION_TIMER_RESET,
+      ...(isTestMode ? forcedTestTimer : QUESTION_TIMER_RESET),
     },
   });
 
@@ -1024,6 +1051,9 @@ app.post("/events/:eventId/duplicate", requireAuth, async (req, res) => {
           liveState: "WAITING",
           voteState: "CLOSED",
           displayState: "WAITING",
+          isLiveConsumed: false,
+          consumedAt: null,
+          isLocked: false,
           autoReveal: Boolean(source.autoReveal),
           autoRevealDelaySec: source.autoRevealDelaySec ?? 5,
           autoRevealShowResultsAt: null,
@@ -1485,6 +1515,8 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
         ? String(event.screenDisplayState).toLowerCase()
         : null,
       activePollId: event.activePollId,
+      isLiveConsumed: Boolean(event.isLiveConsumed),
+      isLocked: Boolean(event.isLocked),
       autoReveal: event.autoReveal,
       autoRevealDelaySec: event.autoRevealDelaySec,
       autoRevealShowResultsAt:
@@ -1882,6 +1914,13 @@ app.post("/events/:eventId/question-timer", requireAuth, async (req, res) => {
       return res.status(404).json({ error: "Événement introuvable." });
     }
 
+    // En mode TEST, le timer est forcé automatiquement (impossible de modifier).
+    if (event.isLiveConsumed === false) {
+      return res.status(403).json({
+        error: "Timer disponible uniquement en mode réel.",
+      });
+    }
+
     if (action === "reset") {
       await prisma.event.update({
         where: { id: eventId },
@@ -2097,6 +2136,18 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
   if (!owned.ok) {
     return res.status(owned.status).json({ error: "Événement introuvable." });
   }
+
+  const eventMode = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { isLocked: true, isLiveConsumed: true },
+  });
+  if (eventMode?.isLocked) {
+    return res.status(403).json({
+      error: "Cet événement est terminé et ne peut plus être rejoué.",
+    });
+  }
+  const isTestMode = eventMode?.isLiveConsumed === false;
+
   const body = req.body ?? {};
   const questionBrute =
     typeof body.question === "string" ? body.question.trim() : "";
@@ -2205,6 +2256,14 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
           displayState: "QUESTION",
           liveState: "VOTING",
           autoRevealShowResultsAt: null,
+          ...(isTestMode
+            ? {
+                questionTimerTotalSec: 30,
+                questionTimerAccumulatedSec: 0,
+                questionTimerStartedAt: new Date(),
+                questionTimerIsPaused: false,
+              }
+            : {}),
         },
       });
     }
@@ -2229,6 +2288,17 @@ app.post("/events/:eventId/next-poll", requireAuth, async (req, res) => {
     if (!owned.ok) {
       return res.status(owned.status).json({ error: "Événement introuvable." });
     }
+
+    const eventMode = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { isLocked: true },
+    });
+    if (eventMode?.isLocked) {
+      return res.status(403).json({
+        error: "Cet événement est terminé et ne peut plus être rejoué.",
+      });
+    }
+
     const result = await passerAuSondageSuivant(eventId);
     if (!result.ok) {
       return res.status(result.code || 404).json({ error: result.message });
@@ -2248,6 +2318,11 @@ app.post("/events/:eventId/finish", requireAuth, async (req, res) => {
     if (!owned.ok) {
       return res.status(owned.status).json({ error: "Événement introuvable." });
     }
+    const eventMode = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { isLiveConsumed: true, isLocked: true },
+    });
+    const shouldLock = Boolean(eventMode?.isLiveConsumed) && !Boolean(eventMode?.isLocked);
     await annulationAutoRevealProgrammee(eventId);
     await prisma.poll.updateMany({
       where: { eventId, status: "ACTIVE" },
@@ -2261,6 +2336,7 @@ app.post("/events/:eventId/finish", requireAuth, async (req, res) => {
         displayState: "WAITING",
         activePollId: null,
         autoRevealShowResultsAt: null,
+        ...(shouldLock ? { isLocked: true } : {}),
         ...QUESTION_TIMER_RESET,
       },
     });
@@ -2272,6 +2348,46 @@ app.post("/events/:eventId/finish", requireAuth, async (req, res) => {
     });
   } catch (e) {
     console.error("events/:eventId/finish", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/**
+ * Régie : démarrer le mode réel (consomme l'événement une seule fois).
+ */
+app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
+  const { eventId } = req.params;
+  try {
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+
+    const eventMode = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { isLiveConsumed: true, isLocked: true },
+    });
+
+    if (eventMode?.isLocked) {
+      return res.status(403).json({ error: "Cet événement est terminé et verrouillé." });
+    }
+    if (eventMode?.isLiveConsumed) {
+      return res.status(403).json({ error: "Mode réel déjà démarré pour cet événement." });
+    }
+
+    await prisma.event.update({
+      where: { id: eventId },
+      data: {
+        isLiveConsumed: true,
+        consumedAt: new Date(),
+        isLocked: false,
+      },
+    });
+
+    await emitEventLiveUpdated(io, eventId);
+    return res.json({ success: true });
+  } catch (e) {
+    console.error("events/:eventId/start-real", e);
     return res.status(500).json({ error: "Erreur serveur." });
   }
 });
@@ -2289,6 +2405,12 @@ app.post("/polls/:pollId/open", requireAuth, async (req, res) => {
     });
     if (!poll) {
       return res.status(404).json({ error: "Sondage introuvable." });
+    }
+
+    if (poll.event?.isLocked) {
+      return res.status(403).json({
+        error: "Cet événement est terminé et ne peut plus être rejoué.",
+      });
     }
 
     if (poll.status === "ARCHIVED") {
@@ -2325,6 +2447,14 @@ app.post("/polls/:pollId/open", requireAuth, async (req, res) => {
         displayState: "QUESTION",
         liveState: "VOTING",
         autoRevealShowResultsAt: null,
+        ...(poll.event?.isLiveConsumed === false
+          ? {
+              questionTimerTotalSec: 30,
+              questionTimerAccumulatedSec: 0,
+              questionTimerStartedAt: new Date(),
+              questionTimerIsPaused: false,
+            }
+          : {}),
       },
     });
 
@@ -4146,6 +4276,15 @@ app.get("/events/:eventId/analytics/v2/export.csv", requireAuth, async (req, res
     if (!owned.ok) {
       return res.status(owned.status).json({ error: "Événement introuvable." });
     }
+
+    const eventMode = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { isLiveConsumed: true },
+    });
+    if (eventMode?.isLiveConsumed === false) {
+      return res.status(403).json({ error: "Export disponible uniquement en mode réel" });
+    }
+
     const fromRaw = typeof req.query.from === "string" ? req.query.from.trim() : "";
     const toRaw = typeof req.query.to === "string" ? req.query.to.trim() : "";
     const pollId = typeof req.query.pollId === "string" ? req.query.pollId.trim() : "";
@@ -4849,6 +4988,15 @@ app.get("/events/:eventId/analytics/export.csv", requireAuth, async (req, res) =
     if (!owned.ok) {
       return res.status(owned.status).json({ error: "Événement introuvable." });
     }
+
+    const eventMode = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { isLiveConsumed: true },
+    });
+    if (eventMode?.isLiveConsumed === false) {
+      return res.status(403).json({ error: "Export disponible uniquement en mode réel" });
+    }
+
     const event = await prisma.event.findUnique({
       where: { id: eventId },
       select: {

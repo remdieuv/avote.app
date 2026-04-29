@@ -30,6 +30,8 @@ export default function EventLeadsPage() {
   const [toDate, setToDate] = useState("");
   const [isMobile, setIsMobile] = useState(false);
   const [copied, setCopied] = useState("");
+  const [eventMode, setEventMode] = useState(null);
+  const [eventModeLoading, setEventModeLoading] = useState(true);
 
   useEffect(() => {
     if (!eventId) return;
@@ -67,6 +69,24 @@ export default function EventLeadsPage() {
       }
     })();
   }, [eventId, debouncedQuery, sourceFilter, fromDate, toDate]);
+
+  useEffect(() => {
+    if (!eventId) return;
+    (async () => {
+      try {
+        setEventModeLoading(true);
+        const res = await adminFetch(`${apiBaseBrowser()}/events/${eventId}`, {
+          cache: "no-store",
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) setEventMode(data ?? null);
+      } catch {
+        /* ignore */
+      } finally {
+        setEventModeLoading(false);
+      }
+    })();
+  }, [eventId]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -316,10 +336,20 @@ export default function EventLeadsPage() {
               type="button"
               style={primaryButtonStyle}
               onClick={exportCsv}
-              disabled={loading || filteredRows.length === 0}
+              disabled={
+                loading ||
+                filteredRows.length === 0 ||
+                eventModeLoading ||
+                eventMode?.isLiveConsumed === false
+              }
             >
               Export CSV événement
             </button>
+            {!eventModeLoading && eventMode?.isLiveConsumed === false ? (
+              <span style={{ fontSize: "0.82rem", color: "#991b1b", fontWeight: 700 }}>
+                Export désactivé en mode TEST
+              </span>
+            ) : null}
             {copied ? (
               <span style={{ fontSize: "0.82rem", color: "#16a34a", fontWeight: 700 }}>
                 {copied} copié

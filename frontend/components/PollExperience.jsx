@@ -41,6 +41,7 @@ import {
   stateBadgeTypography,
 } from "@/lib/liveStateVisual";
 import { ExperienceHeader } from "@/components/navigation/ExperienceHeader";
+import { useEventMode } from "@/lib/useEventMode";
 
 const API_POLLS = `${API_URL}/polls`;
 
@@ -255,6 +256,15 @@ export function PollExperience({
   const [roomSolidBackgroundColor, setRoomSolidBackgroundColor] =
     useState(null);
   const [prefersDark, setPrefersDark] = useState(true);
+
+  const [eventModeUi, setEventModeUi] = useState({
+    isLiveConsumed: null,
+    isLocked: null,
+  });
+
+  const eventMode = useEventMode(poll);
+  const eventModeFromSocket = useEventMode(eventModeUi);
+  const isTestModeEffective = eventMode.isTestMode || eventModeFromSocket.isTestMode;
 
   const voteLockRef = useRef(false);
   /** True si GET /events/slug a renvoyé 404 — évite d’écraser l’erreur avec un message « en attente » */
@@ -577,6 +587,20 @@ export function PollExperience({
       setLiveScene(
         deriveParticipantLiveScene(payload.liveState, payload.voteState),
       );
+
+      if (
+        typeof payload.isLiveConsumed === "boolean" ||
+        typeof payload.isLocked === "boolean"
+      ) {
+        setEventModeUi((prev) => ({
+          isLiveConsumed:
+            typeof payload.isLiveConsumed === "boolean"
+              ? payload.isLiveConsumed
+              : prev.isLiveConsumed,
+          isLocked:
+            typeof payload.isLocked === "boolean" ? payload.isLocked : prev.isLocked,
+        }));
+      }
       if (typeof payload.voteState === "string") {
         setEventVoteStateUi(payload.voteState.toLowerCase());
       }
@@ -656,6 +680,19 @@ export function PollExperience({
       setLiveScene(
         deriveParticipantLiveScene(data.eventLiveState, data.eventVoteState),
       );
+      if (
+        typeof data.eventIsLiveConsumed === "boolean" ||
+        typeof data.eventIsLocked === "boolean"
+      ) {
+        setEventModeUi((prev) => ({
+          isLiveConsumed:
+            typeof data.eventIsLiveConsumed === "boolean"
+              ? data.eventIsLiveConsumed
+              : prev.isLiveConsumed,
+          isLocked:
+            typeof data.eventIsLocked === "boolean" ? data.eventIsLocked : prev.isLocked,
+        }));
+      }
     }
 
     socket.on("connect", rejoindreSalles);
@@ -1340,6 +1377,31 @@ export function PollExperience({
           badgeText="Page votant"
           badgeColor={accent}
         />
+
+        {eventMode.isTestMode || eventModeFromSocket.isTestMode ? (
+          <div
+            style={{
+              position: "fixed",
+              top: 14,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 2147483647,
+              pointerEvents: "none",
+              background: "rgba(0,0,0,0.55)",
+              color: "#f8fafc",
+              border: "1px solid rgba(148,163,184,0.35)",
+              borderRadius: 9999,
+              padding: "0.35rem 0.8rem",
+              fontWeight: 900,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              fontSize: "0.78rem",
+            }}
+            aria-hidden
+          >
+            MODE TEST
+          </div>
+        ) : null}
 
         <div
           className="poll-live-zone"
@@ -2269,8 +2331,17 @@ export function PollExperience({
                             flexShrink: 0,
                           }}
                         >
-                          {percentLabel}% ({optVotes} vote
-                          {optVotes !== 1 ? "s" : ""})
+                          {isTestModeEffective ? (
+                            <>
+                              ≈ {optVotes} vote
+                              {optVotes !== 1 ? "s" : ""}
+                            </>
+                          ) : (
+                            <>
+                              {percentLabel}% ({optVotes} vote
+                              {optVotes !== 1 ? "s" : ""})
+                            </>
+                          )}
                         </span>
                       </div>
                       <div

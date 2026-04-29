@@ -127,6 +127,12 @@ model Event {
   questionTimerAccumulatedSec  Int       @default(0)
   questionTimerStartedAt       DateTime?
   questionTimerIsPaused        Boolean   @default(true)
+  /** Mode test / réel : l'événement n'est consommable qu'une seule fois pour un usage réel. */
+  isLiveConsumed Boolean @default(false)
+  /** Date du démarrage réel (mode réel en premier lancement). */
+  consumedAt DateTime?
+  /** Verrou après fin réelle : empêche tout rejouage / relance en usage réel. */
+  isLocked Boolean @default(false)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
