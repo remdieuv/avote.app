@@ -5751,17 +5751,141 @@ export default function RegieEventPage() {
                 </header>
               </>
             ) : (
-              <h2
+              <div
                 style={{
-                  margin: 0,
-                  fontSize: "1.35rem",
-                  fontWeight: 800,
-                  letterSpacing: "-0.02em",
-                  color: "#111827",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: "0.55rem",
                 }}
               >
-                Pilotage
-              </h2>
+                <h2
+                  style={{
+                    margin: 0,
+                    fontSize: "1.35rem",
+                    fontWeight: 800,
+                    letterSpacing: "-0.02em",
+                    color: "#111827",
+                  }}
+                >
+                  Pilotage
+                </h2>
+                <span
+                  title="Mode business de l'événement"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    borderRadius: "999px",
+                    padding: "0.2rem 0.55rem",
+                    fontSize: "0.74rem",
+                    fontWeight: 900,
+                    border: `1px solid ${modeBadge.border}`,
+                    background: modeBadge.bg,
+                    color: modeBadge.color,
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  {modeBadge.label}
+                </span>
+                {canStartReal ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={async () => {
+                      if (!eventId) return;
+                      const ok = window.confirm(
+                        "Vous allez démarrer l’événement réel.\n\nCela consommera votre événement. Après la fin, il ne pourra plus être rejoué gratuitement.",
+                      );
+                      if (!ok) return;
+                      await postAction(
+                        `/events/${eventId}/start-real`,
+                        "Mode réel en cours",
+                      );
+                    }}
+                    style={{
+                      marginLeft: "0.15rem",
+                      padding: "0.48rem 0.8rem",
+                      fontSize: "0.78rem",
+                      minHeight: "2.2rem",
+                      borderRadius: "10px",
+                      border: "1px solid #0f172a",
+                      background: busy
+                        ? "#e2e8f0"
+                        : "linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%)",
+                      color: "#fff",
+                      fontWeight: 800,
+                      boxShadow: busy ? "none" : "0 2px 10px rgba(2,132,199,0.25)",
+                      cursor: busy ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    ▶ Démarrer l’événement réel
+                  </button>
+                ) : null}
+              </div>
+            )}
+
+            {desktop ? null : (
+              <div
+                style={{
+                  marginTop: "0.55rem",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  gap: "0.45rem",
+                }}
+              >
+                <span
+                  title="Mode business de l'événement"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    borderRadius: "999px",
+                    padding: "0.2rem 0.55rem",
+                    fontSize: "0.72rem",
+                    fontWeight: 900,
+                    border: `1px solid ${modeBadge.border}`,
+                    background: modeBadge.bg,
+                    color: modeBadge.color,
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  {modeBadge.label}
+                </span>
+                {canStartReal ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={async () => {
+                      if (!eventId) return;
+                      const ok = window.confirm(
+                        "Vous allez démarrer l’événement réel.\n\nCela consommera votre événement. Après la fin, il ne pourra plus être rejoué gratuitement.",
+                      );
+                      if (!ok) return;
+                      await postAction(
+                        `/events/${eventId}/start-real`,
+                        "Mode réel en cours",
+                      );
+                    }}
+                    style={{
+                      padding: "0.42rem 0.7rem",
+                      fontSize: "0.74rem",
+                      minHeight: "2rem",
+                      borderRadius: "10px",
+                      border: "1px solid #0f172a",
+                      background: busy
+                        ? "#e2e8f0"
+                        : "linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%)",
+                      color: "#fff",
+                      fontWeight: 800,
+                      boxShadow: busy ? "none" : "0 2px 10px rgba(2,132,199,0.25)",
+                      cursor: busy ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    ▶ Démarrer réel
+                  </button>
+                ) : null}
+              </div>
             )}
 
             <div
@@ -6667,41 +6791,6 @@ export default function RegieEventPage() {
                 />
               ) : null}
             </div>
-              {canStartReal ? (
-                <div style={{ marginTop: "0.62rem" }}>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={async () => {
-                      if (!eventId) return;
-                      const ok = window.confirm(
-                        "Vous allez démarrer l’événement réel.\n\nCela consommera votre événement. Après la fin, il ne pourra plus être rejoué gratuitement.",
-                      );
-                      if (!ok) return;
-                      await postAction(
-                        `/events/${eventId}/start-real`,
-                        "Mode réel en cours",
-                      );
-                    }}
-                    style={{
-                      padding: "0.48rem 0.8rem",
-                      fontSize: "0.78rem",
-                      minHeight: "2.2rem",
-                      borderRadius: "10px",
-                      border: "1px solid #0f172a",
-                      background: busy
-                        ? "#e2e8f0"
-                        : "linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%)",
-                      color: "#fff",
-                      fontWeight: 800,
-                      boxShadow: busy ? "none" : "0 2px 10px rgba(2,132,199,0.25)",
-                      cursor: busy ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    ▶ Démarrer l’événement réel
-                  </button>
-                </div>
-              ) : null}
           </div>
           {desktop && eventData.slug ? (
             <div id="regie-overlay-panel">
