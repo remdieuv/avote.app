@@ -438,18 +438,21 @@ export default function MesLeadsPage() {
           max-width: 60ch;
         }
         .leads-csv-btn {
-          padding: 0.56rem 0.95rem;
-          font-size: 0.84rem;
+          padding: 0.52rem 0.72rem;
+          font-size: 0.83rem;
           font-weight: 700;
           border-radius: 10px;
-          border: 1px solid #cbd5e1;
-          background: #fff;
-          color: #334155;
+          border: none;
+          background: linear-gradient(135deg, #4338ca, #6366f1);
+          color: #fff;
           cursor: pointer;
+          box-shadow: 0 10px 20px rgba(79, 70, 229, 0.14);
         }
         .leads-csv-btn:disabled {
-          background: #f1f5f9;
+          background: #e5e7eb;
+          color: #6b7280;
           cursor: not-allowed;
+          box-shadow: none;
         }
         .leads-kpi-grid {
           display: grid;
