@@ -4520,6 +4520,9 @@ export default function RegieEventPage() {
   const displayStateUi = eventData?.displayState
     ? String(eventData.displayState).toLowerCase()
     : deriveRegieDisplayFallback(liveState);
+  const projectionDisplayStateUi = eventData?.screenDisplayState
+    ? String(eventData.screenDisplayState).toLowerCase()
+    : displayStateUi;
 
   const ux = useMemo(
     () =>
@@ -4565,9 +4568,9 @@ export default function RegieEventPage() {
   const hasDisplayGap =
     Boolean(screenBConnected) &&
     ["question", "results", "waiting", "black"].includes(displayStateBUi) &&
-    displayStateBUi !== String(displayStateUi || "").toLowerCase();
+    displayStateBUi !== String(projectionDisplayStateUi || "").toLowerCase();
   const affichageEnAttente =
-    String(displayStateUi || "").toLowerCase() === "waiting";
+    String(projectionDisplayStateUi || "").toLowerCase() === "waiting";
   const compactTopPanel = !desktop;
   const socketStatusLabel = socketConnected
     ? "Sync live connectee"
@@ -4589,10 +4592,10 @@ export default function RegieEventPage() {
   const canToggleVote = Boolean(activePollIdJs) && !busy && !eventFinished && !eventLocked;
   const voteIsOpen = voteStateUi === "open";
   const canShowQuestionQuick =
-    canManageActivePoll && String(displayStateUi || "").toLowerCase() !== "question";
+    canManageActivePoll && String(projectionDisplayStateUi || "").toLowerCase() !== "question";
   const canShowResultsQuick =
-    canManageActivePoll && String(displayStateUi || "").toLowerCase() !== "results";
-  const isScreenBlack = String(displayStateUi || "").toLowerCase() === "black";
+    canManageActivePoll && String(projectionDisplayStateUi || "").toLowerCase() !== "results";
+  const isScreenBlack = String(projectionDisplayStateUi || "").toLowerCase() === "black";
   const ecranLabel = activePoll
     ? activePoll.question || activePoll.title
     : eventLocked
@@ -6781,7 +6784,7 @@ export default function RegieEventPage() {
               slug={eventData.slug}
               activePollId={eventData.activePollId ?? null}
               liveState={liveState}
-              displayState={displayStateUi}
+              displayState={projectionDisplayStateUi}
               busy={busy}
               postAction={postAction}
               sendScreenAction={sendScreenAction}
