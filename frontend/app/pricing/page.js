@@ -264,13 +264,13 @@ const launchPlan = {
   launchCard: true,
   discoveryTag: "Premier événement à 19€ pour tester Avote. Puis 49€ / événement.",
   features: [
-    "1 événement",
-    "Jusqu'à 1 000 participations",
-    "QR code + lien court",
-    "Résultats en direct",
-    "Projection écran / OBS",
-    "Personnalisation visuelle (logo, couleurs)",
-    "Statistiques détaillées + export des résultats",
+    "1 événement complet",
+    "Jusqu’à 1 000 participants en direct",
+    "QR code + lien d’accès rapide",
+    "Votes et résultats en temps réel",
+    "Projection écran (salle / OBS)",
+    "Personnalisation (logo, couleurs)",
+    "Statistiques + export des résultats",
   ],
 };
 
@@ -372,6 +372,8 @@ export default function PricingPage() {
               {isLaunchMode
                 ? (
                   <>
+                    Créez un événement interactif en quelques minutes et faites participer votre audience en direct.
+                    <br />
                     Une offre claire pour démarrer vite : 49€ / événement.{" "}
                     <strong>Et pour le lancement, votre premier événement est à 19€.</strong>
                   </>
@@ -379,13 +381,29 @@ export default function PricingPage() {
                 : "Payez une seule fois pour un événement, ou choisissez un abonnement mensuel si vous utilisez Avote régulièrement."}
             </p>
             <p className="pricing-micro-reassurance">
-              Aucun engagement. Paiement sécurisé avec Stripe. Offre de lancement disponible.
+              {isLaunchMode ? (
+                <>Aucun engagement. Paiement sécurisé avec Stripe.</>
+              ) : (
+                "Aucun engagement. Paiement sécurisé avec Stripe. Offre de lancement disponible."
+              )}
             </p>
             <div className="pricing-hero-cta">
               {isLaunchMode ? (
-                <a href={launchPlan.href} style={btnPrimary}>
-                  Créer mon événement
-                </a>
+                <div style={{ display: "grid", gap: "0.55rem", justifyItems: "center" }}>
+                  <a href={launchPlan.href} style={btnPrimary}>
+                    Créer mon événement
+                  </a>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "0.78rem",
+                      color: "#94a3b8",
+                      fontWeight: 800,
+                    }}
+                  >
+                    👉 Aucun engagement • Paiement sécurisé • Mise en ligne immédiate • Fonctionne sans application
+                  </p>
+                </div>
               ) : (
                 <>
                   <Link href="/join/demo" style={btnPrimary}>
