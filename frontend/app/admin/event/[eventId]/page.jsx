@@ -6320,6 +6320,27 @@ export default function RegieEventPage() {
                     })}
                   </div>
                 ) : null}
+                <button
+                  type="button"
+                  disabled={!canGoNext}
+                  onClick={() =>
+                    void postAction(`/events/${eventId}/next-poll`, "Question suivante diffusee")
+                  }
+                  style={{
+                    ...btnDanger(!canGoNext),
+                    marginTop: "0.65rem",
+                    width: "100%",
+                    minHeight: "2.4rem",
+                    padding: "0.45rem 0.7rem",
+                    fontSize: "0.78rem",
+                    border: "1px solid #ef4444",
+                    background: canGoNext ? "#dc2626" : "#fee2e2",
+                    color: canGoNext ? "#fff" : "#7f1d1d",
+                    fontWeight: 800,
+                  }}
+                >
+                  ⏭ Question suivante
+                </button>
               </aside>
             </div>
 
@@ -6460,25 +6481,6 @@ export default function RegieEventPage() {
                   >
                     Écran noir : {isScreenBlack ? "actif" : "inactif"}
                   </span>
-                  <button
-                    type="button"
-                    disabled={!canGoNext}
-                    onClick={() =>
-                      void postAction(`/events/${eventId}/next-poll`, "Question suivante diffusee")
-                    }
-                    style={{
-                      ...btnDanger(!canGoNext),
-                      minHeight: "2.6rem",
-                      minWidth: "142px",
-                      padding: "0.5rem 0.8rem",
-                      fontSize: "0.8rem",
-                      border: "1px solid #ef4444",
-                      background: canGoNext ? "#dc2626" : "#fee2e2",
-                      color: canGoNext ? "#fff" : "#7f1d1d",
-                    }}
-                  >
-                    ⏭ Question suivante
-                  </button>
                   <div style={{ flex: 1, minWidth: "10px" }} />
                   <button
                     type="button"
