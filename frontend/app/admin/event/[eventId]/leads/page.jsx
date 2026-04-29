@@ -23,6 +23,7 @@ export default function EventLeadsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [questionFilter, setQuestionFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [fromDate, setFromDate] = useState("");
@@ -46,8 +47,14 @@ export default function EventLeadsPage() {
       setLoading(true);
       setError(null);
       try {
+        const params = new URLSearchParams();
+        if (debouncedQuery.trim()) params.set("q", debouncedQuery.trim());
+        if (fromDate) params.set("from", fromDate);
+        if (toDate) params.set("to", toDate);
+        if (sourceFilter !== "all") params.set("source", sourceFilter);
+        const qs = params.toString();
         const res = await adminFetch(
-          `${apiBaseBrowser()}/events/${eventId}/leads`,
+          `${apiBaseBrowser()}/events/${eventId}/leads${qs ? `?${qs}` : ""}`,
         );
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error || `Erreur ${res.status}`);
@@ -59,7 +66,13 @@ export default function EventLeadsPage() {
         setLoading(false);
       }
     })();
-  }, [eventId]);
+  }, [eventId, debouncedQuery, sourceFilter, fromDate, toDate]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const t = window.setTimeout(() => setDebouncedQuery(query.trim()), 320);
+    return () => window.clearTimeout(t);
+  }, [query]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -79,37 +92,25 @@ export default function EventLeadsPage() {
   const uniqueQuestions = useMemo(() => {
     const map = new Map();
     for (const row of rows) {
-      const key = row.pollId || row.pollOrder || row.pollQuestion || row.id;
-      const label = row.pollQuestion || `Question ${Number(row.pollOrder ?? 0) + 1}`;
-      if (!map.has(String(key))) map.set(String(key), label);
+      if (!row.pollId) continue;
+      const key = String(row.pollId);
+      const label =
+        row.pollQuestion || `Question ${Number(row.pollOrder ?? 0) + 1}`;
+      if (!map.has(key)) map.set(key, label);
     }
     return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
   }, [rows]);
 
   const filteredRows = useMemo(() => {
-    const text = query.trim().toLowerCase();
-    return rows.filter((row) => {
-      const createdAt = row.createdAt ? new Date(row.createdAt) : null;
-      const fromOk = !fromDate || (createdAt && createdAt >= new Date(`${fromDate}T00:00:00`));
-      const toOk = !toDate || (createdAt && createdAt <= new Date(`${toDate}T23:59:59`));
-      const questionKey = String(
-        row.pollId || row.pollOrder || row.pollQuestion || row.id,
-      );
-      const questionOk = questionFilter === "all" || questionKey === questionFilter;
-      const source = getLeadSource(row.pollType);
-      const sourceOk = sourceFilter === "all" || source === sourceFilter;
-      if (!text) return fromOk && toOk && questionOk && sourceOk;
-      const haystack = [
-        row.firstName || "",
-        row.phone || "",
-        row.email || "",
-        row.pollQuestion || "",
-      ]
-        .join(" ")
-        .toLowerCase();
-      return fromOk && toOk && questionOk && sourceOk && haystack.includes(text);
-    });
-  }, [rows, query, questionFilter, sourceFilter, fromDate, toDate]);
+    if (questionFilter === "all") return rows;
+    return rows.filter((row) => String(row.pollId) === questionFilter);
+  }, [rows, questionFilter]);
+
+  useEffect(() => {
+    if (questionFilter === "all") return;
+    const exists = uniqueQuestions.some((q) => String(q.value) === questionFilter);
+    if (!exists) setQuestionFilter("all");
+  }, [uniqueQuestions, questionFilter]);
 
   const stats = useMemo(() => {
     const now = Date.now();
@@ -126,6 +127,7 @@ export default function EventLeadsPage() {
 
   function resetFilters() {
     setQuery("");
+    setDebouncedQuery("");
     setQuestionFilter("all");
     setSourceFilter("all");
     setFromDate("");
@@ -144,9 +146,10 @@ export default function EventLeadsPage() {
   }
 
   function exportCsv() {
-    const header = ["Date", "Question", "Prenom", "Telephone", "Email"];
+    const header = ["Date", "Source", "Question", "Prenom", "Telephone", "Email"];
     const lines = filteredRows.map((r) => [
       formatDateTime(r.createdAt),
+      getLeadSource(r.pollType) === "contest" ? "Concours" : "Lead",
       r.pollQuestion || `Question ${Number(r.pollOrder ?? 0) + 1}`,
       r.firstName || "",
       r.phone || "",
@@ -228,7 +231,7 @@ export default function EventLeadsPage() {
         </p>
       </header>
 
-      {!loading && !error ? (
+      {!error ? (
         <>
           <div
             style={{
@@ -238,9 +241,18 @@ export default function EventLeadsPage() {
               marginBottom: "0.95rem",
             }}
           >
-            <MiniStat label="Leads affichés" value={String(stats.total)} />
-            <MiniStat label="Nouveaux (24h)" value={String(stats.last24h)} />
-            <MiniStat label="Taux e-mail" value={`${stats.emailRate}%`} />
+            <MiniStat
+              label="Leads affichés"
+              value={loading ? "…" : String(stats.total)}
+            />
+            <MiniStat
+              label="Nouveaux (24h)"
+              value={loading ? "…" : String(stats.last24h)}
+            />
+            <MiniStat
+              label="Taux e-mail"
+              value={loading ? "…" : `${stats.emailRate}%`}
+            />
           </div>
 
           <div
@@ -300,7 +312,12 @@ export default function EventLeadsPage() {
               marginBottom: "0.95rem",
             }}
           >
-            <button type="button" style={primaryButtonStyle} onClick={exportCsv}>
+            <button
+              type="button"
+              style={primaryButtonStyle}
+              onClick={exportCsv}
+              disabled={loading || filteredRows.length === 0}
+            >
               Export CSV événement
             </button>
             {copied ? (
@@ -321,7 +338,7 @@ export default function EventLeadsPage() {
         </p>
       ) : null}
 
-      {!loading && !error ? (
+      {!error ? (
         <>
           {!isMobile ? (
             <div style={{ ...CARD, overflow: "hidden" }}>
@@ -362,6 +379,7 @@ export default function EventLeadsPage() {
                             <button
                               style={miniActionBtn}
                               type="button"
+                              aria-label="Copier le téléphone"
                               onClick={() => copyValue(r.phone, "Téléphone")}
                               disabled={!String(r.phone || "").trim()}
                             >
@@ -370,6 +388,7 @@ export default function EventLeadsPage() {
                             <button
                               style={miniActionBtn}
                               type="button"
+                              aria-label="Copier l’e-mail"
                               onClick={() => copyValue(r.email, "E-mail")}
                               disabled={!String(r.email || "").trim()}
                             >
@@ -432,6 +451,7 @@ export default function EventLeadsPage() {
                     <button
                       style={miniActionBtn}
                       type="button"
+                      aria-label="Copier le téléphone"
                       onClick={() => copyValue(r.phone, "Téléphone")}
                       disabled={!String(r.phone || "").trim()}
                     >
@@ -440,6 +460,7 @@ export default function EventLeadsPage() {
                     <button
                       style={miniActionBtn}
                       type="button"
+                      aria-label="Copier l’e-mail"
                       onClick={() => copyValue(r.email, "E-mail")}
                       disabled={!String(r.email || "").trim()}
                     >
@@ -462,6 +483,10 @@ export default function EventLeadsPage() {
           )}
         </>
       ) : null}
+
+      <p style={{ margin: "1rem 0 0", fontSize: "0.75rem", color: "#94a3b8" }}>
+        Les dates « Du / Au » sont interprétées en UTC (jour calendaire) côté serveur.
+      </p>
     </div>
   );
 }

@@ -122,6 +122,7 @@ export default function MesLeadsPage() {
     const header = [
       "Date",
       "Événement",
+      "Source",
       "Question",
       "Prénom",
       "Téléphone",
@@ -133,6 +134,7 @@ export default function MesLeadsPage() {
         [
           escape(new Date(r.createdAt).toLocaleString("fr-FR")),
           escape(r.eventTitle),
+          getLeadSource(r.pollType) === "contest" ? "Concours" : "Lead",
           escape(r.pollQuestion || ""),
           escape(r.firstName),
           escape(r.phone),

@@ -3637,8 +3637,67 @@ app.get("/events/:eventId/leads", requireAuth, async (req, res) => {
     if (!owned.ok) {
       return res.status(owned.status).json({ error: "Événement introuvable." });
     }
+
+    const sourceFilterRaw =
+      typeof req.query.source === "string" ? req.query.source.trim().toLowerCase() : "";
+    const sourceFilter =
+      sourceFilterRaw === "lead" || sourceFilterRaw === "contest" ? sourceFilterRaw : null;
+
+    const qRaw = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    const questionId =
+      typeof req.query.questionId === "string" && req.query.questionId.trim()
+        ? req.query.questionId.trim()
+        : null;
+
+    const fromDate = parseQueryDateStart(
+      typeof req.query.from === "string" ? req.query.from : "",
+    );
+    const toDate = parseQueryDateEnd(
+      typeof req.query.to === "string" ? req.query.to : "",
+    );
+
+    /** @type {import("@prisma/client").Prisma.LeadCaptureWhereInput} */
+    const where = { eventId };
+
+    /** @type {import("@prisma/client").Prisma.LeadCaptureWhereInput[]} */
+    const andParts = [];
+
+    if (qRaw) {
+      andParts.push({
+        OR: [
+          { firstName: { contains: qRaw, mode: "insensitive" } },
+          { phone: { contains: qRaw, mode: "insensitive" } },
+          { email: { contains: qRaw, mode: "insensitive" } },
+          { poll: { question: { contains: qRaw, mode: "insensitive" } } },
+        ],
+      });
+    }
+
+    if (fromDate || toDate) {
+      andParts.push({
+        createdAt: {
+          ...(fromDate ? { gte: fromDate } : {}),
+          ...(toDate ? { lte: toDate } : {}),
+        },
+      });
+    }
+
+    if (sourceFilter === "lead") {
+      andParts.push({ poll: { NOT: { type: "CONTEST_ENTRY" } } });
+    } else if (sourceFilter === "contest") {
+      andParts.push({ poll: { type: "CONTEST_ENTRY" } });
+    }
+
+    if (questionId) {
+      andParts.push({ pollId: questionId });
+    }
+
+    if (andParts.length) {
+      where.AND = andParts;
+    }
+
     const leads = await prisma.leadCapture.findMany({
-      where: { eventId },
+      where,
       orderBy: { createdAt: "desc" },
       include: {
         poll: { select: { id: true, question: true, order: true, type: true } },
