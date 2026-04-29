@@ -6392,80 +6392,134 @@ export default function RegieEventPage() {
                   >
                     {voteIsOpen ? "⏸ Fermer vote" : "▶ Ouvrir vote"}
                   </button>
-                  <button
-                    type="button"
-                    disabled={!canShowQuestionQuick}
-                    onClick={async () => {
-                      if (!activePollIdJs) return;
-                      const ok = await postAction(
-                        `/polls/${activePollIdJs}/display-question`,
-                        "Question affichee",
-                      );
-                      if (ok) sendScreenAction("QUESTION", null);
-                    }}
-                    style={{
-                      ...btnGhost,
-                      minHeight: "2.6rem",
-                      minWidth: "112px",
-                      padding: "0.5rem 0.75rem",
-                      borderColor: "#93c5fd",
-                      background: "#eff6ff",
-                      color: "#1e3a8a",
-                      fontWeight: 700,
-                      fontSize: "0.78rem",
-                    }}
-                  >
-                    📄 Afficher question
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!canShowResultsQuick}
-                    onClick={async () => {
-                      if (!activePollIdJs) return;
-                      const ok = await postAction(
-                        `/polls/${activePollIdJs}/show-results`,
-                        "Resultats affiches",
-                      );
-                      if (ok) sendScreenAction("RESULTS", null);
-                    }}
-                    style={{
-                      ...btnGhost,
-                      minHeight: "2.6rem",
-                      minWidth: "112px",
-                      padding: "0.5rem 0.75rem",
-                      borderColor: "#a5b4fc",
-                      background: "#eef2ff",
-                      color: "#3730a3",
-                      fontWeight: 700,
-                      fontSize: "0.78rem",
-                    }}
-                  >
-                    📊 Afficher résultats
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => {
-                      sendScreenAction(isScreenBlack ? "WAITING" : "BLACK", null);
-                      setToastNotif(isScreenBlack ? "Retour au direct" : "Ecran noir");
-                      window.setTimeout(() => setToastNotif(null), 2200);
-                    }}
-                    style={{
-                      ...btnGhost,
-                      minHeight: "2.6rem",
-                      minWidth: "112px",
-                      padding: "0.5rem 0.75rem",
-                      borderColor: "#334155",
-                      background: "#1e293b",
-                      color: "#f8fafc",
-                      fontWeight: 700,
-                      fontSize: "0.78rem",
-                    }}
-                  >
-                    {isScreenBlack
-                      ? "↩ Retour direct"
-                      : "⏹ Écran noir"}
-                  </button>
+                  <div style={{ display: "grid", justifyItems: "center", gap: "0.25rem" }}>
+                    <button
+                      type="button"
+                      disabled={!canShowQuestionQuick}
+                      onClick={async () => {
+                        if (!activePollIdJs) return;
+                        const ok = await postAction(
+                          `/polls/${activePollIdJs}/display-question`,
+                          "Question affichee",
+                        );
+                        if (ok) sendScreenAction("QUESTION", null);
+                      }}
+                      style={{
+                        ...btnGhost,
+                        minHeight: "2.6rem",
+                        minWidth: "112px",
+                        padding: "0.5rem 0.75rem",
+                        borderColor: "#93c5fd",
+                        background: "#eff6ff",
+                        color: "#1e3a8a",
+                        fontWeight: 700,
+                        fontSize: "0.78rem",
+                      }}
+                    >
+                      📄 Afficher question
+                    </button>
+                    <span
+                      aria-hidden
+                      style={{
+                        width: "8px",
+                        height: "8px",
+                        borderRadius: "9999px",
+                        background:
+                          String(projectionDisplayStateUi || "").toLowerCase() === "question"
+                            ? "#22c55e"
+                            : "#cbd5e1",
+                        boxShadow:
+                          String(projectionDisplayStateUi || "").toLowerCase() === "question"
+                            ? "0 0 0 3px rgba(34,197,94,0.18)"
+                            : "none",
+                      }}
+                    />
+                  </div>
+                  <div style={{ display: "grid", justifyItems: "center", gap: "0.25rem" }}>
+                    <button
+                      type="button"
+                      disabled={!canShowResultsQuick}
+                      onClick={async () => {
+                        if (!activePollIdJs) return;
+                        const ok = await postAction(
+                          `/polls/${activePollIdJs}/show-results`,
+                          "Resultats affiches",
+                        );
+                        if (ok) sendScreenAction("RESULTS", null);
+                      }}
+                      style={{
+                        ...btnGhost,
+                        minHeight: "2.6rem",
+                        minWidth: "112px",
+                        padding: "0.5rem 0.75rem",
+                        borderColor: "#a5b4fc",
+                        background: "#eef2ff",
+                        color: "#3730a3",
+                        fontWeight: 700,
+                        fontSize: "0.78rem",
+                      }}
+                    >
+                      📊 Afficher résultats
+                    </button>
+                    <span
+                      aria-hidden
+                      style={{
+                        width: "8px",
+                        height: "8px",
+                        borderRadius: "9999px",
+                        background:
+                          String(projectionDisplayStateUi || "").toLowerCase() === "results"
+                            ? "#22c55e"
+                            : "#cbd5e1",
+                        boxShadow:
+                          String(projectionDisplayStateUi || "").toLowerCase() === "results"
+                            ? "0 0 0 3px rgba(34,197,94,0.18)"
+                            : "none",
+                      }}
+                    />
+                  </div>
+                  <div style={{ display: "grid", justifyItems: "center", gap: "0.25rem" }}>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        sendScreenAction(isScreenBlack ? "WAITING" : "BLACK", null);
+                        setToastNotif(isScreenBlack ? "Retour au direct" : "Ecran noir");
+                        window.setTimeout(() => setToastNotif(null), 2200);
+                      }}
+                      style={{
+                        ...btnGhost,
+                        minHeight: "2.6rem",
+                        minWidth: "112px",
+                        padding: "0.5rem 0.75rem",
+                        borderColor: "#334155",
+                        background: "#1e293b",
+                        color: "#f8fafc",
+                        fontWeight: 700,
+                        fontSize: "0.78rem",
+                      }}
+                    >
+                      {isScreenBlack
+                        ? "↩ Retour direct"
+                        : "⏹ Écran noir"}
+                    </button>
+                    <span
+                      aria-hidden
+                      style={{
+                        width: "8px",
+                        height: "8px",
+                        borderRadius: "9999px",
+                        background:
+                          String(projectionDisplayStateUi || "").toLowerCase() === "black"
+                            ? "#22c55e"
+                            : "#cbd5e1",
+                        boxShadow:
+                          String(projectionDisplayStateUi || "").toLowerCase() === "black"
+                            ? "0 0 0 3px rgba(34,197,94,0.18)"
+                            : "none",
+                      }}
+                    />
+                  </div>
                   <span
                     style={{
                       display: "inline-flex",
