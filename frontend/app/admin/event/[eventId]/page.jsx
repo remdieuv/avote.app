@@ -4508,6 +4508,7 @@ export default function RegieEventPage() {
       ));
   const eventLocked = Boolean(eventData?.isLocked);
   const inTestMode = eventData?.isLiveConsumed === false;
+  const canStartReal = inTestMode && !eventLocked;
   const canGoNext = !busy && !eventFinished && totalQuestions > 0 && !eventLocked;
 
   /** Ne jamais déduire « open » depuis liveState : lecture seule du champ API (+ défaut fermé si absent). */
@@ -4539,6 +4540,19 @@ export default function RegieEventPage() {
   const statePanel = getEventUxPanelStyles(ux.key);
   const sceneBadge = getEventUxSceneBadgeFromKey(ux.key);
   const pilotageTag = ux.label;
+  const modeBadge = inTestMode
+    ? {
+        label: "MODE TEST",
+        bg: "#fee2e2",
+        color: "#991b1b",
+        border: "#fecaca",
+      }
+    : {
+        label: eventLocked ? "MODE RÉEL • VERROUILLÉ" : "MODE RÉEL",
+        bg: "#dcfce7",
+        color: "#166534",
+        border: "#bbf7d0",
+      };
 
   const voteLabel =
     VOTE_STATE_LABELS[voteStateUi] ?? String(voteStateUi).toUpperCase();
@@ -5859,6 +5873,24 @@ export default function RegieEventPage() {
                 }}
               >
                 <span
+                  title="Mode business de l'événement"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.35rem",
+                    borderRadius: "999px",
+                    padding: "0.2rem 0.55rem",
+                    fontSize: "0.74rem",
+                    fontWeight: 900,
+                    border: `1px solid ${modeBadge.border}`,
+                    background: modeBadge.bg,
+                    color: modeBadge.color,
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  {modeBadge.label}
+                </span>
+                <span
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -6262,61 +6294,6 @@ export default function RegieEventPage() {
                       ? "↩ Retour direct"
                       : "⏹ Écran noir"}
                   </button>
-                  {inTestMode ? (
-                    <button
-                      type="button"
-                      disabled={busy || eventLocked}
-                      onClick={async () => {
-                        if (!eventId) return;
-                        const ok = window.confirm(
-                          "Vous allez démarrer l’événement réel.\n\nCela consommera votre événement. Après la fin, il ne pourra plus être rejoué gratuitement.",
-                        );
-                        if (!ok) return;
-                        await postAction(
-                          `/events/${eventId}/start-real`,
-                          "Mode réel en cours",
-                        );
-                      }}
-                      style={{
-                        padding: "0.5rem 0.8rem",
-                        fontSize: "0.8rem",
-                        minHeight: "2.6rem",
-                        minWidth: "210px",
-                        borderRadius: "10px",
-                        border: "1px solid #0f172a",
-                        background: busy
-                          ? "#e2e8f0"
-                          : "linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%)",
-                        color: "#fff",
-                        fontWeight: 800,
-                        boxShadow: busy ? "none" : "0 2px 10px rgba(2,132,199,0.25)",
-                        cursor: busy ? "not-allowed" : "pointer",
-                      }}
-                    >
-                      ▶ Démarrer l’événement réel
-                    </button>
-                  ) : eventLocked ? null : (
-                    <div
-                      style={{
-                        minHeight: "2.6rem",
-                        minWidth: "210px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        padding: "0 0.75rem",
-                        borderRadius: "10px",
-                        border: "1px solid rgba(2,132,199,0.45)",
-                        background: "rgba(14,165,233,0.14)",
-                        color: "#075985",
-                        fontWeight: 900,
-                        letterSpacing: "0.02em",
-                        fontSize: "0.78rem",
-                      }}
-                      aria-hidden
-                    >
-                      ✅ Mode réel en cours
-                    </div>
-                  )}
                   <button
                     type="button"
                     disabled={!canGoNext}
@@ -6690,6 +6667,41 @@ export default function RegieEventPage() {
                 />
               ) : null}
             </div>
+              {canStartReal ? (
+                <div style={{ marginTop: "0.62rem" }}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={async () => {
+                      if (!eventId) return;
+                      const ok = window.confirm(
+                        "Vous allez démarrer l’événement réel.\n\nCela consommera votre événement. Après la fin, il ne pourra plus être rejoué gratuitement.",
+                      );
+                      if (!ok) return;
+                      await postAction(
+                        `/events/${eventId}/start-real`,
+                        "Mode réel en cours",
+                      );
+                    }}
+                    style={{
+                      padding: "0.48rem 0.8rem",
+                      fontSize: "0.78rem",
+                      minHeight: "2.2rem",
+                      borderRadius: "10px",
+                      border: "1px solid #0f172a",
+                      background: busy
+                        ? "#e2e8f0"
+                        : "linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%)",
+                      color: "#fff",
+                      fontWeight: 800,
+                      boxShadow: busy ? "none" : "0 2px 10px rgba(2,132,199,0.25)",
+                      cursor: busy ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    ▶ Démarrer l’événement réel
+                  </button>
+                </div>
+              ) : null}
           </div>
           {desktop && eventData.slug ? (
             <div id="regie-overlay-panel">
