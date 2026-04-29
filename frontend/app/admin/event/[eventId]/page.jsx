@@ -4162,7 +4162,18 @@ export default function RegieEventPage() {
         setScreenBDisplayState(
           /** @type {"question" | "results" | "waiting" | "black"} */ (dsRaw),
         );
+        return;
       }
+      // Projection principale (screenId null) : synchro immédiate de l'état écran
+      // sans attendre un refetch complet de l'événement.
+      setEventData((prev) =>
+        prev
+          ? {
+              ...prev,
+              screenDisplayState: dsRaw,
+            }
+          : prev,
+      );
     }
 
     function onLive(payload) {
