@@ -6471,6 +6471,47 @@ export default function RegieEventPage() {
                     ⏹ Terminer
                   </button>
                 </div>
+                {String(displayStateUi || "").toLowerCase() === "black" ? (
+                  <div
+                    style={{
+                      marginTop: "0.5rem",
+                      border: "1px solid #334155",
+                      background: "linear-gradient(180deg, #111827 0%, #0f172a 100%)",
+                      borderRadius: "10px",
+                      padding: "0.55rem 0.65rem",
+                      display: "flex",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "0.55rem",
+                    }}
+                  >
+                    <span style={{ color: "#e2e8f0", fontSize: "0.8rem", fontWeight: 800 }}>
+                      ⚫ Écran noir actif
+                    </span>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        sendScreenAction("WAITING", null);
+                        setToastNotif("Sortie de l’écran noir");
+                        window.setTimeout(() => setToastNotif(null), 2200);
+                      }}
+                      style={{
+                        ...btnGhost,
+                        minHeight: "2.1rem",
+                        padding: "0.38rem 0.7rem",
+                        borderColor: "#93c5fd",
+                        background: "#eff6ff",
+                        color: "#1e3a8a",
+                        fontWeight: 800,
+                        fontSize: "0.76rem",
+                      }}
+                    >
+                      ↩ Quitter l’écran noir
+                    </button>
+                  </div>
+                ) : null}
             </div>
           </div>
 
