@@ -6,6 +6,7 @@ const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
+const rateLimit = require("express-rate-limit");
 const { Server } = require("socket.io");
 const cookieParser = require("cookie-parser");
 const { prisma } = require("./lib/prisma");
@@ -106,6 +107,13 @@ const uploadMiddleware = multer({
 
 const app = express();
 app.set("trust proxy", 1);
+
+const voteLimiter = rateLimit({
+  windowMs: 1000,
+  max: 1,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const allowedOrigins = [
   "http://localhost:3000",
@@ -424,116 +432,134 @@ async function loadPublicPollByIdForEventSlug(slug, pollId) {
 }
 
 async function submitVote(input) {
-  const poll = await prisma.poll.findUnique({
-    where: { id: input.pollId },
-    include: {
-      options: true,
-      votes: true,
-      event: true,
-    },
-  });
-
-  if (!poll) {
-    return { ok: false, message: "Sondage introuvable." };
-  }
-
-  if (Boolean(poll.event?.isLocked)) {
-    return {
-      ok: false,
-      locked: true,
-      message: "Cet événement est terminé et ne peut plus accepter de votes.",
-    };
-  }
-
-  const eventId = String(poll.eventId || "").trim();
-  if (!eventId) {
-    return { ok: false, message: "Événement introuvable." };
-  }
-
-  const participantExistsOnEvent = await prisma.vote.findFirst({
-    where: {
-      voterSessionId: input.voterSessionId,
-      poll: { eventId },
-    },
-    select: { id: true },
-  });
-
-  if (!participantExistsOnEvent) {
-    const distinctParticipants = await prisma.vote.findMany({
-      where: { poll: { eventId } },
-      distinct: ["voterSessionId"],
-      select: { voterSessionId: true },
+  return prisma.$transaction(async (tx) => {
+    const poll = await tx.poll.findUnique({
+      where: { id: input.pollId },
+      include: {
+        options: true,
+        event: {
+          select: {
+            id: true,
+            isLocked: true,
+            participantsLimit: true,
+            voteState: true,
+          },
+        },
+      },
     });
-    const participantsUsed = distinctParticipants.length;
-    const participantsLimit = Math.max(
-      1,
-      Number(poll.event?.participantsLimit || 500),
-    );
-    if (participantsUsed >= participantsLimit) {
-      await prisma.event.update({
-        where: { id: eventId },
-        data: { isLocked: true },
-      });
+
+    if (!poll) {
+      return { ok: false, message: "Sondage introuvable." };
+    }
+
+    const eventId = String(poll.eventId || "").trim();
+    if (!eventId) {
+      return { ok: false, message: "Événement introuvable." };
+    }
+
+    // Verrou logique par événement pour sérialiser le contrôle de capacité.
+    await tx.$executeRaw`SELECT 1 FROM "Event" WHERE "id" = ${eventId} FOR UPDATE`;
+
+    const event = await tx.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true,
+        isLocked: true,
+        participantsLimit: true,
+        voteState: true,
+      },
+    });
+    if (!event) {
+      return { ok: false, message: "Événement introuvable." };
+    }
+    if (Boolean(event.isLocked)) {
       return {
         ok: false,
-        limitReached: true,
-        message: "Limite de participants atteinte",
+        locked: true,
+        message: "Cet événement est terminé et ne peut plus accepter de votes.",
       };
     }
-  }
 
-  if (String(poll.event.voteState).toUpperCase() !== "OPEN") {
-    return {
-      ok: false,
-      message: "Le vote n'est pas ouvert pour cet événement.",
-    };
-  }
+    if (String(event.voteState).toUpperCase() !== "OPEN") {
+      return {
+        ok: false,
+        message: "Le vote n'est pas ouvert pour cet événement.",
+      };
+    }
 
-  if (poll.status !== "ACTIVE") {
-    return { ok: false, message: "Ce sondage n'est pas ouvert au vote." };
-  }
+    if (poll.status !== "ACTIVE") {
+      return { ok: false, message: "Ce sondage n'est pas ouvert au vote." };
+    }
 
-  const existing = await prisma.vote.findFirst({
-    where: {
-      pollId: input.pollId,
-      voterSessionId: input.voterSessionId,
-    },
+    const existing = await tx.vote.findFirst({
+      where: {
+        pollId: input.pollId,
+        voterSessionId: input.voterSessionId,
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      return {
+        ok: false,
+        alreadyVoted: true,
+        message: "Vous avez déjà voté pour ce sondage.",
+      };
+    }
+
+    const allowed = new Set(poll.options.map((option) => option.id));
+    const cleaned = [...new Set(input.optionIds)].filter((id) => allowed.has(id));
+
+    if (cleaned.length === 0) {
+      return {
+        ok: false,
+        message: "Aucune réponse valide sélectionnée.",
+      };
+    }
+
+    if (poll.type !== "MULTIPLE_CHOICE" && cleaned.length > 1) {
+      return {
+        ok: false,
+        message: "Une seule réponse est autorisée pour ce sondage.",
+      };
+    }
+
+    const participantExistsOnEvent = await tx.vote.findFirst({
+      where: {
+        voterSessionId: input.voterSessionId,
+        poll: { eventId },
+      },
+      select: { id: true },
+    });
+
+    if (!participantExistsOnEvent) {
+      const participantsUsed = await tx.vote.count({
+        where: { poll: { eventId } },
+        distinct: ["voterSessionId"],
+      });
+      const participantsLimit = Math.max(1, Number(event.participantsLimit || 500));
+      if (participantsUsed >= participantsLimit) {
+        await tx.event.update({
+          where: { id: eventId },
+          data: { isLocked: true },
+        });
+        return {
+          ok: false,
+          limitReached: true,
+          message: "Limite de participants atteinte",
+        };
+      }
+    }
+
+    await tx.vote.createMany({
+      data: cleaned.map((optionId) => ({
+        pollId: input.pollId,
+        optionId,
+        voterSessionId: input.voterSessionId,
+      })),
+    });
+
+    return { ok: true };
   });
-
-  if (existing) {
-    return {
-      ok: false,
-      alreadyVoted: true,
-      message: "Vous avez déjà voté pour ce sondage.",
-    };
-  }
-
-  const allowed = new Set(poll.options.map((option) => option.id));
-  const cleaned = [...new Set(input.optionIds)].filter((id) => allowed.has(id));
-
-  if (cleaned.length === 0) {
-    return {
-      ok: false,
-      message: "Aucune réponse valide sélectionnée.",
-    };
-  }
-
-  if (poll.type !== "MULTIPLE_CHOICE" && cleaned.length > 1) {
-    return {
-      ok: false,
-      message: "Une seule réponse est autorisée pour ce sondage.",
-    };
-  }
-
-  await prisma.vote.createMany({
-    data: cleaned.map((optionId) => ({
-      pollId: input.pollId,
-      optionId,
-      voterSessionId: input.voterSessionId,
-    })),
-  });
-
-  return { ok: true };
 }
 
 /** @param {import("socket.io").Server} io */
@@ -1034,6 +1060,33 @@ async function listEventsForAdmin(userId) {
   }));
 }
 
+/**
+ * Règle business: 1 utilisateur = 1 événement actif.
+ * Actif = isLocked === false ET liveState !== FINISHED.
+ * @param {string} userId
+ * @param {{ excludeEventId?: string | null }} [opts]
+ */
+async function getActiveEventForUser(userId, opts = {}) {
+  const uid = String(userId || "").trim();
+  if (!uid) return null;
+  const excludeEventId = String(opts.excludeEventId || "").trim();
+  return prisma.event.findFirst({
+    where: {
+      userId: uid,
+      isLocked: false,
+      liveState: { not: "FINISHED" },
+      ...(excludeEventId ? { id: { not: excludeEventId } } : {}),
+    },
+    select: {
+      id: true,
+      title: true,
+      liveState: true,
+      isLocked: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
 /** Liste des événements (admin / « Mes événements ») */
 app.get("/events", requireAuth, async (req, res) => {
   try {
@@ -1048,6 +1101,14 @@ app.get("/events", requireAuth, async (req, res) => {
 app.post("/events/:eventId/duplicate", requireAuth, async (req, res) => {
   const { eventId } = req.params;
   try {
+    const active = await getActiveEventForUser(req.userId);
+    if (active) {
+      return res.status(403).json({
+        error: "EVENT_ALREADY_ACTIVE",
+        message:
+          "Vous avez déjà un événement actif. Terminez-le avant d’en créer un nouveau.",
+      });
+    }
     const owned = await assertEventOwnedBy(eventId, req.userId);
     if (!owned.ok) {
       return res.status(owned.status).json({ error: "Événement introuvable." });
@@ -2415,6 +2476,17 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
       return res.status(owned.status).json({ error: "Événement introuvable." });
     }
 
+    const otherActive = await getActiveEventForUser(req.userId, {
+      excludeEventId: eventId,
+    });
+    if (otherActive) {
+      return res.status(403).json({
+        error: "EVENT_ALREADY_ACTIVE",
+        message:
+          "Vous avez déjà un événement actif. Terminez-le avant d’en créer un nouveau.",
+      });
+    }
+
     const eventMode = await prisma.event.findUnique({
       where: { id: eventId },
       select: { isLiveConsumed: true, isLocked: true },
@@ -2852,6 +2924,14 @@ function extraireDescriptionCreation(body) {
 app.post("/polls", requireAuth, async (req, res) => {
   try {
     const userId = req.userId;
+    const active = await getActiveEventForUser(userId);
+    if (active) {
+      return res.status(403).json({
+        error: "EVENT_ALREADY_ACTIVE",
+        message:
+          "Vous avez déjà un événement actif. Terminez-le avant d’en créer un nouveau.",
+      });
+    }
     const body = req.body ?? {};
 
     /** --- Mode multi-questions : tableau `polls` (ou `questions`) non vide --- */
@@ -3248,7 +3328,7 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/polls/:pollId/vote", async (req, res) => {
+app.post("/polls/:pollId/vote", voteLimiter, async (req, res) => {
   const pollId = req.params.pollId;
   const body = req.body ?? {};
 
