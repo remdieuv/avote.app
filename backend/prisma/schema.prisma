@@ -133,6 +133,8 @@ model Event {
   consumedAt DateTime?
   /** Verrou après fin réelle : empêche tout rejouage / relance en usage réel. */
   isLocked Boolean @default(false)
+  /** Limite business de participants uniques (voterSessionId) sur l'événement. */
+  participantsLimit Int @default(500)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 

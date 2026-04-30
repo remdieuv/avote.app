@@ -437,6 +437,51 @@ async function submitVote(input) {
     return { ok: false, message: "Sondage introuvable." };
   }
 
+  if (Boolean(poll.event?.isLocked)) {
+    return {
+      ok: false,
+      locked: true,
+      message: "Cet événement est terminé et ne peut plus accepter de votes.",
+    };
+  }
+
+  const eventId = String(poll.eventId || "").trim();
+  if (!eventId) {
+    return { ok: false, message: "Événement introuvable." };
+  }
+
+  const participantExistsOnEvent = await prisma.vote.findFirst({
+    where: {
+      voterSessionId: input.voterSessionId,
+      poll: { eventId },
+    },
+    select: { id: true },
+  });
+
+  if (!participantExistsOnEvent) {
+    const distinctParticipants = await prisma.vote.findMany({
+      where: { poll: { eventId } },
+      distinct: ["voterSessionId"],
+      select: { voterSessionId: true },
+    });
+    const participantsUsed = distinctParticipants.length;
+    const participantsLimit = Math.max(
+      1,
+      Number(poll.event?.participantsLimit || 500),
+    );
+    if (participantsUsed >= participantsLimit) {
+      await prisma.event.update({
+        where: { id: eventId },
+        data: { isLocked: true },
+      });
+      return {
+        ok: false,
+        limitReached: true,
+        message: "Limite de participants atteinte",
+      };
+    }
+  }
+
   if (String(poll.event.voteState).toUpperCase() !== "OPEN") {
     return {
       ok: false,
@@ -1502,6 +1547,11 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
       return res.status(404).json({ error: "Événement introuvable." });
     }
     await repairStaleVotingLiveState(event);
+    const participantsDistinct = await prisma.vote.findMany({
+      where: { poll: { eventId: event.id } },
+      distinct: ["voterSessionId"],
+      select: { voterSessionId: true },
+    });
     return res.json({
       id: event.id,
       title: event.title,
@@ -1515,6 +1565,8 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
         ? String(event.screenDisplayState).toLowerCase()
         : null,
       activePollId: event.activePollId,
+      participantsLimit: Number(event.participantsLimit || 500),
+      participantsUsed: participantsDistinct.length,
       isLiveConsumed: Boolean(event.isLiveConsumed),
       isLocked: Boolean(event.isLocked),
       autoReveal: event.autoReveal,
@@ -3254,6 +3306,18 @@ app.post("/polls/:pollId/vote", async (req, res) => {
 
       void emitPollUpdated(io, pollId);
       return;
+    }
+
+    if (result.limitReached) {
+      return res
+        .status(403)
+        .json({ error: "LIMIT_REACHED", message: "Limite de participants atteinte" });
+    }
+    if (result.locked) {
+      return res.status(403).json({
+        error: "EVENT_LOCKED",
+        message: result.message || "Cet événement est verrouillé.",
+      });
     }
 
     const status = result.alreadyVoted ? 409 : 400;
