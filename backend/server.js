@@ -1021,6 +1021,7 @@ async function listEventsForAdmin(userId) {
       title: true,
       slug: true,
       createdAt: true,
+      participantsLimit: true,
       liveState: true,
       voteState: true,
       displayState: true,
@@ -1069,6 +1070,8 @@ async function listEventsForAdmin(userId) {
     pollCount: e.polls.length,
     voteCount: votesByEventId.get(e.id) || 0,
     participantCount: participantsByEventId.get(e.id)?.size || 0,
+    participantsUsed: participantsByEventId.get(e.id)?.size || 0,
+    participantsLimit: Number(e.participantsLimit || 500),
   }));
 }
 
