@@ -85,16 +85,48 @@ export function EventDashboardCard({
       : null;
   const participantsUsed =
     typeof ev.participantsUsed === "number" && !Number.isNaN(ev.participantsUsed)
-      ? ev.participantsUsed
+      ? Math.max(0, ev.participantsUsed)
       : null;
   const participantsLimit =
     typeof ev.participantsLimit === "number" && !Number.isNaN(ev.participantsLimit)
-      ? ev.participantsLimit
+      ? Math.max(1, ev.participantsLimit)
       : null;
+  const hasParticipantsLimit = participantsLimit !== null;
+  const safeParticipantsUsed = participantsUsed ?? 0;
+  const participantsProgressRatio = hasParticipantsLimit
+    ? safeParticipantsUsed / participantsLimit
+    : null;
+  const participantsProgressPercent = participantsProgressRatio !== null
+    ? Math.max(0, Math.min(100, Math.round(participantsProgressRatio * 100)))
+    : 0;
+  const participantsTone =
+    participantsProgressRatio === null || participantsProgressRatio < 0.8
+      ? "neutral"
+      : participantsProgressRatio < 1
+        ? "soft"
+        : "strong";
   const participantsLine =
-    participantsUsed !== null && participantsLimit !== null
-      ? `${participantsUsed} / ${participantsLimit} participants`
-      : "Participants : —";
+    participantsLimit === null
+      ? "Participants non disponibles"
+      : `${safeParticipantsUsed} / ${participantsLimit} participants`;
+  const participantsHint =
+    participantsProgressRatio === null || participantsProgressRatio < 0.8
+      ? ""
+      : participantsProgressRatio < 1
+        ? `⚠️ Plus que ${Math.max(0, participantsLimit - safeParticipantsUsed)} places restantes`
+        : "🚫 Limite atteinte — nouveaux participants bloqués";
+  const participantsTrackColor =
+    participantsTone === "strong"
+      ? "#fecaca"
+      : participantsTone === "soft"
+        ? "#fde68a"
+        : "#dbeafe";
+  const participantsFillColor =
+    participantsTone === "strong"
+      ? "#dc2626"
+      : participantsTone === "soft"
+        ? "#d97706"
+        : "#2563eb";
 
   const metaParts = [];
   if (pc !== null) {
@@ -215,6 +247,43 @@ export function EventDashboardCard({
       >
         {participantsLine}
       </p>
+      {hasParticipantsLimit ? (
+        <div style={{ margin: "-0.45rem 0 0.75rem" }}>
+          <div
+            style={{
+              width: "100%",
+              height: "7px",
+              borderRadius: "999px",
+              background: participantsTrackColor,
+              overflow: "hidden",
+            }}
+            aria-hidden
+          >
+            <div
+              style={{
+                width: `${participantsProgressPercent}%`,
+                height: "100%",
+                borderRadius: "999px",
+                background: participantsFillColor,
+                transition: "width 220ms ease",
+              }}
+            />
+          </div>
+          {participantsHint ? (
+            <p
+              style={{
+                margin: "0.38rem 0 0",
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                color: participantsTone === "strong" ? "#b91c1c" : "#92400e",
+                lineHeight: 1.3,
+              }}
+            >
+              {participantsHint}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {!ev._localOnly && ev.slug ? (
         <p

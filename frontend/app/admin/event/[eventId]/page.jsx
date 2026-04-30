@@ -4628,17 +4628,27 @@ export default function RegieEventPage() {
     typeof eventData?.participantsLimit === "number" && !Number.isNaN(eventData.participantsLimit)
       ? Math.max(1, eventData.participantsLimit)
       : null;
-  const hasParticipantsCounter =
-    participantsUsedValue !== null && participantsLimitValue !== null;
-  const participantsRatio = hasParticipantsCounter
-    ? participantsUsedValue / participantsLimitValue
+  const hasParticipantsLimit = participantsLimitValue !== null;
+  const effectiveParticipantsUsed = participantsUsedValue ?? 0;
+  const participantsRatio = hasParticipantsLimit
+    ? effectiveParticipantsUsed / participantsLimitValue
+    : null;
+  const participantsProgressPercent = participantsRatio !== null
+    ? Math.max(0, Math.min(100, Math.round(participantsRatio * 100)))
     : 0;
   const participantsStatus =
-    !hasParticipantsCounter || participantsRatio < 0.8
+    participantsRatio === null || participantsRatio < 0.8
       ? { tone: "neutral", message: "" }
       : participantsRatio < 1
-        ? { tone: "soft", message: "Limite bientôt atteinte" }
-        : { tone: "strong", message: "Limite atteinte" };
+        ? {
+            tone: "soft",
+            message: `⚠️ Plus que ${Math.max(0, participantsLimitValue - effectiveParticipantsUsed)} places restantes`,
+          }
+        : { tone: "strong", message: "🚫 Limite atteinte — nouveaux participants bloqués" };
+  const participantsCounterLabel =
+    participantsLimitValue == null
+      ? "Participants non disponibles"
+      : `Participants : ${effectiveParticipantsUsed} / ${participantsLimitValue}`;
   const participantsCounterStyle =
     participantsStatus.tone === "strong"
       ? {
@@ -4660,6 +4670,18 @@ export default function RegieEventPage() {
             valueColor: "#1e3a8a",
             hintColor: "#475569",
           };
+  const participantsTrackColor =
+    participantsStatus.tone === "strong"
+      ? "#fecaca"
+      : participantsStatus.tone === "soft"
+        ? "#fde68a"
+        : "#dbeafe";
+  const participantsFillColor =
+    participantsStatus.tone === "strong"
+      ? "#dc2626"
+      : participantsStatus.tone === "soft"
+        ? "#d97706"
+        : "#2563eb";
   const ecranLabel = activePoll
     ? activePoll.question || activePoll.title
     : eventLocked
@@ -5908,10 +5930,30 @@ export default function RegieEventPage() {
                       lineHeight: 1.2,
                     }}
                   >
-                    {hasParticipantsCounter
-                      ? `Participants : ${participantsUsedValue} / ${participantsLimitValue}`
-                      : "Participants : —"}
+                    {participantsCounterLabel}
                   </span>
+                  {hasParticipantsLimit ? (
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "7px",
+                        borderRadius: "999px",
+                        background: participantsTrackColor,
+                        overflow: "hidden",
+                      }}
+                      aria-hidden
+                    >
+                      <div
+                        style={{
+                          width: `${participantsProgressPercent}%`,
+                          height: "100%",
+                          borderRadius: "999px",
+                          background: participantsFillColor,
+                          transition: "width 220ms ease",
+                        }}
+                      />
+                    </div>
+                  ) : null}
                   {participantsStatus.message ? (
                     <span
                       style={{
@@ -5924,6 +5966,16 @@ export default function RegieEventPage() {
                       {participantsStatus.message}
                     </span>
                   ) : null}
+                  <span
+                    style={{
+                      fontSize: "0.64rem",
+                      fontWeight: 500,
+                      color: "#64748b",
+                      lineHeight: 1.25,
+                    }}
+                  >
+                    Chaque participant est compté une seule fois, même s’il répond à plusieurs questions.
+                  </span>
                 </div>
               </div>
             )}
@@ -6009,10 +6061,30 @@ export default function RegieEventPage() {
                       lineHeight: 1.2,
                     }}
                   >
-                    {hasParticipantsCounter
-                      ? `Participants : ${participantsUsedValue} / ${participantsLimitValue}`
-                      : "Participants : —"}
+                    {participantsCounterLabel}
                   </span>
+                  {hasParticipantsLimit ? (
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "6px",
+                        borderRadius: "999px",
+                        background: participantsTrackColor,
+                        overflow: "hidden",
+                      }}
+                      aria-hidden
+                    >
+                      <div
+                        style={{
+                          width: `${participantsProgressPercent}%`,
+                          height: "100%",
+                          borderRadius: "999px",
+                          background: participantsFillColor,
+                          transition: "width 220ms ease",
+                        }}
+                      />
+                    </div>
+                  ) : null}
                   {participantsStatus.message ? (
                     <span
                       style={{
@@ -6025,6 +6097,17 @@ export default function RegieEventPage() {
                       {participantsStatus.message}
                     </span>
                   ) : null}
+                  <span
+                    style={{
+                      fontSize: "0.6rem",
+                      fontWeight: 500,
+                      color: "#64748b",
+                      lineHeight: 1.25,
+                      textAlign: "center",
+                    }}
+                  >
+                    Chaque participant est compté une seule fois, même s’il répond à plusieurs questions.
+                  </span>
                 </div>
               </div>
             )}
