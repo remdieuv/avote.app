@@ -110,7 +110,7 @@ app.set("trust proxy", 1);
 
 const voteLimiter = rateLimit({
   windowMs: 1000,
-  max: 1,
+  max: 5,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -451,6 +451,7 @@ async function submitVote(input) {
     if (!poll) {
       return { ok: false, message: "Sondage introuvable." };
     }
+    await tx.$executeRaw`SELECT 1 FROM "Poll" WHERE "id" = ${input.pollId} FOR UPDATE`;
 
     const eventId = String(poll.eventId || "").trim();
     if (!eventId) {
@@ -550,13 +551,24 @@ async function submitVote(input) {
       }
     }
 
-    await tx.vote.createMany({
-      data: cleaned.map((optionId) => ({
-        pollId: input.pollId,
-        optionId,
-        voterSessionId: input.voterSessionId,
-      })),
-    });
+    try {
+      await tx.vote.createMany({
+        data: cleaned.map((optionId) => ({
+          pollId: input.pollId,
+          optionId,
+          voterSessionId: input.voterSessionId,
+        })),
+      });
+    } catch (err) {
+      if (err?.code === "P2002") {
+        return {
+          ok: false,
+          alreadyVoted: true,
+          message: "Vous avez déjà voté pour ce sondage.",
+        };
+      }
+      throw err;
+    }
 
     return { ok: true };
   });
@@ -1087,6 +1099,33 @@ async function getActiveEventForUser(userId, opts = {}) {
   });
 }
 
+/**
+ * Version transactionnelle de la règle "1 user = 1 event actif".
+ * @param {import("@prisma/client").Prisma.TransactionClient} tx
+ * @param {string} userId
+ * @param {{ excludeEventId?: string | null }} [opts]
+ */
+async function getActiveEventForUserTx(tx, userId, opts = {}) {
+  const uid = String(userId || "").trim();
+  if (!uid) return null;
+  const excludeEventId = String(opts.excludeEventId || "").trim();
+  return tx.event.findFirst({
+    where: {
+      userId: uid,
+      isLocked: false,
+      liveState: { not: "FINISHED" },
+      ...(excludeEventId ? { id: { not: excludeEventId } } : {}),
+    },
+    select: {
+      id: true,
+      title: true,
+      liveState: true,
+      isLocked: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
 /** Liste des événements (admin / « Mes événements ») */
 app.get("/events", requireAuth, async (req, res) => {
   try {
@@ -1131,6 +1170,13 @@ app.post("/events/:eventId/duplicate", requireAuth, async (req, res) => {
 
     const slug = await slugEvenementUnique();
     const duplicated = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT 1 FROM "User" WHERE "id" = ${req.userId} FOR UPDATE`;
+      const activeInTx = await getActiveEventForUserTx(tx, req.userId);
+      if (activeInTx) {
+        const err = new Error("EVENT_ALREADY_ACTIVE");
+        err.code = "EVENT_ALREADY_ACTIVE";
+        throw err;
+      }
       const event = await tx.event.create({
         data: {
           userId: req.userId,
@@ -1222,6 +1268,13 @@ app.post("/events/:eventId/duplicate", requireAuth, async (req, res) => {
       },
     });
   } catch (e) {
+    if (e?.code === "EVENT_ALREADY_ACTIVE") {
+      return res.status(403).json({
+        error: "EVENT_ALREADY_ACTIVE",
+        message:
+          "Vous avez déjà un événement actif. Terminez-le avant d’en créer un nouveau.",
+      });
+    }
     console.error("events/:eventId/duplicate", e);
     return res.status(500).json({ error: "Erreur serveur." });
   }
@@ -2924,14 +2977,6 @@ function extraireDescriptionCreation(body) {
 app.post("/polls", requireAuth, async (req, res) => {
   try {
     const userId = req.userId;
-    const active = await getActiveEventForUser(userId);
-    if (active) {
-      return res.status(403).json({
-        error: "EVENT_ALREADY_ACTIVE",
-        message:
-          "Vous avez déjà un événement actif. Terminez-le avant d’en créer un nouveau.",
-      });
-    }
     const body = req.body ?? {};
 
     /** --- Mode multi-questions : tableau `polls` (ou `questions`) non vide --- */
@@ -3017,6 +3062,13 @@ app.post("/polls", requireAuth, async (req, res) => {
       const slug = await slugEvenementUnique();
 
       const firstPollId = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT 1 FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
+        const activeInTx = await getActiveEventForUserTx(tx, userId);
+        if (activeInTx) {
+          const err = new Error("EVENT_ALREADY_ACTIVE");
+          err.code = "EVENT_ALREADY_ACTIVE";
+          throw err;
+        }
         const event = await tx.event.create({
           data: {
             userId,
@@ -3154,66 +3206,81 @@ app.post("/polls", requireAuth, async (req, res) => {
     const slug = await slugEvenementUnique();
     const descriptionInit = extraireDescriptionCreation(body);
 
-    const event = await prisma.event.create({
-      data: {
-        userId,
-        title: titleTrim,
-        slug,
-        description: descriptionInit,
-        status: "PUBLISHED",
-        /** Régie : sondage actif affichable, vote fermé jusqu’à POST /polls/:id/open */
-        liveState: "WAITING",
-        voteState: "CLOSED",
-        displayState: "WAITING",
-      },
-    });
-
-    const poll = await prisma.poll.create({
-      data: {
-        eventId: event.id,
-        title: questionTrim,
-        question: questionTrim,
-        contestPrize: pollTypeParsed === "CONTEST_ENTRY" ? contestPrize : null,
-        contestWinnerCount:
-          pollTypeParsed === "CONTEST_ENTRY" ? contestWinnerCount : 1,
-        type: pollTypeParsed === "LEAD" ? "SINGLE_CHOICE" : pollTypeParsed,
-        leadEnabled: requiresFormOnPositiveAnswer(pollTypeParsed),
-        status: "ACTIVE",
-        order: 0,
-        options: {
-          create: labels.map((label, order) => ({
-            label,
-            order,
-            isCorrect:
-              pollTypeParsed === "QUIZ" ? order === quizCorrectOrder : false,
-          })),
+    const pollId = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT 1 FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
+      const activeInTx = await getActiveEventForUserTx(tx, userId);
+      if (activeInTx) {
+        const err = new Error("EVENT_ALREADY_ACTIVE");
+        err.code = "EVENT_ALREADY_ACTIVE";
+        throw err;
+      }
+      const event = await tx.event.create({
+        data: {
+          userId,
+          title: titleTrim,
+          slug,
+          description: descriptionInit,
+          status: "PUBLISHED",
+          /** Régie : sondage actif affichable, vote fermé jusqu’à POST /polls/:id/open */
+          liveState: "WAITING",
+          voteState: "CLOSED",
+          displayState: "WAITING",
         },
-      },
-      include: {
-        event: true,
-        options: { orderBy: { order: "asc" } },
-        votes: true,
-      },
-    });
-    if (requiresFormOnPositiveAnswer(pollTypeParsed)) {
-      const trigger = poll.options.find((opt) => opt.order === leadTriggerOrder);
-      await prisma.poll.update({
-        where: { id: poll.id },
-        data: { leadTriggerOptionId: trigger?.id ?? poll.options[0]?.id ?? null },
       });
-    }
 
-    await prisma.event.update({
-      where: { id: event.id },
-      data: { activePollId: poll.id },
+      const poll = await tx.poll.create({
+        data: {
+          eventId: event.id,
+          title: questionTrim,
+          question: questionTrim,
+          contestPrize: pollTypeParsed === "CONTEST_ENTRY" ? contestPrize : null,
+          contestWinnerCount:
+            pollTypeParsed === "CONTEST_ENTRY" ? contestWinnerCount : 1,
+          type: pollTypeParsed === "LEAD" ? "SINGLE_CHOICE" : pollTypeParsed,
+          leadEnabled: requiresFormOnPositiveAnswer(pollTypeParsed),
+          status: "ACTIVE",
+          order: 0,
+          options: {
+            create: labels.map((label, order) => ({
+              label,
+              order,
+              isCorrect:
+                pollTypeParsed === "QUIZ" ? order === quizCorrectOrder : false,
+            })),
+          },
+        },
+        include: {
+          options: { orderBy: { order: "asc" } },
+        },
+      });
+      if (requiresFormOnPositiveAnswer(pollTypeParsed)) {
+        const trigger = poll.options.find((opt) => opt.order === leadTriggerOrder);
+        await tx.poll.update({
+          where: { id: poll.id },
+          data: { leadTriggerOptionId: trigger?.id ?? poll.options[0]?.id ?? null },
+        });
+      }
+
+      await tx.event.update({
+        where: { id: event.id },
+        data: { activePollId: poll.id },
+      });
+      return poll.id;
     });
 
-    const full = await loadPollFull(poll.id);
+    const full = await loadPollFull(pollId);
     res.status(201).json({
       ...pollToJson(full),
-      activePollId: poll.id,
+      activePollId: pollId,
     });
   } catch (e) {
+    if (e?.code === "EVENT_ALREADY_ACTIVE") {
+      return res.status(403).json({
+        error: "EVENT_ALREADY_ACTIVE",
+        message:
+          "Vous avez déjà un événement actif. Terminez-le avant d’en créer un nouveau.",
+      });
+    }
     console.error(e);
     res.status(500).json({ error: "Impossible de créer le sondage." });
   }
