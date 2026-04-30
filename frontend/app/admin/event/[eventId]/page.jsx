@@ -4620,6 +4620,46 @@ export default function RegieEventPage() {
   const canShowResultsQuick =
     canManageActivePoll && String(projectionDisplayStateUi || "").toLowerCase() !== "results";
   const isScreenBlack = String(projectionDisplayStateUi || "").toLowerCase() === "black";
+  const participantsUsedValue =
+    typeof eventData?.participantsUsed === "number" && !Number.isNaN(eventData.participantsUsed)
+      ? Math.max(0, eventData.participantsUsed)
+      : null;
+  const participantsLimitValue =
+    typeof eventData?.participantsLimit === "number" && !Number.isNaN(eventData.participantsLimit)
+      ? Math.max(1, eventData.participantsLimit)
+      : null;
+  const hasParticipantsCounter =
+    participantsUsedValue !== null && participantsLimitValue !== null;
+  const participantsRatio = hasParticipantsCounter
+    ? participantsUsedValue / participantsLimitValue
+    : 0;
+  const participantsStatus =
+    !hasParticipantsCounter || participantsRatio < 0.8
+      ? { tone: "neutral", message: "" }
+      : participantsRatio < 1
+        ? { tone: "soft", message: "Limite bientôt atteinte" }
+        : { tone: "strong", message: "Limite atteinte" };
+  const participantsCounterStyle =
+    participantsStatus.tone === "strong"
+      ? {
+          border: "1px solid #fecaca",
+          background: "#fff1f2",
+          valueColor: "#9f1239",
+          hintColor: "#b91c1c",
+        }
+      : participantsStatus.tone === "soft"
+        ? {
+            border: "1px solid #fde68a",
+            background: "#fffbeb",
+            valueColor: "#92400e",
+            hintColor: "#b45309",
+          }
+        : {
+            border: "1px solid #dbeafe",
+            background: "#eff6ff",
+            valueColor: "#1e3a8a",
+            hintColor: "#475569",
+          };
   const ecranLabel = activePoll
     ? activePoll.question || activePoll.title
     : eventLocked
@@ -5849,6 +5889,42 @@ export default function RegieEventPage() {
                     ▶ Démarrer l’événement réel
                   </button>
                 ) : null}
+                <div
+                  title="Compteur de participants uniques pour cet événement"
+                  style={{
+                    display: "inline-flex",
+                    flexDirection: "column",
+                    gap: "0.18rem",
+                    borderRadius: "10px",
+                    padding: "0.45rem 0.65rem",
+                    ...participantsCounterStyle,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.74rem",
+                      fontWeight: 800,
+                      color: participantsCounterStyle.valueColor,
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {hasParticipantsCounter
+                      ? `Participants : ${participantsUsedValue} / ${participantsLimitValue}`
+                      : "Participants : —"}
+                  </span>
+                  {participantsStatus.message ? (
+                    <span
+                      style={{
+                        fontSize: "0.68rem",
+                        fontWeight: 700,
+                        color: participantsCounterStyle.hintColor,
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      {participantsStatus.message}
+                    </span>
+                  ) : null}
+                </div>
               </div>
             )}
 
@@ -5913,6 +5989,43 @@ export default function RegieEventPage() {
                     ▶ Démarrer réel
                   </button>
                 ) : null}
+                <div
+                  title="Compteur de participants uniques pour cet événement"
+                  style={{
+                    display: "inline-flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: "0.16rem",
+                    borderRadius: "10px",
+                    padding: "0.36rem 0.62rem",
+                    ...participantsCounterStyle,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.7rem",
+                      fontWeight: 800,
+                      color: participantsCounterStyle.valueColor,
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {hasParticipantsCounter
+                      ? `Participants : ${participantsUsedValue} / ${participantsLimitValue}`
+                      : "Participants : —"}
+                  </span>
+                  {participantsStatus.message ? (
+                    <span
+                      style={{
+                        fontSize: "0.64rem",
+                        fontWeight: 700,
+                        color: participantsCounterStyle.hintColor,
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      {participantsStatus.message}
+                    </span>
+                  ) : null}
+                </div>
               </div>
             )}
 

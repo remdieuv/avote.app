@@ -18,6 +18,8 @@ import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
  *     pollCount?: number;
  *     voteCount?: number;
  *     participantCount?: number;
+ *     participantsUsed?: number | null;
+ *     participantsLimit?: number | null;
  *     _localOnly?: boolean;
  *   };
  *   featured?: boolean;
@@ -81,6 +83,18 @@ export function EventDashboardCard({
     !Number.isNaN(ev.participantCount)
       ? ev.participantCount
       : null;
+  const participantsUsed =
+    typeof ev.participantsUsed === "number" && !Number.isNaN(ev.participantsUsed)
+      ? ev.participantsUsed
+      : null;
+  const participantsLimit =
+    typeof ev.participantsLimit === "number" && !Number.isNaN(ev.participantsLimit)
+      ? ev.participantsLimit
+      : null;
+  const participantsLine =
+    participantsUsed !== null && participantsLimit !== null
+      ? `${participantsUsed} / ${participantsLimit} participants`
+      : "Participants : —";
 
   const metaParts = [];
   if (pc !== null) {
@@ -191,6 +205,16 @@ export function EventDashboardCard({
           {metaLine}
         </p>
       ) : null}
+      <p
+        style={{
+          margin: metaLine ? "0 0 0.8rem" : "0.1rem 0 0.8rem",
+          fontSize: "0.8rem",
+          color: "#334155",
+          fontWeight: 700,
+        }}
+      >
+        {participantsLine}
+      </p>
 
       {!ev._localOnly && ev.slug ? (
         <p

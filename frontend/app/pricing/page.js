@@ -4,7 +4,7 @@ import { LandingHeader } from "@/components/landing/LandingHeader";
 export const metadata = {
   title: "Tarifs Avote | Vote interactif en direct",
   description:
-    "Des tarifs simples pour vos événements en direct. Testez gratuitement Avote, puis choisissez l'offre adaptée à votre audience.",
+    "Des tarifs simples pour vos événements en direct. Créez votre événement avec une capacité claire et un paiement unique.",
 };
 
 const shell = {
@@ -262,10 +262,10 @@ const launchPlan = {
   badge: "Offre de lancement",
   featured: true,
   launchCard: true,
-  discoveryTag: "Premier événement à 19€ pour tester Avote. Puis 49€ / événement.",
+  discoveryTag: "Premier événement à 19€. Puis 49€ par événement jusqu’à 500 participants uniques.",
   features: [
-    "1 événement complet",
-    "Jusqu’à 1 000 participants en direct",
+    "Jusqu’à 500 participants uniques",
+    "Un seul paiement. Aucun abonnement.",
     "QR code + lien d’accès rapide",
     "Votes et résultats en temps réel",
     "Projection écran (salle / OBS)",
@@ -376,6 +376,8 @@ export default function PricingPage() {
                     <br />
                     Une offre claire pour démarrer vite : 49€ / événement.{" "}
                     <strong>Et pour le lancement, votre premier événement est à 19€.</strong>
+                    <br />
+                    Puis 49€ par événement jusqu&apos;à 500 participants uniques.
                   </>
                 )
                 : "Payez une seule fois pour un événement, ou choisissez un abonnement mensuel si vous utilisez Avote régulièrement."}

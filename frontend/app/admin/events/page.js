@@ -57,6 +57,10 @@ function normalizeEventRow(e) {
     voteCount: typeof e.voteCount === "number" ? e.voteCount : 0,
     participantCount:
       typeof e.participantCount === "number" ? e.participantCount : 0,
+    participantsUsed:
+      typeof e.participantsUsed === "number" ? e.participantsUsed : null,
+    participantsLimit:
+      typeof e.participantsLimit === "number" ? e.participantsLimit : null,
     voteState:
       typeof e.voteState === "string" && e.voteState.trim()
         ? String(e.voteState).toLowerCase()
