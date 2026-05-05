@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LandingHeader } from "@/components/landing/LandingHeader";
+import { CheckoutEventButton } from "@/components/billing/CheckoutEventButton";
 
 export const metadata = {
   title: "Tarifs Avote | Vote interactif en direct",
@@ -307,7 +308,12 @@ function PlanCard({ plan }) {
         ))}
       </ul>
       <div className="pricing-card-cta">
-        {isExternal ? (
+        {plan.key === "launch-pro-event" ? (
+          <CheckoutEventButton
+            label={plan.cta}
+            style={plan.featured ? btnPrimary : btnSecondary}
+          />
+        ) : isExternal ? (
           <a href={plan.href} style={plan.featured ? btnPrimary : btnSecondary}>
             {plan.cta}
           </a>
@@ -392,9 +398,7 @@ export default function PricingPage() {
             <div className="pricing-hero-cta">
               {isLaunchMode ? (
                 <div style={{ display: "grid", gap: "0.55rem", justifyItems: "center" }}>
-                  <a href={launchPlan.href} style={btnPrimary}>
-                    Créer mon événement
-                  </a>
+                  <CheckoutEventButton label="Créer mon événement" style={btnPrimary} />
                   <p
                     style={{
                       margin: 0,

@@ -11,6 +11,7 @@ import {
   formatCountdownVerbose,
 } from "@/lib/chronoFormat";
 import { AjouterQuestionLiveModal } from "@/components/AjouterQuestionLiveModal";
+import { CheckoutEventButton } from "@/components/billing/CheckoutEventButton";
 import { adminFetch, apiBaseBrowser, SOCKET_URL as SOCKET } from "@/lib/config";
 import {
   getEventUxPanelStyles,
@@ -5997,8 +5998,8 @@ export default function RegieEventPage() {
                         : "Ce lancement consommera 1 crédit événement."}
                     </span>
                     {hasCreditsValue && !hasEventCredit ? (
-                      <Link
-                        href="/pricing"
+                      <CheckoutEventButton
+                        label="Acheter 1 événement (49€)"
                         style={{
                           display: "inline-flex",
                           alignItems: "center",
@@ -6013,9 +6014,7 @@ export default function RegieEventPage() {
                           fontWeight: 800,
                           textDecoration: "none",
                         }}
-                      >
-                        Acheter 1 événement (49€)
-                      </Link>
+                      />
                     ) : null}
                   </div>
                 ) : null}
@@ -6189,8 +6188,8 @@ export default function RegieEventPage() {
                         : "Ce lancement consommera 1 crédit événement."}
                     </span>
                     {hasCreditsValue && !hasEventCredit ? (
-                      <Link
-                        href="/pricing"
+                      <CheckoutEventButton
+                        label="Acheter 1 événement (49€)"
                         style={{
                           display: "inline-flex",
                           alignItems: "center",
@@ -6205,9 +6204,7 @@ export default function RegieEventPage() {
                           fontWeight: 800,
                           textDecoration: "none",
                         }}
-                      >
-                        Acheter 1 événement (49€)
-                      </Link>
+                      />
                     ) : null}
                   </div>
                 ) : null}
