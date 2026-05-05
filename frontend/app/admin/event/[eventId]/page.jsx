@@ -5930,7 +5930,7 @@ export default function RegieEventPage() {
                     onClick={async () => {
                       if (!eventId) return;
                       const ok = window.confirm(
-                        "Vous allez démarrer l’événement réel.\n\nCela consommera votre événement. Après la fin, il ne pourra plus être rejoué gratuitement.",
+                        "Vous allez démarrer l’événement réel.\n\nCela consommera 1 crédit événement. Après la fin, cet événement ne pourra plus être rejoué gratuitement.",
                       );
                       if (!ok) return;
                       await postAction(
@@ -6061,7 +6061,7 @@ export default function RegieEventPage() {
                     onClick={async () => {
                       if (!eventId) return;
                       const ok = window.confirm(
-                        "Vous allez démarrer l’événement réel.\n\nCela consommera votre événement. Après la fin, il ne pourra plus être rejoué gratuitement.",
+                        "Vous allez démarrer l’événement réel.\n\nCela consommera 1 crédit événement. Après la fin, cet événement ne pourra plus être rejoué gratuitement.",
                       );
                       if (!ok) return;
                       await postAction(
