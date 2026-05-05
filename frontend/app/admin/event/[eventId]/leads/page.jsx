@@ -7,6 +7,15 @@ import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
 const LEADS_LAST_SEEN_LS_PREFIX = "avote_leads_seen_at_";
 
+function mapApiError(body, status) {
+  const code = String(body?.error || "").trim();
+  const message = typeof body?.message === "string" ? body.message.trim() : "";
+  if (code === "EVENT_ALREADY_ACTIVE") {
+    return "Vous avez déjà un événement actif. Terminez-le avant d’en créer un nouveau.";
+  }
+  return message || code || `Erreur ${status}`;
+}
+
 const CARD = {
   background: "#fff",
   border: "1px solid #e2e8f0",
@@ -59,7 +68,7 @@ export default function EventLeadsPage() {
           `${apiBaseBrowser()}/events/${eventId}/leads${qs ? `?${qs}` : ""}`,
         );
         const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(body.error || `Erreur ${res.status}`);
+        if (!res.ok) throw new Error(mapApiError(body, res.status));
         setRows(Array.isArray(body) ? body : []);
       } catch (e) {
         setRows([]);

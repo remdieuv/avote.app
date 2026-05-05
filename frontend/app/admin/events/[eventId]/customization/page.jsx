@@ -12,6 +12,15 @@ import {
 import { resolveApiAssetUrl } from "@/lib/assetUrl";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
+function mapApiError(body, status, fallbackPrefix = "Erreur") {
+  const code = String(body?.error || "").trim();
+  const message = typeof body?.message === "string" ? body.message.trim() : "";
+  if (code === "EVENT_ALREADY_ACTIVE") {
+    return "Vous avez déjà un événement actif. Terminez-le avant d’en créer un nouveau.";
+  }
+  return message || code || `${fallbackPrefix} ${status}`;
+}
+
 const card = {
   background: "#fff",
   borderRadius: "14px",
@@ -326,7 +335,7 @@ export default function EventCustomizationPage() {
       );
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(body.error || `Upload ${res.status}`);
+        throw new Error(mapApiError(body, res.status, "Upload"));
       }
       if (typeof body.url !== "string") {
         throw new Error("Réponse serveur invalide.");
@@ -400,7 +409,7 @@ export default function EventCustomizationPage() {
       );
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(body.error || `Erreur ${res.status}`);
+        throw new Error(mapApiError(body, res.status));
       }
       setToast("Personnalisation enregistrée");
       window.setTimeout(() => setToast(null), 3200);

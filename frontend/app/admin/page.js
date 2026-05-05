@@ -380,7 +380,15 @@ export default function AdminPage() {
       });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || `Erreur ${res.status}`);
+        const code = String(errBody?.error || "").trim();
+        const serverMessage =
+          typeof errBody?.message === "string" ? errBody.message.trim() : "";
+        if (code === "EVENT_ALREADY_ACTIVE") {
+          throw new Error(
+            "Vous avez déjà un événement actif. Terminez-le avant d’en créer un nouveau.",
+          );
+        }
+        throw new Error(serverMessage || code || `Erreur ${res.status}`);
       }
       const created = await res.json();
       const eventId = created.eventId;

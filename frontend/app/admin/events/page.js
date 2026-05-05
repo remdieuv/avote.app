@@ -18,6 +18,15 @@ import { getEventUxState } from "@/lib/eventUxState";
 
 const LEADS_LAST_SEEN_LS_PREFIX = "avote_leads_seen_at_";
 
+function mapApiError(body, status) {
+  const code = String(body?.error || "").trim();
+  const message = typeof body?.message === "string" ? body.message.trim() : "";
+  if (code === "EVENT_ALREADY_ACTIVE") {
+    return "Vous avez déjà un événement actif. Terminez-le avant d’en créer un nouveau.";
+  }
+  return message || code || `Erreur ${status}`;
+}
+
 function formatEventDate(iso, fallbackLabel) {
   if (!iso) return fallbackLabel ?? "—";
   try {
@@ -58,7 +67,11 @@ function normalizeEventRow(e) {
     participantCount:
       typeof e.participantCount === "number" ? e.participantCount : 0,
     participantsUsed:
-      typeof e.participantsUsed === "number" ? e.participantsUsed : null,
+      typeof e.participantsUsed === "number"
+        ? e.participantsUsed
+        : typeof e.participantCount === "number"
+          ? e.participantCount
+          : null,
     participantsLimit:
       typeof e.participantsLimit === "number" ? e.participantsLimit : null,
     voteState:
@@ -162,7 +175,7 @@ export default function AdminEventsPage() {
         );
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
-          throw new Error(body?.error || `Erreur ${res.status}`);
+          throw new Error(mapApiError(body, res.status));
         }
         await load();
         setToastMsg("Événement dupliqué");
@@ -193,7 +206,7 @@ export default function AdminEventsPage() {
         );
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
-          throw new Error(body?.error || `Erreur ${res.status}`);
+          throw new Error(mapApiError(body, res.status));
         }
         await load();
         setToastMsg("Événement supprimé");

@@ -4,6 +4,15 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
+function mapApiError(body, status) {
+  const code = String(body?.error || "").trim();
+  const message = typeof body?.message === "string" ? body.message.trim() : "";
+  if (code === "EVENT_ALREADY_ACTIVE") {
+    return "Vous avez déjà un événement actif. Terminez-le avant d’en créer un nouveau.";
+  }
+  return message || code || `Erreur ${status}`;
+}
+
 const CARD = {
   background: "#fff",
   border: "1px solid #e2e8f0",
@@ -36,7 +45,7 @@ export default function AdminAccountAnalyticsPage() {
       try {
         const res = await adminFetch(`${apiBaseBrowser()}/analytics/account${qs ? `?${qs}` : ""}`);
         const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(body.error || `Erreur ${res.status}`);
+        if (!res.ok) throw new Error(mapApiError(body, res.status));
         setData(body);
       } catch (e) {
         setData(null);
@@ -51,7 +60,7 @@ export default function AdminAccountAnalyticsPage() {
     try {
       const res = await adminFetch(`${apiBaseBrowser()}/analytics/account/share-links`);
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || `Erreur ${res.status}`);
+      if (!res.ok) throw new Error(mapApiError(body, res.status));
       setShareLinks(Array.isArray(body.links) ? body.links : []);
     } catch {
       setShareLinks([]);
@@ -95,7 +104,7 @@ export default function AdminAccountAnalyticsPage() {
         }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || `Erreur ${res.status}`);
+      if (!res.ok) throw new Error(mapApiError(body, res.status));
       const url = `${window.location.origin}${body.readonlyUrl}`;
       setShareUrl(url);
       setShareExpiresAt(body.expiresAt || "");
@@ -120,7 +129,7 @@ export default function AdminAccountAnalyticsPage() {
         { method: "POST" },
       );
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || `Erreur ${res.status}`);
+      if (!res.ok) throw new Error(mapApiError(body, res.status));
       await loadShareLinks();
     } catch (e) {
       setError(e.message || "Révocation impossible.");

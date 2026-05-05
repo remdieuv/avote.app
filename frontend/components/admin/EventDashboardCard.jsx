@@ -78,11 +78,13 @@ export function EventDashboardCard({
     typeof ev.voteCount === "number" && !Number.isNaN(ev.voteCount)
       ? ev.voteCount
       : null;
-  const part =
-    typeof ev.participantCount === "number" &&
-    !Number.isNaN(ev.participantCount)
-      ? ev.participantCount
-      : null;
+  const partRaw =
+    typeof ev.participantsUsed === "number" && !Number.isNaN(ev.participantsUsed)
+      ? ev.participantsUsed
+      : typeof ev.participantCount === "number" && !Number.isNaN(ev.participantCount)
+        ? ev.participantCount
+        : null;
+  const part = partRaw !== null ? Math.max(0, partRaw) : null;
   const participantsUsed =
     typeof ev.participantsUsed === "number" && !Number.isNaN(ev.participantsUsed)
       ? Math.max(0, ev.participantsUsed)

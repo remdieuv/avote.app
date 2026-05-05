@@ -4,6 +4,15 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
+function mapApiError(body, status) {
+  const code = String(body?.error || "").trim();
+  const message = typeof body?.message === "string" ? body.message.trim() : "";
+  if (code === "EVENT_ALREADY_ACTIVE") {
+    return "Vous avez déjà un événement actif. Terminez-le avant d’en créer un nouveau.";
+  }
+  return message || code || `Erreur ${status}`;
+}
+
 const CARD = {
   background: "#fff",
   border: "1px solid #e2e8f0",
@@ -43,7 +52,7 @@ export default function MesLeadsPage() {
       );
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(body.error || `Erreur ${res.status}`);
+        throw new Error(mapApiError(body, res.status));
       }
       setRows(Array.isArray(body.leads) ? body.leads : []);
       setEvents(Array.isArray(body.events) ? body.events : []);

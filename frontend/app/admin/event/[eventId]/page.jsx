@@ -35,6 +35,18 @@ const DISPLAY_STATE_LABELS = {
 const AUTO_ROTATE_SEC_MIN = 3;
 const AUTO_ROTATE_SEC_MAX = 120;
 
+function mapApiError(body, status) {
+  const code = String(body?.error || "").trim();
+  const message = typeof body?.message === "string" ? body.message.trim() : "";
+  if (code === "EVENT_ALREADY_ACTIVE") {
+    return "Vous avez déjà un événement actif. Terminez-le avant d’en créer un nouveau.";
+  }
+  if (code === "NO_EVENT_CREDIT") {
+    return "Vous n’avez plus de crédit événement. Achetez un événement pour lancer le live réel.";
+  }
+  return message || code || `Erreur ${status}`;
+}
+
 /** @param {unknown} n */
 function clampAutoRotateSec(n) {
   const x =
@@ -3900,7 +3912,7 @@ export default function RegieEventPage() {
         const body = await res.json().catch(() => ({}));
         if (cancelled) return;
         if (!res.ok) {
-          setContestEligibleError(body?.error || `Erreur ${res.status}`);
+          setContestEligibleError(mapApiError(body, res.status));
           return;
         }
         const n =
@@ -4336,7 +4348,7 @@ export default function RegieEventPage() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(body.error || `Erreur ${res.status}`);
+        throw new Error(mapApiError(body, res.status));
       }
       await fetchEvent({ silent: true });
       if (successMessage) {
@@ -4383,7 +4395,7 @@ export default function RegieEventPage() {
       );
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(body?.error || `Erreur ${res.status}`);
+        throw new Error(mapApiError(body, res.status));
       }
       setEditPollModalOpen(false);
       setEditingPoll(null);
@@ -4411,7 +4423,7 @@ export default function RegieEventPage() {
       );
       const out = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(out.error || `Erreur ${res.status}`);
+        throw new Error(mapApiError(out, res.status));
       }
       if (out.questionTimer !== undefined) {
         setEventData((prev) =>
@@ -4459,7 +4471,7 @@ export default function RegieEventPage() {
       );
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(body.error || `Erreur ${res.status}`);
+        throw new Error(mapApiError(body, res.status));
       }
       const winner = Array.isArray(body?.winners) ? body.winners[0] : null;
       setContestDrawResult({
@@ -5274,9 +5286,43 @@ export default function RegieEventPage() {
         </p>
       ) : null}
       {actionError ? (
-        <p style={{ padding: "0 1rem", color: "#b91c1c" }} role="alert">
-          {actionError}
-        </p>
+        <div
+          style={{
+            margin: "0 1rem 0.35rem",
+            padding: "0.55rem 0.7rem",
+            borderRadius: "10px",
+            border: "1px solid #fecaca",
+            background: "#fff1f2",
+            color: "#b91c1c",
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: "0.55rem",
+          }}
+          role="alert"
+        >
+          <span style={{ fontSize: "0.86rem", fontWeight: 700 }}>{actionError}</span>
+          {String(actionError).includes("Vous n’avez plus de crédit événement") ? (
+            <Link
+              href="/pricing"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "0.34rem 0.65rem",
+                borderRadius: "8px",
+                border: "1px solid #fca5a5",
+                background: "#fff",
+                color: "#b91c1c",
+                fontSize: "0.78rem",
+                fontWeight: 800,
+                textDecoration: "none",
+              }}
+            >
+              Acheter un événement
+            </Link>
+          ) : null}
+        </div>
       ) : null}
 
       {toastNotif ? (

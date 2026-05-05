@@ -5,6 +5,15 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
+function mapApiError(body, status) {
+  const code = String(body?.error || "").trim();
+  const message = typeof body?.message === "string" ? body.message.trim() : "";
+  if (code === "EVENT_ALREADY_ACTIVE") {
+    return "Vous avez déjà un événement actif. Terminez-le avant d’en créer un nouveau.";
+  }
+  return message || code || `Erreur ${status}`;
+}
+
 const CARD = {
   background: "#fff",
   border: "1px solid #e2e8f0",
@@ -86,7 +95,7 @@ export default function EventAnalyticsPage() {
       try {
         const res = await adminFetch(`${apiBaseBrowser()}/events/${eventId}/analytics`);
         const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(body.error || `Erreur ${res.status}`);
+        if (!res.ok) throw new Error(mapApiError(body, res.status));
         setData(body);
       } catch (e) {
         setData(null);
@@ -126,7 +135,7 @@ export default function EventAnalyticsPage() {
           `${apiBaseBrowser()}/events/${eventId}/analytics/v2${qs ? `?${qs}` : ""}`,
         );
         const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(body.error || `Erreur ${res.status}`);
+        if (!res.ok) throw new Error(mapApiError(body, res.status));
         setV2Data(body);
       } catch (e) {
         setV2Data(null);

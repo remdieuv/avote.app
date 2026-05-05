@@ -984,13 +984,19 @@ app.get("/auth/me", async (req, res) => {
     }
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, email: true, role: true },
+      select: { id: true, email: true, role: true, eventCredits: true },
     });
     if (!user) {
       clearAuthCookie(res);
       return res.status(401).json({ error: "Compte introuvable." });
     }
-    return res.json({ user });
+    return res.json({
+      user: {
+        ...user,
+        eventCredits: Math.max(0, Number(user.eventCredits || 0)),
+      },
+      eventCredits: Math.max(0, Number(user.eventCredits || 0)),
+    });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Erreur serveur." });
@@ -1075,60 +1081,6 @@ async function listEventsForAdmin(userId) {
   }));
 }
 
-/**
- * Règle business: 1 utilisateur = 1 événement actif.
- * Actif = isLocked === false ET liveState !== FINISHED.
- * @param {string} userId
- * @param {{ excludeEventId?: string | null }} [opts]
- */
-async function getActiveEventForUser(userId, opts = {}) {
-  const uid = String(userId || "").trim();
-  if (!uid) return null;
-  const excludeEventId = String(opts.excludeEventId || "").trim();
-  return prisma.event.findFirst({
-    where: {
-      userId: uid,
-      isLocked: false,
-      liveState: { not: "FINISHED" },
-      ...(excludeEventId ? { id: { not: excludeEventId } } : {}),
-    },
-    select: {
-      id: true,
-      title: true,
-      liveState: true,
-      isLocked: true,
-    },
-    orderBy: { createdAt: "desc" },
-  });
-}
-
-/**
- * Version transactionnelle de la règle "1 user = 1 event actif".
- * @param {import("@prisma/client").Prisma.TransactionClient} tx
- * @param {string} userId
- * @param {{ excludeEventId?: string | null }} [opts]
- */
-async function getActiveEventForUserTx(tx, userId, opts = {}) {
-  const uid = String(userId || "").trim();
-  if (!uid) return null;
-  const excludeEventId = String(opts.excludeEventId || "").trim();
-  return tx.event.findFirst({
-    where: {
-      userId: uid,
-      isLocked: false,
-      liveState: { not: "FINISHED" },
-      ...(excludeEventId ? { id: { not: excludeEventId } } : {}),
-    },
-    select: {
-      id: true,
-      title: true,
-      liveState: true,
-      isLocked: true,
-    },
-    orderBy: { createdAt: "desc" },
-  });
-}
-
 /** Liste des événements (admin / « Mes événements ») */
 app.get("/events", requireAuth, async (req, res) => {
   try {
@@ -1143,14 +1095,6 @@ app.get("/events", requireAuth, async (req, res) => {
 app.post("/events/:eventId/duplicate", requireAuth, async (req, res) => {
   const { eventId } = req.params;
   try {
-    const active = await getActiveEventForUser(req.userId);
-    if (active) {
-      return res.status(403).json({
-        error: "EVENT_ALREADY_ACTIVE",
-        message:
-          "Vous avez déjà un événement actif. Terminez-le avant d’en créer un nouveau.",
-      });
-    }
     const owned = await assertEventOwnedBy(eventId, req.userId);
     if (!owned.ok) {
       return res.status(owned.status).json({ error: "Événement introuvable." });
@@ -1173,13 +1117,6 @@ app.post("/events/:eventId/duplicate", requireAuth, async (req, res) => {
 
     const slug = await slugEvenementUnique();
     const duplicated = await prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT 1 FROM "User" WHERE "id" = ${req.userId} FOR UPDATE`;
-      const activeInTx = await getActiveEventForUserTx(tx, req.userId);
-      if (activeInTx) {
-        const err = new Error("EVENT_ALREADY_ACTIVE");
-        err.code = "EVENT_ALREADY_ACTIVE";
-        throw err;
-      }
       const event = await tx.event.create({
         data: {
           userId: req.userId,
@@ -1271,13 +1208,6 @@ app.post("/events/:eventId/duplicate", requireAuth, async (req, res) => {
       },
     });
   } catch (e) {
-    if (e?.code === "EVENT_ALREADY_ACTIVE") {
-      return res.status(403).json({
-        error: "EVENT_ALREADY_ACTIVE",
-        message:
-          "Vous avez déjà un événement actif. Terminez-le avant d’en créer un nouveau.",
-      });
-    }
     console.error("events/:eventId/duplicate", e);
     return res.status(500).json({ error: "Erreur serveur." });
   }
@@ -1334,6 +1264,7 @@ app.get("/internal/users", requireAuth, requireAdmin, async (_req, res) => {
       select: {
         id: true,
         email: true,
+        eventCredits: true,
         role: true,
         createdAt: true,
         _count: { select: { events: true } },
@@ -1344,6 +1275,7 @@ app.get("/internal/users", requireAuth, requireAdmin, async (_req, res) => {
         id: u.id,
         email: u.email,
         role: u.role ?? "USER",
+        eventCredits: Math.max(0, Number(u.eventCredits || 0)),
         createdAt: u.createdAt,
         eventCount: u._count?.events ?? 0,
       })),
@@ -1381,6 +1313,56 @@ app.patch(
         return res.status(404).json({ error: "Utilisateur introuvable." });
       }
       console.error("internal/users/:userId/role", e);
+      return res.status(500).json({ error: "Erreur serveur." });
+    }
+  },
+);
+
+app.patch(
+  "/internal/users/:userId/event-credits",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const { userId } = req.params;
+    const body = req.body ?? {};
+    const rawDelta = Number(body.delta);
+    const delta = Number.isFinite(rawDelta) ? Math.trunc(rawDelta) : NaN;
+    if (!Number.isFinite(delta) || delta === 0) {
+      return res.status(400).json({
+        error: "Delta invalide. Fournissez un entier non nul (positif ou négatif).",
+      });
+    }
+    try {
+      const updated = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT 1 FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
+        const current = await tx.user.findUnique({
+          where: { id: userId },
+          select: { id: true, email: true, role: true, eventCredits: true, createdAt: true },
+        });
+        if (!current) {
+          const err = new Error("USER_NOT_FOUND");
+          err.code = "USER_NOT_FOUND";
+          throw err;
+        }
+        const nextCredits = Math.max(0, Number(current.eventCredits || 0) + delta);
+        return tx.user.update({
+          where: { id: userId },
+          data: { eventCredits: nextCredits },
+          select: { id: true, email: true, role: true, eventCredits: true, createdAt: true },
+        });
+      });
+      return res.json({
+        ok: true,
+        user: {
+          ...updated,
+          eventCredits: Math.max(0, Number(updated.eventCredits || 0)),
+        },
+      });
+    } catch (e) {
+      if (e?.code === "USER_NOT_FOUND") {
+        return res.status(404).json({ error: "Utilisateur introuvable." });
+      }
+      console.error("internal/users/:userId/event-credits", e);
       return res.status(500).json({ error: "Erreur serveur." });
     }
   },
@@ -2527,46 +2509,92 @@ app.post("/events/:eventId/finish", requireAuth, async (req, res) => {
 app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
   const { eventId } = req.params;
   try {
-    const owned = await assertEventOwnedBy(eventId, req.userId);
-    if (!owned.ok) {
-      return res.status(owned.status).json({ error: "Événement introuvable." });
-    }
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT 1 FROM "User" WHERE "id" = ${req.userId} FOR UPDATE`;
+      await tx.$executeRaw`SELECT 1 FROM "Event" WHERE "id" = ${eventId} FOR UPDATE`;
 
-    const otherActive = await getActiveEventForUser(req.userId, {
-      excludeEventId: eventId,
-    });
-    if (otherActive) {
-      return res.status(403).json({
-        error: "EVENT_ALREADY_ACTIVE",
-        message:
-          "Vous avez déjà un événement actif. Terminez-le avant d’en créer un nouveau.",
+      const event = await tx.event.findUnique({
+        where: { id: eventId },
+        select: {
+          id: true,
+          userId: true,
+          isLiveConsumed: true,
+          isLocked: true,
+          consumedAt: true,
+          participantsLimit: true,
+        },
       });
-    }
+      if (!event || String(event.userId || "") !== String(req.userId || "")) {
+        const err = new Error("EVENT_NOT_FOUND");
+        err.code = "EVENT_NOT_FOUND";
+        throw err;
+      }
+      if (event.isLocked) {
+        const err = new Error("EVENT_LOCKED");
+        err.code = "EVENT_LOCKED";
+        throw err;
+      }
+      if (event.isLiveConsumed) {
+        const err = new Error("EVENT_ALREADY_CONSUMED");
+        err.code = "EVENT_ALREADY_CONSUMED";
+        throw err;
+      }
 
-    const eventMode = await prisma.event.findUnique({
-      where: { id: eventId },
-      select: { isLiveConsumed: true, isLocked: true },
+      const user = await tx.user.findUnique({
+        where: { id: req.userId },
+        select: { eventCredits: true },
+      });
+      const creditsBefore = Math.max(0, Number(user?.eventCredits || 0));
+      if (creditsBefore <= 0) {
+        const err = new Error("NO_EVENT_CREDIT");
+        err.code = "NO_EVENT_CREDIT";
+        throw err;
+      }
+
+      const remainingCredits = creditsBefore - 1;
+      await tx.user.update({
+        where: { id: req.userId },
+        data: { eventCredits: remainingCredits },
+      });
+      const updatedEvent = await tx.event.update({
+        where: { id: eventId },
+        data: {
+          isLiveConsumed: true,
+          consumedAt: new Date(),
+          isLocked: false,
+        },
+        select: {
+          id: true,
+          isLiveConsumed: true,
+          consumedAt: true,
+          isLocked: true,
+          participantsLimit: true,
+        },
+      });
+      return { updatedEvent, remainingCredits };
     });
-
-    if (eventMode?.isLocked) {
+    await emitEventLiveUpdated(io, eventId);
+    return res.json({
+      ok: true,
+      event: result.updatedEvent,
+      eventCredits: result.remainingCredits,
+    });
+  } catch (e) {
+    if (e?.code === "EVENT_NOT_FOUND") {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+    if (e?.code === "EVENT_LOCKED") {
       return res.status(403).json({ error: "Cet événement est terminé et verrouillé." });
     }
-    if (eventMode?.isLiveConsumed) {
+    if (e?.code === "EVENT_ALREADY_CONSUMED") {
       return res.status(403).json({ error: "Mode réel déjà démarré pour cet événement." });
     }
-
-    await prisma.event.update({
-      where: { id: eventId },
-      data: {
-        isLiveConsumed: true,
-        consumedAt: new Date(),
-        isLocked: false,
-      },
-    });
-
-    await emitEventLiveUpdated(io, eventId);
-    return res.json({ success: true });
-  } catch (e) {
+    if (e?.code === "NO_EVENT_CREDIT") {
+      return res.status(402).json({
+        error: "NO_EVENT_CREDIT",
+        message: "Vous devez acheter un événement pour lancer le live réel.",
+      });
+    }
     console.error("events/:eventId/start-real", e);
     return res.status(500).json({ error: "Erreur serveur." });
   }
@@ -3065,13 +3093,6 @@ app.post("/polls", requireAuth, async (req, res) => {
       const slug = await slugEvenementUnique();
 
       const firstPollId = await prisma.$transaction(async (tx) => {
-        await tx.$executeRaw`SELECT 1 FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
-        const activeInTx = await getActiveEventForUserTx(tx, userId);
-        if (activeInTx) {
-          const err = new Error("EVENT_ALREADY_ACTIVE");
-          err.code = "EVENT_ALREADY_ACTIVE";
-          throw err;
-        }
         const event = await tx.event.create({
           data: {
             userId,
@@ -3210,13 +3231,6 @@ app.post("/polls", requireAuth, async (req, res) => {
     const descriptionInit = extraireDescriptionCreation(body);
 
     const pollId = await prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT 1 FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
-      const activeInTx = await getActiveEventForUserTx(tx, userId);
-      if (activeInTx) {
-        const err = new Error("EVENT_ALREADY_ACTIVE");
-        err.code = "EVENT_ALREADY_ACTIVE";
-        throw err;
-      }
       const event = await tx.event.create({
         data: {
           userId,
@@ -3277,13 +3291,6 @@ app.post("/polls", requireAuth, async (req, res) => {
       activePollId: pollId,
     });
   } catch (e) {
-    if (e?.code === "EVENT_ALREADY_ACTIVE") {
-      return res.status(403).json({
-        error: "EVENT_ALREADY_ACTIVE",
-        message:
-          "Vous avez déjà un événement actif. Terminez-le avant d’en créer un nouveau.",
-      });
-    }
     console.error(e);
     res.status(500).json({ error: "Impossible de créer le sondage." });
   }
