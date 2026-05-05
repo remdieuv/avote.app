@@ -1,10 +1,39 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useAdminUser } from "@/components/admin/AdminUserContext";
+import { CheckoutEventButton } from "@/components/billing/CheckoutEventButton";
+import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
 export default function AdminAccountPage() {
   const { user } = useAdminUser();
+  const [eventCredits, setEventCredits] = useState(/** @type {number | null} */ (null));
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await adminFetch(`${apiBaseBrowser()}/auth/me`, { cache: "no-store" });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok || cancelled) return;
+        const raw =
+          typeof body?.eventCredits === "number"
+            ? body.eventCredits
+            : typeof body?.user?.eventCredits === "number"
+              ? body.user.eventCredits
+              : null;
+        if (!cancelled) {
+          setEventCredits(raw == null ? null : Math.max(0, Number(raw)));
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <main
@@ -51,6 +80,35 @@ export default function AdminAccountPage() {
           <span style={{ color: "#64748b", fontWeight: 600 }}>E-mail : </span>
           {user?.email ?? "—"}
         </p>
+        <p style={{ margin: "0.7rem 0 0", color: "#0f172a", fontSize: "1rem", fontWeight: 800 }}>
+          {`Crédits disponibles : ${
+            typeof eventCredits === "number" && !Number.isNaN(eventCredits)
+              ? eventCredits
+              : "—"
+          }`}
+        </p>
+        <p style={{ margin: "0.35rem 0 0", color: "#64748b", fontSize: "0.84rem", fontWeight: 700 }}>
+          1 événement réel = 49€ jusqu’à 500 participants.
+        </p>
+        <div style={{ marginTop: "0.9rem", maxWidth: "320px" }}>
+          <CheckoutEventButton
+            label="Acheter un événement (49€)"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "0.6rem 0.95rem",
+              borderRadius: "10px",
+              border: "1px solid #7c3aed",
+              background: "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)",
+              color: "#fff",
+              fontWeight: 800,
+              fontSize: "0.86rem",
+              textDecoration: "none",
+              boxShadow: "0 8px 20px rgba(124,58,237,0.22)",
+            }}
+          />
+        </div>
       </section>
     </main>
   );
