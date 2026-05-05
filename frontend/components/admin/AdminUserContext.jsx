@@ -2,7 +2,7 @@
 
 import { createContext, useContext } from "react";
 
-/** @type {React.Context<{ user: { id: string; email: string } | null; logout: () => Promise<void> } | null>} */
+/** @type {React.Context<{ user: { id: string; email: string; eventCredits?: number | null } | null; logout: () => Promise<void> } | null>} */
 const AdminUserContext = createContext(null);
 
 export function useAdminUser() {

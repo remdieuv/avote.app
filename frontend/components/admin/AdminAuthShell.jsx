@@ -12,7 +12,9 @@ import { AdminUserContext } from "./AdminUserContext";
 export function AdminAuthShell({ children }) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
-  const [user, setUser] = useState(/** @type {{ id: string; email: string } | null} */ (null));
+  const [user, setUser] = useState(
+    /** @type {{ id: string; email: string; eventCredits?: number | null } | null} */ (null),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -36,7 +38,20 @@ export function AdminAuthShell({ children }) {
           typeof u.id === "string" &&
           typeof u.email === "string"
         ) {
-          setUser({ id: u.id, email: u.email });
+          const creditsRaw =
+            typeof data?.eventCredits === "number"
+              ? data.eventCredits
+              : typeof u?.eventCredits === "number"
+                ? u.eventCredits
+                : null;
+          setUser({
+            id: u.id,
+            email: u.email,
+            eventCredits:
+              creditsRaw == null || Number.isNaN(Number(creditsRaw))
+                ? null
+                : Math.max(0, Number(creditsRaw)),
+          });
           setReady(true);
           return;
         }

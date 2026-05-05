@@ -104,6 +104,25 @@ export function AdminAccountMenu() {
           >
             {user?.email}
           </div>
+          <div
+            style={{
+              margin: "-0.05rem 0.85rem 0.45rem",
+              padding: "0.28rem 0.45rem",
+              borderRadius: "8px",
+              border: "1px solid #dbeafe",
+              background: "#eff6ff",
+              color: "#1e3a8a",
+              fontSize: "0.72rem",
+              fontWeight: 800,
+            }}
+            title="Crédits événement disponibles"
+          >
+            {`Crédit dispo. ${
+              typeof user?.eventCredits === "number" && !Number.isNaN(user.eventCredits)
+                ? user.eventCredits
+                : "—"
+            }`}
+          </div>
           <Link
             role="menuitem"
             href="/admin/account"
