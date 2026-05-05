@@ -7,6 +7,7 @@ const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
 const rateLimit = require("express-rate-limit");
+const Stripe = require("stripe");
 const { Server } = require("socket.io");
 const cookieParser = require("cookie-parser");
 const { prisma } = require("./lib/prisma");
@@ -122,6 +123,17 @@ const allowedOrigins = [
 ].filter(Boolean);
 
 const PORT = process.env.PORT || 4000;
+
+let stripeClient = null;
+function getStripeClient() {
+  if (stripeClient) return stripeClient;
+  const secret = String(process.env.STRIPE_SECRET_KEY || "").trim();
+  if (!secret) {
+    throw new Error("STRIPE_SECRET_KEY manquant.");
+  }
+  stripeClient = new Stripe(secret, { apiVersion: "2025-04-30.basil" });
+  return stripeClient;
+}
 
 /**
  * Ancien champ liveState dérivé pour compat (chrono, clients legacy).
@@ -848,6 +860,39 @@ async function passerAuSondageSuivant(eventId) {
   };
 }
 
+async function handleCheckoutCompleted(session) {
+  const stripeSessionId = String(session?.id || "").trim();
+  const userId = String(session?.metadata?.userId || "").trim();
+  const creditsRaw = Number(session?.metadata?.credits);
+  const credits = Number.isFinite(creditsRaw) ? Math.max(1, Math.trunc(creditsRaw)) : 1;
+  const amount = Number.isFinite(Number(session?.amount_total))
+    ? Math.max(0, Math.trunc(Number(session.amount_total)))
+    : 0;
+  if (!stripeSessionId || !userId) return;
+
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.payment.findUnique({
+      where: { stripeSessionId },
+      select: { id: true },
+    });
+    if (existing) return;
+
+    await tx.user.update({
+      where: { id: userId },
+      data: { eventCredits: { increment: credits } },
+    });
+    await tx.payment.create({
+      data: {
+        userId,
+        stripeSessionId,
+        amount,
+        credits,
+      },
+    });
+  });
+  console.log("User crédité:", userId);
+}
+
 app.use(
   cors({
     origin: allowedOrigins,
@@ -855,6 +900,34 @@ app.use(
   }),
 );
 app.use(cookieParser());
+app.post("/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+  const webhookSecret = String(process.env.STRIPE_WEBHOOK_SECRET || "").trim();
+  if (!webhookSecret) {
+    return res.status(500).send("STRIPE_WEBHOOK_SECRET manquant");
+  }
+  const signature = req.headers["stripe-signature"];
+  if (!signature || typeof signature !== "string") {
+    return res.status(400).send("Signature Stripe manquante");
+  }
+
+  let event;
+  try {
+    event = getStripeClient().webhooks.constructEvent(req.body, signature, webhookSecret);
+  } catch (err) {
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  console.log("Stripe webhook reçu:", event.type);
+  try {
+    if (event.type === "checkout.session.completed") {
+      await handleCheckoutCompleted(event.data.object);
+    }
+    return res.json({ received: true });
+  } catch (err) {
+    console.error("stripe/webhook", err);
+    return res.status(500).send("Erreur webhook");
+  }
+});
 app.use(express.json({ limit: "1mb" }));
 
 function requireAuth(req, res, next) {
@@ -1000,6 +1073,35 @@ app.get("/auth/me", async (req, res) => {
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+app.post("/billing/create-checkout-session", requireAuth, async (req, res) => {
+  try {
+    const priceId = String(process.env.STRIPE_PRICE_EVENT_1 || "").trim();
+    const clientUrl = String(process.env.CLIENT_URL || "").trim();
+    if (!priceId) {
+      return res.status(500).json({ error: "STRIPE_PRICE_EVENT_1 manquant." });
+    }
+    if (!clientUrl) {
+      return res.status(500).json({ error: "CLIENT_URL manquant." });
+    }
+
+    const session = await getStripeClient().checkout.sessions.create({
+      mode: "payment",
+      line_items: [{ price: priceId, quantity: 1 }],
+      metadata: {
+        userId: String(req.userId || ""),
+        credits: "1",
+      },
+      success_url: `${clientUrl.replace(/\/$/, "")}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${clientUrl.replace(/\/$/, "")}/pricing`,
+    });
+
+    return res.json({ url: session.url });
+  } catch (e) {
+    console.error("billing/create-checkout-session", e);
+    return res.status(500).json({ error: "Impossible de créer la session de paiement." });
   }
 });
 

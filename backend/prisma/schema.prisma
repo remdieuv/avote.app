@@ -78,6 +78,7 @@ model User {
   events       Event[]
   contestDraws ContestDraw[] @relation("ContestDrawCreatedBy")
   reportShareTokens AccountReportShareToken[]
+  payments     Payment[]
 }
 
 model Event {
@@ -266,4 +267,17 @@ model AccountReportShareToken {
 
   @@index([userId, createdAt])
   @@index([userId, revokedAt, expiresAt])
+}
+
+model Payment {
+  id              String   @id @default(cuid())
+  userId          String
+  stripeSessionId String   @unique
+  amount          Int
+  credits         Int
+  createdAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
