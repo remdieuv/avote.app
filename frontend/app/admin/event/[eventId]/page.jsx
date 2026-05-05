@@ -3688,6 +3688,7 @@ export default function RegieEventPage() {
     typeof rawId === "string" ? rawId : Array.isArray(rawId) ? rawId[0] : null;
 
   const [eventData, setEventData] = useState(null);
+  const [eventCredits, setEventCredits] = useState(/** @type {number | null} */ (null));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionError, setActionError] = useState(null);
@@ -3796,6 +3797,25 @@ export default function RegieEventPage() {
     }
   }, [eventId]);
 
+  const fetchMeCredits = useCallback(async () => {
+    try {
+      const res = await adminFetch(`${apiBaseBrowser()}/auth/me`, {
+        cache: "no-store",
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) return;
+      const raw =
+        typeof body?.eventCredits === "number"
+          ? body.eventCredits
+          : typeof body?.user?.eventCredits === "number"
+            ? body.user.eventCredits
+            : null;
+      setEventCredits(raw == null ? null : Math.max(0, Number(raw)));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const handleQuestionLiveAdded = useCallback(
     async ({ pollId }) => {
       await fetchEvent({ silent: true });
@@ -3859,10 +3879,11 @@ export default function RegieEventPage() {
 
   useEffect(() => {
     void fetchEvent();
+    void fetchMeCredits();
     return () => {
       loadPollAbortRef.current?.abort();
     };
-  }, [fetchEvent]);
+  }, [fetchEvent, fetchMeCredits]);
 
   useEffect(() => {
     if (!eventId || typeof window === "undefined") return;
@@ -4545,6 +4566,10 @@ export default function RegieEventPage() {
   const eventLocked = Boolean(eventData?.isLocked);
   const inTestMode = eventData?.isLiveConsumed === false;
   const canStartReal = inTestMode && !eventLocked;
+  const hasCreditsValue = typeof eventCredits === "number" && !Number.isNaN(eventCredits);
+  const hasEventCredit = hasCreditsValue && eventCredits > 0;
+  const startRealDisabled = busy || (hasCreditsValue && !hasEventCredit);
+  const creditsLabel = hasCreditsValue ? String(eventCredits) : "—";
   const canGoNext = !busy && !eventFinished && totalQuestions > 0 && !eventLocked;
 
   /** Ne jamais déduire « open » depuis liveState : lecture seule du champ API (+ défaut fermé si absent). */
@@ -5924,39 +5949,93 @@ export default function RegieEventPage() {
                   {modeBadge.label}
                 </span>
                 {canStartReal ? (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={async () => {
-                      if (!eventId) return;
-                      const ok = window.confirm(
-                        "Vous allez démarrer l’événement réel.\n\nCela consommera 1 crédit événement. Après la fin, cet événement ne pourra plus être rejoué gratuitement.",
-                      );
-                      if (!ok) return;
-                      await postAction(
-                        `/events/${eventId}/start-real`,
-                        "Mode réel en cours",
-                      );
-                    }}
+                  <div
                     style={{
                       marginLeft: "0.15rem",
-                      padding: "0.48rem 0.8rem",
-                      fontSize: "0.78rem",
-                      minHeight: "2.2rem",
-                      borderRadius: "10px",
-                      border: "1px solid #0f172a",
-                      background: busy
-                        ? "#e2e8f0"
-                        : "linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%)",
-                      color: "#fff",
-                      fontWeight: 800,
-                      boxShadow: busy ? "none" : "0 2px 10px rgba(2,132,199,0.25)",
-                      cursor: busy ? "not-allowed" : "pointer",
+                      display: "inline-flex",
+                      flexDirection: "column",
+                      gap: "0.22rem",
                     }}
                   >
-                    ▶ Démarrer l’événement réel
-                  </button>
+                    <button
+                      type="button"
+                      disabled={startRealDisabled}
+                      onClick={async () => {
+                        if (!eventId || startRealDisabled) return;
+                        const ok = window.confirm(
+                          "Vous allez démarrer l’événement réel.\n\nCela consommera 1 crédit événement. Après la fin, cet événement ne pourra plus être rejoué gratuitement.",
+                        );
+                        if (!ok) return;
+                        await postAction(
+                          `/events/${eventId}/start-real`,
+                          "Mode réel en cours",
+                        );
+                        await fetchMeCredits();
+                      }}
+                      style={{
+                        padding: "0.48rem 0.8rem",
+                        fontSize: "0.78rem",
+                        minHeight: "2.2rem",
+                        borderRadius: "10px",
+                        border: "1px solid #0f172a",
+                        background: startRealDisabled
+                          ? "#e2e8f0"
+                          : "linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%)",
+                        color: startRealDisabled ? "#64748b" : "#fff",
+                        fontWeight: 800,
+                        boxShadow: startRealDisabled ? "none" : "0 2px 10px rgba(2,132,199,0.25)",
+                        cursor: startRealDisabled ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      {hasCreditsValue && !hasEventCredit
+                        ? "Aucun crédit disponible"
+                        : "▶ Démarrer l’événement réel"}
+                    </button>
+                    <span style={{ fontSize: "0.68rem", color: "#475569", fontWeight: 700 }}>
+                      {hasCreditsValue && !hasEventCredit
+                        ? "1 événement réel = 49€ jusqu’à 500 participants."
+                        : "Ce lancement consommera 1 crédit événement."}
+                    </span>
+                    {hasCreditsValue && !hasEventCredit ? (
+                      <Link
+                        href="/pricing"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          width: "fit-content",
+                          padding: "0.34rem 0.65rem",
+                          borderRadius: "8px",
+                          border: "1px solid #fca5a5",
+                          background: "#fff",
+                          color: "#b91c1c",
+                          fontSize: "0.76rem",
+                          fontWeight: 800,
+                          textDecoration: "none",
+                        }}
+                      >
+                        Acheter 1 événement (49€)
+                      </Link>
+                    ) : null}
+                  </div>
                 ) : null}
+                <span
+                  title="Crédits événement disponibles"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    borderRadius: "999px",
+                    padding: "0.2rem 0.55rem",
+                    fontSize: "0.74rem",
+                    fontWeight: 900,
+                    border: "1px solid #dbeafe",
+                    background: "#eff6ff",
+                    color: "#1e3a8a",
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  {`Crédits : ${creditsLabel}`}
+                </span>
                 <div
                   title="Compteur de participants uniques pour cet événement"
                   style={{
@@ -6055,38 +6134,100 @@ export default function RegieEventPage() {
                   {modeBadge.label}
                 </span>
                 {canStartReal ? (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={async () => {
-                      if (!eventId) return;
-                      const ok = window.confirm(
-                        "Vous allez démarrer l’événement réel.\n\nCela consommera 1 crédit événement. Après la fin, cet événement ne pourra plus être rejoué gratuitement.",
-                      );
-                      if (!ok) return;
-                      await postAction(
-                        `/events/${eventId}/start-real`,
-                        "Mode réel en cours",
-                      );
-                    }}
+                  <div
                     style={{
-                      padding: "0.42rem 0.7rem",
-                      fontSize: "0.74rem",
-                      minHeight: "2rem",
-                      borderRadius: "10px",
-                      border: "1px solid #0f172a",
-                      background: busy
-                        ? "#e2e8f0"
-                        : "linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%)",
-                      color: "#fff",
-                      fontWeight: 800,
-                      boxShadow: busy ? "none" : "0 2px 10px rgba(2,132,199,0.25)",
-                      cursor: busy ? "not-allowed" : "pointer",
+                      display: "inline-flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: "0.2rem",
                     }}
                   >
-                    ▶ Démarrer réel
-                  </button>
+                    <button
+                      type="button"
+                      disabled={startRealDisabled}
+                      onClick={async () => {
+                        if (!eventId || startRealDisabled) return;
+                        const ok = window.confirm(
+                          "Vous allez démarrer l’événement réel.\n\nCela consommera 1 crédit événement. Après la fin, cet événement ne pourra plus être rejoué gratuitement.",
+                        );
+                        if (!ok) return;
+                        await postAction(
+                          `/events/${eventId}/start-real`,
+                          "Mode réel en cours",
+                        );
+                        await fetchMeCredits();
+                      }}
+                      style={{
+                        padding: "0.42rem 0.7rem",
+                        fontSize: "0.74rem",
+                        minHeight: "2rem",
+                        borderRadius: "10px",
+                        border: "1px solid #0f172a",
+                        background: startRealDisabled
+                          ? "#e2e8f0"
+                          : "linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%)",
+                        color: startRealDisabled ? "#64748b" : "#fff",
+                        fontWeight: 800,
+                        boxShadow: startRealDisabled ? "none" : "0 2px 10px rgba(2,132,199,0.25)",
+                        cursor: startRealDisabled ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      {hasCreditsValue && !hasEventCredit
+                        ? "Aucun crédit disponible"
+                        : "▶ Démarrer réel"}
+                    </button>
+                    <span
+                      style={{
+                        fontSize: "0.63rem",
+                        color: "#475569",
+                        fontWeight: 700,
+                        textAlign: "center",
+                      }}
+                    >
+                      {hasCreditsValue && !hasEventCredit
+                        ? "1 événement réel = 49€ jusqu’à 500 participants."
+                        : "Ce lancement consommera 1 crédit événement."}
+                    </span>
+                    {hasCreditsValue && !hasEventCredit ? (
+                      <Link
+                        href="/pricing"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          width: "fit-content",
+                          padding: "0.3rem 0.6rem",
+                          borderRadius: "8px",
+                          border: "1px solid #fca5a5",
+                          background: "#fff",
+                          color: "#b91c1c",
+                          fontSize: "0.72rem",
+                          fontWeight: 800,
+                          textDecoration: "none",
+                        }}
+                      >
+                        Acheter 1 événement (49€)
+                      </Link>
+                    ) : null}
+                  </div>
                 ) : null}
+                <span
+                  title="Crédits événement disponibles"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    borderRadius: "999px",
+                    padding: "0.2rem 0.55rem",
+                    fontSize: "0.7rem",
+                    fontWeight: 900,
+                    border: "1px solid #dbeafe",
+                    background: "#eff6ff",
+                    color: "#1e3a8a",
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  {`Crédits : ${creditsLabel}`}
+                </span>
                 <div
                   title="Compteur de participants uniques pour cet événement"
                   style={{
