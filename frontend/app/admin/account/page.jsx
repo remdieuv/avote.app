@@ -13,6 +13,12 @@ export default function AdminAccountPage() {
   const [payments, setPayments] = useState(
     /** @type {{ id: string; amount: number; credits: number; createdAt: string }[]} */ ([]),
   );
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -39,6 +45,58 @@ export default function AdminAccountPage() {
       cancelled = true;
     };
   }, []);
+
+  async function submitPasswordChange(e) {
+    e.preventDefault();
+    setPasswordError("");
+    setPasswordSuccess("");
+
+    if (!currentPassword || !newPassword || !confirmNewPassword) {
+      setPasswordError("Tous les champs sont requis.");
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordError("Le nouveau mot de passe doit contenir au moins 8 caractères.");
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setPasswordError("La confirmation du mot de passe ne correspond pas.");
+      return;
+    }
+    if (newPassword === currentPassword) {
+      setPasswordError("Le nouveau mot de passe doit être différent de l’actuel.");
+      return;
+    }
+
+    setPasswordBusy(true);
+    try {
+      const res = await adminFetch(`${apiBaseBrowser()}/auth/change-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          typeof body?.error === "string" && body.error.trim()
+            ? body.error
+            : "Impossible de modifier le mot de passe.",
+        );
+      }
+      setPasswordSuccess(
+        typeof body?.message === "string" && body.message.trim()
+          ? body.message
+          : "Mot de passe mis à jour.",
+      );
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+    } catch (err) {
+      setPasswordError(err?.message || "Impossible de modifier le mot de passe.");
+    } finally {
+      setPasswordBusy(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -189,28 +247,73 @@ export default function AdminAccountPage() {
 
         <article style={CARD}>
           <h2 style={CARD_TITLE}>Sécurité</h2>
-          <p style={{ margin: "0 0 0.55rem", color: "#64748b", fontSize: "0.86rem", fontWeight: 600 }}>
-            La modification du mot de passe sera bientôt disponible.
-          </p>
-          <button
-            type="button"
-            disabled
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "0.52rem 0.9rem",
-              borderRadius: "10px",
-              border: "1px solid #cbd5e1",
-              background: "#f8fafc",
-              color: "#94a3b8",
-              fontWeight: 700,
-              fontSize: "0.84rem",
-              cursor: "not-allowed",
-            }}
-          >
-            Modifier mon mot de passe
-          </button>
+          <form onSubmit={submitPasswordChange} style={{ display: "grid", gap: "0.55rem" }}>
+            <label style={LABEL_STYLE}>
+              Mot de passe actuel
+              <input
+                type="password"
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                style={INPUT_STYLE}
+                required
+              />
+            </label>
+            <label style={LABEL_STYLE}>
+              Nouveau mot de passe
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                minLength={8}
+                style={INPUT_STYLE}
+                required
+              />
+            </label>
+            <label style={LABEL_STYLE}>
+              Confirmer le nouveau mot de passe
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                minLength={8}
+                style={INPUT_STYLE}
+                required
+              />
+            </label>
+            {passwordError ? (
+              <p style={{ margin: 0, color: "#b91c1c", fontSize: "0.82rem", fontWeight: 700 }}>
+                {passwordError}
+              </p>
+            ) : null}
+            {passwordSuccess ? (
+              <p style={{ margin: 0, color: "#166534", fontSize: "0.82rem", fontWeight: 700 }}>
+                {passwordSuccess}
+              </p>
+            ) : null}
+            <button
+              type="submit"
+              disabled={passwordBusy}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "fit-content",
+                padding: "0.52rem 0.9rem",
+                borderRadius: "10px",
+                border: "1px solid #cbd5e1",
+                background: passwordBusy ? "#e2e8f0" : "#f8fafc",
+                color: passwordBusy ? "#64748b" : "#0f172a",
+                fontWeight: 700,
+                fontSize: "0.84rem",
+                cursor: passwordBusy ? "not-allowed" : "pointer",
+              }}
+            >
+              {passwordBusy ? "Mise à jour..." : "Modifier mon mot de passe"}
+            </button>
+          </form>
           <p style={{ margin: "0.65rem 0 0", color: "#64748b", fontSize: "0.82rem", fontWeight: 600 }}>
             Les paiements sont sécurisés par Stripe.
           </p>
@@ -244,4 +347,24 @@ const ROW_TEXT = {
 const ROW_LABEL = {
   color: "#64748b",
   fontWeight: 700,
+};
+
+const LABEL_STYLE = {
+  display: "grid",
+  gap: "0.24rem",
+  color: "#334155",
+  fontSize: "0.82rem",
+  fontWeight: 700,
+};
+
+const INPUT_STYLE = {
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "0.5rem 0.58rem",
+  borderRadius: "9px",
+  border: "1px solid #cbd5e1",
+  background: "#ffffff",
+  color: "#0f172a",
+  fontSize: "0.9rem",
+  outline: "none",
 };

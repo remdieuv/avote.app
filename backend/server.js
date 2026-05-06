@@ -1076,6 +1076,70 @@ app.get("/auth/me", async (req, res) => {
   }
 });
 
+app.post("/auth/change-password", requireAuth, async (req, res) => {
+  try {
+    const body = req.body ?? {};
+    const currentPassword =
+      typeof body.currentPassword === "string" ? body.currentPassword : "";
+    const newPassword =
+      typeof body.newPassword === "string" ? body.newPassword : "";
+
+    if (!currentPassword) {
+      return res.status(400).json({ error: "Mot de passe actuel requis." });
+    }
+    if (!newPassword) {
+      return res.status(400).json({ error: "Nouveau mot de passe requis." });
+    }
+    if (newPassword.length < 8) {
+      return res
+        .status(400)
+        .json({ error: "Mot de passe : au moins 8 caractères." });
+    }
+    if (newPassword === currentPassword) {
+      return res.status(400).json({
+        error: "Le nouveau mot de passe doit être différent de l’actuel.",
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { id: true, passwordHash: true, provider: true },
+    });
+    if (!user) {
+      clearAuthCookie(res);
+      return res.status(401).json({ error: "Compte introuvable." });
+    }
+    if (!user.passwordHash) {
+      return res.status(400).json({
+        error:
+          "Ce compte utilise une connexion externe. La modification du mot de passe n’est pas disponible.",
+      });
+    }
+
+    const isCurrentValid = await verifyPassword(
+      currentPassword,
+      user.passwordHash,
+    );
+    if (!isCurrentValid) {
+      return res.status(400).json({ error: "Mot de passe actuel incorrect." });
+    }
+
+    const passwordHash = await hashPassword(newPassword);
+    await prisma.user.update({
+      where: { id: req.userId },
+      data: { passwordHash },
+      select: { id: true },
+    });
+
+    return res.json({ success: true, message: "Mot de passe mis à jour." });
+  } catch (e) {
+    console.error("auth/change-password", e);
+    return res
+      .status(500)
+      .json({ error: "Impossible de modifier le mot de passe." });
+  }
+});
+
 app.post("/billing/create-checkout-session", requireAuth, async (req, res) => {
   try {
     const priceId = String(process.env.STRIPE_PRICE_EVENT_1 || "").trim();
