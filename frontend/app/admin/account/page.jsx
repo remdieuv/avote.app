@@ -130,10 +130,11 @@ export default function AdminAccountPage() {
 
   return (
     <main
+      id="account-page"
       style={{
-        maxWidth: "1200px",
+        maxWidth: "1040px",
         margin: "0 auto",
-        padding: "24px 16px 40px",
+        padding: "28px 16px 56px",
         fontFamily: 'system-ui, "Segoe UI", sans-serif',
         boxSizing: "border-box",
       }}
@@ -143,7 +144,7 @@ export default function AdminAccountPage() {
           ← Mes événements
         </Link>
       </p>
-      <header style={{ marginBottom: "1rem" }}>
+      <header style={{ marginBottom: "1.2rem" }}>
         <h1
           style={{
             margin: "0 0 0.35rem",
@@ -162,8 +163,8 @@ export default function AdminAccountPage() {
       <section
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-          gap: "0.9rem",
+          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+          gap: "1rem",
         }}
       >
         <article style={CARD}>
@@ -211,22 +212,25 @@ export default function AdminAccountPage() {
           <p style={{ margin: 0, color: "#64748b", fontSize: "0.86rem", fontWeight: 700 }}>
             1 événement réel = 49€ jusqu’à 500 participants.
           </p>
-          <div style={{ marginTop: "0.85rem", maxWidth: "320px" }}>
+          <div className="buy-credit-cta" style={{ marginTop: "0.95rem", maxWidth: "360px" }}>
             <CheckoutEventButton
               label="Acheter 1 crédit événement"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
-                padding: "0.6rem 0.95rem",
-                borderRadius: "10px",
+                width: "100%",
+                minHeight: "46px",
+                padding: "0.72rem 1rem",
+                borderRadius: "12px",
                 border: "1px solid #7c3aed",
-                background: "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)",
+                background: "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 58%, #6d28d9 100%)",
                 color: "#fff",
-                fontWeight: 800,
-                fontSize: "0.86rem",
+                fontWeight: 850,
+                fontSize: "0.9rem",
                 textDecoration: "none",
-                boxShadow: "0 8px 20px rgba(124,58,237,0.22)",
+                boxShadow: "0 12px 24px rgba(124,58,237,0.26)",
+                transition: "transform 160ms ease, box-shadow 160ms ease, filter 160ms ease",
               }}
             />
           </div>
@@ -239,7 +243,7 @@ export default function AdminAccountPage() {
         </article>
       </section>
 
-      <section style={{ marginTop: "0.9rem" }}>
+      <section style={{ marginTop: "1rem" }}>
         <article style={CARD}>
           <h2 style={CARD_TITLE}>Factures / achats</h2>
           <p style={{ margin: "0 0 0.6rem", color: "#334155", fontSize: "0.84rem", fontWeight: 800 }}>
@@ -250,24 +254,24 @@ export default function AdminAccountPage() {
               Aucun achat pour le moment.
             </p>
           ) : (
-            <div style={{ display: "grid", gap: "0.5rem" }}>
+            <div style={{ display: "grid", gap: "0.6rem" }}>
               {payments.map((p) => (
                 <div
                   key={p.id}
                   style={{
-                    border: "1px solid #e2e8f0",
-                    borderRadius: "10px",
+                    border: "1px solid #e6ebf3",
+                    borderRadius: "12px",
                     background: "#f8fafc",
-                    padding: "0.55rem 0.6rem",
+                    padding: "0.7rem 0.75rem",
                   }}
                 >
-                  <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#0f172a" }}>
+                  <div style={{ fontSize: "0.76rem", fontWeight: 700, color: "#64748b", letterSpacing: "0.01em" }}>
                     {new Date(p.createdAt).toLocaleDateString("fr-FR")}
                   </div>
-                  <div style={{ marginTop: "0.16rem", fontSize: "0.8rem", color: "#334155", fontWeight: 700 }}>
+                  <div style={{ marginTop: "0.22rem", fontSize: "0.83rem", color: "#334155", fontWeight: 700 }}>
                     {`${p.credits} crédit${p.credits > 1 ? "s" : ""}`}
                   </div>
-                  <div style={{ marginTop: "0.12rem", fontSize: "0.82rem", color: "#475569", fontWeight: 700 }}>
+                  <div style={{ marginTop: "0.16rem", fontSize: "0.95rem", color: "#0f172a", fontWeight: 850 }}>
                     {new Intl.NumberFormat("fr-FR", {
                       style: "currency",
                       currency: "EUR",
@@ -280,10 +284,10 @@ export default function AdminAccountPage() {
         </article>
       </section>
 
-      <section style={{ marginTop: "0.9rem" }}>
+      <section style={{ marginTop: "1rem" }}>
         <article style={CARD}>
           <h2 style={CARD_TITLE}>Sécurité</h2>
-          <form onSubmit={submitPasswordChange} style={{ display: "grid", gap: "0.55rem" }}>
+          <form onSubmit={submitPasswordChange} style={{ display: "grid", gap: "0.75rem", maxWidth: "640px" }}>
             <label style={LABEL_STYLE}>
               Mot de passe actuel
               <input
@@ -352,23 +356,37 @@ export default function AdminAccountPage() {
           </form>
         </article>
       </section>
+      <style>{`
+        #account-page .buy-credit-cta :is(a,button) {
+          cursor: pointer;
+        }
+        #account-page .buy-credit-cta :is(a,button):hover {
+          transform: translateY(-1px);
+          box-shadow: 0 14px 30px rgba(124, 58, 237, 0.3);
+          filter: saturate(1.03);
+        }
+        #account-page .buy-credit-cta :is(a,button):active {
+          transform: translateY(0);
+        }
+      `}</style>
     </main>
   );
 }
 
 const CARD = {
   background: "#fff",
-  border: "1px solid #e2e8f0",
-  borderRadius: "14px",
-  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
-  padding: "1rem 1.15rem",
+  border: "1px solid #e8edf5",
+  borderRadius: "16px",
+  boxShadow: "0 8px 22px rgba(15, 23, 42, 0.045)",
+  padding: "1.12rem 1.2rem",
 };
 
 const CARD_TITLE = {
-  margin: "0 0 0.75rem",
+  margin: "0 0 0.85rem",
   color: "#0f172a",
-  fontSize: "0.98rem",
-  fontWeight: 800,
+  fontSize: "1rem",
+  fontWeight: 820,
+  letterSpacing: "-0.01em",
 };
 
 const ROW_TEXT = {
@@ -384,20 +402,21 @@ const ROW_LABEL = {
 
 const LABEL_STYLE = {
   display: "grid",
-  gap: "0.24rem",
+  gap: "0.3rem",
   color: "#334155",
-  fontSize: "0.82rem",
-  fontWeight: 700,
+  fontSize: "0.84rem",
+  fontWeight: 740,
 };
 
 const INPUT_STYLE = {
   width: "100%",
   boxSizing: "border-box",
-  padding: "0.5rem 0.58rem",
-  borderRadius: "9px",
+  minHeight: "42px",
+  padding: "0.58rem 0.68rem",
+  borderRadius: "10px",
   border: "1px solid #cbd5e1",
   background: "#ffffff",
   color: "#0f172a",
-  fontSize: "0.9rem",
+  fontSize: "0.92rem",
   outline: "none",
 };
