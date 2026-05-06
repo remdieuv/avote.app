@@ -132,7 +132,7 @@ export default function AdminAccountPage() {
     <main
       id="account-page"
       style={{
-        maxWidth: "1040px",
+        maxWidth: "1200px",
         margin: "0 auto",
         padding: "24px clamp(16px, 3vw, 24px) 40px",
         fontFamily: 'system-ui, "Segoe UI", sans-serif',
