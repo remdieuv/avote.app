@@ -416,7 +416,7 @@ export default function MesLeadsPage() {
         .leads-page-wrap {
           max-width: 1200px;
           margin: 0 auto;
-          padding: 24px 16px 40px;
+          padding: 24px clamp(16px, 3vw, 24px) 40px;
           font-family: system-ui, "Segoe UI", sans-serif;
         }
         .leads-back-link {
@@ -426,7 +426,7 @@ export default function MesLeadsPage() {
           text-decoration: none;
         }
         .leads-head {
-          margin-bottom: 1rem;
+          margin-bottom: clamp(1rem, 2vw, 1.5rem);
           display: flex;
           flex-wrap: wrap;
           align-items: flex-end;
@@ -465,9 +465,9 @@ export default function MesLeadsPage() {
         }
         .leads-kpi-grid {
           display: grid;
-          gap: 0.65rem;
+          gap: 12px;
           grid-template-columns: repeat(3, minmax(0, 1fr));
-          margin-bottom: 1rem;
+          margin-bottom: clamp(1rem, 2vw, 1.5rem);
         }
         .leads-kpi-card {
           background: linear-gradient(180deg, #fff 0%, #faf5ff 100%);
@@ -494,7 +494,7 @@ export default function MesLeadsPage() {
           border-radius: 14px;
           box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
           padding: 1rem 1.15rem;
-          margin-bottom: 1rem;
+          margin-bottom: clamp(1rem, 2vw, 1.5rem);
         }
         .leads-section-eyebrow {
           margin: 0 0 0.75rem 0;
@@ -559,6 +559,9 @@ export default function MesLeadsPage() {
         @media (max-width: 920px) {
           .leads-kpi-grid { grid-template-columns: 1fr; }
           .leads-filters-grid { grid-template-columns: 1fr 1fr 1fr; }
+        }
+        @media (min-width: 768px) {
+          .leads-kpi-grid { gap: 16px; }
         }
         @media (max-width: 720px) {
           .leads-head { align-items: flex-start; }

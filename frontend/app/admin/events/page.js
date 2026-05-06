@@ -278,7 +278,7 @@ export default function AdminEventsPage() {
         style={{
           maxWidth: "1200px",
           margin: "0 auto",
-          padding: "24px 16px 40px",
+          padding: "24px clamp(16px, 3vw, 24px) 40px",
           boxSizing: "border-box",
           width: "100%",
         }}
@@ -436,12 +436,13 @@ export default function AdminEventsPage() {
         .admin-events-grid {
           display: grid;
           grid-template-columns: 1fr;
-          gap: 20px;
+          gap: 12px;
           width: 100%;
         }
         @media (min-width: 768px) {
           .admin-events-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
           }
         }
         @media (min-width: 1200px) {

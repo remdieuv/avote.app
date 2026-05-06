@@ -139,7 +139,7 @@ export default function AdminAccountAnalyticsPage() {
   };
 
   return (
-    <main style={{ maxWidth: "1220px", margin: "0 auto", padding: "1rem 1rem 2.2rem", fontFamily: 'system-ui, "Segoe UI", sans-serif' }}>
+    <main style={{ maxWidth: "1200px", margin: "0 auto", padding: "24px clamp(16px, 3vw, 24px) 40px", fontFamily: 'system-ui, "Segoe UI", sans-serif' }}>
       <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", marginBottom: "0.9rem", flexWrap: "wrap" }}>
         <Link href="/admin/events" style={{ color: "#64748b", textDecoration: "none", fontWeight: 700, fontSize: "0.85rem" }}>
           ← Mes événements
@@ -150,7 +150,7 @@ export default function AdminAccountAnalyticsPage() {
         </h1>
       </div>
 
-      <section style={{ ...CARD, padding: "0.9rem", marginBottom: "0.95rem" }}>
+      <section style={{ ...CARD, padding: "0.9rem", marginBottom: "clamp(1rem, 2vw, 1.5rem)" }}>
         <div style={{ display: "grid", gap: "0.55rem", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
           <FilterField label="Période (de)">
             <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} style={inputStyle} />
@@ -200,7 +200,7 @@ export default function AdminAccountAnalyticsPage() {
         ) : null}
       </section>
 
-      <section style={{ ...CARD, padding: "0.9rem", marginBottom: "0.95rem" }}>
+      <section style={{ ...CARD, padding: "0.9rem", marginBottom: "clamp(1rem, 2vw, 1.5rem)" }}>
         <h3 style={{ ...h3, marginBottom: "0.45rem" }}>Liens readonly actifs/récents</h3>
         <div style={{ display: "grid", gap: "0.45rem" }}>
           {shareLinks.map((x) => {
@@ -268,7 +268,7 @@ export default function AdminAccountAnalyticsPage() {
 
       {!loading && !error ? (
         <>
-          <section style={{ display: "grid", gap: "0.75rem", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", marginBottom: "0.95rem" }}>
+          <section style={{ display: "grid", gap: "clamp(0.75rem, 1.6vw, 1rem)", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", marginBottom: "clamp(1rem, 2vw, 1.5rem)" }}>
             <Kpi label="Événements" value={summary.totalEvents ?? 0} />
             <Kpi label="Votes" value={summary.totalVotes ?? 0} />
             <Kpi label="Participants" value={summary.totalParticipants ?? 0} />
@@ -277,7 +277,7 @@ export default function AdminAccountAnalyticsPage() {
             <Kpi label="Moy. conversion lead" value={`${Number(summary.avgLeadConversionPct ?? 0).toLocaleString("fr-FR")} %`} />
           </section>
 
-          <section style={{ display: "grid", gap: "0.75rem", gridTemplateColumns: isMobile ? "1fr" : "1.3fr 1fr", marginBottom: "0.95rem" }}>
+          <section style={{ display: "grid", gap: "clamp(0.75rem, 1.6vw, 1rem)", gridTemplateColumns: isMobile ? "1fr" : "1.3fr 1fr", marginBottom: "clamp(1rem, 2vw, 1.5rem)" }}>
             <article style={{ ...CARD, padding: "0.85rem" }}>
               <h3 style={h3}>Évolution mensuelle</h3>
               <MonthlyBars rows={monthly} />
@@ -288,7 +288,7 @@ export default function AdminAccountAnalyticsPage() {
             </article>
           </section>
 
-          <section style={{ display: "grid", gap: "0.75rem", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", marginBottom: "0.95rem" }}>
+          <section style={{ display: "grid", gap: "clamp(0.75rem, 1.6vw, 1rem)", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", marginBottom: "clamp(1rem, 2vw, 1.5rem)" }}>
             <article style={{ ...CARD, padding: "0.85rem" }}>
               <h3 style={h3}>Best performer</h3>
               {best ? (

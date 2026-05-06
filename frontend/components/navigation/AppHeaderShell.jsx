@@ -152,8 +152,11 @@ export function AppHeaderShell({
           background: rgba(255, 255, 255, 0.96);
         }
         .app-header-inner {
-          width: min(1240px, 94vw);
+          width: 100%;
+          max-width: 1200px;
           margin: 0 auto;
+          padding: 0 24px;
+          box-sizing: border-box;
           min-height: 56px;
           display: grid;
           grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
@@ -290,9 +293,7 @@ export function AppHeaderShell({
         }
         @media (max-width: 860px) {
           .app-header-inner {
-            width: min(100%, 100vw);
-            padding: 0 0.6rem;
-            box-sizing: border-box;
+            padding: 0 16px;
             grid-template-columns: auto 1fr auto;
           }
           .app-header-nav {

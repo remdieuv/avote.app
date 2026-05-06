@@ -893,9 +893,10 @@ export default function AdminPage() {
           color: #0f172a;
         }
         .admin-create-shell {
-          width: min(1200px, 94vw);
+          width: 100%;
+          max-width: 1040px;
           margin: 0 auto;
-          padding: 24px 16px 40px;
+          padding: 24px clamp(16px, 3vw, 24px) 40px;
           box-sizing: border-box;
         }
         .admin-create-hero {
@@ -920,13 +921,13 @@ export default function AdminPage() {
         .admin-create-grid {
           display: grid;
           grid-template-columns: minmax(0, 1fr);
-          gap: 1rem;
+          gap: 0.75rem;
         }
         .admin-create-form {
           min-width: 0;
           display: flex;
           flex-direction: column;
-          gap: 0.95rem;
+          gap: 0.75rem;
         }
         .admin-section-card {
           border-radius: 14px;
@@ -1262,14 +1263,13 @@ export default function AdminPage() {
           justify-content: center;
         }
         @media (min-width: 980px) {
-          .admin-create-shell {
-            width: min(1540px, 95vw);
-            padding: 1.2rem 1.1rem 2.2rem;
-          }
           .admin-create-grid {
             grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
             align-items: start;
-            gap: 1.1rem;
+            gap: 1rem;
+          }
+          .admin-create-form {
+            gap: 1rem;
           }
           .admin-side-sticky {
             position: static;

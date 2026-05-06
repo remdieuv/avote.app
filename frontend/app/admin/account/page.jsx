@@ -134,7 +134,7 @@ export default function AdminAccountPage() {
       style={{
         maxWidth: "1040px",
         margin: "0 auto",
-        padding: "28px 16px 56px",
+        padding: "24px clamp(16px, 3vw, 24px) 40px",
         fontFamily: 'system-ui, "Segoe UI", sans-serif',
         boxSizing: "border-box",
       }}
@@ -144,7 +144,7 @@ export default function AdminAccountPage() {
           ← Mes événements
         </Link>
       </p>
-      <header style={{ marginBottom: "1.2rem" }}>
+      <header style={{ marginBottom: "clamp(1rem, 2vw, 1.5rem)" }}>
         <h1
           style={{
             margin: "0 0 0.35rem",
@@ -164,7 +164,7 @@ export default function AdminAccountPage() {
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-          gap: "1rem",
+          gap: "clamp(0.75rem, 1.8vw, 1rem)",
         }}
       >
         <article style={CARD}>
@@ -243,7 +243,7 @@ export default function AdminAccountPage() {
         </article>
       </section>
 
-      <section style={{ marginTop: "1rem" }}>
+      <section style={{ marginTop: "clamp(1rem, 2vw, 1.5rem)" }}>
         <article style={CARD}>
           <h2 style={CARD_TITLE}>Factures / achats</h2>
           <p style={{ margin: "0 0 0.6rem", color: "#334155", fontSize: "0.84rem", fontWeight: 800 }}>
@@ -284,7 +284,7 @@ export default function AdminAccountPage() {
         </article>
       </section>
 
-      <section style={{ marginTop: "1rem" }}>
+      <section style={{ marginTop: "clamp(1rem, 2vw, 1.5rem)" }}>
         <article style={CARD}>
           <h2 style={CARD_TITLE}>Sécurité</h2>
           <form onSubmit={submitPasswordChange} style={{ display: "grid", gap: "0.75rem", maxWidth: "640px" }}>
