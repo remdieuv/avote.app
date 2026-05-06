@@ -116,6 +116,14 @@ const voteLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const authAttemptLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Trop de tentatives. Réessayez plus tard." },
+});
+
 const allowedOrigins = [
   "http://localhost:3000",
   "http://127.0.0.1:3000",
@@ -1015,7 +1023,7 @@ app.post("/auth/register", async (req, res) => {
   }
 });
 
-app.post("/auth/login", async (req, res) => {
+app.post("/auth/login", authAttemptLimiter, async (req, res) => {
   try {
     const body = req.body ?? {};
     const emailRaw =
@@ -1076,7 +1084,7 @@ app.get("/auth/me", async (req, res) => {
   }
 });
 
-app.post("/auth/change-password", requireAuth, async (req, res) => {
+app.post("/auth/change-password", authAttemptLimiter, requireAuth, async (req, res) => {
   try {
     const body = req.body ?? {};
     const currentPassword =

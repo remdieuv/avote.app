@@ -19,6 +19,9 @@ export default function AdminAccountPage() {
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [passwordSuccess, setPasswordSuccess] = useState("");
+  const totalCreditsBought = payments.reduce((sum, p) => sum + Math.max(0, Number(p.credits || 0)), 0);
+  const creditCount = typeof eventCredits === "number" && !Number.isNaN(eventCredits) ? eventCredits : null;
+  const hasNoCredit = creditCount === 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -159,7 +162,7 @@ export default function AdminAccountPage() {
       <section
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
           gap: "0.9rem",
         }}
       >
@@ -185,12 +188,32 @@ export default function AdminAccountPage() {
 
         <article style={CARD}>
           <h2 style={CARD_TITLE}>Crédits & achat</h2>
+          <p
+            style={{
+              margin: "0 0 0.45rem",
+              color: hasNoCredit ? "#b45309" : "#0f172a",
+              fontSize: "0.86rem",
+              fontWeight: 800,
+              padding: "0.38rem 0.48rem",
+              borderRadius: "9px",
+              border: hasNoCredit ? "1px solid #fdba74" : "1px solid #e2e8f0",
+              background: hasNoCredit ? "#fff7ed" : "#f8fafc",
+            }}
+          >
+            {creditCount == null
+              ? "Crédits en cours de chargement..."
+              : hasNoCredit
+                ? "Aucun crédit disponible"
+                : creditCount === 1
+                  ? "1 crédit disponible"
+                  : `${creditCount} crédits disponibles`}
+          </p>
           <p style={{ margin: 0, color: "#64748b", fontSize: "0.86rem", fontWeight: 700 }}>
             1 événement réel = 49€ jusqu’à 500 participants.
           </p>
           <div style={{ marginTop: "0.85rem", maxWidth: "320px" }}>
             <CheckoutEventButton
-              label="Acheter un événement (49€)"
+              label="Acheter 1 crédit événement"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -207,10 +230,21 @@ export default function AdminAccountPage() {
               }}
             />
           </div>
+          <p style={{ margin: "0.55rem 0 0", color: "#64748b", fontSize: "0.8rem", fontWeight: 700 }}>
+            Paiement sécurisé • Sans abonnement
+          </p>
+          <p style={{ margin: "0.65rem 0 0", color: "#64748b", fontSize: "0.82rem", fontWeight: 600 }}>
+            Les paiements sont sécurisés par Stripe.
+          </p>
         </article>
+      </section>
 
+      <section style={{ marginTop: "0.9rem" }}>
         <article style={CARD}>
           <h2 style={CARD_TITLE}>Factures / achats</h2>
+          <p style={{ margin: "0 0 0.6rem", color: "#334155", fontSize: "0.84rem", fontWeight: 800 }}>
+            Total acheté : {totalCreditsBought} crédit{totalCreditsBought > 1 ? "s" : ""}
+          </p>
           {payments.length === 0 ? (
             <p style={{ margin: 0, color: "#64748b", fontSize: "0.86rem", fontWeight: 600 }}>
               Aucun achat pour le moment.
@@ -244,7 +278,9 @@ export default function AdminAccountPage() {
             </div>
           )}
         </article>
+      </section>
 
+      <section style={{ marginTop: "0.9rem" }}>
         <article style={CARD}>
           <h2 style={CARD_TITLE}>Sécurité</h2>
           <form onSubmit={submitPasswordChange} style={{ display: "grid", gap: "0.55rem" }}>
@@ -314,9 +350,6 @@ export default function AdminAccountPage() {
               {passwordBusy ? "Mise à jour..." : "Modifier mon mot de passe"}
             </button>
           </form>
-          <p style={{ margin: "0.65rem 0 0", color: "#64748b", fontSize: "0.82rem", fontWeight: 600 }}>
-            Les paiements sont sécurisés par Stripe.
-          </p>
         </article>
       </section>
     </main>

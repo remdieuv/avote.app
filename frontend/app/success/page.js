@@ -1,216 +1,152 @@
-import Link from "next/link";
-import { LandingHeader } from "@/components/landing/LandingHeader";
+"use client";
 
-export const metadata = {
-  title: "Paiement confirmé - Avote",
-  description: "Votre paiement a été validé. Lancez votre événement en quelques secondes.",
-};
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { LandingHeader } from "@/components/landing/LandingHeader";
+import { adminFetch, apiBaseBrowser } from "@/lib/config";
+
+export default function SuccessPage() {
+  const [eventCredits, setEventCredits] = useState(/** @type {number | null} */ (null));
+  const [loadingCredits, setLoadingCredits] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await adminFetch(`${apiBaseBrowser()}/auth/me`, { cache: "no-store" });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok || cancelled) return;
+        const raw =
+          typeof body?.eventCredits === "number"
+            ? body.eventCredits
+            : typeof body?.user?.eventCredits === "number"
+              ? body.user.eventCredits
+              : null;
+        if (!cancelled) setEventCredits(raw == null ? null : Math.max(0, Number(raw)));
+      } catch {
+        /* ignore */
+      } finally {
+        if (!cancelled) setLoadingCredits(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <div style={shell}>
+      <LandingHeader />
+      <main style={mainWrap}>
+        <section style={card}>
+          <p style={eyebrow}>Paiement confirmé ✅</p>
+          <h1 style={title}>Votre achat a bien été validé.</h1>
+          <p style={subtitle}>1 crédit a été ajouté à votre compte.</p>
+          <p style={creditLine}>
+            {loadingCredits
+              ? "Mise à jour du solde en cours..."
+              : typeof eventCredits === "number"
+                ? `Crédits disponibles maintenant : ${eventCredits}`
+                : "Votre solde sera actualisé automatiquement."}
+          </p>
+          <div style={ctaWrap}>
+            <Link href="/admin/events" style={btnPrimary}>
+              Retour à mes événements
+            </Link>
+            <Link href="/admin/account" style={btnSecondary}>
+              Mon compte
+            </Link>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
 
 const shell = {
-  fontFamily: "system-ui, sans-serif",
-  lineHeight: 1.55,
-  color: "#0f172a",
   minHeight: "100vh",
-  display: "flex",
-  flexDirection: "column",
-  background: "linear-gradient(180deg, #f1f5f9 0%, #ffffff 38%, #faf5ff 100%)",
+  background: "linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)",
+  color: "#0f172a",
+  fontFamily: "system-ui, sans-serif",
 };
 
-const inner = {
-  width: "100%",
-  maxWidth: "980px",
+const mainWrap = {
+  maxWidth: "920px",
   margin: "0 auto",
-  padding: "1.25rem 1.25rem 4rem",
-  boxSizing: "border-box",
-  flex: 1,
+  padding: "clamp(2rem, 5vw, 4rem) 1rem 3rem",
+  display: "flex",
+  justifyContent: "center",
 };
 
-const sectionY = {
-  paddingTop: "clamp(2.6rem, 6.5vw, 4.1rem)",
-  paddingBottom: "clamp(2.6rem, 6.5vw, 4.1rem)",
+const card = {
+  width: "100%",
+  maxWidth: "640px",
+  border: "1px solid #ddd6fe",
+  borderRadius: "16px",
+  background:
+    "radial-gradient(700px 220px at 20% -10%, rgba(124,58,237,0.11), transparent 62%), #fff",
+  boxShadow: "0 12px 34px rgba(76, 29, 149, 0.08)",
+  padding: "clamp(1rem, 3vw, 2rem)",
+  textAlign: "center",
+};
+
+const eyebrow = {
+  margin: 0,
+  color: "#7c3aed",
+  fontSize: "0.78rem",
+  fontWeight: 800,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+};
+
+const title = {
+  margin: "0.62rem 0 0",
+  fontSize: "clamp(1.35rem, 3.8vw, 2rem)",
+  lineHeight: 1.15,
+  letterSpacing: "-0.02em",
+  fontWeight: 850,
+  color: "#0f172a",
+};
+
+const subtitle = {
+  margin: "0.55rem 0 0",
+  color: "#334155",
+  fontSize: "1rem",
+  fontWeight: 700,
+};
+
+const creditLine = {
+  margin: "0.75rem 0 0",
+  color: "#64748b",
+  fontSize: "0.88rem",
+  fontWeight: 700,
+};
+
+const ctaWrap = {
+  marginTop: "1.1rem",
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "0.65rem",
+  justifyContent: "center",
 };
 
 const btnPrimary = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  padding: "0.8rem 1.3rem",
+  padding: "0.7rem 1rem",
   borderRadius: "10px",
-  border: "1px solid #6d28d9",
-  background: "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 55%, #6d28d9 100%)",
+  border: "1px solid #7c3aed",
+  background: "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)",
   color: "#fff",
   textDecoration: "none",
-  fontSize: "0.95rem",
+  fontSize: "0.88rem",
   fontWeight: 800,
-  boxShadow: "0 10px 24px rgba(109, 40, 217, 0.2)",
 };
 
 const btnSecondary = {
   ...btnPrimary,
+  border: "1px solid #c4b5fd",
   background: "#fff",
-  border: "1px solid #d8b4fe",
   color: "#5b21b6",
-  boxShadow: "none",
 };
-
-const steps = [
-  {
-    title: "Accès immédiat",
-    text: "Votre achat est actif. Vous pouvez commencer dès maintenant.",
-  },
-  {
-    title: "Créez votre événement",
-    text: "Ajoutez vos questions, réponses et personnalisez votre session.",
-  },
-  {
-    title: "Partagez et lancez",
-    text: "Diffusez votre QR code et affichez les résultats en direct.",
-  },
-];
-
-export default function SuccessPage() {
-  return (
-    <div style={shell}>
-      <LandingHeader />
-
-      <main style={inner}>
-        <section style={sectionY}>
-          <div className="success-hero">
-            <p className="success-eyebrow">Paiement confirmé</p>
-            <h1 className="success-title">Votre paiement a bien été validé 🎉</h1>
-            <p className="success-subtitle">
-              Merci pour votre confiance. Vous pouvez maintenant créer votre événement et faire
-              voter votre audience en direct.
-            </p>
-            <div className="success-cta">
-              <Link href="/admin" style={btnPrimary}>
-                Créer mon événement
-              </Link>
-              <Link href="/pricing" style={btnSecondary}>
-                Retour aux tarifs
-              </Link>
-            </div>
-          </div>
-        </section>
-
-        <section style={{ ...sectionY, paddingTop: "0.6rem" }}>
-          <h2 className="success-section-title">Prochaines étapes</h2>
-          <div className="success-steps-grid">
-            {steps.map((step) => (
-              <article key={step.title} className="success-step-card">
-                <h3>{step.title}</h3>
-                <p>{step.text}</p>
-              </article>
-            ))}
-          </div>
-          <p className="success-product-reminder">
-            Un QR code, quelques secondes pour répondre, des résultats instantanés.
-          </p>
-          <p className="success-help">
-            Besoin d’aide ? <Link href="/admin">Contactez-nous</Link>
-          </p>
-        </section>
-      </main>
-
-      <style>{`
-        .success-hero {
-          border-radius: 24px;
-          border: 1px solid #ddd6fe;
-          background:
-            radial-gradient(760px 220px at 18% -10%, rgba(124, 58, 237, 0.12), transparent 60%),
-            linear-gradient(160deg, #ffffff 0%, #f8fafc 52%, #faf5ff 100%);
-          box-shadow: 0 18px 48px rgba(76, 29, 149, 0.08);
-          padding: clamp(1.3rem, 3.8vw, 2.35rem);
-          text-align: center;
-        }
-        .success-eyebrow {
-          margin: 0 0 0.48rem;
-          font-size: 0.72rem;
-          font-weight: 700;
-          letter-spacing: 0.11em;
-          text-transform: uppercase;
-          color: #7c3aed;
-        }
-        .success-title {
-          margin: 0;
-          font-size: clamp(1.45rem, 4.1vw, 2.35rem);
-          line-height: 1.1;
-          letter-spacing: -0.03em;
-          font-weight: 900;
-          color: #0f172a;
-        }
-        .success-subtitle {
-          margin: 0.9rem auto 0;
-          max-width: 66ch;
-          font-size: clamp(0.95rem, 2.2vw, 1.03rem);
-          color: #64748b;
-        }
-        .success-cta {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.72rem;
-          justify-content: center;
-          margin-top: 1.2rem;
-        }
-        .success-section-title {
-          margin: 0 0 1rem;
-          text-align: center;
-          font-size: clamp(1.18rem, 2.8vw, 1.55rem);
-          font-weight: 850;
-          letter-spacing: -0.02em;
-          color: #0f172a;
-        }
-        .success-steps-grid {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 0.85rem;
-        }
-        .success-step-card {
-          border: 1px solid #e2e8f0;
-          border-radius: 14px;
-          background: #fff;
-          box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
-          padding: 0.9rem 0.95rem;
-        }
-        .success-step-card h3 {
-          margin: 0;
-          font-size: 0.95rem;
-          font-weight: 800;
-          color: #0f172a;
-        }
-        .success-step-card p {
-          margin: 0.38rem 0 0;
-          font-size: 0.84rem;
-          color: #64748b;
-        }
-        .success-product-reminder {
-          margin: 1rem auto 0;
-          text-align: center;
-          max-width: 56ch;
-          color: #475569;
-          font-size: 0.86rem;
-          font-weight: 700;
-        }
-        .success-help {
-          margin: 0.65rem 0 0;
-          text-align: center;
-          color: #64748b;
-          font-size: 0.82rem;
-        }
-        .success-help a {
-          color: #6d28d9;
-          font-weight: 700;
-          text-decoration: none;
-        }
-        .success-help a:hover {
-          text-decoration: underline;
-        }
-        @media (min-width: 860px) {
-          .success-steps-grid {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-          }
-        }
-      `}</style>
-    </div>
-  );
-}
