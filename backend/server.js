@@ -1105,6 +1105,32 @@ app.post("/billing/create-checkout-session", requireAuth, async (req, res) => {
   }
 });
 
+app.get("/billing/payments", requireAuth, async (req, res) => {
+  try {
+    const payments = await prisma.payment.findMany({
+      where: { userId: req.userId },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        amount: true,
+        credits: true,
+        createdAt: true,
+      },
+    });
+    return res.json(
+      payments.map((p) => ({
+        id: p.id,
+        amount: p.amount,
+        credits: p.credits,
+        createdAt: p.createdAt,
+      })),
+    );
+  } catch (e) {
+    console.error("billing/payments", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
 /**
  * Liste admin : live + compteurs (questions, votes, participants distincts).
  * @returns {Promise<Array<{

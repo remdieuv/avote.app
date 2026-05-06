@@ -10,6 +10,9 @@ export default function AdminAccountPage() {
   const { user } = useAdminUser();
   const [eventCredits, setEventCredits] = useState(/** @type {number | null} */ (null));
   const [createdAt, setCreatedAt] = useState(/** @type {string | null} */ (null));
+  const [payments, setPayments] = useState(
+    /** @type {{ id: string; amount: number; credits: number; createdAt: string }[]} */ ([]),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -28,6 +31,33 @@ export default function AdminAccountPage() {
           setEventCredits(raw == null ? null : Math.max(0, Number(raw)));
           setCreatedAt(typeof body?.user?.createdAt === "string" ? body.user.createdAt : null);
         }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await adminFetch(`${apiBaseBrowser()}/billing/payments`, {
+          cache: "no-store",
+        });
+        const body = await res.json().catch(() => []);
+        if (!res.ok || cancelled || !Array.isArray(body)) return;
+        const rows = body
+          .map((x) => ({
+            id: String(x?.id || ""),
+            amount: Number(x?.amount || 0),
+            credits: Math.max(1, Number(x?.credits || 1)),
+            createdAt: String(x?.createdAt || ""),
+          }))
+          .filter((x) => x.id && x.createdAt);
+        if (!cancelled) setPayments(rows);
       } catch {
         /* ignore */
       }
@@ -123,9 +153,38 @@ export default function AdminAccountPage() {
 
         <article style={CARD}>
           <h2 style={CARD_TITLE}>Factures / achats</h2>
-          <p style={{ margin: 0, color: "#64748b", fontSize: "0.86rem", fontWeight: 600 }}>
-            L’historique des achats sera bientôt disponible.
-          </p>
+          {payments.length === 0 ? (
+            <p style={{ margin: 0, color: "#64748b", fontSize: "0.86rem", fontWeight: 600 }}>
+              Aucun achat pour le moment.
+            </p>
+          ) : (
+            <div style={{ display: "grid", gap: "0.5rem" }}>
+              {payments.map((p) => (
+                <div
+                  key={p.id}
+                  style={{
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "10px",
+                    background: "#f8fafc",
+                    padding: "0.55rem 0.6rem",
+                  }}
+                >
+                  <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#0f172a" }}>
+                    {new Date(p.createdAt).toLocaleDateString("fr-FR")}
+                  </div>
+                  <div style={{ marginTop: "0.16rem", fontSize: "0.8rem", color: "#334155", fontWeight: 700 }}>
+                    {`${p.credits} crédit${p.credits > 1 ? "s" : ""}`}
+                  </div>
+                  <div style={{ marginTop: "0.12rem", fontSize: "0.82rem", color: "#475569", fontWeight: 700 }}>
+                    {new Intl.NumberFormat("fr-FR", {
+                      style: "currency",
+                      currency: "EUR",
+                    }).format(Math.max(0, Number(p.amount || 0)) / 100)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </article>
 
         <article style={CARD}>
