@@ -17,7 +17,7 @@ const CARD = {
   background: "#fff",
   border: "1px solid #e2e8f0",
   borderRadius: "14px",
-  boxShadow: "0 6px 20px rgba(15, 23, 42, 0.06)",
+  boxShadow: "0 2px 8px rgba(15, 23, 42, 0.06)",
 };
 
 export default function AdminAccountAnalyticsPage() {
@@ -398,8 +398,8 @@ export default function AdminAccountAnalyticsPage() {
   );
 }
 
-const inputStyle = { width: "100%", border: "1px solid #dbe3ee", borderRadius: "9px", padding: "0.45rem 0.55rem", fontSize: "0.82rem" };
-const ghostBtnStyle = { display: "inline-flex", alignItems: "center", border: "1px solid #cbd5e1", borderRadius: "9px", padding: "0.44rem 0.66rem", fontSize: "0.79rem", color: "#334155", background: "#fff", textDecoration: "none", fontWeight: 700, cursor: "pointer" };
+const inputStyle = { width: "100%", minHeight: "42px", border: "1px solid #cbd5e1", borderRadius: "10px", padding: "0.58rem 0.68rem", fontSize: "0.86rem", outline: "none" };
+const ghostBtnStyle = { display: "inline-flex", alignItems: "center", border: "1px solid #cbd5e1", borderRadius: "10px", minHeight: "40px", padding: "0.52rem 0.78rem", fontSize: "0.82rem", color: "#334155", background: "#fff", textDecoration: "none", fontWeight: 700, cursor: "pointer" };
 const h3 = { margin: "0 0 0.55rem 0", color: "#0f172a", fontSize: "0.9rem", fontWeight: 800 };
 
 function FilterField({ label, children }) {
@@ -409,10 +409,10 @@ function Kpi({ label, value }) {
   return <article style={{ ...CARD, padding: "0.7rem 0.82rem" }}><p style={{ margin: "0 0 0.2rem 0", color: "#64748b", fontSize: "0.74rem", fontWeight: 700 }}>{label}</p><p style={{ margin: 0, color: "#0f172a", fontSize: "1.15rem", fontWeight: 800 }}>{value}</p></article>;
 }
 function Th({ children }) {
-  return <th style={{ textAlign: "left", padding: "0.65rem 0.7rem", fontSize: "0.71rem", fontWeight: 800, color: "#64748b", borderBottom: "1px solid #e2e8f0", textTransform: "uppercase" }}>{children}</th>;
+  return <th style={{ textAlign: "left", padding: "0.76rem 0.9rem", fontSize: "0.73rem", fontWeight: 800, color: "#64748b", borderBottom: "1px solid #e2e8f0", textTransform: "uppercase" }}>{children}</th>;
 }
 function Td({ children, colSpan }) {
-  return <td colSpan={colSpan} style={{ padding: "0.62rem 0.7rem", fontSize: "0.84rem", color: "#0f172a", borderBottom: "1px solid #f1f5f9" }}>{children}</td>;
+  return <td colSpan={colSpan} style={{ padding: "0.72rem 0.9rem", fontSize: "0.85rem", color: "#0f172a", borderBottom: "1px solid #f1f5f9" }}>{children}</td>;
 }
 function MonthlyBars({ rows }) {
   if (!rows.length) return <p style={{ margin: 0, color: "#64748b" }}>Aucune activité.</p>;

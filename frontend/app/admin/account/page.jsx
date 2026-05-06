@@ -341,13 +341,14 @@ export default function AdminAccountPage() {
                 alignItems: "center",
                 justifyContent: "center",
                 width: "fit-content",
-                padding: "0.52rem 0.9rem",
+                minHeight: "40px",
+                padding: "0.58rem 0.9rem",
                 borderRadius: "10px",
                 border: "1px solid #cbd5e1",
                 background: passwordBusy ? "#e2e8f0" : "#f8fafc",
                 color: passwordBusy ? "#64748b" : "#0f172a",
                 fontWeight: 700,
-                fontSize: "0.84rem",
+                fontSize: "0.86rem",
                 cursor: passwordBusy ? "not-allowed" : "pointer",
               }}
             >
@@ -368,6 +369,10 @@ export default function AdminAccountPage() {
         #account-page .buy-credit-cta :is(a,button):active {
           transform: translateY(0);
         }
+        #account-page input:focus-visible {
+          border-color: #93c5fd;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+        }
       `}</style>
     </main>
   );
@@ -375,10 +380,10 @@ export default function AdminAccountPage() {
 
 const CARD = {
   background: "#fff",
-  border: "1px solid #e8edf5",
-  borderRadius: "16px",
-  boxShadow: "0 8px 22px rgba(15, 23, 42, 0.045)",
-  padding: "1.12rem 1.2rem",
+  border: "1px solid #e2e8f0",
+  borderRadius: "14px",
+  boxShadow: "0 2px 8px rgba(15, 23, 42, 0.06)",
+  padding: "1rem 1rem",
 };
 
 const CARD_TITLE = {
@@ -417,6 +422,6 @@ const INPUT_STYLE = {
   border: "1px solid #cbd5e1",
   background: "#ffffff",
   color: "#0f172a",
-  fontSize: "0.92rem",
+  fontSize: "0.88rem",
   outline: "none",
 };

@@ -9,11 +9,13 @@ import { rememberMyEvent } from "@/lib/myEventsStorage";
 
 const inputStyle = {
   width: "100%",
-  padding: "0.5rem 0.65rem",
-  fontSize: "1rem",
-  borderRadius: "8px",
+  minHeight: "42px",
+  padding: "0.58rem 0.68rem",
+  fontSize: "0.9rem",
+  borderRadius: "10px",
   border: "1px solid #cbd5e1",
   boxSizing: "border-box",
+  outline: "none",
 };
 
 const CONTEST_DEFAULT_QUESTION = "Souhaitez-vous participer au tirage au sort ?";
@@ -934,7 +936,7 @@ export default function AdminPage() {
           border: 1px solid #e2e8f0;
           background: #fff;
           padding: 1rem;
-          box-shadow: 0 2px 16px rgba(15, 23, 42, 0.04);
+          box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
         }
         .admin-section-title {
           margin: 0 0 0.65rem;
@@ -963,7 +965,8 @@ export default function AdminPage() {
           margin-bottom: 0.75rem;
         }
         .admin-add-question {
-          padding: 0.6rem 0.95rem;
+          min-height: 40px;
+          padding: 0.58rem 0.95rem;
           border-radius: 10px;
           border: 1px solid #2563eb;
           background: #eff6ff;
@@ -996,8 +999,9 @@ export default function AdminPage() {
           color: #0f172a;
         }
         .admin-remove-question {
-          padding: 0.35rem 0.6rem;
-          border-radius: 8px;
+          min-height: 36px;
+          padding: 0.42rem 0.68rem;
+          border-radius: 9px;
           border: 1px solid #fecaca;
           background: #fff;
           color: #b91c1c;
@@ -1100,8 +1104,9 @@ export default function AdminPage() {
           font-weight: 500;
         }
         .admin-option-remove {
-          padding: 0.48rem 0.68rem;
-          border-radius: 8px;
+          min-height: 36px;
+          padding: 0.48rem 0.7rem;
+          border-radius: 9px;
           border: 1px solid #fecaca;
           background: #fff5f5;
           color: #b91c1c;
@@ -1134,6 +1139,7 @@ export default function AdminPage() {
         }
         .admin-option-add-btn {
           width: 100%;
+          min-height: 40px;
           padding: 0.62rem 0.95rem;
           border-radius: 10px;
           border: 1px dashed #93c5fd;
@@ -1151,8 +1157,9 @@ export default function AdminPage() {
         }
         .admin-bulk-btn {
           width: 100%;
-          padding: 0.58rem 0.75rem;
-          border-radius: 8px;
+          min-height: 40px;
+          padding: 0.58rem 0.8rem;
+          border-radius: 10px;
           border: 1px solid #c7d2fe;
           background: #fff;
           color: #4338ca;
@@ -1178,9 +1185,10 @@ export default function AdminPage() {
           gap: 0.5rem;
         }
         .admin-bulk-import {
-          padding: 0.45rem 0.9rem;
-          font-size: 0.9rem;
-          border-radius: 8px;
+          min-height: 40px;
+          padding: 0.52rem 0.9rem;
+          font-size: 0.88rem;
+          border-radius: 10px;
           border: 1px solid #4f46e5;
           background: #4f46e5;
           color: #fff;
@@ -1200,8 +1208,9 @@ export default function AdminPage() {
         .admin-create-cta {
           width: 100%;
           border: none;
-          border-radius: 12px;
-          padding: 0.85rem 1.1rem;
+          border-radius: 10px;
+          min-height: 44px;
+          padding: 0.72rem 1.1rem;
           background: linear-gradient(180deg, #2563eb, #1d4ed8);
           color: #fff;
           font-weight: 800;
@@ -1226,7 +1235,7 @@ export default function AdminPage() {
           border: 1px solid #e2e8f0;
           background: #fff;
           padding: 0.95rem;
-          box-shadow: 0 2px 14px rgba(15, 23, 42, 0.04);
+          box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
         }
         .admin-side-kicker {
           margin: 0 0 0.35rem;
@@ -1261,6 +1270,12 @@ export default function AdminPage() {
           margin-top: 0.8rem;
           display: flex;
           justify-content: center;
+        }
+        .admin-create-page input:focus-visible,
+        .admin-create-page textarea:focus-visible,
+        .admin-create-page select:focus-visible {
+          border-color: #93c5fd !important;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
         }
         @media (min-width: 980px) {
           .admin-create-grid {

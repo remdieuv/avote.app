@@ -447,9 +447,10 @@ export default function MesLeadsPage() {
           max-width: 60ch;
         }
         .leads-csv-btn {
-          padding: 0.52rem 0.72rem;
+          min-height: 42px;
+          padding: 0.62rem 0.9rem;
           font-size: 0.83rem;
-          font-weight: 700;
+          font-weight: 800;
           border-radius: 10px;
           border: none;
           background: linear-gradient(135deg, #4338ca, #6366f1);
@@ -492,8 +493,8 @@ export default function MesLeadsPage() {
           background: #fff;
           border: 1px solid #e2e8f0;
           border-radius: 14px;
-          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-          padding: 1rem 1.15rem;
+          box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+          padding: 1rem 1rem;
           margin-bottom: clamp(1rem, 2vw, 1.5rem);
         }
         .leads-section-eyebrow {
@@ -513,13 +514,15 @@ export default function MesLeadsPage() {
         .field-col { display: flex; flex-direction: column; gap: 0.35rem; }
         .field-col span { font-size: 0.78rem; font-weight: 600; color: #475569; }
         .field-input {
-          padding: 0.54rem 0.62rem;
+          min-height: 42px;
+          padding: 0.58rem 0.68rem;
           border-radius: 10px;
           border: 1px solid #cbd5e1;
           font-size: 0.88rem;
           background: #fff;
           width: 100%;
           box-sizing: border-box;
+          outline: none;
         }
         .leads-presets-row {
           margin-top: 0.85rem;
@@ -539,7 +542,7 @@ export default function MesLeadsPage() {
           background: #fff;
           border: 1px solid #e2e8f0;
           border-radius: 14px;
-          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+          box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
           overflow: hidden;
         }
         .leads-table-scroll { overflow-x: auto; }
@@ -575,8 +578,8 @@ export default function MesLeadsPage() {
           .leads-mobile-card {
             background: #fff;
             border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+            border-radius: 14px;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
             padding: 0.8rem 0.85rem;
           }
           .mobile-card-date {
@@ -606,6 +609,17 @@ export default function MesLeadsPage() {
             color: #334155;
           }
         }
+        .field-input:focus-visible {
+          border-color: #93c5fd;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+        }
+        .leads-csv-btn:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 12px 24px rgba(79, 70, 229, 0.2);
+        }
+        .leads-detail-link:hover {
+          text-decoration: underline;
+        }
       `}</style>
     </div>
   );
@@ -629,13 +643,14 @@ const presetGhostStyle = {
 };
 
 const miniActionBtn = {
+  minHeight: "36px",
   border: "1px solid #cbd5e1",
   background: "#fff",
   color: "#334155",
-  fontSize: "0.74rem",
+  fontSize: "0.78rem",
   fontWeight: 700,
-  borderRadius: "8px",
-  padding: "0.32rem 0.46rem",
+  borderRadius: "9px",
+  padding: "0.45rem 0.6rem",
   cursor: "pointer",
 };
 
@@ -671,9 +686,9 @@ function Th({ children }) {
     <th
       style={{
         textAlign: "left",
-        padding: "0.72rem 0.85rem",
-        fontSize: "0.72rem",
-        fontWeight: 700,
+        padding: "0.76rem 0.9rem",
+        fontSize: "0.73rem",
+        fontWeight: 800,
         color: "#64748b",
         letterSpacing: "0.04em",
         textTransform: "uppercase",
@@ -690,8 +705,8 @@ function Td({ children, subtle, title: titleAttr, style: styleExtra }) {
     <td
       title={titleAttr}
       style={{
-        padding: "0.65rem 0.85rem",
-        fontSize: "0.86rem",
+        padding: "0.72rem 0.9rem",
+        fontSize: "0.85rem",
         color: subtle ? "#64748b" : "#0f172a",
         borderBottom: "1px solid #f1f5f9",
         maxWidth: titleAttr ? "220px" : undefined,

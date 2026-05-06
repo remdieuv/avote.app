@@ -14,7 +14,8 @@ const fieldLabel = {
 
 const controlBase = {
   width: "100%",
-  padding: "0.55rem 0.65rem",
+  minHeight: "42px",
+  padding: "0.58rem 0.7rem",
   fontSize: "0.88rem",
   fontWeight: 600,
   color: "#0f172a",
@@ -23,15 +24,17 @@ const controlBase = {
   background: "#fff",
   boxSizing: "border-box",
   minWidth: 0,
+  outline: "none",
 };
 
 const createBtnStyle = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  padding: "0.62rem 1.1rem",
+  minHeight: "44px",
+  padding: "0.72rem 1.1rem",
   fontSize: "0.88rem",
-  fontWeight: 700,
+  fontWeight: 800,
   borderRadius: "10px",
   textDecoration: "none",
   border: "1px solid #1e40af",
@@ -165,6 +168,16 @@ export function AdminEventsToolbar({
             width: auto !important;
             align-self: end;
           }
+        }
+        #admin-events-search:focus-visible,
+        #admin-events-status:focus-visible,
+        #admin-events-sort:focus-visible {
+          border-color: #93c5fd;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+        }
+        .admin-events-toolbar-create:hover {
+          box-shadow: 0 6px 20px rgba(37, 99, 235, 0.32) !important;
+          transform: translateY(-1px);
         }
       `}</style>
     </div>
