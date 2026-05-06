@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { useAdminUser } from "@/components/admin/AdminUserContext";
 import { CheckoutEventButton } from "@/components/billing/CheckoutEventButton";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
@@ -139,27 +140,15 @@ export default function AdminAccountPage() {
         boxSizing: "border-box",
       }}
     >
-      <p style={{ margin: "0 0 1rem", fontSize: "0.88rem" }}>
-        <Link href="/admin/events" style={{ color: "#64748b", fontWeight: 600, textDecoration: "none" }}>
-          ← Mes événements
-        </Link>
-      </p>
-      <header style={{ marginBottom: "clamp(1rem, 2vw, 1.5rem)" }}>
-        <h1
-          style={{
-            margin: "0 0 0.35rem",
-            fontSize: "clamp(1.4rem, 2.8vw, 1.85rem)",
-            fontWeight: 820,
-            letterSpacing: "-0.03em",
-            color: "#0f172a",
-          }}
-        >
-          Mon compte
-        </h1>
-        <p style={{ margin: 0, color: "#64748b", fontSize: "0.95rem", maxWidth: "60ch" }}>
-          Informations de profil liées à votre espace administrateur.
-        </p>
-      </header>
+      <AdminPageHeader
+        title="Mon compte"
+        subtitle="Informations de profil liées à votre espace administrateur."
+        breadcrumbs={
+          <Link href="/admin/events" style={{ color: "#64748b", fontWeight: 600, textDecoration: "none", fontSize: "0.88rem" }}>
+            ← Mes événements
+          </Link>
+        }
+      />
       <section
         style={{
           display: "grid",

@@ -57,6 +57,7 @@ const createBtnStyle = {
  *   onSortChange: (v: string) => void;
  *   statusOptions: { value: string; label: string }[];
  *   sortOptions: { value: string; label: string }[];
+ *   showCreate?: boolean;
  * }} props
  */
 export function AdminEventsToolbar({
@@ -68,6 +69,7 @@ export function AdminEventsToolbar({
   onSortChange,
   statusOptions,
   sortOptions,
+  showCreate = true,
 }) {
   return (
     <div className="admin-events-toolbar">
@@ -126,14 +128,16 @@ export function AdminEventsToolbar({
         </div>
       </div>
 
-      <div className="admin-events-toolbar-create-wrap">
-        <span style={{ ...fieldLabel, visibility: "hidden", marginBottom: "0.35rem" }} aria-hidden>
-          .
-        </span>
-        <Link href="/admin" className="admin-events-toolbar-create" style={createBtnStyle}>
-          + Créer un événement
-        </Link>
-      </div>
+      {showCreate ? (
+        <div className="admin-events-toolbar-create-wrap">
+          <span style={{ ...fieldLabel, visibility: "hidden", marginBottom: "0.35rem" }} aria-hidden>
+            .
+          </span>
+          <Link href="/admin" className="admin-events-toolbar-create" style={createBtnStyle}>
+            + Créer un événement
+          </Link>
+        </div>
+      ) : null}
 
       <style>{`
         .admin-events-toolbar {

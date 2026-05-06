@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
 function mapApiError(body, status) {
@@ -50,13 +51,15 @@ const LIVE_OPTIONS = [
 
 const inputStyle = {
   width: "100%",
-  border: "1px solid #dbe3ee",
+  border: "1px solid #cbd5e1",
   background: "#fff",
   borderRadius: "10px",
-  padding: "0.48rem 0.56rem",
+  minHeight: "42px",
+  padding: "0.58rem 0.68rem",
   color: "#0f172a",
-  fontSize: "0.82rem",
+  fontSize: "0.86rem",
   fontWeight: 600,
+  outline: "none",
 };
 
 const sectionTitleStyle = {
@@ -155,94 +158,57 @@ export default function EventAnalyticsPage() {
   return (
     <div
       style={{
-        maxWidth: "1280px",
+        maxWidth: "1200px",
         margin: "0 auto",
-        padding: "clamp(1rem, 3vw, 2rem) clamp(0.8rem, 2.2vw, 1.2rem) 3rem",
+        padding: "24px clamp(16px, 3vw, 24px) 40px",
         fontFamily: 'system-ui, "Segoe UI", sans-serif',
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "0.65rem",
-          marginBottom: "1.15rem",
-          alignItems: "center",
-        }}
-      >
-        <Link
-          href={`/admin/event/${encodeURIComponent(eventId || "")}`}
-          style={{ fontSize: "0.86rem", fontWeight: 600, color: "#64748b", textDecoration: "none" }}
-        >
-          ← Régie
-        </Link>
-        <span style={{ color: "#e2e8f0" }}>|</span>
-        <Link
-          href={`/admin/event/${encodeURIComponent(eventId || "")}/leads`}
-          style={{ fontSize: "0.86rem", fontWeight: 600, color: "#16a34a", textDecoration: "none" }}
-        >
-          Leads
-        </Link>
-      </div>
-
-      <header
-        style={{
-          ...CARD,
-          padding: "clamp(0.9rem, 2.2vw, 1.2rem)",
-          marginBottom: "1rem",
-          background: "linear-gradient(180deg, #ffffff, #f8fbff)",
-        }}
-      >
-        <p
-          style={{
-            margin: "0 0 0.25rem 0",
-            color: "#64748b",
-            fontSize: "0.79rem",
-            fontWeight: 700,
-            letterSpacing: "0.03em",
-            textTransform: "uppercase",
-          }}
-        >
-          {data?.event?.title || "Événement"}
-        </p>
-        <h1
-          style={{
-            margin: "0 0 0.4rem 0",
-            fontSize: "clamp(1.35rem, 2.4vw, 1.9rem)",
-            fontWeight: 800,
-            letterSpacing: "-0.03em",
-            color: "#0f172a",
-          }}
-        >
-          Statistiques de l’événement
-        </h1>
-        <p style={{ margin: 0, color: "#64748b", fontSize: "0.95rem" }}>
-          Vue globale des participations et performances par question.
-        </p>
-      </header>
-
-      {eventId ? (
-        <div style={{ marginBottom: "1rem" }}>
-          <a
-            href={`${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/analytics/export.csv`}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.45rem",
-              padding: "0.58rem 0.92rem",
-              borderRadius: "10px",
-              border: "1px solid #bfdbfe",
-              background: "#eff6ff",
-              color: "#1d4ed8",
-              fontWeight: 800,
-              fontSize: "0.86rem",
-              textDecoration: "none",
-            }}
-          >
-            Export CSV des résultats
-          </a>
-        </div>
-      ) : null}
+      <AdminPageHeader
+        eyebrow={data?.event?.title || "Événement"}
+        title="Statistiques de l’événement"
+        subtitle="Vue globale des participations et performances par question."
+        breadcrumbs={
+          <>
+            <Link
+              href={`/admin/event/${encodeURIComponent(eventId || "")}`}
+              style={{ fontSize: "0.86rem", fontWeight: 600, color: "#64748b", textDecoration: "none" }}
+            >
+              ← Régie
+            </Link>
+            <span style={{ color: "#e2e8f0" }}>|</span>
+            <Link
+              href={`/admin/event/${encodeURIComponent(eventId || "")}/leads`}
+              style={{ fontSize: "0.86rem", fontWeight: 600, color: "#16a34a", textDecoration: "none" }}
+            >
+              Leads
+            </Link>
+          </>
+        }
+        actions={
+          eventId ? (
+            <a
+              href={`${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/analytics/export.csv`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.45rem",
+                minHeight: "40px",
+                padding: "0.52rem 0.78rem",
+                borderRadius: "10px",
+                border: "1px solid #cbd5e1",
+                background: "#fff",
+                color: "#334155",
+                fontWeight: 700,
+                fontSize: "0.82rem",
+                textDecoration: "none",
+              }}
+            >
+              Export CSV des résultats
+            </a>
+          ) : null
+        }
+      />
 
       {loading ? <p style={{ color: "#64748b" }}>Chargement…</p> : null}
       {error ? (

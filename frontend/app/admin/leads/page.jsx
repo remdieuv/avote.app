@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
 function mapApiError(body, status) {
@@ -177,29 +178,25 @@ export default function MesLeadsPage() {
 
   return (
     <div className="leads-page-wrap">
-      <nav style={{ marginBottom: "1rem" }}>
-        <Link href="/admin/events" className="leads-back-link">
-          ← Mes événements
-        </Link>
-      </nav>
-
-      <header className="leads-head">
-        <div>
-          <h1 className="leads-title">Mes leads</h1>
-          <p className="leads-subtitle">
-            Tous les contacts captés sur vos événements. Filtrez par événement,
-            période ou recherche.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={exportCsv}
-          disabled={rows.length === 0}
-          className="leads-csv-btn"
-        >
-          Exporter CSV
-        </button>
-      </header>
+      <AdminPageHeader
+        title="Mes leads"
+        subtitle="Tous les contacts captés sur vos événements. Filtrez par événement, période ou recherche."
+        breadcrumbs={
+          <Link href="/admin/events" className="leads-back-link">
+            ← Mes événements
+          </Link>
+        }
+        actions={
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={rows.length === 0}
+            className="leads-csv-btn"
+          >
+            Exporter CSV
+          </button>
+        }
+      />
 
       <section className="leads-kpi-grid">
         <article className="leads-kpi-card">
@@ -425,27 +422,6 @@ export default function MesLeadsPage() {
           color: #64748b;
           text-decoration: none;
         }
-        .leads-head {
-          margin-bottom: clamp(1rem, 2vw, 1.5rem);
-          display: flex;
-          flex-wrap: wrap;
-          align-items: flex-end;
-          justify-content: space-between;
-          gap: 0.8rem;
-        }
-        .leads-title {
-          margin: 0 0 0.35rem 0;
-          font-size: clamp(1.4rem, 2.8vw, 1.85rem);
-          font-weight: 820;
-          letter-spacing: -0.03em;
-          color: #0f172a;
-        }
-        .leads-subtitle {
-          margin: 0;
-          color: #64748b;
-          font-size: 0.95rem;
-          max-width: 60ch;
-        }
         .leads-csv-btn {
           min-height: 42px;
           padding: 0.62rem 0.9rem;
@@ -567,7 +543,6 @@ export default function MesLeadsPage() {
           .leads-kpi-grid { gap: 16px; }
         }
         @media (max-width: 720px) {
-          .leads-head { align-items: flex-start; }
           .leads-csv-btn { width: 100%; }
           .leads-filters-grid { grid-template-columns: 1fr; }
           .leads-table-wrap { display: none; }

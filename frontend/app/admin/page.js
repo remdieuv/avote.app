@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { EventLivePreview } from "@/components/admin/EventLivePreview";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 import { rememberMyEvent } from "@/lib/myEventsStorage";
@@ -428,13 +429,15 @@ export default function AdminPage() {
   return (
     <main className="admin-create-page">
       <div className="admin-create-shell">
-        <div className="admin-create-hero">
-          <h1>Créer un événement</h1>
-          <p>
-            Préparez vos questions, structurez le vote et lancez votre régie en
-            quelques secondes.
-          </p>
-        </div>
+        <AdminPageHeader
+          title="Créer un événement"
+          subtitle="Préparez vos questions, structurez le vote et lancez votre régie en quelques secondes."
+          breadcrumbs={
+            <Link href="/admin/events" style={{ color: "#64748b", fontWeight: 600, textDecoration: "none", fontSize: "0.88rem" }}>
+              ← Mes événements
+            </Link>
+          }
+        />
 
         <div className="admin-create-grid">
           <form id="create-event-form" className="admin-create-form" onSubmit={handleCreatePoll}>
@@ -900,25 +903,6 @@ export default function AdminPage() {
           margin: 0 auto;
           padding: 24px clamp(16px, 3vw, 24px) 40px;
           box-sizing: border-box;
-        }
-        .admin-create-hero {
-          margin-bottom: 1rem;
-          margin-top: 0;
-          padding: 1.1rem 1.2rem;
-          border: 1px solid #dbeafe;
-          border-radius: 14px;
-          background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-        }
-        .admin-create-hero h1 {
-          margin: 0 0 0.35rem;
-          font-size: clamp(1.4rem, 3.5vw, 1.9rem);
-          letter-spacing: -0.03em;
-        }
-        .admin-create-hero p {
-          margin: 0;
-          color: #64748b;
-          max-width: 56rem;
-          font-size: 0.95rem;
         }
         .admin-create-grid {
           display: grid;

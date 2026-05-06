@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminEventsToolbar } from "@/components/admin/AdminEventsToolbar";
 import { EventDashboardCard } from "@/components/admin/EventDashboardCard";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
@@ -283,22 +284,33 @@ export default function AdminEventsPage() {
           width: "100%",
         }}
       >
-        <header style={{ marginBottom: "1.5rem" }}>
-          <h1
-            style={{
-              fontSize: "clamp(1.45rem, 3.2vw, 1.85rem)",
-              margin: "0 0 0.4rem",
-              fontWeight: 800,
-              color: "#0f172a",
-              letterSpacing: "-0.03em",
-            }}
-          >
-            Mes événements
-          </h1>
-          <p style={{ color: "#64748b", margin: 0, fontSize: "0.95rem", maxWidth: "42rem" }}>
-            Pilotez le live : régie, salle participants et projection sur un même tableau.
-          </p>
-        </header>
+        <AdminPageHeader
+          title="Mes événements"
+          subtitle="Pilotez le live : régie, salle participants et projection sur un même tableau."
+          actions={
+            <Link
+              href="/admin"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: "44px",
+                padding: "0.72rem 1.1rem",
+                fontSize: "0.88rem",
+                fontWeight: 800,
+                borderRadius: "10px",
+                textDecoration: "none",
+                border: "1px solid #1e40af",
+                background: "linear-gradient(180deg, #2563eb, #1d4ed8)",
+                color: "#fff",
+                boxShadow: "0 4px 16px rgba(37, 99, 235, 0.28)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              + Créer un événement
+            </Link>
+          }
+        />
 
         {fetchError ? (
           <p
@@ -372,6 +384,7 @@ export default function AdminEventsPage() {
               onSortChange={setSortMode}
               statusOptions={EVENT_STATUS_FILTERS}
               sortOptions={EVENT_SORT_OPTIONS}
+              showCreate={false}
             />
             <p
               style={{

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
 function mapApiError(body, status) {
@@ -140,15 +141,32 @@ export default function AdminAccountAnalyticsPage() {
 
   return (
     <main style={{ maxWidth: "1200px", margin: "0 auto", padding: "24px clamp(16px, 3vw, 24px) 40px", fontFamily: 'system-ui, "Segoe UI", sans-serif' }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", marginBottom: "0.9rem", flexWrap: "wrap" }}>
-        <Link href="/admin/events" style={{ color: "#64748b", textDecoration: "none", fontWeight: 700, fontSize: "0.85rem" }}>
-          ← Mes événements
-        </Link>
-        <span style={{ color: "#e2e8f0" }}>|</span>
-        <h1 style={{ margin: 0, color: "#0f172a", fontSize: "1.25rem", fontWeight: 800 }}>
-          Dashboard compte
-        </h1>
-      </div>
+      <AdminPageHeader
+        title="Dashboard compte"
+        subtitle="Vue consolidée de vos performances multi-événements."
+        breadcrumbs={
+          <Link href="/admin/events" style={{ color: "#64748b", textDecoration: "none", fontWeight: 700, fontSize: "0.85rem" }}>
+            ← Mes événements
+          </Link>
+        }
+        actions={
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                setFromDate("");
+                setToDate("");
+              }}
+              style={ghostBtnStyle}
+            >
+              Réinitialiser
+            </button>
+            <a href={exportHref} style={ghostBtnStyle}>
+              Export CSV multi-events
+            </a>
+          </>
+        }
+      />
 
       <section style={{ ...CARD, padding: "0.9rem", marginBottom: "clamp(1rem, 2vw, 1.5rem)" }}>
         <div style={{ display: "grid", gap: "0.55rem", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
@@ -158,16 +176,6 @@ export default function AdminAccountAnalyticsPage() {
           <FilterField label="Période (à)">
             <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} style={inputStyle} />
           </FilterField>
-          <div style={{ display: "flex", alignItems: "end", gap: "0.45rem", flexWrap: "wrap" }}>
-            <button type="button" onClick={() => { setFromDate(""); setToDate(""); }} style={ghostBtnStyle}>
-              Réinitialiser
-            </button>
-            {!isMobile ? (
-              <a href={exportHref} style={ghostBtnStyle}>
-                Export CSV multi-events
-              </a>
-            ) : null}
-          </div>
         </div>
         <div style={{ marginTop: "0.7rem", display: "flex", gap: "0.45rem", alignItems: "center", flexWrap: "wrap" }}>
           <label style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", color: "#64748b", fontSize: "0.75rem", fontWeight: 700 }}>
@@ -181,11 +189,6 @@ export default function AdminAccountAnalyticsPage() {
           <button type="button" onClick={generateShareLink} style={ghostBtnStyle} disabled={shareLoading}>
             {shareLoading ? "Génération..." : "Générer lien readonly"}
           </button>
-          {isMobile ? (
-            <a href={exportHref} style={ghostBtnStyle}>
-              Export CSV multi-events
-            </a>
-          ) : null}
           {shareUrl ? (
             <a href={shareUrl} target="_blank" rel="noopener noreferrer" style={ghostBtnStyle}>
               Ouvrir rapport client
