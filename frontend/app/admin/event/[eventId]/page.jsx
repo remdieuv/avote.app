@@ -2053,7 +2053,7 @@ function BlocProjectionEcran({
 
 /**
  * Panneau droit / mobile : QR + lien rapide uniquement (pas d’écran ni liste technique).
- * Toggle Participants ↔ Vote direct.
+ * Toggle Ma salle ↔ Vote direct.
  * @param {{ slug: string; liveState: string; stateLabel: string; variant: "rail" | "mobile"; embedded?: boolean; sceneBadge?: { label: string; bg: string; color: string; border: string } | null }} props
  */
 function PanneauQrParticipant({
@@ -2240,7 +2240,7 @@ function PanneauQrParticipant({
   }
 
   return (
-    <aside style={wrap} aria-label="Accès participants rapide">
+    <aside style={wrap} aria-label="Accès audience rapide">
       {embedded ? null : (
         <>
           <h3
@@ -2252,7 +2252,7 @@ function PanneauQrParticipant({
               letterSpacing: "-0.02em",
             }}
           >
-            Accès participants
+            Participation
           </h3>
           <p
             style={{
@@ -2309,7 +2309,7 @@ function PanneauQrParticipant({
           onClick={() => setMode("join")}
           style={styleSeg("join")}
         >
-          Participants
+          Ma salle
         </button>
         <button
           type="button"
