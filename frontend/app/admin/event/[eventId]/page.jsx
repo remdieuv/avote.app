@@ -6394,11 +6394,10 @@ export default function RegieEventPage() {
               <div
                 style={{
                   marginTop: "0.55rem",
-                  display: "flex",
-                  flexWrap: "wrap",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  gap: "0.45rem",
+                  display: "grid",
+                  gap: "0.55rem",
+                  justifyItems: "stretch",
+                  width: "100%",
                 }}
               >
                 <span
@@ -6406,6 +6405,7 @@ export default function RegieEventPage() {
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
+                    justifySelf: "center",
                     borderRadius: "999px",
                     padding: "0.2rem 0.55rem",
                     fontSize: "0.72rem",
@@ -6425,6 +6425,7 @@ export default function RegieEventPage() {
                       flexDirection: "column",
                       alignItems: "center",
                       gap: "0.2rem",
+                      width: "100%",
                     }}
                   >
                     <button
@@ -6446,6 +6447,7 @@ export default function RegieEventPage() {
                         padding: "0.42rem 0.7rem",
                         fontSize: "0.74rem",
                         minHeight: "2rem",
+                        width: "min(100%, 320px)",
                         borderRadius: "10px",
                         border: "1px solid #0f172a",
                         background: startRealDisabled
@@ -6499,6 +6501,7 @@ export default function RegieEventPage() {
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
+                    justifySelf: "center",
                     borderRadius: "999px",
                     padding: "0.2rem 0.55rem",
                     fontSize: "0.7rem",
@@ -6520,6 +6523,8 @@ export default function RegieEventPage() {
                     gap: "0.16rem",
                     borderRadius: "10px",
                     padding: "0.36rem 0.62rem",
+                    width: "100%",
+                    boxSizing: "border-box",
                     ...participantsCounterStyle,
                   }}
                 >
