@@ -96,64 +96,32 @@ function parseSvgMarkup(svgMarkup) {
 }
 
 function buildPrintableQrSvg({ qrSvgMarkup, mirror = false }) {
-  const ns = "http://www.w3.org/2000/svg";
   const qrRoot = parseSvgMarkup(qrSvgMarkup);
   const sourceViewBox =
     qrRoot.getAttribute("viewBox") || `0 0 ${QR_EXPORT_SOURCE_SIZE} ${QR_EXPORT_SOURCE_SIZE}`;
-
-  const doc = document.implementation.createDocument(ns, "svg", null);
-  const root = doc.documentElement;
   const pageW = 1600;
   const pageH = 2000;
   const qrSize = 1240;
   const qrX = Math.round((pageW - qrSize) / 2);
   const qrY = 180;
+  const qrInnerMarkup = qrRoot.innerHTML || "";
+  const mirrorTransform = mirror
+    ? `translate(${qrX + qrSize} ${qrY}) scale(-1 1)`
+    : `translate(${qrX} ${qrY})`;
+  const quietZone = 92;
 
-  root.setAttribute("xmlns", ns);
-  root.setAttribute("width", String(pageW));
-  root.setAttribute("height", String(pageH));
-  root.setAttribute("viewBox", `0 0 ${pageW} ${pageH}`);
-
-  const bg = doc.createElementNS(ns, "rect");
-  bg.setAttribute("x", "0");
-  bg.setAttribute("y", "0");
-  bg.setAttribute("width", String(pageW));
-  bg.setAttribute("height", String(pageH));
-  bg.setAttribute("fill", "#ffffff");
-  root.appendChild(bg);
-
-  const wrapper = doc.createElementNS(ns, "g");
-  if (mirror) {
-    wrapper.setAttribute(
-      "transform",
-      `translate(${qrX + qrSize} ${qrY}) scale(-1 1)`,
-    );
-  } else {
-    wrapper.setAttribute("transform", `translate(${qrX} ${qrY})`);
-  }
-  const qrInner = doc.createElementNS(ns, "svg");
-  qrInner.setAttribute("width", String(qrSize));
-  qrInner.setAttribute("height", String(qrSize));
-  qrInner.setAttribute("viewBox", sourceViewBox);
-  qrInner.setAttribute("preserveAspectRatio", "xMidYMid meet");
-  Array.from(qrRoot.childNodes).forEach((node) => {
-    qrInner.appendChild(doc.importNode(node, true));
-  });
-  wrapper.appendChild(qrInner);
-  root.appendChild(wrapper);
-
-  const text = doc.createElementNS(ns, "text");
-  text.setAttribute("x", String(pageW / 2));
-  text.setAttribute("y", String(qrY + qrSize + 160));
-  text.setAttribute("text-anchor", "middle");
-  text.setAttribute("fill", "#0f172a");
-  text.setAttribute("font-size", "84");
-  text.setAttribute("font-family", "Arial, Helvetica, sans-serif");
-  text.setAttribute("font-weight", "700");
-  text.textContent = "Scannez pour participer";
-  root.appendChild(text);
-
-  return new XMLSerializer().serializeToString(root);
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${pageW}" height="${pageH}" viewBox="0 0 ${pageW} ${pageH}">`,
+    `<rect x="0" y="0" width="${pageW}" height="${pageH}" fill="#ffffff" />`,
+    `<rect x="${qrX - quietZone}" y="${qrY - quietZone}" width="${qrSize + quietZone * 2}" height="${qrSize + quietZone * 2}" fill="#ffffff" />`,
+    `<g transform="${mirrorTransform}">`,
+    `<svg width="${qrSize}" height="${qrSize}" viewBox="${sourceViewBox}" preserveAspectRatio="xMidYMid meet">`,
+    qrInnerMarkup,
+    `</svg>`,
+    `</g>`,
+    `<text x="${pageW / 2}" y="${qrY + qrSize + 160}" text-anchor="middle" fill="#0f172a" font-size="84" font-family="Arial, Helvetica, sans-serif" font-weight="700">Scannez pour participer</text>`,
+    `</svg>`,
+  ].join("");
 }
 
 async function svgToPngBlob(svgMarkup, size = 2400) {
@@ -162,7 +130,14 @@ async function svgToPngBlob(svgMarkup, size = 2400) {
   try {
     const img = await new Promise((resolve, reject) => {
       const el = new Image();
-      el.onload = () => resolve(el);
+      el.onload = async () => {
+        try {
+          if (typeof el.decode === "function") await el.decode();
+        } catch {
+          // decode optional
+        }
+        resolve(el);
+      };
       el.onerror = reject;
       el.src = url;
     });
@@ -2200,12 +2175,6 @@ function PanneauQrParticipant({
       pdf.setFillColor(255, 255, 255);
       pdf.rect(0, 0, pageW, pageH, "F");
       pdf.addImage(imgData, "PNG", x, y, qrW, qrH, undefined, "FAST");
-      pdf.setTextColor(15, 23, 42);
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(20);
-      pdf.text("Scannez pour participer", pageW / 2, y + qrH + 10, {
-        align: "center",
-      });
       pdf.save(`avote-qr-${slug}-${exportOrientation}.pdf`);
     } finally {
       URL.revokeObjectURL(pngUrl);
