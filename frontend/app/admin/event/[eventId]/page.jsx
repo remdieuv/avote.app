@@ -2444,7 +2444,7 @@ function PanneauQrParticipant({
             disabled={exportBusy !== null}
             style={qrExportBtnStyle}
           >
-            {exportBusy === "png" ? "..." : "Télécharger PNG"}
+            {exportBusy === "png" ? "..." : "Télécharger PNG (HD)"}
           </button>
           <button
             type="button"
@@ -2460,7 +2460,7 @@ function PanneauQrParticipant({
             disabled={exportBusy !== null}
             style={qrExportBtnStyle}
           >
-            {exportBusy === "svg" ? "..." : "Télécharger SVG"}
+            {exportBusy === "svg" ? "..." : "Télécharger SVG (vectoriel)"}
           </button>
         </div>
       </div>
