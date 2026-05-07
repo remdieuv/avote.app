@@ -2291,7 +2291,7 @@ function PanneauQrParticipant({
             border: `1px solid ${badge.border}`,
           }}
         >
-          {badge.label}
+          Participation
         </span>
         {!hasDuplicateStateLabel ? (
           <span
