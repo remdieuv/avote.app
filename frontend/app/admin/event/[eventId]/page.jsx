@@ -76,6 +76,114 @@ function normalizeRegieLiveStateForUx(raw) {
   return s;
 }
 
+const QR_EXPORT_SOURCE_SIZE = 1024;
+
+function downloadBlobFile(blob, filename) {
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.setTimeout(() => URL.revokeObjectURL(href), 1000);
+}
+
+function parseSvgMarkup(svgMarkup) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(svgMarkup, "image/svg+xml");
+  return doc.documentElement;
+}
+
+function buildPrintableQrSvg({ qrSvgMarkup, mirror = false }) {
+  const ns = "http://www.w3.org/2000/svg";
+  const qrRoot = parseSvgMarkup(qrSvgMarkup);
+  const sourceViewBox =
+    qrRoot.getAttribute("viewBox") || `0 0 ${QR_EXPORT_SOURCE_SIZE} ${QR_EXPORT_SOURCE_SIZE}`;
+
+  const doc = document.implementation.createDocument(ns, "svg", null);
+  const root = doc.documentElement;
+  const pageW = 1600;
+  const pageH = 2000;
+  const qrSize = 1240;
+  const qrX = Math.round((pageW - qrSize) / 2);
+  const qrY = 180;
+
+  root.setAttribute("xmlns", ns);
+  root.setAttribute("width", String(pageW));
+  root.setAttribute("height", String(pageH));
+  root.setAttribute("viewBox", `0 0 ${pageW} ${pageH}`);
+
+  const bg = doc.createElementNS(ns, "rect");
+  bg.setAttribute("x", "0");
+  bg.setAttribute("y", "0");
+  bg.setAttribute("width", String(pageW));
+  bg.setAttribute("height", String(pageH));
+  bg.setAttribute("fill", "#ffffff");
+  root.appendChild(bg);
+
+  const wrapper = doc.createElementNS(ns, "g");
+  if (mirror) {
+    wrapper.setAttribute(
+      "transform",
+      `translate(${qrX + qrSize} ${qrY}) scale(-1 1)`,
+    );
+  } else {
+    wrapper.setAttribute("transform", `translate(${qrX} ${qrY})`);
+  }
+  const qrInner = doc.createElementNS(ns, "svg");
+  qrInner.setAttribute("width", String(qrSize));
+  qrInner.setAttribute("height", String(qrSize));
+  qrInner.setAttribute("viewBox", sourceViewBox);
+  qrInner.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  Array.from(qrRoot.childNodes).forEach((node) => {
+    qrInner.appendChild(doc.importNode(node, true));
+  });
+  wrapper.appendChild(qrInner);
+  root.appendChild(wrapper);
+
+  const text = doc.createElementNS(ns, "text");
+  text.setAttribute("x", String(pageW / 2));
+  text.setAttribute("y", String(qrY + qrSize + 160));
+  text.setAttribute("text-anchor", "middle");
+  text.setAttribute("fill", "#0f172a");
+  text.setAttribute("font-size", "84");
+  text.setAttribute("font-family", "Arial, Helvetica, sans-serif");
+  text.setAttribute("font-weight", "700");
+  text.textContent = "Scannez pour participer";
+  root.appendChild(text);
+
+  return new XMLSerializer().serializeToString(root);
+}
+
+async function svgToPngBlob(svgMarkup, size = 2400) {
+  const svgBlob = new Blob([svgMarkup], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(svgBlob);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = reject;
+      el.src = url;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = Math.round((img.height / img.width) * size);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas indisponible.");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((resolve) =>
+      canvas.toBlob(resolve, "image/png", 1),
+    );
+    if (!blob) throw new Error("PNG indisponible.");
+    return blob;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 /** ≥1024px : dashboard 3 colonnes (équivalent lg) */
 function useBreakpointMin(px) {
   const [ok, setOk] = useState(false);
@@ -1982,8 +2090,15 @@ function PanneauQrParticipant({
   sceneBadge = null,
 }) {
   const [mode, setMode] = useState(/** @type {"join" | "vote"} */ ("join"));
+  const [exportOrientation, setExportOrientation] = useState(
+    /** @type {"normal" | "mirror"} */ ("normal"),
+  );
+  const [exportBusy, setExportBusy] = useState(
+    /** @type {null | "png" | "pdf" | "svg"} */ (null),
+  );
   const [targetUrl, setTargetUrl] = useState("");
   const [copied, setCopied] = useState(false);
+  const exportQrHostRef = useRef(null);
   const rail = variant === "rail";
 
   const enc = encodeURIComponent(slug);
@@ -2016,6 +2131,98 @@ function PanneauQrParticipant({
   function ouvrirLien() {
     const url = lienDiffusionAbsolu(pathActif);
     if (url) window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  function getExportSourceSvgMarkup() {
+    const host = exportQrHostRef.current;
+    const svg = host?.querySelector("svg");
+    return typeof svg?.outerHTML === "string" ? svg.outerHTML : "";
+  }
+
+  async function exportSvgFile() {
+    const raw = getExportSourceSvgMarkup();
+    if (!raw || !slug) return;
+    const printable = buildPrintableQrSvg({
+      qrSvgMarkup: raw,
+      mirror: exportOrientation === "mirror",
+    });
+    downloadBlobFile(
+      new Blob([printable], { type: "image/svg+xml;charset=utf-8" }),
+      `avote-qr-${slug}-${exportOrientation}.svg`,
+    );
+  }
+
+  async function exportPngFile() {
+    const raw = getExportSourceSvgMarkup();
+    if (!raw || !slug) return;
+    const printable = buildPrintableQrSvg({
+      qrSvgMarkup: raw,
+      mirror: exportOrientation === "mirror",
+    });
+    const pngBlob = await svgToPngBlob(printable, 2600);
+    downloadBlobFile(pngBlob, `avote-qr-${slug}-${exportOrientation}.png`);
+  }
+
+  async function exportPdfFile() {
+    const raw = getExportSourceSvgMarkup();
+    if (!raw || !slug) return;
+    const printable = buildPrintableQrSvg({
+      qrSvgMarkup: raw,
+      mirror: exportOrientation === "mirror",
+    });
+    const pngBlob = await svgToPngBlob(printable, 2600);
+    const pngUrl = URL.createObjectURL(pngBlob);
+    try {
+      const imgData = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const c = document.createElement("canvas");
+          c.width = img.width;
+          c.height = img.height;
+          const ctx = c.getContext("2d");
+          if (!ctx) return reject(new Error("Canvas indisponible."));
+          ctx.fillStyle = "#fff";
+          ctx.fillRect(0, 0, c.width, c.height);
+          ctx.drawImage(img, 0, 0);
+          resolve(c.toDataURL("image/png", 1));
+        };
+        img.onerror = reject;
+        img.src = pngUrl;
+      });
+      const { jsPDF } = await import("jspdf");
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const qrW = 170;
+      const qrH = 212;
+      const x = (pageW - qrW) / 2;
+      const y = (pageH - qrH) / 2 - 8;
+      pdf.setFillColor(255, 255, 255);
+      pdf.rect(0, 0, pageW, pageH, "F");
+      pdf.addImage(imgData, "PNG", x, y, qrW, qrH, undefined, "FAST");
+      pdf.setTextColor(15, 23, 42);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(20);
+      pdf.text("Scannez pour participer", pageW / 2, y + qrH + 10, {
+        align: "center",
+      });
+      pdf.save(`avote-qr-${slug}-${exportOrientation}.pdf`);
+    } finally {
+      URL.revokeObjectURL(pngUrl);
+    }
+  }
+
+  async function runExport(type) {
+    try {
+      setExportBusy(type);
+      if (type === "svg") await exportSvgFile();
+      if (type === "png") await exportPngFile();
+      if (type === "pdf") await exportPdfFile();
+    } catch {
+      // ignore: keeps regie flow intact
+    } finally {
+      setExportBusy(null);
+    }
   }
 
   const qrSize = rail ? 252 : 196;
@@ -2171,6 +2378,27 @@ function PanneauQrParticipant({
           </p>
         )}
       </div>
+      <div
+        ref={exportQrHostRef}
+        style={{
+          position: "absolute",
+          width: 0,
+          height: 0,
+          overflow: "hidden",
+          opacity: 0,
+          pointerEvents: "none",
+        }}
+        aria-hidden
+      >
+        <QRCodeSVG
+          value={lienDiffusionAbsolu(pathJoin) || pathJoin}
+          size={QR_EXPORT_SOURCE_SIZE}
+          level="H"
+          marginSize={4}
+          bgColor="#ffffff"
+          fgColor="#000000"
+        />
+      </div>
 
       {targetUrl ? (
         <p
@@ -2190,6 +2418,78 @@ function PanneauQrParticipant({
           {pathActif}
         </p>
       ) : null}
+
+      <div
+        style={{
+          margin: "0.2rem 0 0.7rem",
+          border: "1px solid #e2e8f0",
+          borderRadius: "12px",
+          background: "#fff",
+          padding: "0.65rem",
+        }}
+      >
+        <p
+          style={{
+            margin: "0 0 0.5rem",
+            fontSize: "0.78rem",
+            fontWeight: 800,
+            color: "#0f172a",
+          }}
+        >
+          Export QR code
+        </p>
+        <div style={{ display: "grid", gap: "0.28rem", marginBottom: "0.5rem" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "0.45rem", fontSize: "0.75rem", color: "#334155", fontWeight: 600 }}>
+            <input
+              type="radio"
+              name={`qr-export-orientation-${variant}`}
+              checked={exportOrientation === "normal"}
+              onChange={() => setExportOrientation("normal")}
+            />
+            QR normal
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "0.45rem", fontSize: "0.75rem", color: "#334155", fontWeight: 600 }}>
+            <input
+              type="radio"
+              name={`qr-export-orientation-${variant}`}
+              checked={exportOrientation === "mirror"}
+              onChange={() => setExportOrientation("mirror")}
+            />
+            QR miroir textile
+          </label>
+          {exportOrientation === "mirror" ? (
+            <p style={{ margin: "0.1rem 0 0", fontSize: "0.68rem", color: "#64748b", fontWeight: 600 }}>
+              Copie prête impression textile
+            </p>
+          ) : null}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "0.4rem" }}>
+          <button
+            type="button"
+            onClick={() => void runExport("png")}
+            disabled={exportBusy !== null}
+            style={qrExportBtnStyle}
+          >
+            {exportBusy === "png" ? "..." : "Télécharger PNG"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void runExport("pdf")}
+            disabled={exportBusy !== null}
+            style={qrExportBtnStyle}
+          >
+            {exportBusy === "pdf" ? "..." : "Télécharger PDF"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void runExport("svg")}
+            disabled={exportBusy !== null}
+            style={qrExportBtnStyle}
+          >
+            {exportBusy === "svg" ? "..." : "Télécharger SVG"}
+          </button>
+        </div>
+      </div>
 
       <div
         style={{
@@ -2253,6 +2553,18 @@ function PanneauQrParticipant({
     </aside>
   );
 }
+
+const qrExportBtnStyle = {
+  minHeight: "36px",
+  border: "1px solid #cbd5e1",
+  borderRadius: "9px",
+  background: "#fff",
+  color: "#334155",
+  fontSize: "0.72rem",
+  fontWeight: 700,
+  padding: "0.45rem 0.35rem",
+  cursor: "pointer",
+};
 
 /** Copie du lien /screen — discret, colonne partage */
 function CopierLienEcranLeger({ slug }) {
