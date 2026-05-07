@@ -2429,7 +2429,7 @@ function PanneauQrParticipant({
               checked={exportOrientation === "mirror"}
               onChange={() => setExportOrientation("mirror")}
             />
-            QR miroir textile
+            QR miroir textile (Transfert)
           </label>
           {exportOrientation === "mirror" ? (
             <p style={{ margin: "0.1rem 0 0", fontSize: "0.68rem", color: "#64748b", fontWeight: 600 }}>
