@@ -3989,6 +3989,7 @@ export default function RegieEventPage() {
   /** Aperçu /join intégré (desktop split) — persistant par événement */
   const [previewJoinOpen, setPreviewJoinOpen] = useState(false);
   const [mobileJoinPreviewOpen, setMobileJoinPreviewOpen] = useState(false);
+  const [liveAnswersOpen, setLiveAnswersOpen] = useState(false);
   /** Desktop : colonne gauche (questions + liens) repliée */
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
   /** Nombre de clients /screen connectés (socket room dédiée) */
@@ -4825,6 +4826,31 @@ export default function RegieEventPage() {
   const activePoll = eventData?.polls?.find(
     (p) => p.id === eventData.activePollId,
   );
+  const liveResponsesOptions = useMemo(() => {
+    const opts = Array.isArray(activePoll?.options) ? activePoll.options : [];
+    const totalVotesSafe = Math.max(
+      0,
+      Number(activePoll?.voteCount || opts.reduce((acc, o) => acc + Number(o?.voteCount || 0), 0)),
+    );
+    return opts
+      .map((o, i) => {
+        const voteCount = Math.max(0, Number(o?.voteCount || 0));
+        const pctRaw = Number(o?.votePct);
+        const pct =
+          Number.isFinite(pctRaw) && pctRaw >= 0
+            ? pctRaw
+            : totalVotesSafe > 0
+              ? (voteCount / totalVotesSafe) * 100
+              : 0;
+        return {
+          id: String(o?.id || i),
+          label: String(o?.label || `Option ${i + 1}`),
+          voteCount,
+          pct: Math.max(0, Math.min(100, pct)),
+        };
+      })
+      .sort((a, b) => b.voteCount - a.voteCount);
+  }, [activePoll]);
   const activeContestSummary = pollDrawSummary[String(activePoll?.id || "")] ?? {
     totalDraws: 0,
     totalWinners: 0,
@@ -7209,6 +7235,27 @@ export default function RegieEventPage() {
                   <div style={{ flex: 1, minWidth: "10px" }} />
                   <button
                     type="button"
+                    disabled={!activePollIdJs}
+                    onClick={() => setLiveAnswersOpen((v) => !v)}
+                    style={{
+                      ...btnGhost,
+                      minHeight: "2.6rem",
+                      minWidth: "170px",
+                      padding: "0.5rem 0.75rem",
+                      borderColor: "#cbd5e1",
+                      background: "#fff",
+                      color: "#0f172a",
+                      fontWeight: 700,
+                      fontSize: "0.78rem",
+                    }}
+                    title="Afficher les réponses en direct sans quitter la régie"
+                  >
+                    {liveAnswersOpen
+                      ? "Masquer les réponses en direct"
+                      : "Voir les réponses en direct"}
+                  </button>
+                  <button
+                    type="button"
                     disabled={busy || eventFinished}
                     onClick={async () => {
                       if (typeof window === "undefined") return;
@@ -7240,6 +7287,64 @@ export default function RegieEventPage() {
                     ⏹ Terminer
                   </button>
                 </div>
+                {desktop && liveAnswersOpen ? (
+                  <section
+                    style={{
+                      marginTop: "0.55rem",
+                      border: "1px solid #dbeafe",
+                      background: "#f8fbff",
+                      borderRadius: "10px",
+                      padding: "0.7rem 0.75rem",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "0.5rem",
+                        marginBottom: "0.55rem",
+                      }}
+                    >
+                      <p style={{ margin: 0, fontSize: "0.82rem", fontWeight: 800, color: "#0f172a" }}>
+                        Réponses en direct
+                      </p>
+                      <span style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: 700 }}>
+                        Mise à jour live
+                      </span>
+                    </div>
+                    {liveResponsesOptions.length === 0 ? (
+                      <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", fontWeight: 600 }}>
+                        Aucune réponse à afficher pour le moment.
+                      </p>
+                    ) : (
+                      <div style={{ display: "grid", gap: "0.4rem" }}>
+                        {liveResponsesOptions.map((opt) => (
+                          <div key={opt.id} style={{ display: "grid", gap: "0.2rem" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                              <span style={{ flex: 1, fontSize: "0.78rem", fontWeight: 700, color: "#0f172a" }}>
+                                {opt.label}
+                              </span>
+                              <span style={{ fontSize: "0.74rem", fontWeight: 800, color: "#334155" }}>
+                                {opt.voteCount} · {Number(opt.pct).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}%
+                              </span>
+                            </div>
+                            <div style={{ height: "7px", borderRadius: "999px", background: "#dbeafe", overflow: "hidden" }}>
+                              <div
+                                style={{
+                                  width: `${Math.max(0, Math.min(100, opt.pct))}%`,
+                                  height: "100%",
+                                  borderRadius: "999px",
+                                  background: "#2563eb",
+                                }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                ) : null}
                 {isScreenBlack ? (
                   <div
                     style={{
@@ -7282,6 +7387,78 @@ export default function RegieEventPage() {
                   </div>
                 ) : null}
             </div>
+
+            {!desktop && liveAnswersOpen ? (
+              <>
+                <div
+                  onClick={() => setLiveAnswersOpen(false)}
+                  style={{
+                    position: "fixed",
+                    inset: 0,
+                    background: "rgba(15,23,42,0.35)",
+                    zIndex: 1400,
+                  }}
+                />
+                <aside
+                  style={{
+                    position: "fixed",
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    maxHeight: "56vh",
+                    overflowY: "auto",
+                    background: "#fff",
+                    borderTopLeftRadius: "14px",
+                    borderTopRightRadius: "14px",
+                    border: "1px solid #dbeafe",
+                    boxShadow: "0 -8px 28px rgba(15,23,42,0.2)",
+                    padding: "0.85rem 0.85rem 1rem",
+                    zIndex: 1450,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", marginBottom: "0.55rem" }}>
+                    <p style={{ margin: 0, fontSize: "0.84rem", fontWeight: 800, color: "#0f172a" }}>
+                      Réponses en direct
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setLiveAnswersOpen(false)}
+                      style={{
+                        ...btnGhost,
+                        minHeight: "34px",
+                        padding: "0.28rem 0.58rem",
+                        fontSize: "0.74rem",
+                      }}
+                    >
+                      Fermer
+                    </button>
+                  </div>
+                  {liveResponsesOptions.length === 0 ? (
+                    <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", fontWeight: 600 }}>
+                      Aucune réponse à afficher pour le moment.
+                    </p>
+                  ) : (
+                    <div style={{ display: "grid", gap: "0.45rem" }}>
+                      {liveResponsesOptions.map((opt) => (
+                        <div key={`mobile-${opt.id}`} style={{ display: "grid", gap: "0.22rem" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                            <span style={{ flex: 1, fontSize: "0.78rem", fontWeight: 700, color: "#0f172a" }}>
+                              {opt.label}
+                            </span>
+                            <span style={{ fontSize: "0.72rem", fontWeight: 800, color: "#334155" }}>
+                              {opt.voteCount} · {Number(opt.pct).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}%
+                            </span>
+                          </div>
+                          <div style={{ height: "7px", borderRadius: "999px", background: "#dbeafe", overflow: "hidden" }}>
+                            <div style={{ width: `${Math.max(0, Math.min(100, opt.pct))}%`, height: "100%", borderRadius: "999px", background: "#2563eb" }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </aside>
+              </>
+            ) : null}
           </div>
 
           {String(activePoll?.type || "").toUpperCase() === "CONTEST_ENTRY" ? (
