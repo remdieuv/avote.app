@@ -2452,7 +2452,7 @@ function PanneauQrParticipant({
             disabled={exportBusy !== null}
             style={qrExportBtnStyle}
           >
-            {exportBusy === "pdf" ? "..." : "Télécharger PDF"}
+            {exportBusy === "pdf" ? "..." : "Télécharger PDF (A4)"}
           </button>
           <button
             type="button"
