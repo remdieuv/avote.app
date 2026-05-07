@@ -2198,6 +2198,9 @@ function PanneauQrParticipant({
   const badge =
     sceneBadge ??
     getEventUxSceneBadge({ liveState: normalizeRegieLiveStateForUx(liveState) });
+  const hasDuplicateStateLabel =
+    String(stateLabel || "").trim().toLowerCase() ===
+    String(badge?.label || "").trim().toLowerCase();
 
   const wrap = {
     ...CARD,
@@ -2290,16 +2293,18 @@ function PanneauQrParticipant({
         >
           {badge.label}
         </span>
-        <span
-          style={{
-            fontSize: "0.78rem",
-            fontWeight: 600,
-            color: "#475569",
-            lineHeight: 1.3,
-          }}
-        >
-          {stateLabel}
-        </span>
+        {!hasDuplicateStateLabel ? (
+          <span
+            style={{
+              fontSize: "0.78rem",
+              fontWeight: 600,
+              color: "#475569",
+              lineHeight: 1.3,
+            }}
+          >
+            {stateLabel}
+          </span>
+        ) : null}
       </div>
 
       <div style={toggleWrap} role="group" aria-label="Type de lien pour le QR">
