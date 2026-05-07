@@ -553,10 +553,12 @@ async function submitVote(input) {
     });
 
     if (!participantExistsOnEvent) {
-      const participantsUsed = await tx.vote.count({
+      const participantsUsedRows = await tx.vote.findMany({
         where: { poll: { eventId } },
         distinct: ["voterSessionId"],
+        select: { voterSessionId: true },
       });
+      const participantsUsed = participantsUsedRows.length;
       const participantsLimit = Math.max(1, Number(event.participantsLimit || 500));
       if (participantsUsed >= participantsLimit) {
         await tx.event.update({
