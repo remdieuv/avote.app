@@ -12,6 +12,46 @@ function mapApiError(body, status) {
   return message || code || `Erreur ${status}`;
 }
 
+/** Photo galerie landing (carrousel ou grille) avec suppression optionnelle. */
+function LandingGalleryPhoto({
+  url,
+  photoId,
+  variant,
+  canManage,
+  isDeleting,
+  isExiting,
+  onDelete,
+}) {
+  const wrapClass =
+    variant === "slide" ? "ev-gallery-slide" : "ev-gallery-card";
+  const exitingClass = isExiting
+    ? variant === "slide"
+      ? " ev-gallery-slide--exiting"
+      : " ev-gallery-card--exiting"
+    : "";
+  return (
+    <div className={`${wrapClass}${exitingClass}`}>
+      <div className="ev-gallery-frame">
+        <figure>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt="" loading="lazy" />
+        </figure>
+        {canManage ? (
+          <button
+            type="button"
+            className="ev-gallery-delete-btn"
+            disabled={isDeleting}
+            aria-label="Supprimer cette photo"
+            onClick={() => onDelete(photoId)}
+          >
+            {isDeleting ? "…" : "✕"}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Landing événement publique — vitrine + galerie + lien vers la salle live.
  */
@@ -29,6 +69,8 @@ export default function EventLandingPage() {
   const [toastNotif, setToastNotif] = useState(null);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadError, setUploadError] = useState(null);
+  const [deletingPhotoId, setDeletingPhotoId] = useState(null);
+  const [exitingPhotoId, setExitingPhotoId] = useState(null);
   const fileInputRef = useRef(null);
   const galleryScrollRef = useRef(null);
   const carouselRafRef = useRef(0);
@@ -124,6 +166,61 @@ export default function EventLandingPage() {
         setUploadError(err?.message || "Upload impossible.");
       } finally {
         setUploadBusy(false);
+      }
+    },
+    [payload],
+  );
+
+  const handleDeleteLandingPhoto = useCallback(
+    async (photoId) => {
+      if (!payload || typeof payload !== "object") return;
+      const can =
+        payload.canUploadLandingPhoto === true &&
+        typeof payload.landingPhotoUploadEventId === "string" &&
+        String(payload.landingPhotoUploadEventId).trim() !== "";
+      const eventId = can
+        ? String(payload.landingPhotoUploadEventId).trim()
+        : "";
+      const pid = String(photoId || "").trim();
+      if (!can || !eventId || !pid) return;
+      if (!window.confirm("Supprimer cette photo ?")) return;
+      setDeletingPhotoId(pid);
+      setUploadError(null);
+      try {
+        const res = await adminFetch(
+          `${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/landing/photos/${encodeURIComponent(pid)}`,
+          { method: "DELETE" },
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(mapApiError(body, res.status));
+        setDeletingPhotoId(null);
+        const reduceMotion =
+          typeof window !== "undefined" &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        if (reduceMotion) {
+          setPayload((prev) => {
+            if (!prev || typeof prev !== "object") return prev;
+            const ph = Array.isArray(prev.photos) ? prev.photos : [];
+            return { ...prev, photos: ph.filter((x) => String(x?.id) !== pid) };
+          });
+          setToastNotif("🗑 Photo supprimée");
+          window.setTimeout(() => setToastNotif(null), 2600);
+          return;
+        }
+        setExitingPhotoId(pid);
+        window.setTimeout(() => {
+          setPayload((prev) => {
+            if (!prev || typeof prev !== "object") return prev;
+            const ph = Array.isArray(prev.photos) ? prev.photos : [];
+            return { ...prev, photos: ph.filter((x) => String(x?.id) !== pid) };
+          });
+          setExitingPhotoId(null);
+          setToastNotif("🗑 Photo supprimée");
+          window.setTimeout(() => setToastNotif(null), 2600);
+        }, 320);
+      } catch (err) {
+        setUploadError(err?.message || "Suppression impossible.");
+        setDeletingPhotoId(null);
       }
     },
     [payload],
@@ -524,16 +621,38 @@ export default function EventLandingPage() {
           max-width: min(360px, calc(100vw - 4.75rem));
           scroll-snap-align: start;
           scroll-snap-stop: normal;
+          transition:
+            opacity 0.32s ease,
+            transform 0.32s ease;
         }
-        .ev-gallery-slide figure {
-          margin: 0;
-          height: min(58vw, 320px);
+        .ev-gallery-slide--exiting {
+          opacity: 0;
+          transform: scale(0.96);
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .ev-gallery-slide--exiting {
+            transition: none;
+          }
+        }
+        .ev-gallery-frame {
+          position: relative;
+          height: 100%;
           border-radius: 22px;
           overflow: hidden;
           box-shadow:
             0 22px 50px rgba(15, 23, 42, 0.14),
             0 0 0 1px rgba(15, 23, 42, 0.06);
-          transition: transform 0.35s ease, box-shadow 0.35s ease;
+        }
+        .ev-gallery-slide .ev-gallery-frame {
+          height: min(58vw, 320px);
+        }
+        .ev-gallery-slide figure {
+          margin: 0;
+          height: 100%;
+          border-radius: 0;
+          overflow: hidden;
+          box-shadow: none;
+          transition: transform 0.35s ease;
         }
         .ev-gallery-slide img {
           width: 100%;
@@ -543,7 +662,7 @@ export default function EventLandingPage() {
           transition: transform 0.5s ease;
         }
         @media (prefers-reduced-motion: no-preference) {
-          .ev-gallery-slide figure:hover img {
+          .ev-gallery-slide .ev-gallery-frame:hover img {
             transform: scale(1.04);
           }
         }
@@ -600,10 +719,6 @@ export default function EventLandingPage() {
             grid-template-columns: repeat(2, 1fr);
             gap: 1.25rem;
           }
-          .ev-gallery-card figure {
-            height: auto;
-            aspect-ratio: 4 / 3;
-          }
         }
         @media (min-width: 1024px) {
           .ev-landing-gallery-grid {
@@ -619,14 +734,34 @@ export default function EventLandingPage() {
         .ev-landing-gallery-grid {
           display: none;
         }
-        .ev-gallery-card figure {
-          margin: 0;
+        .ev-gallery-card {
+          transition:
+            opacity 0.32s ease,
+            transform 0.32s ease;
+        }
+        .ev-gallery-card--exiting {
+          opacity: 0;
+          transform: scale(0.97);
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .ev-gallery-card--exiting {
+            transition: none;
+          }
+        }
+        .ev-gallery-card .ev-gallery-frame {
           border-radius: 20px;
-          overflow: hidden;
+          aspect-ratio: 4 / 3;
           box-shadow:
             0 18px 44px rgba(15, 23, 42, 0.1),
             0 0 0 1px rgba(15, 23, 42, 0.05);
           transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .ev-gallery-card figure {
+          margin: 0;
+          height: 100%;
+          border-radius: 0;
+          overflow: hidden;
+          box-shadow: none;
         }
         .ev-gallery-card img {
           width: 100%;
@@ -636,7 +771,7 @@ export default function EventLandingPage() {
           transition: transform 0.45s ease;
         }
         @media (prefers-reduced-motion: no-preference) {
-          .ev-gallery-card:hover figure {
+          .ev-gallery-card:hover .ev-gallery-frame {
             transform: translateY(-4px);
             box-shadow:
               0 28px 56px rgba(15, 23, 42, 0.14),
@@ -647,6 +782,60 @@ export default function EventLandingPage() {
           }
         }
 
+        .ev-gallery-delete-btn {
+          position: absolute;
+          top: 0.55rem;
+          right: 0.55rem;
+          z-index: 4;
+          width: 2.1rem;
+          height: 2.1rem;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+          border: none;
+          border-radius: 50%;
+          font-size: 0.82rem;
+          font-weight: 700;
+          line-height: 1;
+          cursor: pointer;
+          color: #f8fafc;
+          background: rgba(15, 23, 42, 0.48);
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+          box-shadow:
+            0 2px 12px rgba(0, 0, 0, 0.2),
+            0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+          transition:
+            opacity 0.22s ease,
+            transform 0.2s ease,
+            background 0.2s ease;
+          opacity: 0.92;
+        }
+        .ev-gallery-delete-btn:hover:not(:disabled) {
+          background: rgba(185, 28, 28, 0.88);
+          transform: scale(1.05);
+        }
+        .ev-gallery-delete-btn:active:not(:disabled) {
+          transform: scale(0.96);
+        }
+        .ev-gallery-delete-btn:disabled {
+          opacity: 0.55;
+          cursor: wait;
+        }
+        @media (min-width: 768px) {
+          .ev-gallery-delete-btn {
+            opacity: 0;
+          }
+          .ev-gallery-frame:hover .ev-gallery-delete-btn {
+            opacity: 1;
+          }
+        }
+        .ev-gallery-delete-btn:focus-visible {
+          opacity: 1;
+          outline: 2px solid var(--ev-accent, #2563eb);
+          outline-offset: 2px;
+        }
         .ev-landing-upload-fab {
           position: fixed;
           right: max(1rem, env(safe-area-inset-right));
@@ -878,13 +1067,18 @@ export default function EventLandingPage() {
                       ? resolveApiAssetUrlNullable(p.url.trim())
                       : null;
                   if (!u) return null;
+                  const pid = String(p.id ?? "");
                   return (
-                    <div key={p.id} className="ev-gallery-slide">
-                      <figure>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={u} alt="" loading="lazy" />
-                      </figure>
-                    </div>
+                    <LandingGalleryPhoto
+                      key={p.id}
+                      url={u}
+                      photoId={pid}
+                      variant="slide"
+                      canManage={canUploadLanding}
+                      isDeleting={deletingPhotoId === pid}
+                      isExiting={exitingPhotoId === pid}
+                      onDelete={handleDeleteLandingPhoto}
+                    />
                   );
                 })}
               </div>
@@ -915,13 +1109,18 @@ export default function EventLandingPage() {
                     ? resolveApiAssetUrlNullable(p.url.trim())
                     : null;
                 if (!u) return null;
+                const pid = String(p.id ?? "");
                 return (
-                  <div key={`g-${p.id}`} className="ev-gallery-card">
-                    <figure>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={u} alt="" loading="lazy" />
-                    </figure>
-                  </div>
+                  <LandingGalleryPhoto
+                    key={`g-${p.id}`}
+                    url={u}
+                    photoId={pid}
+                    variant="card"
+                    canManage={canUploadLanding}
+                    isDeleting={deletingPhotoId === pid}
+                    isExiting={exitingPhotoId === pid}
+                    onDelete={handleDeleteLandingPhoto}
+                  />
                 );
               })}
             </div>
