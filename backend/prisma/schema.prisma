@@ -137,14 +137,33 @@ model Event {
   isLocked Boolean @default(false)
   /** Limite business de participants uniques (voterSessionId) sur l'événement. */
   participantsLimit Int @default(500)
+  /** Landing publique `/e/[slug]` (vitrine + galerie photo). */
+  landingEnabled     Boolean @default(false)
+  landingCoverUrl    String?
+  landingTitle       String?
+  landingDescription String?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
   polls Poll[]
   leads LeadCapture[]
   contestDraws ContestDraw[]
+  landingPhotos EventLandingPhoto[]
 
   @@index([userId])
+}
+
+/** Photos galerie landing (upload organisateur, pas de vidéo V1). */
+model EventLandingPhoto {
+  id                 String   @id @default(cuid())
+  eventId            String
+  url                String
+  cloudinaryPublicId String?
+  createdAt          DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, createdAt])
 }
 
 model Poll {

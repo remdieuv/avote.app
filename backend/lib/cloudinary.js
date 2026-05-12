@@ -35,14 +35,32 @@ function sanitizeSegment(input) {
 }
 
 /**
- * @param {{buffer: Buffer, eventId: string, kind: "logo" | "background"}} args
+ * @param {{buffer: Buffer, eventId: string, kind: "logo" | "background" | "landing_cover" | "landing_photo"}} args
  * @returns {Promise<{secureUrl: string, publicId: string}>}
  */
 function uploadImageBufferToCloudinary(args) {
   assertCloudinaryConfigured();
   const eventSafe = sanitizeSegment(args.eventId) || "event";
-  const kindSafe = args.kind === "background" ? "bg" : "logo";
+  const kindSafe =
+    args.kind === "background"
+      ? "bg"
+      : args.kind === "landing_cover"
+        ? "lc"
+        : args.kind === "landing_photo"
+          ? "lp"
+          : "logo";
   const publicId = `${kindSafe}-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+  const landingTransform =
+    args.kind === "landing_cover" || args.kind === "landing_photo"
+      ? [
+          {
+            width: args.kind === "landing_cover" ? 1920 : 1600,
+            crop: "limit",
+            quality: "auto",
+            fetch_format: "auto",
+          },
+        ]
+      : undefined;
 
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
@@ -50,6 +68,7 @@ function uploadImageBufferToCloudinary(args) {
         folder: `avote/events/${eventSafe}`,
         public_id: publicId,
         resource_type: "image",
+        ...(landingTransform ? { transformation: landingTransform } : {}),
       },
       (err, result) => {
         if (err) return reject(err);
@@ -66,6 +85,31 @@ function uploadImageBufferToCloudinary(args) {
   });
 }
 
+/**
+ * Supprime une ressource Cloudinary (best-effort, ignore si non configuré).
+ * @param {string | null | undefined} publicId
+ */
+function destroyCloudinaryByPublicId(publicId) {
+  const id = typeof publicId === "string" ? publicId.trim() : "";
+  if (!id) return Promise.resolve(false);
+  try {
+    assertCloudinaryConfigured();
+  } catch {
+    return Promise.resolve(false);
+  }
+  return new Promise((resolve) => {
+    cloudinary.uploader.destroy(id, { resource_type: "image" }, (err, result) => {
+      if (err) {
+        console.warn("cloudinary.destroy", id, err.message || err);
+        resolve(false);
+        return;
+      }
+      resolve(result?.result === "ok");
+    });
+  });
+}
+
 module.exports = {
   uploadImageBufferToCloudinary,
+  destroyCloudinaryByPublicId,
 };

@@ -11,7 +11,10 @@ const Stripe = require("stripe");
 const { Server } = require("socket.io");
 const cookieParser = require("cookie-parser");
 const { prisma } = require("./lib/prisma");
-const { uploadImageBufferToCloudinary } = require("./lib/cloudinary");
+const {
+  uploadImageBufferToCloudinary,
+  destroyCloudinaryByPublicId,
+} = require("./lib/cloudinary");
 const {
   hashPassword,
   verifyPassword,
@@ -71,6 +74,10 @@ function eventCustomizationJson(event) {
       infoSecondaryCtaLabel: null,
       infoSecondaryCtaUrl: null,
       infoShowOnFinished: true,
+      landingEnabled: false,
+      landingCoverUrl: null,
+      landingTitle: null,
+      landingDescription: null,
     };
   }
   return {
@@ -91,11 +98,16 @@ function eventCustomizationJson(event) {
       typeof event.infoShowOnFinished === "boolean"
         ? event.infoShowOnFinished
         : true,
+    landingEnabled: Boolean(event.landingEnabled),
+    landingCoverUrl: absolutizeStoredAssetUrl(event.landingCoverUrl),
+    landingTitle: event.landingTitle ?? null,
+    landingDescription: event.landingDescription ?? null,
   };
 }
 
 const CUSTOM_THEME_MODES = new Set(["dark", "light", "auto"]);
 const CUSTOM_OVERLAY = new Set(["low", "medium", "strong"]);
+const MAX_EVENT_LANDING_PHOTOS = 50;
 
 const uploadMiddleware = multer({
   storage: multer.memoryStorage(),
@@ -1823,6 +1835,65 @@ app.get("/events/slug/:slug", async (req, res) => {
   }
 });
 
+/** Landing publique `/e/[slug]` (vitrine + galerie). */
+app.get("/events/slug/:slug/landing", async (req, res) => {
+  try {
+    const slug =
+      typeof req.params.slug === "string" ? req.params.slug.trim() : "";
+    if (!slug) {
+      return res.status(400).json({ error: "Slug invalide." });
+    }
+    const event = await prisma.event.findUnique({
+      where: { slug },
+      include: {
+        landingPhotos: { orderBy: { createdAt: "desc" } },
+      },
+    });
+    if (!event) {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+    if (!event.landingEnabled) {
+      return res.json({ enabled: false, slug: event.slug });
+    }
+    const info = eventCustomizationJson(event);
+    const photos = (event.landingPhotos || []).map((p) => ({
+      id: p.id,
+      url: absolutizeStoredAssetUrl(p.url),
+      createdAt: p.createdAt.toISOString(),
+    }));
+    const titleEffective =
+      (event.landingTitle && event.landingTitle.trim()) ||
+      event.title ||
+      "Événement";
+    const descEffective =
+      event.landingDescription != null &&
+      String(event.landingDescription).trim() !== ""
+        ? event.landingDescription
+        : event.description ?? null;
+
+    return res.json({
+      enabled: true,
+      slug: event.slug,
+      title: titleEffective,
+      description: descEffective,
+      coverUrl: info.landingCoverUrl,
+      primaryColor: info.primaryColor,
+      logoUrl: info.logoUrl,
+      photos,
+      infoSectionTitle: info.infoSectionTitle,
+      infoSectionText: info.infoSectionText,
+      infoPrimaryCtaLabel: info.infoPrimaryCtaLabel,
+      infoPrimaryCtaUrl: info.infoPrimaryCtaUrl,
+      infoSecondaryCtaLabel: info.infoSecondaryCtaLabel,
+      infoSecondaryCtaUrl: info.infoSecondaryCtaUrl,
+      joinPath: `/join/${event.slug}`,
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
 /** Détail événement + sondages triés (régie admin) */
 app.get("/events/:eventId", requireAuth, async (req, res) => {
   try {
@@ -1841,6 +1912,9 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
           include: {
             _count: { select: { votes: true } },
           },
+        },
+        landingPhotos: {
+          orderBy: { createdAt: "desc" },
         },
       },
     });
@@ -1888,6 +1962,11 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
         leadEnabled: Boolean(p.leadEnabled),
         leadTriggerOptionId: p.leadTriggerOptionId ?? null,
         voteCount: p._count.votes,
+      })),
+      landingPhotos: (event.landingPhotos || []).map((ph) => ({
+        id: ph.id,
+        url: absolutizeStoredAssetUrl(ph.url),
+        createdAt: ph.createdAt.toISOString(),
       })),
     });
   } catch (e) {
@@ -2188,6 +2267,45 @@ app.patch("/events/:eventId/customization", requireAuth, async (req, res) => {
       data.infoShowOnFinished = v;
     }
 
+    if (Object.prototype.hasOwnProperty.call(body, "landingEnabled")) {
+      if (typeof body.landingEnabled !== "boolean") {
+        return res.status(400).json({ error: "landingEnabled invalide." });
+      }
+      data.landingEnabled = body.landingEnabled;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, "landingCoverUrl")) {
+      const v = normalizeAssetUrlInput(body.landingCoverUrl);
+      if (v === undefined) {
+        return res.status(400).json({ error: "landingCoverUrl invalide." });
+      }
+      data.landingCoverUrl = v;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, "landingTitle")) {
+      const v = body.landingTitle;
+      if (v === null) {
+        data.landingTitle = null;
+      } else if (typeof v === "string") {
+        const t = v.trim();
+        data.landingTitle = t === "" ? null : t.slice(0, 200);
+      } else {
+        return res.status(400).json({ error: "landingTitle invalide." });
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, "landingDescription")) {
+      const v = body.landingDescription;
+      if (v === null) {
+        data.landingDescription = null;
+      } else if (typeof v === "string") {
+        const t = v.trim();
+        data.landingDescription = t === "" ? null : t.slice(0, 1200);
+      } else {
+        return res.status(400).json({ error: "landingDescription invalide." });
+      }
+    }
+
     if (Object.keys(data).length === 0) {
       return res.status(400).json({ error: "Aucun champ à enregistrer." });
     }
@@ -2218,10 +2336,15 @@ app.post("/events/:eventId/customization/upload", requireAuth, async (req, res) 
       return res.status(owned.status).json({ error: "Événement introuvable." });
     }
     const kindRaw = String(req.query.kind || "").toLowerCase();
-    if (kindRaw !== "logo" && kindRaw !== "background") {
-      return res
-        .status(400)
-        .json({ error: "Query kind=logo ou kind=background requis." });
+    if (
+      kindRaw !== "logo" &&
+      kindRaw !== "background" &&
+      kindRaw !== "landing_cover"
+    ) {
+      return res.status(400).json({
+        error:
+          "Query kind=logo, kind=background ou kind=landing_cover requis.",
+      });
     }
 
     await new Promise((resolve, reject) => {
@@ -2234,10 +2357,16 @@ app.post("/events/:eventId/customization/upload", requireAuth, async (req, res) 
     if (!req.file) {
       return res.status(400).json({ error: "Fichier manquant (champ file)." });
     }
+    const cloudKind =
+      kindRaw === "background"
+        ? "background"
+        : kindRaw === "landing_cover"
+          ? "landing_cover"
+          : "logo";
     const uploadResult = await uploadImageBufferToCloudinary({
       buffer: req.file.buffer,
       eventId,
-      kind: kindRaw === "background" ? "background" : "logo",
+      kind: cloudKind,
     });
     return res.json({ url: uploadResult.secureUrl, publicId: uploadResult.publicId });
   } catch (e) {
@@ -2248,6 +2377,87 @@ app.post("/events/:eventId/customization/upload", requireAuth, async (req, res) 
     return res.status(500).json({ error: e?.message || "Upload impossible." });
   }
 });
+
+/** Ajout photo galerie landing (une image par requête, upload Cloudinary). */
+app.post("/events/:eventId/landing/photos", requireAuth, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    await new Promise((resolve, reject) => {
+      uploadMiddleware(req, res, (err) => {
+        if (err) reject(err);
+        else resolve(undefined);
+      });
+    });
+    if (!req.file) {
+      return res.status(400).json({ error: "Fichier manquant (champ file)." });
+    }
+    const count = await prisma.eventLandingPhoto.count({
+      where: { eventId },
+    });
+    if (count >= MAX_EVENT_LANDING_PHOTOS) {
+      return res.status(400).json({
+        error: `Galerie limitée à ${MAX_EVENT_LANDING_PHOTOS} photos.`,
+      });
+    }
+    const uploadResult = await uploadImageBufferToCloudinary({
+      buffer: req.file.buffer,
+      eventId,
+      kind: "landing_photo",
+    });
+    const row = await prisma.eventLandingPhoto.create({
+      data: {
+        eventId,
+        url: uploadResult.secureUrl,
+        cloudinaryPublicId: uploadResult.publicId,
+      },
+    });
+    return res.status(201).json({
+      id: row.id,
+      url: absolutizeStoredAssetUrl(row.url),
+      createdAt: row.createdAt.toISOString(),
+    });
+  } catch (e) {
+    if (e && typeof e === "object" && e.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({ error: "Fichier trop volumineux (max 3 Mo)." });
+    }
+    console.error(e);
+    return res.status(500).json({ error: e?.message || "Upload impossible." });
+  }
+});
+
+app.delete(
+  "/events/:eventId/landing/photos/:photoId",
+  requireAuth,
+  async (req, res) => {
+    try {
+      const { eventId, photoId } = req.params;
+      const owned = await assertEventOwnedBy(eventId, req.userId);
+      if (!owned.ok) {
+        return res.status(owned.status).json({ error: "Événement introuvable." });
+      }
+      const pid = typeof photoId === "string" ? photoId.trim() : "";
+      if (!pid) {
+        return res.status(400).json({ error: "photoId invalide." });
+      }
+      const existing = await prisma.eventLandingPhoto.findFirst({
+        where: { id: pid, eventId },
+      });
+      if (!existing) {
+        return res.status(404).json({ error: "Photo introuvable." });
+      }
+      await prisma.eventLandingPhoto.delete({ where: { id: pid } });
+      void destroyCloudinaryByPublicId(existing.cloudinaryPublicId);
+      return res.json({ ok: true });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: "Erreur serveur." });
+    }
+  },
+);
 
 /** Chrono question (auto-fermeture du vote quand remainingSec atteint 0) */
 app.post("/events/:eventId/question-timer", requireAuth, async (req, res) => {

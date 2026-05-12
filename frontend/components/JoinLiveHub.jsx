@@ -176,6 +176,8 @@ export function JoinLiveHub({ slug }) {
   const [infoSecondaryCtaLabel, setInfoSecondaryCtaLabel] = useState(null);
   const [infoSecondaryCtaUrl, setInfoSecondaryCtaUrl] = useState(null);
   const [infoShowOnFinished, setInfoShowOnFinished] = useState(true);
+  /** Landing `/e/[slug]` activée (lien discret vers vitrine). */
+  const [landingEnabled, setLandingEnabled] = useState(false);
   const [prefersDark, setPrefersDark] = useState(true);
   /**
    * Surcharge visuelle depuis la page admin (iframe + postMessage), non persistée.
@@ -230,6 +232,7 @@ export function JoinLiveHub({ slug }) {
       setInfoSecondaryCtaLabel(null);
       setInfoSecondaryCtaUrl(null);
       setInfoShowOnFinished(true);
+      setLandingEnabled(false);
       setPreviewCustomization(null);
       return;
     }
@@ -370,6 +373,7 @@ export function JoinLiveHub({ slug }) {
         : null,
     );
     setInfoShowOnFinished(typeof isof === "boolean" ? isof : true);
+    setLandingEnabled(Boolean(data.landingEnabled));
   }, [slug]);
 
   useEffect(() => {
@@ -1353,6 +1357,30 @@ export function JoinLiveHub({ slug }) {
           </section>
         ) : null}
       </ExperienceHeader>
+
+      {!loading && !error && landingEnabled ? (
+        <div
+          style={{
+            padding: "0 1rem",
+            marginTop: "-0.35rem",
+            marginBottom: "0.25rem",
+            textAlign: "center",
+          }}
+        >
+          <Link
+            href={`/e/${encodeURIComponent(slug)}`}
+            style={{
+              fontSize: "0.78rem",
+              fontWeight: 600,
+              color: palette.muted,
+              textDecoration: "none",
+              borderBottom: `1px solid color-mix(in srgb, ${palette.muted} 35%, transparent)`,
+            }}
+          >
+            Galerie & infos
+          </Link>
+        </div>
+      ) : null}
 
       <div className="join-live-zone" style={zoneMain}>
         {loading ? (

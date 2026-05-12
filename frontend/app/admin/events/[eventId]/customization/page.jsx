@@ -92,8 +92,17 @@ export default function EventCustomizationPage() {
   const [baseline, setBaseline] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
-  const [uploadKind, setUploadKind] = useState(null);
+  const [uploadKind, setUploadKind] = useState(
+    /** @type {null | "logo" | "background" | "landing_cover"} */ (null),
+  );
   const [toast, setToast] = useState(null);
+  const [landingEnabled, setLandingEnabled] = useState(false);
+  const [landingCoverUrl, setLandingCoverUrl] = useState("");
+  const [landingTitle, setLandingTitle] = useState("");
+  const [landingDescription, setLandingDescription] = useState("");
+  /** @type {{ id: string; url: string; createdAt: string }[]} */
+  const [landingPhotos, setLandingPhotos] = useState([]);
+  const [landingPhotoBusy, setLandingPhotoBusy] = useState(false);
   const previewIframeRef = useRef(null);
   const [previewIframeReady, setPreviewIframeReady] = useState(false);
 
@@ -200,7 +209,11 @@ export default function EventCustomizationPage() {
       infoPrimaryCtaUrl !== baseline.infoPrimaryCtaUrl ||
       infoSecondaryCtaLabel !== baseline.infoSecondaryCtaLabel ||
       infoSecondaryCtaUrl !== baseline.infoSecondaryCtaUrl ||
-      infoShowOnFinished !== baseline.infoShowOnFinished
+      infoShowOnFinished !== baseline.infoShowOnFinished ||
+      landingEnabled !== baseline.landingEnabled ||
+      landingCoverUrl !== baseline.landingCoverUrl ||
+      landingTitle !== baseline.landingTitle ||
+      landingDescription !== baseline.landingDescription
     );
   }, [
     baseline,
@@ -218,6 +231,10 @@ export default function EventCustomizationPage() {
     infoSecondaryCtaLabel,
     infoSecondaryCtaUrl,
     infoShowOnFinished,
+    landingEnabled,
+    landingCoverUrl,
+    landingTitle,
+    landingDescription,
   ]);
 
   const load = useCallback(async () => {
@@ -251,6 +268,10 @@ export default function EventCustomizationPage() {
       const iscl = data.infoSecondaryCtaLabel;
       const iscu = data.infoSecondaryCtaUrl;
       const isof = data.infoShowOnFinished;
+      const landEn = Boolean(data.landingEnabled);
+      const lcov = data.landingCoverUrl;
+      const ltit = data.landingTitle;
+      const ldesc = data.landingDescription;
 
       setDescription(desc);
       setLogoUrl(typeof lu === "string" ? resolveApiAssetUrl(lu) : "");
@@ -283,6 +304,30 @@ export default function EventCustomizationPage() {
       setInfoSecondaryCtaUrl(typeof iscu === "string" ? iscu : "");
       setInfoShowOnFinished(typeof isof === "boolean" ? isof : true);
 
+      setLandingEnabled(landEn);
+      setLandingCoverUrl(
+        typeof lcov === "string" ? resolveApiAssetUrl(lcov) : "",
+      );
+      setLandingTitle(typeof ltit === "string" ? ltit : "");
+      setLandingDescription(typeof ldesc === "string" ? ldesc : "");
+      if (Array.isArray(data.landingPhotos)) {
+        setLandingPhotos(
+          data.landingPhotos
+            .map((p) => ({
+              id: String(p?.id || ""),
+              url:
+                typeof p?.url === "string"
+                  ? resolveApiAssetUrl(p.url)
+                  : "",
+              createdAt:
+                typeof p?.createdAt === "string" ? p.createdAt : "",
+            }))
+            .filter((p) => p.id && p.url),
+        );
+      } else {
+        setLandingPhotos([]);
+      }
+
       setBaseline({
         description: desc,
         logoUrl: typeof lu === "string" ? resolveApiAssetUrl(lu) : "",
@@ -310,6 +355,11 @@ export default function EventCustomizationPage() {
         infoSecondaryCtaLabel: typeof iscl === "string" ? iscl : "",
         infoSecondaryCtaUrl: typeof iscu === "string" ? iscu : "",
         infoShowOnFinished: typeof isof === "boolean" ? isof : true,
+        landingEnabled: landEn,
+        landingCoverUrl:
+          typeof lcov === "string" ? resolveApiAssetUrl(lcov) : "",
+        landingTitle: typeof ltit === "string" ? ltit : "",
+        landingDescription: typeof ldesc === "string" ? ldesc : "",
       });
     } catch (e) {
       setLoadError(e.message || "Chargement impossible.");
@@ -341,7 +391,11 @@ export default function EventCustomizationPage() {
         throw new Error("Réponse serveur invalide.");
       }
       if (kind === "logo") setLogoUrl(resolveApiAssetUrl(body.url));
-      else setBackgroundUrl(resolveApiAssetUrl(body.url));
+      else if (kind === "background") {
+        setBackgroundUrl(resolveApiAssetUrl(body.url));
+      } else if (kind === "landing_cover") {
+        setLandingCoverUrl(resolveApiAssetUrl(body.url));
+      }
     } catch (e) {
       setSaveError(e.message || "Échec de l’envoi du fichier.");
     } finally {
@@ -398,6 +452,17 @@ export default function EventCustomizationPage() {
               ? isUrlTrim
               : null,
         infoShowOnFinished: Boolean(infoShowOnFinished),
+        landingEnabled: Boolean(landingEnabled),
+        landingCoverUrl:
+          landingCoverUrl.trim() === "" ? null : landingCoverUrl.trim(),
+        landingTitle:
+          landingTitle.trim() === ""
+            ? null
+            : landingTitle.trim().slice(0, 200),
+        landingDescription:
+          landingDescription.trim() === ""
+            ? null
+            : landingDescription.trim().slice(0, 1200),
       };
       const res = await adminFetch(
         `${apiBaseBrowser()}/events/${eventId}/customization`,
@@ -440,6 +505,10 @@ export default function EventCustomizationPage() {
             ? infoSecondaryCtaUrl.trim()
             : "",
         infoShowOnFinished: Boolean(infoShowOnFinished),
+        landingEnabled: Boolean(landingEnabled),
+        landingCoverUrl: landingCoverUrl.trim(),
+        landingTitle: landingTitle.trim(),
+        landingDescription: landingDescription.trim(),
       });
     } catch (e) {
       setSaveError(e.message || "Enregistrement impossible.");
@@ -454,8 +523,74 @@ export default function EventCustomizationPage() {
   function clearBackground() {
     setBackgroundUrl("");
   }
+  function clearLandingCover() {
+    setLandingCoverUrl("");
+  }
+
+  async function addLandingPhotos(fileList) {
+    if (!eventId || !fileList?.length) return;
+    const files = Array.from(fileList).filter(Boolean);
+    if (!files.length) return;
+    setLandingPhotoBusy(true);
+    setSaveError(null);
+    try {
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await adminFetch(
+          `${apiBaseBrowser()}/events/${eventId}/landing/photos`,
+          { method: "POST", body: fd },
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(mapApiError(body, res.status, "Photo"));
+        }
+        if (typeof body.id === "string" && typeof body.url === "string") {
+          setLandingPhotos((prev) => [
+            {
+              id: body.id,
+              url: resolveApiAssetUrl(body.url),
+              createdAt:
+                typeof body.createdAt === "string" ? body.createdAt : "",
+            },
+            ...prev,
+          ]);
+        }
+      }
+      setToast("Photos ajoutées");
+      window.setTimeout(() => setToast(null), 2400);
+    } catch (e) {
+      setSaveError(e.message || "Envoi photo impossible.");
+    } finally {
+      setLandingPhotoBusy(false);
+    }
+  }
+
+  async function removeLandingPhoto(photoId) {
+    if (!eventId || !photoId) return;
+    setLandingPhotoBusy(true);
+    setSaveError(null);
+    try {
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/events/${eventId}/landing/photos/${encodeURIComponent(photoId)}`,
+        { method: "DELETE" },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(mapApiError(body, res.status));
+      }
+      setLandingPhotos((prev) => prev.filter((p) => p.id !== photoId));
+      setToast("Photo supprimée");
+      window.setTimeout(() => setToast(null), 2200);
+    } catch (e) {
+      setSaveError(e.message || "Suppression impossible.");
+    } finally {
+      setLandingPhotoBusy(false);
+    }
+  }
 
   const joinPath = slug ? `/join/${encodeURIComponent(slug)}` : null;
+  const landingPath = slug ? `/e/${encodeURIComponent(slug)}` : null;
 
   if (!eventId) {
     return (
@@ -896,6 +1031,286 @@ export default function EventCustomizationPage() {
                   />
                   Afficher aussi après la fin de l’événement
                 </label>
+              </section>
+
+              <section style={card}>
+                <h2
+                  style={{
+                    margin: "0 0 0.85rem",
+                    fontSize: "0.72rem",
+                    fontWeight: 800,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    color: "#64748b",
+                  }}
+                >
+                  Landing page
+                </h2>
+                <p
+                  style={{
+                    margin: "0 0 0.85rem",
+                    fontSize: "0.77rem",
+                    color: "#64748b",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Vitrine publique <code style={{ fontSize: "0.76rem" }}>/e/[slug]</code>{" "}
+                  : couverture, galerie photo live, infos — puis accès à la salle{" "}
+                  <code style={{ fontSize: "0.76rem" }}>/join</code>.
+                  {landingPath ? (
+                    <>
+                      {" "}
+                      <Link
+                        href={landingPath}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: "#2563eb", fontWeight: 600 }}
+                      >
+                        Ouvrir la landing
+                      </Link>
+                    </>
+                  ) : null}
+                </p>
+                <label
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    fontSize: "0.85rem",
+                    color: "#334155",
+                    cursor: "pointer",
+                    marginBottom: "0.85rem",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={landingEnabled}
+                    onChange={(e) => setLandingEnabled(e.target.checked)}
+                  />
+                  Activer la landing page
+                </label>
+
+                <p
+                  style={{
+                    margin: "0 0 0.35rem",
+                    fontSize: "0.78rem",
+                    fontWeight: 600,
+                    color: "#475569",
+                  }}
+                >
+                  Image de couverture
+                </p>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "0.5rem",
+                    alignItems: "center",
+                    marginBottom: "0.85rem",
+                  }}
+                >
+                  {landingCoverUrl ? (
+                    <img
+                      src={landingCoverUrl}
+                      alt="Couverture landing"
+                      style={{
+                        width: "140px",
+                        height: "84px",
+                        objectFit: "cover",
+                        borderRadius: "10px",
+                        border: "1px solid #e2e8f0",
+                      }}
+                    />
+                  ) : null}
+                  <label
+                    style={{
+                      ...btnSecondary,
+                      display: "inline-block",
+                      cursor:
+                        uploadKind !== null || landingPhotoBusy
+                          ? "not-allowed"
+                          : "pointer",
+                      opacity: uploadKind !== null || landingPhotoBusy ? 0.65 : 1,
+                    }}
+                  >
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      style={{ display: "none" }}
+                      disabled={uploadKind !== null || landingPhotoBusy}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        e.target.value = "";
+                        if (f) void handleUpload("landing_cover", f);
+                      }}
+                    />
+                    {uploadKind === "landing_cover"
+                      ? "Envoi…"
+                      : "Envoyer une couverture"}
+                  </label>
+                  {landingCoverUrl ? (
+                    <button
+                      type="button"
+                      style={btnDanger}
+                      disabled={landingPhotoBusy}
+                      onClick={clearLandingCover}
+                    >
+                      Retirer
+                    </button>
+                  ) : null}
+                </div>
+
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.78rem",
+                    fontWeight: 600,
+                    color: "#475569",
+                    marginBottom: "0.35rem",
+                  }}
+                >
+                  Titre affiché sur la landing (optionnel)
+                </label>
+                <input
+                  type="text"
+                  value={landingTitle}
+                  maxLength={200}
+                  onChange={(e) => setLandingTitle(e.target.value)}
+                  placeholder={
+                    eventTitle
+                      ? `Par défaut : ${eventTitle}`
+                      : "Sinon : titre de l’événement"
+                  }
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    padding: "0.5rem 0.65rem",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "0.88rem",
+                    marginBottom: "0.75rem",
+                  }}
+                />
+
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.78rem",
+                    fontWeight: 600,
+                    color: "#475569",
+                    marginBottom: "0.35rem",
+                  }}
+                >
+                  Description courte (optionnelle)
+                </label>
+                <textarea
+                  value={landingDescription}
+                  onChange={(e) => setLandingDescription(e.target.value)}
+                  rows={3}
+                  maxLength={1200}
+                  placeholder="Accroche sous le titre sur la landing uniquement."
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    padding: "0.55rem 0.65rem",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "0.88rem",
+                    resize: "vertical",
+                    fontFamily: "inherit",
+                    marginBottom: "0.85rem",
+                  }}
+                />
+
+                <p
+                  style={{
+                    margin: "0 0 0.4rem",
+                    fontSize: "0.78rem",
+                    fontWeight: 600,
+                    color: "#475569",
+                  }}
+                >
+                  Galerie live photos
+                </p>
+                <label
+                  style={{
+                    ...btnPrimary,
+                    display: "inline-block",
+                    cursor:
+                      uploadKind !== null || landingPhotoBusy
+                        ? "not-allowed"
+                        : "pointer",
+                    opacity: uploadKind !== null || landingPhotoBusy ? 0.65 : 1,
+                    marginBottom: "0.65rem",
+                  }}
+                >
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    multiple
+                    style={{ display: "none" }}
+                    disabled={uploadKind !== null || landingPhotoBusy}
+                    onChange={(e) => {
+                      const list = e.target.files;
+                      e.target.value = "";
+                      if (list?.length) void addLandingPhotos(list);
+                    }}
+                  />
+                  {landingPhotoBusy ? "Envoi…" : "Ajouter des photos"}
+                </label>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fill, minmax(96px, 1fr))",
+                    gap: "0.5rem",
+                  }}
+                >
+                  {landingPhotos.map((ph) => (
+                    <div
+                      key={ph.id}
+                      style={{
+                        position: "relative",
+                        borderRadius: "10px",
+                        overflow: "hidden",
+                        border: "1px solid #e2e8f0",
+                        aspectRatio: "1",
+                        background: "#f8fafc",
+                      }}
+                    >
+                      <img
+                        src={ph.url}
+                        alt=""
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          display: "block",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void removeLandingPhoto(ph.id)}
+                        disabled={landingPhotoBusy}
+                        style={{
+                          position: "absolute",
+                          top: 4,
+                          right: 4,
+                          padding: "0.2rem 0.45rem",
+                          fontSize: "0.68rem",
+                          fontWeight: 700,
+                          borderRadius: "6px",
+                          border: "1px solid #fecaca",
+                          background: "rgba(254,242,242,0.95)",
+                          color: "#b91c1c",
+                          cursor: landingPhotoBusy ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </section>
 
               <section style={card}>
