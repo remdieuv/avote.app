@@ -2965,7 +2965,7 @@ function LiensDiffusionCompact({ slug }) {
 
 /**
  * Colonne droite desktop : QR + liens diffusion.
- * @param {{ slug: string; liveState: string; stateLabel: string; showHeader?: boolean; noSticky?: boolean; qrVariant?: "rail" | "mobile"; sceneBadge?: { label: string; bg: string; color: string; border: string } | null }} props
+ * @param {{ slug: string; liveState: string; stateLabel: string; showHeader?: boolean; noSticky?: boolean; qrVariant?: "rail" | "mobile"; sceneBadge?: { label: string; bg: string; color: string; border: string } | null; onQuickLandingPhoto?: () => void; landingPhotoUploading?: boolean; landingPhotosCount?: number }} props
  */
 function SidebarPartageDroit({
   slug,
@@ -2976,6 +2976,9 @@ function SidebarPartageDroit({
   qrVariant = "rail",
   sceneBadge = null,
   onOverlayCopied,
+  onQuickLandingPhoto,
+  landingPhotoUploading = false,
+  landingPhotosCount = 0,
 }) {
   return (
     <aside
@@ -3018,6 +3021,54 @@ function SidebarPartageDroit({
         embedded
         sceneBadge={sceneBadge}
       />
+      <section
+        style={{
+          border: "1px solid #e2e8f0",
+          borderRadius: "12px",
+          background: "#ffffff",
+          padding: "0.75rem 0.8rem",
+          boxShadow: "0 1px 3px rgba(15, 23, 42, 0.06)",
+        }}
+      >
+        <p
+          style={{
+            margin: 0,
+            fontSize: "0.86rem",
+            fontWeight: 800,
+            color: "#0f172a",
+            letterSpacing: "-0.01em",
+          }}
+        >
+          📸 Galerie live
+        </p>
+        <p style={{ margin: "0.3rem 0 0 0", fontSize: "0.74rem", color: "#64748b", lineHeight: 1.35 }}>
+          Ajoutez des photos en direct pendant l’événement.
+        </p>
+        <button
+          type="button"
+          disabled={landingPhotoUploading}
+          onClick={() => onQuickLandingPhoto?.()}
+          style={{
+            marginTop: "0.62rem",
+            width: "100%",
+            minHeight: "2.2rem",
+            padding: "0.45rem 0.68rem",
+            borderRadius: "10px",
+            border: "1px solid #fdba74",
+            background: "linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%)",
+            color: "#9a3412",
+            fontSize: "0.8rem",
+            fontWeight: 800,
+            cursor: landingPhotoUploading ? "not-allowed" : "pointer",
+          }}
+        >
+          {landingPhotoUploading ? "Envoi photo…" : "📸 Publier une photo"}
+        </button>
+        <p style={{ margin: "0.42rem 0 0 0", fontSize: "0.7rem", color: "#64748b", fontWeight: 600 }}>
+          {landingPhotosCount} photo{landingPhotosCount > 1 ? "s" : ""} publiée
+          {landingPhotosCount > 1 ? "s" : ""}
+        </p>
+      </section>
       <CopierLienEcranLeger slug={slug} />
       <div
         style={{
@@ -5026,6 +5077,9 @@ export default function RegieEventPage() {
     participantsLimitValue == null
       ? "Participants non disponibles"
       : `Participants : ${effectiveParticipantsUsed} / ${participantsLimitValue}`;
+  const landingPhotosCount = Array.isArray(eventData?.landingPhotos)
+    ? eventData.landingPhotos.length
+    : 0;
   const participantsCounterStyle =
     participantsStatus.tone === "strong"
       ? {
@@ -6230,21 +6284,6 @@ export default function RegieEventPage() {
                         Voir ma salle
                       </button>
                     ) : null}
-                    <button
-                      type="button"
-                      disabled={landingPhotoUploading}
-                      onClick={() => quickLandingPhotoInputRef.current?.click()}
-                      style={{
-                        ...btnGhost,
-                        fontSize: "0.72rem",
-                        fontWeight: 800,
-                        color: "#1e3a8a",
-                        borderColor: "#bfdbfe",
-                        background: "linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%)",
-                      }}
-                    >
-                      {landingPhotoUploading ? "Envoi photo…" : "📸 Ajouter une photo live"}
-                    </button>
                   </div>
                   <span
                     style={{
@@ -6315,23 +6354,6 @@ export default function RegieEventPage() {
                 >
                   {modeBadge.label}
                 </span>
-                <button
-                  type="button"
-                  disabled={landingPhotoUploading}
-                  onClick={() => quickLandingPhotoInputRef.current?.click()}
-                  style={{
-                    ...btnGhost,
-                    minHeight: "2.2rem",
-                    padding: "0.42rem 0.72rem",
-                    fontSize: "0.76rem",
-                    fontWeight: 800,
-                    color: "#1e3a8a",
-                    borderColor: "#bfdbfe",
-                    background: "linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%)",
-                  }}
-                >
-                  {landingPhotoUploading ? "Envoi photo…" : "📸 Ajouter une photo live"}
-                </button>
                 {canStartReal ? (
                   <div
                     style={{
@@ -7829,6 +7851,9 @@ export default function RegieEventPage() {
                   showHeader={false}
                   noSticky
                   qrVariant="mobile"
+                  onQuickLandingPhoto={() => quickLandingPhotoInputRef.current?.click()}
+                  landingPhotoUploading={landingPhotoUploading}
+                  landingPhotosCount={landingPhotosCount}
                   onOverlayCopied={() => {
                     setToastNotif("Lien overlay copié");
                     window.setTimeout(() => setToastNotif(null), 3200);
@@ -7857,6 +7882,9 @@ export default function RegieEventPage() {
                 liveState={liveState}
                 stateLabel={stateLabel}
                 sceneBadge={sceneBadge}
+                onQuickLandingPhoto={() => quickLandingPhotoInputRef.current?.click()}
+                landingPhotoUploading={landingPhotoUploading}
+                landingPhotosCount={landingPhotosCount}
                 onOverlayCopied={() => {
                   setToastNotif("Lien overlay copié");
                   window.setTimeout(() => setToastNotif(null), 3200);
