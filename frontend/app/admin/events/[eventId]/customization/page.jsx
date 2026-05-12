@@ -101,8 +101,8 @@ export default function EventCustomizationPage() {
   const [landingTitle, setLandingTitle] = useState("");
   const [landingDescription, setLandingDescription] = useState("");
   /** @type {{ id: string; url: string; createdAt: string }[]} */
-  const [landingPhotos, setLandingPhotos] = useState([]);
-  const [landingPhotoBusy, setLandingPhotoBusy] = useState(false);
+  const [showcasePhotos, setShowcasePhotos] = useState([]);
+  const [showcasePhotoBusy, setShowcasePhotoBusy] = useState(false);
   const previewIframeRef = useRef(null);
   const [previewIframeReady, setPreviewIframeReady] = useState(false);
 
@@ -310,9 +310,9 @@ export default function EventCustomizationPage() {
       );
       setLandingTitle(typeof ltit === "string" ? ltit : "");
       setLandingDescription(typeof ldesc === "string" ? ldesc : "");
-      if (Array.isArray(data.landingPhotos)) {
-        setLandingPhotos(
-          data.landingPhotos
+      if (Array.isArray(data.landingShowcasePhotos)) {
+        setShowcasePhotos(
+          data.landingShowcasePhotos
             .map((p) => ({
               id: String(p?.id || ""),
               url:
@@ -325,7 +325,7 @@ export default function EventCustomizationPage() {
             .filter((p) => p.id && p.url),
         );
       } else {
-        setLandingPhotos([]);
+        setShowcasePhotos([]);
       }
 
       setBaseline({
@@ -538,18 +538,18 @@ export default function EventCustomizationPage() {
     setLandingCoverUrl("");
   }
 
-  async function addLandingPhotos(fileList) {
+  async function addShowcasePhotos(fileList) {
     if (!eventId || !fileList?.length) return;
     const files = Array.from(fileList).filter(Boolean);
     if (!files.length) return;
-    setLandingPhotoBusy(true);
+    setShowcasePhotoBusy(true);
     setSaveError(null);
     try {
       for (const file of files) {
         const fd = new FormData();
         fd.append("file", file);
         const res = await adminFetch(
-          `${apiBaseBrowser()}/events/${eventId}/landing/photos`,
+          `${apiBaseBrowser()}/events/${eventId}/landing/showcase-photos`,
           { method: "POST", body: fd },
         );
         const body = await res.json().catch(() => ({}));
@@ -557,14 +557,14 @@ export default function EventCustomizationPage() {
           throw new Error(mapApiError(body, res.status, "Photo"));
         }
         if (typeof body.id === "string" && typeof body.url === "string") {
-          setLandingPhotos((prev) => [
+          setShowcasePhotos((prev) => [
+            ...prev,
             {
               id: body.id,
               url: resolveApiAssetUrl(body.url),
               createdAt:
                 typeof body.createdAt === "string" ? body.createdAt : "",
             },
-            ...prev,
           ]);
         }
       }
@@ -573,30 +573,30 @@ export default function EventCustomizationPage() {
     } catch (e) {
       setSaveError(e.message || "Envoi photo impossible.");
     } finally {
-      setLandingPhotoBusy(false);
+      setShowcasePhotoBusy(false);
     }
   }
 
-  async function removeLandingPhoto(photoId) {
+  async function removeShowcasePhoto(photoId) {
     if (!eventId || !photoId) return;
-    setLandingPhotoBusy(true);
+    setShowcasePhotoBusy(true);
     setSaveError(null);
     try {
       const res = await adminFetch(
-        `${apiBaseBrowser()}/events/${eventId}/landing/photos/${encodeURIComponent(photoId)}`,
+        `${apiBaseBrowser()}/events/${eventId}/landing/showcase-photos/${encodeURIComponent(photoId)}`,
         { method: "DELETE" },
       );
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(mapApiError(body, res.status));
       }
-      setLandingPhotos((prev) => prev.filter((p) => p.id !== photoId));
+      setShowcasePhotos((prev) => prev.filter((p) => p.id !== photoId));
       setToast("Photo supprimée");
       window.setTimeout(() => setToast(null), 2200);
     } catch (e) {
       setSaveError(e.message || "Suppression impossible.");
     } finally {
-      setLandingPhotoBusy(false);
+      setShowcasePhotoBusy(false);
     }
   }
 
@@ -1138,17 +1138,17 @@ export default function EventCustomizationPage() {
                       ...btnSecondary,
                       display: "inline-block",
                       cursor:
-                        uploadKind !== null || landingPhotoBusy
+                        uploadKind !== null || showcasePhotoBusy
                           ? "not-allowed"
                           : "pointer",
-                      opacity: uploadKind !== null || landingPhotoBusy ? 0.65 : 1,
+                      opacity: uploadKind !== null || showcasePhotoBusy ? 0.65 : 1,
                     }}
                   >
                     <input
                       type="file"
                       accept="image/jpeg,image/png,image/webp,image/gif"
                       style={{ display: "none" }}
-                      disabled={uploadKind !== null || landingPhotoBusy}
+                      disabled={uploadKind !== null || showcasePhotoBusy}
                       onChange={(e) => {
                         const f = e.target.files?.[0];
                         e.target.value = "";
@@ -1163,7 +1163,7 @@ export default function EventCustomizationPage() {
                     <button
                       type="button"
                       style={btnDanger}
-                      disabled={landingPhotoBusy}
+                      disabled={showcasePhotoBusy}
                       onClick={clearLandingCover}
                     >
                       Retirer
@@ -1233,25 +1233,37 @@ export default function EventCustomizationPage() {
                   }}
                 />
 
-                <p
+                <h3
                   style={{
-                    margin: "0 0 0.4rem",
-                    fontSize: "0.78rem",
-                    fontWeight: 600,
-                    color: "#475569",
+                    margin: "0 0 0.35rem",
+                    fontSize: "1rem",
+                    fontWeight: 800,
+                    color: "#0f172a",
                   }}
                 >
-                  Galerie live photos
+                  ✨ Galerie événement
+                </h3>
+                <p
+                  style={{
+                    margin: "0 0 0.65rem",
+                    fontSize: "0.8rem",
+                    color: "#64748b",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Teaser, ambiance, lieu, sponsors — affichées sur la landing
+                  avant et pendant le live. Les photos « moments live » se gèrent
+                  depuis la régie ou la landing.
                 </p>
                 <label
                   style={{
                     ...btnPrimary,
                     display: "inline-block",
                     cursor:
-                      uploadKind !== null || landingPhotoBusy
+                      uploadKind !== null || showcasePhotoBusy
                         ? "not-allowed"
                         : "pointer",
-                    opacity: uploadKind !== null || landingPhotoBusy ? 0.65 : 1,
+                    opacity: uploadKind !== null || showcasePhotoBusy ? 0.65 : 1,
                     marginBottom: "0.65rem",
                   }}
                 >
@@ -1260,14 +1272,14 @@ export default function EventCustomizationPage() {
                     accept="image/jpeg,image/png,image/webp,image/gif"
                     multiple
                     style={{ display: "none" }}
-                    disabled={uploadKind !== null || landingPhotoBusy}
+                    disabled={uploadKind !== null || showcasePhotoBusy}
                     onChange={(e) => {
                       const list = e.target.files;
                       e.target.value = "";
-                      if (list?.length) void addLandingPhotos(list);
+                      if (list?.length) void addShowcasePhotos(list);
                     }}
                   />
-                  {landingPhotoBusy ? "Envoi…" : "Ajouter des photos"}
+                  {showcasePhotoBusy ? "Envoi…" : "Ajouter des photos"}
                 </label>
                 <div
                   style={{
@@ -1277,7 +1289,7 @@ export default function EventCustomizationPage() {
                     gap: "0.5rem",
                   }}
                 >
-                  {landingPhotos.map((ph) => (
+                  {showcasePhotos.map((ph) => (
                     <div
                       key={ph.id}
                       style={{
@@ -1301,8 +1313,8 @@ export default function EventCustomizationPage() {
                       />
                       <button
                         type="button"
-                        onClick={() => void removeLandingPhoto(ph.id)}
-                        disabled={landingPhotoBusy}
+                        onClick={() => void removeShowcasePhoto(ph.id)}
+                        disabled={showcasePhotoBusy}
                         style={{
                           position: "absolute",
                           top: 4,
@@ -1314,7 +1326,7 @@ export default function EventCustomizationPage() {
                           border: "1px solid #fecaca",
                           background: "rgba(254,242,242,0.95)",
                           color: "#b91c1c",
-                          cursor: landingPhotoBusy ? "not-allowed" : "pointer",
+                          cursor: showcasePhotoBusy ? "not-allowed" : "pointer",
                         }}
                       >
                         ✕

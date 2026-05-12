@@ -35,7 +35,7 @@ function sanitizeSegment(input) {
 }
 
 /**
- * @param {{buffer: Buffer, eventId: string, kind: "logo" | "background" | "landing_cover" | "landing_photo"}} args
+ * @param {{buffer: Buffer, eventId: string, kind: "logo" | "background" | "landing_cover" | "landing_photo" | "landing_showcase_photo"}} args
  * @returns {Promise<{secureUrl: string, publicId: string}>}
  */
 function uploadImageBufferToCloudinary(args) {
@@ -48,10 +48,14 @@ function uploadImageBufferToCloudinary(args) {
         ? "lc"
         : args.kind === "landing_photo"
           ? "lp"
-          : "logo";
+          : args.kind === "landing_showcase_photo"
+            ? "ls"
+            : "logo";
   const publicId = `${kindSafe}-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
   const landingTransform =
-    args.kind === "landing_cover" || args.kind === "landing_photo"
+    args.kind === "landing_cover" ||
+    args.kind === "landing_photo" ||
+    args.kind === "landing_showcase_photo"
       ? [
           {
             width: args.kind === "landing_cover" ? 1920 : 1600,

@@ -112,6 +112,7 @@ function eventCustomizationJson(event) {
 const CUSTOM_THEME_MODES = new Set(["dark", "light", "auto"]);
 const CUSTOM_OVERLAY = new Set(["low", "medium", "strong"]);
 const MAX_EVENT_LANDING_PHOTOS = 50;
+const MAX_EVENT_LANDING_SHOWCASE_PHOTOS = 30;
 
 const uploadMiddleware = multer({
   storage: multer.memoryStorage(),
@@ -1854,6 +1855,7 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       where: { slug },
       include: {
         landingPhotos: { orderBy: { createdAt: "desc" } },
+        landingShowcasePhotos: { orderBy: { createdAt: "asc" } },
       },
     });
     if (!event) {
@@ -1864,6 +1866,11 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
     }
     const info = eventCustomizationJson(event);
     const photos = (event.landingPhotos || []).map((p) => ({
+      id: p.id,
+      url: absolutizeStoredAssetUrl(p.url),
+      createdAt: p.createdAt.toISOString(),
+    }));
+    const showcasePhotos = (event.landingShowcasePhotos || []).map((p) => ({
       id: p.id,
       url: absolutizeStoredAssetUrl(p.url),
       createdAt: p.createdAt.toISOString(),
@@ -1911,6 +1918,7 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       primaryColor: info.primaryColor,
       logoUrl: info.logoUrl,
       photos,
+      showcasePhotos,
       canUploadLandingPhoto,
       landingPhotoUploadEventId,
       infoSectionTitle: info.infoSectionTitle,
@@ -1948,6 +1956,9 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
         },
         landingPhotos: {
           orderBy: { createdAt: "desc" },
+        },
+        landingShowcasePhotos: {
+          orderBy: { createdAt: "asc" },
         },
       },
     });
@@ -1997,6 +2008,11 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
         voteCount: p._count.votes,
       })),
       landingPhotos: (event.landingPhotos || []).map((ph) => ({
+        id: ph.id,
+        url: absolutizeStoredAssetUrl(ph.url),
+        createdAt: ph.createdAt.toISOString(),
+      })),
+      landingShowcasePhotos: (event.landingShowcasePhotos || []).map((ph) => ({
         id: ph.id,
         url: absolutizeStoredAssetUrl(ph.url),
         createdAt: ph.createdAt.toISOString(),
@@ -2483,6 +2499,87 @@ app.delete(
         return res.status(404).json({ error: "Photo introuvable." });
       }
       await prisma.eventLandingPhoto.delete({ where: { id: pid } });
+      void destroyCloudinaryByPublicId(existing.cloudinaryPublicId);
+      return res.json({ ok: true });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: "Erreur serveur." });
+    }
+  },
+);
+
+/** Galerie « événement » (teaser) — customization uniquement, max 30. */
+app.post("/events/:eventId/landing/showcase-photos", requireAuth, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const owned = await assertEventOwnedByOrPlatformAdmin(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    await new Promise((resolve, reject) => {
+      uploadMiddleware(req, res, (err) => {
+        if (err) reject(err);
+        else resolve(undefined);
+      });
+    });
+    if (!req.file) {
+      return res.status(400).json({ error: "Fichier manquant (champ file)." });
+    }
+    const count = await prisma.eventLandingShowcasePhoto.count({
+      where: { eventId },
+    });
+    if (count >= MAX_EVENT_LANDING_SHOWCASE_PHOTOS) {
+      return res.status(400).json({
+        error: `Galerie événement limitée à ${MAX_EVENT_LANDING_SHOWCASE_PHOTOS} photos.`,
+      });
+    }
+    const uploadResult = await uploadImageBufferToCloudinary({
+      buffer: req.file.buffer,
+      eventId,
+      kind: "landing_showcase_photo",
+    });
+    const row = await prisma.eventLandingShowcasePhoto.create({
+      data: {
+        eventId,
+        url: uploadResult.secureUrl,
+        cloudinaryPublicId: uploadResult.publicId,
+      },
+    });
+    return res.status(201).json({
+      id: row.id,
+      url: absolutizeStoredAssetUrl(row.url),
+      createdAt: row.createdAt.toISOString(),
+    });
+  } catch (e) {
+    if (e && typeof e === "object" && e.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({ error: "Fichier trop volumineux (max 3 Mo)." });
+    }
+    console.error(e);
+    return res.status(500).json({ error: e?.message || "Upload impossible." });
+  }
+});
+
+app.delete(
+  "/events/:eventId/landing/showcase-photos/:photoId",
+  requireAuth,
+  async (req, res) => {
+    try {
+      const { eventId, photoId } = req.params;
+      const owned = await assertEventOwnedByOrPlatformAdmin(eventId, req.userId);
+      if (!owned.ok) {
+        return res.status(owned.status).json({ error: "Événement introuvable." });
+      }
+      const pid = typeof photoId === "string" ? photoId.trim() : "";
+      if (!pid) {
+        return res.status(400).json({ error: "photoId invalide." });
+      }
+      const existing = await prisma.eventLandingShowcasePhoto.findFirst({
+        where: { id: pid, eventId },
+      });
+      if (!existing) {
+        return res.status(404).json({ error: "Photo introuvable." });
+      }
+      await prisma.eventLandingShowcasePhoto.delete({ where: { id: pid } });
       void destroyCloudinaryByPublicId(existing.cloudinaryPublicId);
       return res.json({ ok: true });
     } catch (e) {

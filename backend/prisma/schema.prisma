@@ -148,9 +148,23 @@ model Event {
   polls Poll[]
   leads LeadCapture[]
   contestDraws ContestDraw[]
-  landingPhotos EventLandingPhoto[]
+  landingPhotos         EventLandingPhoto[]
+  landingShowcasePhotos EventLandingShowcasePhoto[]
 
   @@index([userId])
+}
+
+/** Photos « galerie événement » (teaser / ambiance), uniquement depuis customization. */
+model EventLandingShowcasePhoto {
+  id                 String   @id @default(cuid())
+  eventId            String
+  url                String
+  cloudinaryPublicId String?
+  createdAt          DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, createdAt])
 }
 
 /** Photos galerie landing (upload organisateur, pas de vidéo V1). */

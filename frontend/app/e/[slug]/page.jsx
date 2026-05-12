@@ -20,7 +20,7 @@ function LandingGalleryPhoto({
   canManage,
   isDeleting,
   isExiting,
-  onDelete,
+  onDelete = () => {},
 }) {
   const wrapClass =
     variant === "slide" ? "ev-gallery-slide" : "ev-gallery-card";
@@ -72,9 +72,12 @@ export default function EventLandingPage() {
   const [deletingPhotoId, setDeletingPhotoId] = useState(null);
   const [exitingPhotoId, setExitingPhotoId] = useState(null);
   const fileInputRef = useRef(null);
-  const galleryScrollRef = useRef(null);
-  const carouselRafRef = useRef(0);
-  const [carouselIndex, setCarouselIndex] = useState(0);
+  const liveGalleryScrollRef = useRef(null);
+  const liveCarouselRafRef = useRef(0);
+  const [liveCarouselIndex, setLiveCarouselIndex] = useState(0);
+  const showcaseScrollRef = useRef(null);
+  const showcaseCarouselRafRef = useRef(0);
+  const [showcaseCarouselIndex, setShowcaseCarouselIndex] = useState(0);
 
   useEffect(() => {
     if (!slug) return undefined;
@@ -226,20 +229,36 @@ export default function EventLandingPage() {
     [payload],
   );
 
-  const photoIdsKey = useMemo(() => {
+  const livePhotoIdsKey = useMemo(() => {
     if (!payload || typeof payload !== "object") return "";
     const ph = Array.isArray(payload.photos) ? payload.photos : [];
     return ph.map((p) => String(p?.id ?? "")).join(",");
   }, [payload]);
 
-  const landingPhotoCount = useMemo(() => {
+  const livePhotoCount = useMemo(() => {
     if (!payload || typeof payload !== "object") return 0;
     const ph = Array.isArray(payload.photos) ? payload.photos : [];
     return ph.length;
   }, [payload]);
 
-  const updateCarouselIndexFromScroll = useCallback(() => {
-    const root = galleryScrollRef.current;
+  const showcasePhotoIdsKey = useMemo(() => {
+    if (!payload || typeof payload !== "object") return "";
+    const ph = Array.isArray(payload.showcasePhotos)
+      ? payload.showcasePhotos
+      : [];
+    return ph.map((p) => String(p?.id ?? "")).join(",");
+  }, [payload]);
+
+  const showcasePhotoCount = useMemo(() => {
+    if (!payload || typeof payload !== "object") return 0;
+    const ph = Array.isArray(payload.showcasePhotos)
+      ? payload.showcasePhotos
+      : [];
+    return ph.length;
+  }, [payload]);
+
+  const updateLiveCarouselIndexFromScroll = useCallback(() => {
+    const root = liveGalleryScrollRef.current;
     if (!root) return;
     const slides = root.querySelectorAll(".ev-gallery-slide");
     if (!slides.length) return;
@@ -258,26 +277,55 @@ export default function EventLandingPage() {
         bestI = i;
       }
     });
-    setCarouselIndex((prev) => (prev !== bestI ? bestI : prev));
+    setLiveCarouselIndex((prev) => (prev !== bestI ? bestI : prev));
+  }, []);
+
+  const updateShowcaseCarouselIndexFromScroll = useCallback(() => {
+    const root = showcaseScrollRef.current;
+    if (!root) return;
+    const slides = root.querySelectorAll(".ev-gallery-slide");
+    if (!slides.length) return;
+    const rootRect = root.getBoundingClientRect();
+    const cs = getComputedStyle(root);
+    const pad =
+      parseFloat(cs.scrollPaddingLeft) || parseFloat(cs.paddingLeft) || 16;
+    const anchor = rootRect.left + pad;
+    let bestI = 0;
+    let bestD = Infinity;
+    slides.forEach((slide, i) => {
+      const r = slide.getBoundingClientRect();
+      const d = Math.abs(r.left - anchor);
+      if (d < bestD) {
+        bestD = d;
+        bestI = i;
+      }
+    });
+    setShowcaseCarouselIndex((prev) => (prev !== bestI ? bestI : prev));
   }, []);
 
   useEffect(() => {
-    setCarouselIndex(0);
-    const root = galleryScrollRef.current;
+    setLiveCarouselIndex(0);
+    const root = liveGalleryScrollRef.current;
     if (root) root.scrollLeft = 0;
-  }, [photoIdsKey]);
+  }, [livePhotoIdsKey]);
 
   useEffect(() => {
-    const root = galleryScrollRef.current;
-    if (!root || landingPhotoCount < 2) return undefined;
+    setShowcaseCarouselIndex(0);
+    const root = showcaseScrollRef.current;
+    if (root) root.scrollLeft = 0;
+  }, [showcasePhotoIdsKey]);
+
+  useEffect(() => {
+    const root = liveGalleryScrollRef.current;
+    if (!root || livePhotoCount < 2) return undefined;
     const tick = () => {
-      if (carouselRafRef.current) return;
-      carouselRafRef.current = requestAnimationFrame(() => {
-        carouselRafRef.current = 0;
-        updateCarouselIndexFromScroll();
+      if (liveCarouselRafRef.current) return;
+      liveCarouselRafRef.current = requestAnimationFrame(() => {
+        liveCarouselRafRef.current = 0;
+        updateLiveCarouselIndexFromScroll();
       });
     };
-    const onScrollEnd = () => updateCarouselIndexFromScroll();
+    const onScrollEnd = () => updateLiveCarouselIndexFromScroll();
     root.addEventListener("scroll", tick, { passive: true });
     root.addEventListener("scrollend", onScrollEnd);
     tick();
@@ -285,7 +333,31 @@ export default function EventLandingPage() {
       root.removeEventListener("scroll", tick);
       root.removeEventListener("scrollend", onScrollEnd);
     };
-  }, [landingPhotoCount, photoIdsKey, updateCarouselIndexFromScroll]);
+  }, [livePhotoCount, livePhotoIdsKey, updateLiveCarouselIndexFromScroll]);
+
+  useEffect(() => {
+    const root = showcaseScrollRef.current;
+    if (!root || showcasePhotoCount < 2) return undefined;
+    const tick = () => {
+      if (showcaseCarouselRafRef.current) return;
+      showcaseCarouselRafRef.current = requestAnimationFrame(() => {
+        showcaseCarouselRafRef.current = 0;
+        updateShowcaseCarouselIndexFromScroll();
+      });
+    };
+    const onScrollEnd = () => updateShowcaseCarouselIndexFromScroll();
+    root.addEventListener("scroll", tick, { passive: true });
+    root.addEventListener("scrollend", onScrollEnd);
+    tick();
+    return () => {
+      root.removeEventListener("scroll", tick);
+      root.removeEventListener("scrollend", onScrollEnd);
+    };
+  }, [
+    showcasePhotoCount,
+    showcasePhotoIdsKey,
+    updateShowcaseCarouselIndexFromScroll,
+  ]);
 
   const accent = useMemo(() => {
     const c = payload?.primaryColor;
@@ -360,6 +432,9 @@ export default function EventLandingPage() {
       ? resolveApiAssetUrlNullable(payload.logoUrl.trim())
       : null;
   const photos = Array.isArray(payload.photos) ? payload.photos : [];
+  const showcasePhotosList = Array.isArray(payload.showcasePhotos)
+    ? payload.showcasePhotos
+    : [];
   const joinHref =
     typeof payload.joinPath === "string" && payload.joinPath.startsWith("/")
       ? payload.joinPath
@@ -399,7 +474,8 @@ export default function EventLandingPage() {
     payload.canUploadLandingPhoto === true &&
     typeof payload.landingPhotoUploadEventId === "string" &&
     String(payload.landingPhotoUploadEventId).trim() !== "";
-  const showGalleryBlock = photos.length > 0 || canUploadLanding;
+  const showShowcaseBlock = showcasePhotosList.length > 0;
+  const showLiveBlock = photos.length > 0 || canUploadLanding;
 
   const footerCta = {
     display: "inline-flex",
@@ -940,11 +1016,6 @@ export default function EventLandingPage() {
           {description ? (
             <p className="ev-landing-hero-desc">{description}</p>
           ) : null}
-          <div>
-            <Link href={joinHref} className="ev-landing-hero-cta">
-              Participer au live
-            </Link>
-          </div>
         </div>
       </section>
 
@@ -956,7 +1027,146 @@ export default function EventLandingPage() {
           boxSizing: "border-box",
         }}
       >
-        {showGalleryBlock ? (
+        {showShowcaseBlock ? (
+          <section
+            className="ev-landing-gallery-section"
+            style={{
+              marginBottom: "clamp(1.75rem, 5vw, 2.5rem)",
+              "--ev-accent": accent,
+            }}
+          >
+            <div style={{ marginBottom: "1.15rem" }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "0.68rem",
+                  fontWeight: 800,
+                  letterSpacing: "0.2em",
+                  textTransform: "uppercase",
+                  color: "#64748b",
+                }}
+              >
+                Avant le live
+              </p>
+              <h2
+                style={{
+                  margin: "0.35rem 0 0",
+                  fontSize: "clamp(1.45rem, 4vw, 1.85rem)",
+                  fontWeight: 800,
+                  letterSpacing: "-0.03em",
+                  color: "#0f172a",
+                  lineHeight: 1.15,
+                }}
+              >
+                ✨ L&apos;événement
+              </h2>
+              <p
+                style={{
+                  margin: "0.4rem 0 0",
+                  fontSize: "0.95rem",
+                  color: "#64748b",
+                  maxWidth: "32rem",
+                  lineHeight: 1.45,
+                }}
+              >
+                Découvrez l&apos;ambiance et les temps forts de l&apos;événement.
+              </p>
+            </div>
+            <div className="ev-landing-carousel-mobile-wrap">
+              <div
+                ref={showcaseScrollRef}
+                className="ev-landing-gallery-scroll"
+              >
+                {showcasePhotosList.map((p) => {
+                  const u =
+                    typeof p?.url === "string"
+                      ? resolveApiAssetUrlNullable(p.url.trim())
+                      : null;
+                  if (!u) return null;
+                  const pid = String(p.id ?? "");
+                  return (
+                    <LandingGalleryPhoto
+                      key={`s-${p.id}`}
+                      url={u}
+                      photoId={pid}
+                      variant="slide"
+                      canManage={false}
+                      isDeleting={false}
+                      isExiting={false}
+                    />
+                  );
+                })}
+              </div>
+              {showcasePhotosList.length > 1 ? (
+                <div className="ev-landing-carousel-progress">
+                  <div className="ev-landing-carousel-dots" aria-hidden="true">
+                    {showcasePhotosList.map((p, i) => (
+                      <span
+                        key={p.id}
+                        className={
+                          i === showcaseCarouselIndex
+                            ? "ev-landing-carousel-dot ev-landing-carousel-dot--active"
+                            : "ev-landing-carousel-dot"
+                        }
+                      />
+                    ))}
+                  </div>
+                  <span className="ev-landing-carousel-fraction">
+                    {showcaseCarouselIndex + 1} / {showcasePhotosList.length}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+            <div className="ev-landing-gallery-grid">
+              {showcasePhotosList.map((p) => {
+                const u =
+                  typeof p?.url === "string"
+                    ? resolveApiAssetUrlNullable(p.url.trim())
+                    : null;
+                if (!u) return null;
+                const pid = String(p.id ?? "");
+                return (
+                  <LandingGalleryPhoto
+                    key={`sg-${p.id}`}
+                    url={u}
+                    photoId={pid}
+                    variant="card"
+                    canManage={false}
+                    isDeleting={false}
+                    isExiting={false}
+                  />
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
+        <section
+          style={{
+            textAlign: "center",
+            marginBottom: "clamp(1.75rem, 5vw, 2.75rem)",
+            padding: "0.25rem 0",
+          }}
+        >
+          <Link href={joinHref} className="ev-landing-hero-cta">
+            Participer au live
+          </Link>
+          <p
+            style={{
+              margin: "0.85rem 0 0",
+              fontSize: "0.9rem",
+              color: "#64748b",
+              maxWidth: "26rem",
+              marginLeft: "auto",
+              marginRight: "auto",
+              lineHeight: 1.45,
+            }}
+          >
+            Accès à la salle interactive : votes et animations en direct.
+          </p>
+        </section>
+
+        {showLiveBlock ? (
           <section
             className="ev-landing-gallery-section"
             style={{
@@ -985,7 +1195,7 @@ export default function EventLandingPage() {
                     color: "#64748b",
                   }}
                 >
-                  Live
+                  En direct
                 </p>
                 <h2
                   style={{
@@ -997,7 +1207,7 @@ export default function EventLandingPage() {
                     lineHeight: 1.15,
                   }}
                 >
-                  Moments de l&apos;événement
+                  🔴 Moments live
                 </h2>
                 <p
                   style={{
@@ -1008,7 +1218,7 @@ export default function EventLandingPage() {
                     lineHeight: 1.45,
                   }}
                 >
-                  Quelques images partagées depuis la soirée.
+                  Les photos ajoutées pendant le live apparaissent ici.
                 </p>
               </div>
               {canUploadLanding ? (
@@ -1058,7 +1268,7 @@ export default function EventLandingPage() {
             ) : null}
             <div className="ev-landing-carousel-mobile-wrap">
               <div
-                ref={galleryScrollRef}
+                ref={liveGalleryScrollRef}
                 className="ev-landing-gallery-scroll"
               >
                 {photos.map((p) => {
@@ -1089,7 +1299,7 @@ export default function EventLandingPage() {
                       <span
                         key={p.id}
                         className={
-                          i === carouselIndex
+                          i === liveCarouselIndex
                             ? "ev-landing-carousel-dot ev-landing-carousel-dot--active"
                             : "ev-landing-carousel-dot"
                         }
@@ -1097,7 +1307,7 @@ export default function EventLandingPage() {
                     ))}
                   </div>
                   <span className="ev-landing-carousel-fraction">
-                    {carouselIndex + 1} / {photos.length}
+                    {liveCarouselIndex + 1} / {photos.length}
                   </span>
                 </div>
               ) : null}
