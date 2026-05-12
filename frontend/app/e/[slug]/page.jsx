@@ -144,15 +144,19 @@ export default function EventLandingPage() {
   if (loading) {
     return (
       <main
+        className="ev-landing-shell"
         style={{
           minHeight: "100vh",
           display: "grid",
           placeItems: "center",
           fontFamily: "system-ui, sans-serif",
           color: "#64748b",
+          background: "#0f172a",
         }}
       >
-        Chargement…
+        <p className="ev-landing-fade-in" style={{ color: "#94a3b8" }}>
+          Chargement…
+        </p>
       </main>
     );
   }
@@ -160,10 +164,12 @@ export default function EventLandingPage() {
   if (error || !payload) {
     return (
       <main
+        className="ev-landing-shell"
         style={{
           minHeight: "100vh",
           padding: "2rem",
           fontFamily: "system-ui, sans-serif",
+          background: "#f8fafc",
         }}
       >
         <p style={{ color: "#b91c1c" }}>{error || "Indisponible."}</p>
@@ -234,99 +240,322 @@ export default function EventLandingPage() {
     String(payload.landingPhotoUploadEventId).trim() !== "";
   const showGalleryBlock = photos.length > 0 || canUploadLanding;
 
-  const mainBtn = {
+  const footerCta = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "0.85rem 1.35rem",
-    borderRadius: "14px",
+    padding: "0.95rem 1.75rem",
+    borderRadius: "999px",
     border: "none",
-    fontWeight: 800,
+    fontWeight: 700,
     fontSize: "1rem",
+    letterSpacing: "0.02em",
     cursor: "pointer",
     textDecoration: "none",
-    color: "#fff",
-    background: `linear-gradient(180deg, ${accent}, color-mix(in srgb, ${accent} 82%, #000))`,
-    boxShadow: `0 14px 36px color-mix(in srgb, ${accent} 35%, transparent)`,
+    color: "#0c1222",
+    background: "#f8fafc",
+    boxShadow: `0 6px 28px color-mix(in srgb, ${accent} 28%, rgba(15,23,42,0.12))`,
     boxSizing: "border-box",
-    width: "100%",
-    maxWidth: "22rem",
+    transition: "transform 0.2s ease, box-shadow 0.2s ease",
   };
 
   return (
     <main
+      className="ev-landing-shell"
       style={{
         minHeight: "100vh",
-        background: "#f8fafc",
+        background: "#f1f5f9",
         fontFamily:
           'system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif',
         color: "#0f172a",
       }}
     >
       <style>{`
-        .ev-landing-hero-img {
-          width: 100%;
-          height: min(52vh, 420px);
-          object-fit: cover;
-          display: block;
+        .ev-landing-shell { -webkit-font-smoothing: antialiased; }
+        @media (prefers-reduced-motion: no-preference) {
+          .ev-landing-fade-in {
+            animation: evLandingFade 0.5s ease-out both;
+          }
+          .ev-landing-gallery-section {
+            animation: evLandingFadeUp 0.65s ease-out 0.08s both;
+          }
+          .ev-landing-hero-content {
+            animation: evLandingFadeUp 0.75s ease-out both;
+          }
         }
-        @media (min-width: 768px) {
-          .ev-landing-hero-img { height: min(44vh, 480px); }
+        @keyframes evLandingFade {
+          from { opacity: 0; }
+          to { opacity: 1; }
         }
-        .ev-landing-gallery-scroll {
+        @keyframes evLandingFadeUp {
+          from { opacity: 0; transform: translateY(14px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .ev-landing-hero {
+          position: relative;
+          min-height: min(100svh, 820px);
           display: flex;
-          gap: 0.65rem;
-          overflow-x: auto;
-          scroll-snap-type: x mandatory;
-          padding-bottom: 0.35rem;
-          -webkit-overflow-scrolling: touch;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
         }
-        .ev-landing-gallery-scroll img {
-          scroll-snap-align: start;
-          flex: 0 0 min(88vw, 340px);
-          width: min(88vw, 340px);
-          height: min(52vw, 240px);
+        .ev-landing-hero-bg {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
           object-fit: cover;
-          border-radius: 14px;
-          border: 1px solid #e2e8f0;
+          transform: scale(1.02);
         }
-        @media (min-width: 768px) {
-          .ev-landing-gallery-scroll { display: none; }
-          .ev-landing-gallery-grid {
-            display: grid !important;
-            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-            gap: 0.75rem;
-          }
-          .ev-landing-gallery-grid img {
-            width: 100%;
-            aspect-ratio: 1;
-            object-fit: cover;
-            border-radius: 14px;
-            border: 1px solid #e2e8f0;
-          }
+        .ev-landing-hero-bg--placeholder {
+          background: linear-gradient(
+            160deg,
+            color-mix(in srgb, var(--ev-accent, #2563eb) 28%, #0f172a) 0%,
+            #0f172a 55%,
+            #020617 100%
+          );
         }
-        .ev-landing-gallery-grid { display: none; }
-        .ev-landing-upload-fab {
-          position: fixed;
-          right: max(0.85rem, env(safe-area-inset-right));
-          bottom: max(0.85rem, env(safe-area-inset-bottom));
-          z-index: 60;
+        .ev-landing-hero-overlay {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          background: linear-gradient(
+            180deg,
+            rgba(2, 6, 23, 0.5) 0%,
+            rgba(15, 23, 42, 0.25) 38%,
+            rgba(2, 6, 23, 0.88) 100%
+          );
+        }
+        .ev-landing-hero-overlay::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: radial-gradient(
+            ellipse 85% 55% at 50% 100%,
+            color-mix(in srgb, var(--ev-accent, #2563eb) 22%, transparent) 0%,
+            transparent 62%
+          );
+          opacity: 0.85;
+        }
+        .ev-landing-hero-content {
+          position: relative;
+          z-index: 2;
+          width: 100%;
+          max-width: 700px;
+          margin: 0 auto;
+          padding: clamp(1.5rem, 5vw, 2.75rem) clamp(1.25rem, 4vw, 2rem)
+            clamp(2rem, 6vw, 3.5rem);
+          text-align: center;
+          box-sizing: border-box;
+        }
+        .ev-landing-hero-kicker {
+          margin: 0 0 0.75rem;
+          font-size: 0.7rem;
+          font-weight: 700;
+          letter-spacing: 0.22em;
+          text-transform: uppercase;
+          color: rgba(248, 250, 252, 0.72);
+        }
+        .ev-landing-hero-title {
+          margin: 0;
+          font-size: clamp(2rem, 7vw, 3.15rem);
+          font-weight: 800;
+          line-height: 1.08;
+          letter-spacing: -0.035em;
+          color: #f8fafc;
+          text-wrap: balance;
+          text-shadow: 0 4px 48px rgba(0, 0, 0, 0.45);
+        }
+        .ev-landing-hero-desc {
+          margin: 1.15rem auto 0;
+          max-width: 38rem;
+          font-size: clamp(1.02rem, 3.2vw, 1.2rem);
+          line-height: 1.55;
+          font-weight: 450;
+          color: rgba(226, 232, 240, 0.94);
+          text-wrap: pretty;
+        }
+        .ev-landing-hero-logo {
+          width: clamp(56px, 14vw, 72px);
+          height: clamp(56px, 14vw, 72px);
+          object-fit: contain;
+          border-radius: 18px;
+          background: rgba(255, 255, 255, 0.12);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          padding: 10px;
+          margin: 0 auto 1.35rem;
+          box-shadow:
+            0 0 0 1px rgba(255, 255, 255, 0.18),
+            0 18px 48px rgba(0, 0, 0, 0.35);
+        }
+        .ev-landing-hero-cta {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          gap: 0.35rem;
-          padding: 0.65rem 0.95rem;
+          margin-top: clamp(1.75rem, 4vw, 2.35rem);
+          padding: 1.05rem 2.1rem;
           border-radius: 999px;
+          font-weight: 700;
+          font-size: clamp(1.02rem, 3vw, 1.125rem);
+          letter-spacing: 0.03em;
+          text-decoration: none;
+          color: #0c1222;
+          background: #f8fafc;
           border: none;
-          font-weight: 800;
-          font-size: 0.82rem;
           cursor: pointer;
-          color: #fff;
-          box-shadow: 0 10px 28px rgba(15, 23, 42, 0.22);
-          max-width: min(92vw, 16rem);
+          box-shadow:
+            0 4px 24px rgba(0, 0, 0, 0.28),
+            0 0 0 1px rgba(255, 255, 255, 0.35) inset;
+          transition: transform 0.22s ease, box-shadow 0.22s ease;
+        }
+        .ev-landing-hero-cta:hover {
+          transform: translateY(-2px);
+          box-shadow:
+            0 12px 40px rgba(0, 0, 0, 0.32),
+            0 0 0 1px rgba(255, 255, 255, 0.45) inset;
+        }
+        .ev-landing-hero-cta:active {
+          transform: translateY(0);
+        }
+
+        .ev-landing-gallery-scroll {
+          display: flex;
+          gap: 1rem;
+          overflow-x: auto;
+          scroll-snap-type: x mandatory;
+          scroll-padding-inline: clamp(1rem, 4vw, 1.5rem);
+          padding: 0.25rem clamp(1rem, 4vw, 1.5rem) 1.25rem;
+          margin-inline: clamp(-1rem, -2vw, -0.5rem);
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: none;
+        }
+        .ev-landing-gallery-scroll::-webkit-scrollbar {
+          display: none;
+        }
+        .ev-gallery-slide {
+          flex: 0 0 calc(100vw - 2.5rem);
+          max-width: min(420px, 92vw);
+          scroll-snap-align: center;
+        }
+        .ev-gallery-slide figure {
+          margin: 0;
+          height: min(58vw, 320px);
+          border-radius: 22px;
+          overflow: hidden;
+          box-shadow:
+            0 22px 50px rgba(15, 23, 42, 0.14),
+            0 0 0 1px rgba(15, 23, 42, 0.06);
+          transition: transform 0.35s ease, box-shadow 0.35s ease;
+        }
+        .ev-gallery-slide img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+          transition: transform 0.5s ease;
+        }
+        @media (prefers-reduced-motion: no-preference) {
+          .ev-gallery-slide figure:hover img {
+            transform: scale(1.04);
+          }
         }
         @media (min-width: 768px) {
-          .ev-landing-upload-fab { display: none; }
+          .ev-landing-gallery-scroll {
+            display: none;
+          }
+          .ev-landing-gallery-grid {
+            display: grid !important;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.25rem;
+          }
+          .ev-gallery-card figure {
+            height: auto;
+            aspect-ratio: 4 / 3;
+          }
+        }
+        @media (min-width: 1024px) {
+          .ev-landing-gallery-grid {
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.35rem;
+          }
+        }
+        @media (min-width: 1280px) {
+          .ev-landing-gallery-grid {
+            grid-template-columns: repeat(4, 1fr);
+          }
+        }
+        .ev-landing-gallery-grid {
+          display: none;
+        }
+        .ev-gallery-card figure {
+          margin: 0;
+          border-radius: 20px;
+          overflow: hidden;
+          box-shadow:
+            0 18px 44px rgba(15, 23, 42, 0.1),
+            0 0 0 1px rgba(15, 23, 42, 0.05);
+          transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .ev-gallery-card img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+          transition: transform 0.45s ease;
+        }
+        @media (prefers-reduced-motion: no-preference) {
+          .ev-gallery-card:hover figure {
+            transform: translateY(-4px);
+            box-shadow:
+              0 28px 56px rgba(15, 23, 42, 0.14),
+              0 0 0 1px rgba(15, 23, 42, 0.06);
+          }
+          .ev-gallery-card:hover img {
+            transform: scale(1.03);
+          }
+        }
+
+        .ev-landing-upload-fab {
+          position: fixed;
+          right: max(1rem, env(safe-area-inset-right));
+          bottom: max(1rem, env(safe-area-inset-bottom));
+          z-index: 60;
+          width: 3.5rem;
+          height: 3.5rem;
+          padding: 0;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 50%;
+          border: none;
+          font-size: 1.35rem;
+          line-height: 1;
+          cursor: pointer;
+          color: #fff;
+          box-shadow:
+            0 12px 36px rgba(15, 23, 42, 0.28),
+            0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .ev-landing-upload-fab:not(:disabled):hover {
+          transform: scale(1.06);
+          box-shadow:
+            0 16px 44px rgba(15, 23, 42, 0.32),
+            0 0 0 1px rgba(255, 255, 255, 0.18) inset;
+        }
+        .ev-landing-upload-fab:not(:disabled):active {
+          transform: scale(0.96);
+        }
+        .ev-landing-upload-fab:disabled {
+          opacity: 0.65;
+          cursor: wait;
+        }
+        @media (min-width: 768px) {
+          .ev-landing-upload-fab {
+            display: none;
+          }
         }
         .ev-landing-upload-desktop {
           display: none;
@@ -336,83 +565,64 @@ export default function EventLandingPage() {
             display: inline-flex;
           }
         }
+        .ev-landing-upload-desktop {
+          align-items: center;
+          gap: 0.45rem;
+          padding: 0.55rem 1.1rem;
+          border-radius: 999px;
+          border: 1px solid rgba(15, 23, 42, 0.08);
+          font-weight: 600;
+          font-size: 0.875rem;
+          letter-spacing: 0.01em;
+          background: #fff;
+          cursor: pointer;
+          box-shadow: 0 2px 12px rgba(15, 23, 42, 0.06);
+          transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+        .ev-landing-upload-desktop:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
+        }
+        .ev-landing-upload-desktop:disabled {
+          opacity: 0.65;
+          cursor: wait;
+        }
+
+        .ev-landing-footer-cta:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 36px color-mix(in srgb, var(--ev-accent, #2563eb) 32%, rgba(15,23,42,0.15));
+        }
+        .ev-landing-footer-cta:active {
+          transform: translateY(0);
+        }
       `}</style>
 
-      <section style={{ position: "relative" }}>
+      <section
+        className="ev-landing-hero"
+        style={{ "--ev-accent": accent }}
+      >
         {cover ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img className="ev-landing-hero-img" src={cover} alt="" />
+          <img className="ev-landing-hero-bg" src={cover} alt="" />
         ) : (
           <div
-            className="ev-landing-hero-img"
-            style={{
-              background: `linear-gradient(145deg, color-mix(in srgb, ${accent} 22%, #f8fafc), #f1f5f9)`,
-            }}
+            className="ev-landing-hero-bg ev-landing-hero-bg--placeholder"
+            aria-hidden
           />
         )}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "linear-gradient(to top, rgba(15,23,42,0.72) 0%, transparent 55%)",
-            pointerEvents: "none",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            bottom: 0,
-            padding: "clamp(1.25rem, 4vw, 2rem)",
-            maxWidth: "720px",
-          }}
-        >
+        <div className="ev-landing-hero-overlay" aria-hidden />
+        <div className="ev-landing-hero-content ev-landing-fade-in">
           {logo ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={logo}
-              alt=""
-              style={{
-                width: "52px",
-                height: "52px",
-                objectFit: "contain",
-                borderRadius: "12px",
-                background: "rgba(255,255,255,0.92)",
-                padding: "6px",
-                marginBottom: "0.65rem",
-              }}
-            />
+            <img className="ev-landing-hero-logo" src={logo} alt="" />
           ) : null}
-          <h1
-            style={{
-              margin: 0,
-              fontSize: "clamp(1.55rem, 5vw, 2.15rem)",
-              fontWeight: 800,
-              lineHeight: 1.2,
-              color: "#fff",
-              letterSpacing: "-0.03em",
-              textShadow: "0 2px 24px rgba(0,0,0,0.35)",
-            }}
-          >
-            {title}
-          </h1>
+          <p className="ev-landing-hero-kicker">Événement en direct</p>
+          <h1 className="ev-landing-hero-title">{title}</h1>
           {description ? (
-            <p
-              style={{
-                margin: "0.65rem 0 0",
-                fontSize: "clamp(0.95rem, 2.8vw, 1.05rem)",
-                lineHeight: 1.45,
-                color: "rgba(248,250,252,0.92)",
-                maxWidth: "36rem",
-              }}
-            >
-              {description}
-            </p>
+            <p className="ev-landing-hero-desc">{description}</p>
           ) : null}
-          <div style={{ marginTop: "1.25rem" }}>
-            <Link href={joinHref} style={mainBtn}>
+          <div>
+            <Link href={joinHref} className="ev-landing-hero-cta">
               Participer au live
             </Link>
           </div>
@@ -421,58 +631,73 @@ export default function EventLandingPage() {
 
       <div
         style={{
-          maxWidth: "920px",
+          maxWidth: "1100px",
           margin: "0 auto",
-          padding: "clamp(1.25rem, 4vw, 2rem)",
+          padding: "clamp(1.5rem, 4vw, 2.5rem) clamp(1.15rem, 4vw, 2rem) 2.75rem",
           boxSizing: "border-box",
         }}
       >
         {showGalleryBlock ? (
-          <section style={{ marginBottom: "clamp(1.5rem, 4vw, 2.25rem)" }}>
+          <section
+            className="ev-landing-gallery-section"
+            style={{ marginBottom: "clamp(2rem, 5vw, 3rem)" }}
+          >
             <div
               style={{
                 display: "flex",
                 flexWrap: "wrap",
-                alignItems: "center",
+                alignItems: "flex-end",
                 justifyContent: "space-between",
-                gap: "0.65rem",
-                marginBottom: "0.65rem",
+                gap: "1rem",
+                marginBottom: "1.15rem",
               }}
             >
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: "0.72rem",
-                  fontWeight: 800,
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                  color: "#64748b",
-                }}
-              >
-                Galerie live
-              </h2>
+              <div>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "0.68rem",
+                    fontWeight: 800,
+                    letterSpacing: "0.2em",
+                    textTransform: "uppercase",
+                    color: "#64748b",
+                  }}
+                >
+                  Live
+                </p>
+                <h2
+                  style={{
+                    margin: "0.35rem 0 0",
+                    fontSize: "clamp(1.45rem, 4vw, 1.85rem)",
+                    fontWeight: 800,
+                    letterSpacing: "-0.03em",
+                    color: "#0f172a",
+                    lineHeight: 1.15,
+                  }}
+                >
+                  Moments de l&apos;événement
+                </h2>
+                <p
+                  style={{
+                    margin: "0.4rem 0 0",
+                    fontSize: "0.95rem",
+                    color: "#64748b",
+                    maxWidth: "28rem",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Quelques images partagées depuis la soirée.
+                </p>
+              </div>
               {canUploadLanding ? (
                 <button
                   type="button"
                   className="ev-landing-upload-desktop"
                   disabled={uploadBusy}
                   onClick={triggerLandingPhotoPicker}
-                  style={{
-                    alignItems: "center",
-                    gap: "0.35rem",
-                    padding: "0.5rem 0.95rem",
-                    borderRadius: "12px",
-                    border: `1px solid color-mix(in srgb, ${accent} 38%, #e2e8f0)`,
-                    fontWeight: 700,
-                    fontSize: "0.88rem",
-                    color: accent,
-                    background: "#fff",
-                    cursor: uploadBusy ? "wait" : "pointer",
-                    opacity: uploadBusy ? 0.75 : 1,
-                    boxShadow: "0 1px 2px rgba(15,23,42,0.06)",
-                  }}
+                  style={{ color: accent }}
                 >
-                  📸 Publier une photo
+                  📸 Ajouter un moment live
                 </button>
               ) : null}
             </div>
@@ -488,8 +713,8 @@ export default function EventLandingPage() {
             {uploadError ? (
               <p
                 style={{
-                  margin: "0 0 0.5rem",
-                  fontSize: "0.84rem",
+                  margin: "0 0 0.75rem",
+                  fontSize: "0.88rem",
                   color: "#b91c1c",
                 }}
               >
@@ -499,12 +724,14 @@ export default function EventLandingPage() {
             {photos.length === 0 && canUploadLanding ? (
               <p
                 style={{
-                  margin: "0 0 0.75rem",
-                  fontSize: "0.88rem",
+                  margin: "0 0 1rem",
+                  fontSize: "0.95rem",
                   color: "#64748b",
+                  lineHeight: 1.5,
                 }}
               >
-                Aucune photo pour le moment — publiez-en une ci-dessus.
+                Aucun moment pour l’instant — ajoutez une photo pour donner vie
+                à cette page.
               </p>
             ) : null}
             <div className="ev-landing-gallery-scroll">
@@ -515,8 +742,12 @@ export default function EventLandingPage() {
                     : null;
                 if (!u) return null;
                 return (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img key={p.id} src={u} alt="" />
+                  <div key={p.id} className="ev-gallery-slide">
+                    <figure>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={u} alt="" loading="lazy" />
+                    </figure>
+                  </div>
                 );
               })}
             </div>
@@ -528,8 +759,12 @@ export default function EventLandingPage() {
                     : null;
                 if (!u) return null;
                 return (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img key={`g-${p.id}`} src={u} alt="" />
+                  <div key={`g-${p.id}`} className="ev-gallery-card">
+                    <figure>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={u} alt="" loading="lazy" />
+                    </figure>
+                  </div>
                 );
               })}
             </div>
@@ -539,37 +774,45 @@ export default function EventLandingPage() {
         {showInfo ? (
           <section
             style={{
-              marginBottom: "clamp(1.5rem, 4vw, 2.25rem)",
-              padding: "1.15rem 1.2rem",
-              borderRadius: "16px",
-              border: "1px solid #e2e8f0",
+              marginBottom: "clamp(1.75rem, 4vw, 2.5rem)",
+              padding: "clamp(1.25rem, 3vw, 1.65rem)",
+              borderRadius: "22px",
+              border: "1px solid rgba(15,23,42,0.06)",
               background: "#fff",
-              boxShadow: "0 1px 3px rgba(15,23,42,0.06)",
+              boxShadow: "0 16px 48px rgba(15,23,42,0.06)",
             }}
           >
             <h2
               style={{
-                margin: "0 0 0.45rem",
-                fontSize: "0.72rem",
+                margin: 0,
+                fontSize: "0.68rem",
                 fontWeight: 800,
-                letterSpacing: "0.1em",
+                letterSpacing: "0.18em",
                 textTransform: "uppercase",
-                color: "#64748b",
+                color: "#94a3b8",
               }}
             >
               Infos pratiques
             </h2>
             {infoTitle ? (
-              <p style={{ margin: 0, fontWeight: 800, fontSize: "1rem" }}>
+              <p
+                style={{
+                  margin: "0.65rem 0 0",
+                  fontWeight: 700,
+                  fontSize: "clamp(1.05rem, 2.8vw, 1.2rem)",
+                  color: "#0f172a",
+                  letterSpacing: "-0.02em",
+                }}
+              >
                 {infoTitle}
               </p>
             ) : null}
             {infoText ? (
               <p
                 style={{
-                  margin: infoTitle ? "0.45rem 0 0" : 0,
-                  fontSize: "0.94rem",
-                  lineHeight: 1.55,
+                  margin: infoTitle ? "0.5rem 0 0" : "0.65rem 0 0",
+                  fontSize: "0.98rem",
+                  lineHeight: 1.6,
                   color: "#475569",
                   whiteSpace: "pre-wrap",
                 }}
@@ -579,10 +822,10 @@ export default function EventLandingPage() {
             ) : null}
             <div
               style={{
-                marginTop: "0.75rem",
+                marginTop: "1rem",
                 display: "flex",
                 flexWrap: "wrap",
-                gap: "0.5rem",
+                gap: "0.65rem",
               }}
             >
               {ipL && ipU ? (
@@ -591,11 +834,9 @@ export default function EventLandingPage() {
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{
-                    ...mainBtn,
-                    width: "auto",
-                    maxWidth: "none",
-                    padding: "0.55rem 0.95rem",
-                    fontSize: "0.88rem",
+                    ...footerCta,
+                    background: `linear-gradient(180deg, ${accent}, color-mix(in srgb, ${accent} 82%, #000))`,
+                    color: "#fff",
                   }}
                 >
                   ↗ {ipL}
@@ -609,14 +850,15 @@ export default function EventLandingPage() {
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
-                    padding: "0.55rem 0.95rem",
-                    borderRadius: "12px",
+                    padding: "0.65rem 1.1rem",
+                    borderRadius: "999px",
                     border: `1px solid color-mix(in srgb, ${accent} 35%, #e2e8f0)`,
-                    fontWeight: 700,
-                    fontSize: "0.88rem",
+                    fontWeight: 600,
+                    fontSize: "0.9rem",
                     color: accent,
                     textDecoration: "none",
-                    background: "#fff",
+                    background: "#f8fafc",
+                    transition: "transform 0.2s ease, background 0.2s ease",
                   }}
                 >
                   ↗ {isL}
@@ -629,13 +871,29 @@ export default function EventLandingPage() {
         <section
           style={{
             textAlign: "center",
-            padding: "1.5rem 1rem 2.5rem",
+            padding: "clamp(1.5rem, 4vw, 2.5rem) 0 2.5rem",
           }}
         >
-          <Link href={joinHref} style={mainBtn}>
+          <Link
+            href={joinHref}
+            className="ev-landing-footer-cta"
+            style={{
+              ...footerCta,
+              background: `linear-gradient(180deg, ${accent}, color-mix(in srgb, ${accent} 82%, #000))`,
+              color: "#fff",
+            }}
+          >
             Rejoindre la salle live
           </Link>
-          <p style={{ margin: "1rem 0 0", fontSize: "0.82rem", color: "#64748b" }}>
+          <p
+            style={{
+              margin: "1.1rem auto 0",
+              fontSize: "0.92rem",
+              color: "#64748b",
+              maxWidth: "22rem",
+              lineHeight: 1.5,
+            }}
+          >
             Accès interactif : votes et animations en direct.
           </p>
         </section>
@@ -647,33 +905,35 @@ export default function EventLandingPage() {
           className="ev-landing-upload-fab"
           disabled={uploadBusy}
           onClick={triggerLandingPhotoPicker}
-          aria-label="Publier une photo sur la landing"
+          aria-label="Ajouter un moment live"
           style={{
-            background: `linear-gradient(180deg, ${accent}, color-mix(in srgb, ${accent} 82%, #000))`,
+            background: `linear-gradient(160deg, ${accent}, color-mix(in srgb, ${accent} 72%, #0f172a))`,
           }}
         >
-          📸 Publier
+          📸
         </button>
       ) : null}
 
       {toastNotif ? (
         <div
           role="status"
+          className="ev-landing-fade-in"
           style={{
             position: "fixed",
             left: "50%",
-            top: "max(0.75rem, env(safe-area-inset-top))",
+            top: "max(0.85rem, env(safe-area-inset-top))",
             transform: "translateX(-50%)",
             zIndex: 70,
-            padding: "0.55rem 1rem",
+            padding: "0.65rem 1.15rem",
             borderRadius: "999px",
-            background: "rgba(15,23,42,0.92)",
+            background: "rgba(15,23,42,0.94)",
             color: "#f8fafc",
-            fontSize: "0.88rem",
+            fontSize: "0.9rem",
             fontWeight: 600,
-            boxShadow: "0 12px 32px rgba(15,23,42,0.25)",
+            boxShadow: "0 16px 40px rgba(15,23,42,0.35)",
             maxWidth: "min(92vw, 22rem)",
             textAlign: "center",
+            backdropFilter: "blur(8px)",
           }}
         >
           {toastNotif}
