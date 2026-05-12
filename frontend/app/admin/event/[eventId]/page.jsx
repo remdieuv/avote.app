@@ -105,21 +105,26 @@ function buildPrintableQrSvg({ qrSvgMarkup, mirror = false }) {
   const qrX = Math.round((pageW - qrSize) / 2);
   const qrY = 180;
   const qrInnerMarkup = qrRoot.innerHTML || "";
-  const mirrorTransform = mirror
-    ? `translate(${qrX + qrSize} ${qrY}) scale(-1 1)`
-    : `translate(${qrX} ${qrY})`;
+  const qrGroupTransform = `translate(${qrX} ${qrY})`;
   const quietZone = 92;
 
-  return [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${pageW}" height="${pageH}" viewBox="0 0 ${pageW} ${pageH}">`,
-    `<rect x="0" y="0" width="${pageW}" height="${pageH}" fill="#ffffff" />`,
-    `<rect x="${qrX - quietZone}" y="${qrY - quietZone}" width="${qrSize + quietZone * 2}" height="${qrSize + quietZone * 2}" fill="#ffffff" />`,
-    `<g transform="${mirrorTransform}">`,
+  const quietRect = `<rect x="${qrX - quietZone}" y="${qrY - quietZone}" width="${qrSize + quietZone * 2}" height="${qrSize + quietZone * 2}" fill="#ffffff" />`;
+  const qrGroup = [
+    `<g transform="${qrGroupTransform}">`,
     `<svg width="${qrSize}" height="${qrSize}" viewBox="${sourceViewBox}" preserveAspectRatio="xMidYMid meet">`,
     qrInnerMarkup,
     `</svg>`,
     `</g>`,
-    `<text x="${pageW / 2}" y="${qrY + qrSize + 160}" text-anchor="middle" fill="#0f172a" font-size="84" font-family="Arial, Helvetica, sans-serif" font-weight="700">Scannez pour participer</text>`,
+  ].join("");
+  const labelText = `<text x="${pageW / 2}" y="${qrY + qrSize + 160}" text-anchor="middle" fill="#0f172a" font-size="84" font-family="Arial, Helvetica, sans-serif" font-weight="700">Scannez pour participer</text>`;
+  const printableBody = `${quietRect}${qrGroup}${labelText}`;
+
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${pageW}" height="${pageH}" viewBox="0 0 ${pageW} ${pageH}">`,
+    `<rect x="0" y="0" width="${pageW}" height="${pageH}" fill="#ffffff" />`,
+    mirror
+      ? `<g transform="translate(${pageW} 0) scale(-1 1)">${printableBody}</g>`
+      : printableBody,
     `</svg>`,
   ].join("");
 }
