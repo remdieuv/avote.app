@@ -3990,6 +3990,7 @@ export default function RegieEventPage() {
   const [previewJoinOpen, setPreviewJoinOpen] = useState(false);
   const [mobileJoinPreviewOpen, setMobileJoinPreviewOpen] = useState(false);
   const [liveAnswersOpen, setLiveAnswersOpen] = useState(false);
+  const [landingPhotoUploading, setLandingPhotoUploading] = useState(false);
   /** Desktop : colonne gauche (questions + liens) repliée */
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
   /** Nombre de clients /screen connectés (socket room dédiée) */
@@ -4048,6 +4049,7 @@ export default function RegieEventPage() {
   );
   /** Ids des questions de l’événement (pour ignorer poll_updated d’un autre event) */
   const eventPollIdsRef = useRef(new Set());
+  const quickLandingPhotoInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
 
   const fetchEvent = useCallback(async (opts = {}) => {
     const silent = opts.silent === true;
@@ -4103,6 +4105,31 @@ export default function RegieEventPage() {
       /* ignore */
     }
   }, []);
+
+  const uploadQuickLandingPhoto = useCallback(
+    async (file) => {
+      if (!eventId || !file) return;
+      setLandingPhotoUploading(true);
+      setActionError(null);
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await adminFetch(
+          `${apiBaseBrowser()}/events/${eventId}/landing/photos`,
+          { method: "POST", body: fd },
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(mapApiError(body, res.status));
+        setToastNotif("✅ Photo publiée sur la landing");
+        window.setTimeout(() => setToastNotif(null), 2600);
+      } catch (e) {
+        setActionError(e.message || "Upload photo impossible.");
+      } finally {
+        setLandingPhotoUploading(false);
+      }
+    },
+    [eventId],
+  );
 
   const handleQuestionLiveAdded = useCallback(
     async ({ pollId }) => {
@@ -5615,6 +5642,18 @@ export default function RegieEventPage() {
         ...shellFont,
       }}
     >
+      <input
+        ref={quickLandingPhotoInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style={{ display: "none" }}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) void uploadQuickLandingPhoto(f);
+        }}
+      />
       {loading && !eventData ? (
         <p style={{ padding: "1rem 1rem", color: "#6b7280" }}>Chargement...</p>
       ) : null}
@@ -6191,6 +6230,21 @@ export default function RegieEventPage() {
                         Voir ma salle
                       </button>
                     ) : null}
+                    <button
+                      type="button"
+                      disabled={landingPhotoUploading}
+                      onClick={() => quickLandingPhotoInputRef.current?.click()}
+                      style={{
+                        ...btnGhost,
+                        fontSize: "0.72rem",
+                        fontWeight: 800,
+                        color: "#1e3a8a",
+                        borderColor: "#bfdbfe",
+                        background: "linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%)",
+                      }}
+                    >
+                      {landingPhotoUploading ? "Envoi photo…" : "📸 Ajouter une photo live"}
+                    </button>
                   </div>
                   <span
                     style={{
@@ -6261,6 +6315,23 @@ export default function RegieEventPage() {
                 >
                   {modeBadge.label}
                 </span>
+                <button
+                  type="button"
+                  disabled={landingPhotoUploading}
+                  onClick={() => quickLandingPhotoInputRef.current?.click()}
+                  style={{
+                    ...btnGhost,
+                    minHeight: "2.2rem",
+                    padding: "0.42rem 0.72rem",
+                    fontSize: "0.76rem",
+                    fontWeight: 800,
+                    color: "#1e3a8a",
+                    borderColor: "#bfdbfe",
+                    background: "linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%)",
+                  }}
+                >
+                  {landingPhotoUploading ? "Envoi photo…" : "📸 Ajouter une photo live"}
+                </button>
                 {canStartReal ? (
                   <div
                     style={{
