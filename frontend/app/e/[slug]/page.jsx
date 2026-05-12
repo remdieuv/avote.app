@@ -30,6 +30,9 @@ export default function EventLandingPage() {
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadError, setUploadError] = useState(null);
   const fileInputRef = useRef(null);
+  const galleryScrollRef = useRef(null);
+  const carouselRafRef = useRef(0);
+  const [carouselIndex, setCarouselIndex] = useState(0);
 
   useEffect(() => {
     if (!slug) return undefined;
@@ -125,6 +128,67 @@ export default function EventLandingPage() {
     },
     [payload],
   );
+
+  const photoIdsKey = useMemo(() => {
+    if (!payload || typeof payload !== "object") return "";
+    const ph = Array.isArray(payload.photos) ? payload.photos : [];
+    return ph.map((p) => String(p?.id ?? "")).join(",");
+  }, [payload]);
+
+  const landingPhotoCount = useMemo(() => {
+    if (!payload || typeof payload !== "object") return 0;
+    const ph = Array.isArray(payload.photos) ? payload.photos : [];
+    return ph.length;
+  }, [payload]);
+
+  const updateCarouselIndexFromScroll = useCallback(() => {
+    const root = galleryScrollRef.current;
+    if (!root) return;
+    const slides = root.querySelectorAll(".ev-gallery-slide");
+    if (!slides.length) return;
+    const rootRect = root.getBoundingClientRect();
+    const cs = getComputedStyle(root);
+    const pad =
+      parseFloat(cs.scrollPaddingLeft) || parseFloat(cs.paddingLeft) || 16;
+    const anchor = rootRect.left + pad;
+    let bestI = 0;
+    let bestD = Infinity;
+    slides.forEach((slide, i) => {
+      const r = slide.getBoundingClientRect();
+      const d = Math.abs(r.left - anchor);
+      if (d < bestD) {
+        bestD = d;
+        bestI = i;
+      }
+    });
+    setCarouselIndex((prev) => (prev !== bestI ? bestI : prev));
+  }, []);
+
+  useEffect(() => {
+    setCarouselIndex(0);
+    const root = galleryScrollRef.current;
+    if (root) root.scrollLeft = 0;
+  }, [photoIdsKey]);
+
+  useEffect(() => {
+    const root = galleryScrollRef.current;
+    if (!root || landingPhotoCount < 2) return undefined;
+    const tick = () => {
+      if (carouselRafRef.current) return;
+      carouselRafRef.current = requestAnimationFrame(() => {
+        carouselRafRef.current = 0;
+        updateCarouselIndexFromScroll();
+      });
+    };
+    const onScrollEnd = () => updateCarouselIndexFromScroll();
+    root.addEventListener("scroll", tick, { passive: true });
+    root.addEventListener("scrollend", onScrollEnd);
+    tick();
+    return () => {
+      root.removeEventListener("scroll", tick);
+      root.removeEventListener("scrollend", onScrollEnd);
+    };
+  }, [landingPhotoCount, photoIdsKey, updateCarouselIndexFromScroll]);
 
   const accent = useMemo(() => {
     const c = payload?.primaryColor;
@@ -294,11 +358,16 @@ export default function EventLandingPage() {
 
         .ev-landing-hero {
           position: relative;
-          min-height: min(100svh, 820px);
+          min-height: min(72svh, 600px);
           display: flex;
           align-items: center;
           justify-content: center;
           overflow: hidden;
+        }
+        @media (min-width: 768px) {
+          .ev-landing-hero {
+            min-height: min(90svh, 860px);
+          }
         }
         .ev-landing-hero-bg {
           position: absolute;
@@ -348,6 +417,21 @@ export default function EventLandingPage() {
             clamp(2rem, 6vw, 3.5rem);
           text-align: center;
           box-sizing: border-box;
+        }
+        @media (max-width: 767px) {
+          .ev-landing-hero-content {
+            padding-top: clamp(1rem, 3vw, 1.35rem);
+            padding-bottom: clamp(1.15rem, 3.5vw, 1.75rem);
+          }
+          .ev-landing-hero-cta {
+            margin-top: clamp(1rem, 3vw, 1.5rem);
+          }
+          .ev-landing-hero-title {
+            font-size: clamp(1.65rem, 6.2vw, 2.35rem);
+          }
+          .ev-landing-hero-desc {
+            margin-top: 0.75rem;
+          }
         }
         .ev-landing-hero-kicker {
           margin: 0 0 0.75rem;
@@ -422,12 +506,13 @@ export default function EventLandingPage() {
 
         .ev-landing-gallery-scroll {
           display: flex;
-          gap: 1rem;
+          gap: 0.75rem;
           overflow-x: auto;
           scroll-snap-type: x mandatory;
-          scroll-padding-inline: clamp(1rem, 4vw, 1.5rem);
-          padding: 0.25rem clamp(1rem, 4vw, 1.5rem) 1.25rem;
-          margin-inline: clamp(-1rem, -2vw, -0.5rem);
+          scroll-padding-inline-start: 1rem;
+          scroll-padding-inline-end: 0.75rem;
+          padding: 0.25rem 1rem 0.65rem;
+          margin-inline: -1rem;
           -webkit-overflow-scrolling: touch;
           scrollbar-width: none;
         }
@@ -435,9 +520,10 @@ export default function EventLandingPage() {
           display: none;
         }
         .ev-gallery-slide {
-          flex: 0 0 calc(100vw - 2.5rem);
-          max-width: min(420px, 92vw);
-          scroll-snap-align: center;
+          flex: 0 0 calc(100vw - 4.75rem);
+          max-width: min(360px, calc(100vw - 4.75rem));
+          scroll-snap-align: start;
+          scroll-snap-stop: normal;
         }
         .ev-gallery-slide figure {
           margin: 0;
@@ -460,6 +546,50 @@ export default function EventLandingPage() {
           .ev-gallery-slide figure:hover img {
             transform: scale(1.04);
           }
+        }
+        .ev-landing-carousel-progress {
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          justify-content: center;
+          gap: 0.7rem;
+          margin-top: 0.45rem;
+          padding: 0 1rem 0.35rem;
+        }
+        @media (min-width: 768px) {
+          .ev-landing-carousel-progress {
+            display: none;
+          }
+        }
+        .ev-landing-carousel-dots {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.32rem;
+        }
+        .ev-landing-carousel-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 999px;
+          background: #cbd5e1;
+          flex-shrink: 0;
+          transition: transform 0.2s ease, background 0.2s ease, width 0.2s ease;
+        }
+        .ev-landing-carousel-dot--active {
+          width: 7px;
+          height: 7px;
+          background: var(--ev-accent, #2563eb);
+          transform: scale(1.15);
+          box-shadow: 0 0 0 3px color-mix(in srgb, var(--ev-accent, #2563eb) 22%, transparent);
+        }
+        .ev-landing-carousel-fraction {
+          font-size: 0.72rem;
+          font-weight: 700;
+          font-variant-numeric: tabular-nums;
+          letter-spacing: 0.04em;
+          color: #94a3b8;
+          min-width: 2.5rem;
+          text-align: center;
         }
         @media (min-width: 768px) {
           .ev-landing-gallery-scroll {
@@ -640,7 +770,10 @@ export default function EventLandingPage() {
         {showGalleryBlock ? (
           <section
             className="ev-landing-gallery-section"
-            style={{ marginBottom: "clamp(2rem, 5vw, 3rem)" }}
+            style={{
+              marginBottom: "clamp(2rem, 5vw, 3rem)",
+              "--ev-accent": accent,
+            }}
           >
             <div
               style={{
@@ -734,22 +867,46 @@ export default function EventLandingPage() {
                 à cette page.
               </p>
             ) : null}
-            <div className="ev-landing-gallery-scroll">
-              {photos.map((p) => {
-                const u =
-                  typeof p?.url === "string"
-                    ? resolveApiAssetUrlNullable(p.url.trim())
-                    : null;
-                if (!u) return null;
-                return (
-                  <div key={p.id} className="ev-gallery-slide">
-                    <figure>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={u} alt="" loading="lazy" />
-                    </figure>
+            <div className="ev-landing-carousel-mobile-wrap">
+              <div
+                ref={galleryScrollRef}
+                className="ev-landing-gallery-scroll"
+              >
+                {photos.map((p) => {
+                  const u =
+                    typeof p?.url === "string"
+                      ? resolveApiAssetUrlNullable(p.url.trim())
+                      : null;
+                  if (!u) return null;
+                  return (
+                    <div key={p.id} className="ev-gallery-slide">
+                      <figure>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={u} alt="" loading="lazy" />
+                      </figure>
+                    </div>
+                  );
+                })}
+              </div>
+              {photos.length > 1 ? (
+                <div className="ev-landing-carousel-progress">
+                  <div className="ev-landing-carousel-dots" aria-hidden="true">
+                    {photos.map((p, i) => (
+                      <span
+                        key={p.id}
+                        className={
+                          i === carouselIndex
+                            ? "ev-landing-carousel-dot ev-landing-carousel-dot--active"
+                            : "ev-landing-carousel-dot"
+                        }
+                      />
+                    ))}
                   </div>
-                );
-              })}
+                  <span className="ev-landing-carousel-fraction">
+                    {carouselIndex + 1} / {photos.length}
+                  </span>
+                </div>
+              ) : null}
             </div>
             <div className="ev-landing-gallery-grid">
               {photos.map((p) => {
