@@ -372,6 +372,17 @@ export default function EventCustomizationPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || loading) return;
+    if (window.location.hash !== "#landing-page-section") return;
+    const el = document.getElementById("landing-page-section");
+    if (!el) return;
+    const t = window.setTimeout(() => {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+    return () => window.clearTimeout(t);
+  }, [loading, eventId]);
+
   async function handleUpload(kind, file) {
     if (!eventId || !file) return;
     setUploadKind(kind);
@@ -1033,7 +1044,7 @@ export default function EventCustomizationPage() {
                 </label>
               </section>
 
-              <section style={card}>
+              <section id="landing-page-section" style={card}>
                 <h2
                   style={{
                     margin: "0 0 0.85rem",

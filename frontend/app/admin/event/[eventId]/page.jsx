@@ -2875,9 +2875,11 @@ function LiensDiffusionCompact({ slug }) {
     if (url) window.open(url, "_blank", "noopener,noreferrer");
   }
 
-  /** @param {{ titre: string; path: string; k: "join" | "vote"; hint: string }} p */
+  /** @param {{ titre: string; path: string; k: "join" | "vote"; hint: string; openLabel?: string; copyLabel?: string }} p */
   function cell(p) {
     const abs = clientPret ? lienDiffusionAbsolu(p.path) : "";
+    const openLabel = p.openLabel ?? "Ouvrir";
+    const copyLabel = p.copyLabel ?? "Copier";
     return (
       <div
         style={{
@@ -2915,11 +2917,11 @@ function LiensDiffusionCompact({ slug }) {
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem", alignItems: "center" }}>
           <button type="button" onClick={() => ouvrir(p.path)} style={linkAct}>
-            Ouvrir
+            {openLabel}
           </button>
           <span style={{ color: "#e2e8f0", fontSize: "0.65rem" }}>·</span>
           <button type="button" onClick={() => copier(p.path, p.k)} style={linkAct}>
-            Copier
+            {copyLabel}
           </button>
           {copied === p.k ? (
             <span style={{ fontSize: "0.62rem", fontWeight: 600, color: "#15803d" }}>OK</span>
@@ -2964,8 +2966,166 @@ function LiensDiffusionCompact({ slug }) {
 }
 
 /**
+ * Section dédiée landing — Partage & accès (régie).
+ * @param {{ slug: string; landingEnabled: boolean; eventId: string | null }} props
+ */
+function SectionPartageLandingEvenement({ slug, landingEnabled, eventId }) {
+  const [clientPret, setClientPret] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") setClientPret(true);
+  }, []);
+
+  useEffect(() => {
+    if (!copied) return;
+    const id = window.setTimeout(() => setCopied(false), 1800);
+    return () => window.clearTimeout(id);
+  }, [copied]);
+
+  const enc = encodeURIComponent(slug);
+  const pathLanding = `/e/${enc}`;
+
+  const linkAct = {
+    fontSize: "0.68rem",
+    fontWeight: 600,
+    color: "#7c3aed",
+    background: "none",
+    border: "none",
+    padding: "0.15rem 0",
+    cursor: "pointer",
+    textDecoration: "underline",
+    textUnderlineOffset: "2px",
+  };
+
+  async function copier() {
+    const url = lienDiffusionAbsolu(pathLanding);
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+    } catch {
+      // ignore
+    }
+  }
+
+  function ouvrir() {
+    const url = lienDiffusionAbsolu(pathLanding);
+    if (url) window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  const eyebrow = {
+    margin: "0 0 0.45rem 0",
+    fontSize: "0.65rem",
+    fontWeight: 700,
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    color: "#64748b",
+  };
+
+  const customizeHref =
+    eventId != null
+      ? `/admin/events/${encodeURIComponent(eventId)}/customization#landing-page-section`
+      : "/admin/events";
+
+  if (landingEnabled) {
+    const abs = clientPret ? lienDiffusionAbsolu(pathLanding) : "";
+    return (
+      <div style={{ paddingTop: "0.55rem" }}>
+        <p style={eyebrow}>Landing événement</p>
+        <div
+          style={{
+            padding: "0.55rem 0.65rem",
+            borderRadius: "10px",
+            border: "1px solid #e2e8f0",
+            background: "#fff",
+            minWidth: 0,
+          }}
+        >
+          <p
+            title={abs || undefined}
+            style={{
+              margin: "0 0 0.4rem 0",
+              fontSize: "0.62rem",
+              color: "#94a3b8",
+              fontFamily: "ui-monospace, monospace",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {pathLanding}
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem", alignItems: "center" }}>
+            <button type="button" onClick={() => ouvrir()} style={linkAct}>
+              Ouvrir la landing
+            </button>
+            <span style={{ color: "#e2e8f0", fontSize: "0.65rem" }}>·</span>
+            <button type="button" onClick={() => void copier()} style={linkAct}>
+              Copier le lien
+            </button>
+            {copied ? (
+              <span style={{ fontSize: "0.62rem", fontWeight: 600, color: "#15803d" }}>OK</span>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ paddingTop: "0.55rem" }}>
+      <div
+        style={{
+          padding: "0.55rem 0.65rem",
+          borderRadius: "10px",
+          border: "1px solid #e5e7eb",
+          background: "#f8fafc",
+          minWidth: 0,
+          opacity: 0.92,
+        }}
+      >
+        <p
+          style={{
+            margin: "0 0 0.25rem 0",
+            fontSize: "0.7rem",
+            fontWeight: 700,
+            color: "#64748b",
+            lineHeight: 1.25,
+          }}
+        >
+          Landing événement
+        </p>
+        <p style={{ margin: "0 0 0.55rem 0", fontSize: "0.72rem", color: "#64748b", lineHeight: 1.4 }}>
+          Landing désactivée pour cet événement.
+        </p>
+        <Link
+          href={customizeHref}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: "2rem",
+            padding: "0.4rem 0.65rem",
+            borderRadius: "9px",
+            border: "1px solid #cbd5e1",
+            background: "#fff",
+            color: "#475569",
+            fontSize: "0.76rem",
+            fontWeight: 700,
+            textDecoration: "none",
+          }}
+        >
+          Configurer la landing
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Colonne droite desktop : QR + liens diffusion.
- * @param {{ slug: string; liveState: string; stateLabel: string; showHeader?: boolean; noSticky?: boolean; qrVariant?: "rail" | "mobile"; sceneBadge?: { label: string; bg: string; color: string; border: string } | null; onQuickLandingPhoto?: () => void; landingPhotoUploading?: boolean; landingPhotosCount?: number }} props
+ * @param {{ slug: string; liveState: string; stateLabel: string; showHeader?: boolean; noSticky?: boolean; qrVariant?: "rail" | "mobile"; sceneBadge?: { label: string; bg: string; color: string; border: string } | null; onQuickLandingPhoto?: () => void; landingPhotoUploading?: boolean; landingPhotosCount?: number; landingEnabled?: boolean; eventId?: string | null }} props
  */
 function SidebarPartageDroit({
   slug,
@@ -2979,6 +3139,8 @@ function SidebarPartageDroit({
   onQuickLandingPhoto,
   landingPhotoUploading = false,
   landingPhotosCount = 0,
+  landingEnabled = false,
+  eventId = null,
 }) {
   return (
     <aside
@@ -3089,6 +3251,11 @@ function SidebarPartageDroit({
         </p>
         <LiensDiffusionCompact slug={slug} />
       </div>
+      <SectionPartageLandingEvenement
+        slug={slug}
+        landingEnabled={Boolean(landingEnabled)}
+        eventId={eventId}
+      />
     </aside>
   );
 }
@@ -7854,6 +8021,8 @@ export default function RegieEventPage() {
                   onQuickLandingPhoto={() => quickLandingPhotoInputRef.current?.click()}
                   landingPhotoUploading={landingPhotoUploading}
                   landingPhotosCount={landingPhotosCount}
+                  landingEnabled={Boolean(eventData?.landingEnabled)}
+                  eventId={eventId}
                   onOverlayCopied={() => {
                     setToastNotif("Lien overlay copié");
                     window.setTimeout(() => setToastNotif(null), 3200);
@@ -7885,6 +8054,8 @@ export default function RegieEventPage() {
                 onQuickLandingPhoto={() => quickLandingPhotoInputRef.current?.click()}
                 landingPhotoUploading={landingPhotoUploading}
                 landingPhotosCount={landingPhotosCount}
+                landingEnabled={Boolean(eventData?.landingEnabled)}
+                eventId={eventId}
                 onOverlayCopied={() => {
                   setToastNotif("Lien overlay copié");
                   window.setTimeout(() => setToastNotif(null), 3200);

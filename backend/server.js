@@ -1230,6 +1230,7 @@ app.get("/billing/payments", requireAuth, async (req, res) => {
  *   pollCount: number;
  *   voteCount: number;
  *   participantCount: number;
+ *   landingEnabled: boolean;
  * }>>}
  */
 async function listEventsForAdmin(userId) {
@@ -1242,6 +1243,7 @@ async function listEventsForAdmin(userId) {
       slug: true,
       createdAt: true,
       participantsLimit: true,
+      landingEnabled: true,
       liveState: true,
       voteState: true,
       displayState: true,
@@ -1287,6 +1289,7 @@ async function listEventsForAdmin(userId) {
     liveState: String(e.liveState).toLowerCase(),
     voteState: String(e.voteState).toLowerCase(),
     displayState: String(e.displayState).toLowerCase(),
+    landingEnabled: Boolean(e.landingEnabled),
     pollCount: e.polls.length,
     voteCount: votesByEventId.get(e.id) || 0,
     participantCount: participantsByEventId.get(e.id)?.size || 0,

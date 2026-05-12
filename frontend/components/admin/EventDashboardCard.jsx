@@ -20,6 +20,7 @@ import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
  *     participantCount?: number;
  *     participantsUsed?: number | null;
  *     participantsLimit?: number | null;
+ *     landingEnabled?: boolean;
  *     _localOnly?: boolean;
  *   };
  *   featured?: boolean;
@@ -131,6 +132,7 @@ export function EventDashboardCard({
         : "#2563eb";
 
   const metaParts = [];
+  const landingOn = Boolean(ev.landingEnabled);
   if (pc !== null) {
     metaParts.push(`${pc} question${pc !== 1 ? "s" : ""}`);
   }
@@ -350,7 +352,7 @@ export function EventDashboardCard({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            gridTemplateColumns: "repeat(auto-fit, minmax(8.5rem, 1fr))",
             gap: "0.45rem",
           }}
           className="avote-event-card-secondary-grid"
@@ -373,6 +375,28 @@ export function EventDashboardCard({
               >
                 Voir l’écran
               </Link>
+              {landingOn ? (
+                <Link
+                  href={`/e/${encodeURIComponent(ev.slug)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={secondaryLinkStyle}
+                >
+                  Voir la landing
+                </Link>
+              ) : (
+                <span
+                  title="Activez la landing dans Personnalisation"
+                  style={{
+                    ...secondaryLinkStyle,
+                    opacity: 0.5,
+                    cursor: "not-allowed",
+                    pointerEvents: "none",
+                  }}
+                >
+                  Landing désactivée
+                </span>
+              )}
             </>
           ) : (
             <>
@@ -381,6 +405,9 @@ export function EventDashboardCard({
               </span>
               <span style={{ ...secondaryLinkStyle, opacity: 0.45, cursor: "default", pointerEvents: "none" }}>
                 Voir l’écran
+              </span>
+              <span style={{ ...secondaryLinkStyle, opacity: 0.45, cursor: "default", pointerEvents: "none" }}>
+                Landing désactivée
               </span>
             </>
           )}
