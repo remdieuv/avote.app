@@ -132,7 +132,7 @@ export function EventDashboardCard({
         : "#2563eb";
 
   const metaParts = [];
-  const landingOn = Boolean(ev.landingEnabled);
+  const landingOn = ev.landingEnabled === true;
   if (pc !== null) {
     metaParts.push(`${pc} question${pc !== 1 ? "s" : ""}`);
   }

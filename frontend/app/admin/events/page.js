@@ -83,6 +83,8 @@ function normalizeEventRow(e) {
       typeof e.displayState === "string" && e.displayState.trim()
         ? String(e.displayState).toLowerCase()
         : "",
+    landingEnabled:
+      typeof e.landingEnabled === "boolean" ? e.landingEnabled : undefined,
     _localOnly: Boolean(e._localOnly),
   };
 }
