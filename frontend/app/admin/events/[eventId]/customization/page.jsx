@@ -1259,11 +1259,8 @@ export default function EventCustomizationPage() {
                   style={{
                     ...btnPrimary,
                     display: "inline-block",
-                    cursor:
-                      uploadKind !== null || showcasePhotoBusy
-                        ? "not-allowed"
-                        : "pointer",
-                    opacity: uploadKind !== null || showcasePhotoBusy ? 0.65 : 1,
+                    cursor: showcasePhotoBusy ? "not-allowed" : "pointer",
+                    opacity: showcasePhotoBusy ? 0.65 : 1,
                     marginBottom: "0.65rem",
                   }}
                 >
@@ -1272,11 +1269,12 @@ export default function EventCustomizationPage() {
                     accept="image/jpeg,image/png,image/webp,image/gif"
                     multiple
                     style={{ display: "none" }}
-                    disabled={uploadKind !== null || showcasePhotoBusy}
+                    disabled={showcasePhotoBusy}
                     onChange={(e) => {
-                      const list = e.target.files;
+                      const raw = e.target.files;
+                      const files = raw?.length ? Array.from(raw) : [];
                       e.target.value = "";
-                      if (list?.length) void addShowcasePhotos(list);
+                      if (files.length) void addShowcasePhotos(files);
                     }}
                   />
                   {showcasePhotoBusy ? "Envoi…" : "Ajouter des photos"}
