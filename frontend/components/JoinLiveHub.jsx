@@ -1237,6 +1237,15 @@ export function JoinLiveHub({ slug }) {
             min-height: 50px !important;
             font-size: 1rem !important;
           }
+          .join-landing-link-label-long {
+            display: none !important;
+          }
+          .join-landing-link-label-short {
+            display: inline !important;
+          }
+        }
+        .join-landing-link-label-short {
+          display: none;
         }
       `}</style>
 
@@ -1262,6 +1271,32 @@ export function JoinLiveHub({ slug }) {
           >
             {progressionLigne}
           </p>
+        ) : null}
+        {!loading && !error && landingEnabled ? (
+          <div style={{ marginTop: "0.65rem" }}>
+            <Link
+              href={`/e/${encodeURIComponent(slug)}`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: "2.1rem",
+                padding: "0.45rem 0.75rem",
+                borderRadius: "10px",
+                border: `1px solid ${palette.headerBorder}`,
+                background: isDark ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.82)",
+                color: palette.fg2,
+                textDecoration: "none",
+                fontSize: "0.82rem",
+                fontWeight: 700,
+                backdropFilter: "blur(6px)",
+                WebkitBackdropFilter: "blur(6px)",
+              }}
+            >
+              <span className="join-landing-link-label-long">📸 Voir les photos & infos</span>
+              <span className="join-landing-link-label-short">📸 Photos & infos</span>
+            </Link>
+          </div>
         ) : null}
         {showInfoSection ? (
           <section
@@ -1357,30 +1392,6 @@ export function JoinLiveHub({ slug }) {
           </section>
         ) : null}
       </ExperienceHeader>
-
-      {!loading && !error && landingEnabled ? (
-        <div
-          style={{
-            padding: "0 1rem",
-            marginTop: "-0.35rem",
-            marginBottom: "0.25rem",
-            textAlign: "center",
-          }}
-        >
-          <Link
-            href={`/e/${encodeURIComponent(slug)}`}
-            style={{
-              fontSize: "0.78rem",
-              fontWeight: 600,
-              color: palette.muted,
-              textDecoration: "none",
-              borderBottom: `1px solid color-mix(in srgb, ${palette.muted} 35%, transparent)`,
-            }}
-          >
-            Galerie & infos
-          </Link>
-        </div>
-      ) : null}
 
       <div className="join-live-zone" style={zoneMain}>
         {loading ? (
