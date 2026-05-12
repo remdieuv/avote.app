@@ -24,7 +24,11 @@ const {
   setAuthCookie,
   clearAuthCookie,
 } = require("./lib/auth");
-const { assertEventOwnedBy, assertPollOwnedBy } = require("./lib/eventAccess");
+const {
+  assertEventOwnedBy,
+  assertEventOwnedByOrPlatformAdmin,
+  assertPollOwnedBy,
+} = require("./lib/eventAccess");
 
 /** Origine publique de l’API (URLs absolues assets /join). */
 const PUBLIC_API_ORIGIN = (
@@ -1874,6 +1878,30 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
         ? event.landingDescription
         : event.description ?? null;
 
+    let canUploadLandingPhoto = false;
+    let landingPhotoUploadEventId = null;
+    const token = readTokenFromRequest(req);
+    const authPayload = verifyToken(token);
+    const sessionUserId =
+      authPayload && typeof authPayload.sub === "string"
+        ? authPayload.sub.trim()
+        : "";
+    if (sessionUserId) {
+      if (event.userId && event.userId === sessionUserId) {
+        canUploadLandingPhoto = true;
+        landingPhotoUploadEventId = event.id;
+      } else {
+        const sessionUser = await prisma.user.findUnique({
+          where: { id: sessionUserId },
+          select: { role: true },
+        });
+        if (String(sessionUser?.role || "").toUpperCase() === "ADMIN") {
+          canUploadLandingPhoto = true;
+          landingPhotoUploadEventId = event.id;
+        }
+      }
+    }
+
     return res.json({
       enabled: true,
       slug: event.slug,
@@ -1883,6 +1911,8 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       primaryColor: info.primaryColor,
       logoUrl: info.logoUrl,
       photos,
+      canUploadLandingPhoto,
+      landingPhotoUploadEventId,
       infoSectionTitle: info.infoSectionTitle,
       infoSectionText: info.infoSectionText,
       infoPrimaryCtaLabel: info.infoPrimaryCtaLabel,
@@ -2385,7 +2415,7 @@ app.post("/events/:eventId/customization/upload", requireAuth, async (req, res) 
 app.post("/events/:eventId/landing/photos", requireAuth, async (req, res) => {
   try {
     const { eventId } = req.params;
-    const owned = await assertEventOwnedBy(eventId, req.userId);
+    const owned = await assertEventOwnedByOrPlatformAdmin(eventId, req.userId);
     if (!owned.ok) {
       return res.status(owned.status).json({ error: "Événement introuvable." });
     }
@@ -2438,7 +2468,7 @@ app.delete(
   async (req, res) => {
     try {
       const { eventId, photoId } = req.params;
-      const owned = await assertEventOwnedBy(eventId, req.userId);
+      const owned = await assertEventOwnedByOrPlatformAdmin(eventId, req.userId);
       if (!owned.ok) {
         return res.status(owned.status).json({ error: "Événement introuvable." });
       }

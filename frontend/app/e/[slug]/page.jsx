@@ -2,9 +2,15 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveApiAssetUrlNullable } from "@/lib/assetUrl";
-import { API_URL } from "@/lib/config";
+import { adminFetch, apiBaseBrowser } from "@/lib/config";
+
+function mapApiError(body, status) {
+  const code = String(body?.error || "").trim();
+  const message = typeof body?.message === "string" ? body.message.trim() : "";
+  return message || code || `Erreur ${status}`;
+}
 
 /**
  * Landing événement publique — vitrine + galerie + lien vers la salle live.
@@ -18,8 +24,12 @@ export default function EventLandingPage() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  /** @type {null | import("react").CSSProperties} */
+  /** @type {null | Record<string, unknown>} */
   const [payload, setPayload] = useState(null);
+  const [toastNotif, setToastNotif] = useState(null);
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (!slug) return undefined;
@@ -29,8 +39,8 @@ export default function EventLandingPage() {
       setError(null);
       let redirected = false;
       try {
-        const res = await fetch(
-          `${API_URL}/events/slug/${encodeURIComponent(slug)}/landing`,
+        const res = await adminFetch(
+          `${apiBaseBrowser()}/events/slug/${encodeURIComponent(slug)}/landing`,
           { cache: "no-store" },
         );
         if (res.status === 404) {
@@ -61,6 +71,60 @@ export default function EventLandingPage() {
       cancelled = true;
     };
   }, [slug, router]);
+
+  const triggerLandingPhotoPicker = useCallback(() => {
+    setUploadError(null);
+    fileInputRef.current?.click();
+  }, []);
+
+  const onLandingPhotoSelected = useCallback(
+    async (e) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file || !payload) return;
+      const can =
+        payload.canUploadLandingPhoto === true &&
+        typeof payload.landingPhotoUploadEventId === "string" &&
+        String(payload.landingPhotoUploadEventId).trim() !== "";
+      const eventId = can
+        ? String(payload.landingPhotoUploadEventId).trim()
+        : "";
+      if (!can || !eventId) return;
+      setUploadBusy(true);
+      setUploadError(null);
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await adminFetch(
+          `${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/landing/photos`,
+          { method: "POST", body: fd },
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(mapApiError(body, res.status));
+        const id = typeof body?.id === "string" ? body.id : null;
+        const url = typeof body?.url === "string" ? body.url : null;
+        const createdAt =
+          typeof body?.createdAt === "string" ? body.createdAt : null;
+        if (id && url && createdAt) {
+          setPayload((prev) => {
+            if (!prev || typeof prev !== "object") return prev;
+            const prevPhotos = Array.isArray(prev.photos) ? prev.photos : [];
+            return {
+              ...prev,
+              photos: [{ id, url, createdAt }, ...prevPhotos],
+            };
+          });
+        }
+        setToastNotif("✅ Photo publiée sur la landing");
+        window.setTimeout(() => setToastNotif(null), 2600);
+      } catch (err) {
+        setUploadError(err?.message || "Upload impossible.");
+      } finally {
+        setUploadBusy(false);
+      }
+    },
+    [payload],
+  );
 
   const accent = useMemo(() => {
     const c = payload?.primaryColor;
@@ -164,6 +228,12 @@ export default function EventLandingPage() {
     (ipL && ipU) ||
     (isL && isU);
 
+  const canUploadLanding =
+    payload.canUploadLandingPhoto === true &&
+    typeof payload.landingPhotoUploadEventId === "string" &&
+    String(payload.landingPhotoUploadEventId).trim() !== "";
+  const showGalleryBlock = photos.length > 0 || canUploadLanding;
+
   const mainBtn = {
     display: "inline-flex",
     alignItems: "center",
@@ -236,6 +306,36 @@ export default function EventLandingPage() {
           }
         }
         .ev-landing-gallery-grid { display: none; }
+        .ev-landing-upload-fab {
+          position: fixed;
+          right: max(0.85rem, env(safe-area-inset-right));
+          bottom: max(0.85rem, env(safe-area-inset-bottom));
+          z-index: 60;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.35rem;
+          padding: 0.65rem 0.95rem;
+          border-radius: 999px;
+          border: none;
+          font-weight: 800;
+          font-size: 0.82rem;
+          cursor: pointer;
+          color: #fff;
+          box-shadow: 0 10px 28px rgba(15, 23, 42, 0.22);
+          max-width: min(92vw, 16rem);
+        }
+        @media (min-width: 768px) {
+          .ev-landing-upload-fab { display: none; }
+        }
+        .ev-landing-upload-desktop {
+          display: none;
+        }
+        @media (min-width: 768px) {
+          .ev-landing-upload-desktop {
+            display: inline-flex;
+          }
+        }
       `}</style>
 
       <section style={{ position: "relative" }}>
@@ -327,20 +427,86 @@ export default function EventLandingPage() {
           boxSizing: "border-box",
         }}
       >
-        {photos.length > 0 ? (
+        {showGalleryBlock ? (
           <section style={{ marginBottom: "clamp(1.5rem, 4vw, 2.25rem)" }}>
-            <h2
+            <div
               style={{
-                margin: "0 0 0.65rem",
-                fontSize: "0.72rem",
-                fontWeight: 800,
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                color: "#64748b",
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "0.65rem",
+                marginBottom: "0.65rem",
               }}
             >
-              Galerie live
-            </h2>
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: "0.72rem",
+                  fontWeight: 800,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  color: "#64748b",
+                }}
+              >
+                Galerie live
+              </h2>
+              {canUploadLanding ? (
+                <button
+                  type="button"
+                  className="ev-landing-upload-desktop"
+                  disabled={uploadBusy}
+                  onClick={triggerLandingPhotoPicker}
+                  style={{
+                    alignItems: "center",
+                    gap: "0.35rem",
+                    padding: "0.5rem 0.95rem",
+                    borderRadius: "12px",
+                    border: `1px solid color-mix(in srgb, ${accent} 38%, #e2e8f0)`,
+                    fontWeight: 700,
+                    fontSize: "0.88rem",
+                    color: accent,
+                    background: "#fff",
+                    cursor: uploadBusy ? "wait" : "pointer",
+                    opacity: uploadBusy ? 0.75 : 1,
+                    boxShadow: "0 1px 2px rgba(15,23,42,0.06)",
+                  }}
+                >
+                  📸 Publier une photo
+                </button>
+              ) : null}
+            </div>
+            {canUploadLanding ? (
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                style={{ display: "none" }}
+                onChange={onLandingPhotoSelected}
+              />
+            ) : null}
+            {uploadError ? (
+              <p
+                style={{
+                  margin: "0 0 0.5rem",
+                  fontSize: "0.84rem",
+                  color: "#b91c1c",
+                }}
+              >
+                {uploadError}
+              </p>
+            ) : null}
+            {photos.length === 0 && canUploadLanding ? (
+              <p
+                style={{
+                  margin: "0 0 0.75rem",
+                  fontSize: "0.88rem",
+                  color: "#64748b",
+                }}
+              >
+                Aucune photo pour le moment — publiez-en une ci-dessus.
+              </p>
+            ) : null}
             <div className="ev-landing-gallery-scroll">
               {photos.map((p) => {
                 const u =
@@ -474,6 +640,45 @@ export default function EventLandingPage() {
           </p>
         </section>
       </div>
+
+      {canUploadLanding ? (
+        <button
+          type="button"
+          className="ev-landing-upload-fab"
+          disabled={uploadBusy}
+          onClick={triggerLandingPhotoPicker}
+          aria-label="Publier une photo sur la landing"
+          style={{
+            background: `linear-gradient(180deg, ${accent}, color-mix(in srgb, ${accent} 82%, #000))`,
+          }}
+        >
+          📸 Publier
+        </button>
+      ) : null}
+
+      {toastNotif ? (
+        <div
+          role="status"
+          style={{
+            position: "fixed",
+            left: "50%",
+            top: "max(0.75rem, env(safe-area-inset-top))",
+            transform: "translateX(-50%)",
+            zIndex: 70,
+            padding: "0.55rem 1rem",
+            borderRadius: "999px",
+            background: "rgba(15,23,42,0.92)",
+            color: "#f8fafc",
+            fontSize: "0.88rem",
+            fontWeight: 600,
+            boxShadow: "0 12px 32px rgba(15,23,42,0.25)",
+            maxWidth: "min(92vw, 22rem)",
+            textAlign: "center",
+          }}
+        >
+          {toastNotif}
+        </div>
+      ) : null}
     </main>
   );
 }
