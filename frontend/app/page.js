@@ -13,7 +13,7 @@ const shell = {
 
 const inner = {
   width: "100%",
-  maxWidth: "960px",
+  maxWidth: "1100px",
   margin: "0 auto",
   padding: "1.25rem 1.25rem 4rem",
   boxSizing: "border-box",
