@@ -1208,19 +1208,20 @@ function BlocProjectionEcran({
     <section
       style={{
         ...CARD,
-        padding: desktop ? "1.35rem 1.45rem" : "1.2rem 1rem",
-        background: "linear-gradient(165deg, #f5f3ff 0%, #ede9fe 40%, #faf5ff 100%)",
-        border: "1px solid #c4b5fd",
-        boxShadow: "0 4px 20px rgba(91, 33, 182, 0.12)",
+        padding: desktop ? "1.45rem 1.55rem" : "1.25rem 1rem",
+        background:
+          "linear-gradient(145deg, #faf5ff 0%, #eef2ff 48%, #ffffff 100%)",
+        border: "1px solid rgba(167, 139, 250, 0.26)",
+        boxShadow: "0 24px 44px rgba(91, 33, 182, 0.12)",
       }}
     >
       <div style={{ marginBottom: "1.25rem" }}>
         <h2
           style={{
-            fontSize: desktop ? "1.28rem" : "1.12rem",
+            fontSize: desktop ? "1.4rem" : "1.16rem",
             fontWeight: 800,
             margin: 0,
-            letterSpacing: "-0.02em",
+            letterSpacing: "-0.03em",
             color: "#3b0764",
           }}
         >
@@ -1229,7 +1230,7 @@ function BlocProjectionEcran({
         <p
           style={{
             margin: "0.45rem 0 0 0",
-            fontSize: desktop ? "1.08rem" : "1.02rem",
+            fontSize: desktop ? "1.14rem" : "1.02rem",
             fontWeight: 700,
             letterSpacing: "-0.01em",
             lineHeight: 1.35,
@@ -1255,10 +1256,11 @@ function BlocProjectionEcran({
       <div
         style={{
           marginBottom: "1.15rem",
-          padding: desktop ? "0.8rem 0.95rem" : "0.72rem 0.8rem",
-          borderRadius: "10px",
-          background: "rgba(255,255,255,0.58)",
-          border: "1px solid rgba(91, 33, 182, 0.2)",
+          padding: desktop ? "0.95rem 1rem" : "0.78rem 0.84rem",
+          borderRadius: "16px",
+          background: "rgba(255,255,255,0.74)",
+          border: "1px solid rgba(91, 33, 182, 0.16)",
+          boxShadow: "0 14px 28px rgba(15, 23, 42, 0.05)",
         }}
       >
         <p
@@ -1294,14 +1296,17 @@ function BlocProjectionEcran({
                 type="button"
                 onClick={() => changeProjectionMode(m.id)}
                 style={{
-                  padding: "0.38rem 0.65rem",
+                  padding: "0.46rem 0.76rem",
                   fontSize: "0.75rem",
                   fontWeight: 700,
-                  borderRadius: "8px",
-                  border: on ? "1px solid #6d28d9" : "1px solid #d1d5db",
-                  background: on ? "#f5f3ff" : "#fff",
+                  borderRadius: "12px",
+                  border: on ? "1px solid #7c3aed" : PREMIUM_BORDER,
+                  background: on
+                    ? "linear-gradient(180deg, #ede9fe 0%, #ddd6fe 100%)"
+                    : "rgba(255,255,255,0.9)",
                   color: on ? "#5b21b6" : "#475569",
                   cursor: "pointer",
+                  boxShadow: on ? "0 12px 24px rgba(124, 58, 237, 0.12)" : "none",
                 }}
               >
                 {m.label}
@@ -1324,10 +1329,11 @@ function BlocProjectionEcran({
       <div
         style={{
           marginBottom: "1.1rem",
-          padding: desktop ? "0.9rem 0.95rem" : "0.78rem 0.82rem",
-          borderRadius: "12px",
-          background: "rgba(255,255,255,0.62)",
-          border: "1px solid rgba(91, 33, 182, 0.26)",
+          padding: desktop ? "1rem 1.05rem" : "0.84rem 0.86rem",
+          borderRadius: "18px",
+          background: "rgba(255,255,255,0.78)",
+          border: "1px solid rgba(91, 33, 182, 0.18)",
+          boxShadow: "0 14px 30px rgba(15, 23, 42, 0.05)",
         }}
       >
         <p
@@ -1624,10 +1630,11 @@ function BlocProjectionEcran({
       <div
         style={{
           marginBottom: "0.95rem",
-          padding: desktop ? "1.1rem 1rem" : "1rem 0.85rem",
-          borderRadius: "12px",
-          border: "1px dashed rgba(91, 33, 182, 0.35)",
-          background: "rgba(255,255,255,0.4)",
+          padding: desktop ? "1.15rem 1.05rem" : "1rem 0.9rem",
+          borderRadius: "18px",
+          border: "1px solid rgba(15, 23, 42, 0.12)",
+          background: "linear-gradient(180deg, rgba(15,23,42,0.94) 0%, rgba(30,41,59,0.98) 100%)",
+          boxShadow: "0 18px 34px rgba(2, 6, 23, 0.18)",
         }}
       >
         <button
@@ -1652,7 +1659,7 @@ function BlocProjectionEcran({
           style={{
             margin: "0.45rem 0 0 0",
             fontSize: "0.7rem",
-            color: "#64748b",
+            color: "#cbd5e1",
             lineHeight: 1.35,
           }}
         >
@@ -1665,10 +1672,11 @@ function BlocProjectionEcran({
       <div
         style={{
           marginTop: "0",
-          padding: desktop ? "0.85rem 1rem" : "0.75rem 0.85rem",
-          borderRadius: "10px",
-          background: "rgba(255,255,255,0.55)",
-          border: "1px solid rgba(91, 33, 182, 0.22)",
+          padding: desktop ? "0.95rem 1.05rem" : "0.8rem 0.88rem",
+          borderRadius: "16px",
+          background: "rgba(255,255,255,0.72)",
+          border: "1px solid rgba(91, 33, 182, 0.16)",
+          boxShadow: "0 12px 24px rgba(15, 23, 42, 0.04)",
         }}
       >
         <div
@@ -2219,7 +2227,7 @@ function PanneauQrParticipant({
     }
   }
 
-  const qrSize = rail ? 252 : 196;
+  const qrSize = rail ? 224 : 196;
   const badge =
     sceneBadge ??
     getEventUxSceneBadge({ liveState: normalizeRegieLiveStateForUx(liveState) });
@@ -3178,11 +3186,11 @@ function SidebarPartageDroit({
         top: noSticky ? undefined : "1.5rem",
         alignSelf: "start",
         width: "100%",
-        maxWidth: noSticky ? "none" : "288px",
+        maxWidth: noSticky ? "none" : "264px",
         boxSizing: "border-box",
         display: "flex",
         flexDirection: "column",
-        gap: "0.7rem",
+        gap: "0.58rem",
       }}
     >
       {showHeader ? (
@@ -3190,7 +3198,7 @@ function SidebarPartageDroit({
           <h2
             style={{
               margin: "0 0 0.2rem 0",
-              fontSize: "0.94rem",
+              fontSize: "0.82rem",
               fontWeight: 800,
               color: "#0f172a",
               letterSpacing: "-0.02em",
@@ -3198,7 +3206,7 @@ function SidebarPartageDroit({
           >
             Partage & accès
           </h2>
-          <p style={{ margin: 0, fontSize: "0.72rem", color: "#64748b", lineHeight: 1.35 }}>
+          <p style={{ margin: 0, fontSize: "0.66rem", color: "#64748b", lineHeight: 1.35 }}>
             QR et liens pour votre audience
           </p>
         </div>
@@ -3324,6 +3332,7 @@ function RegiePublicPreviewPanel({
   newLeadCount = 0,
   layout,
   onHide,
+  fused = false,
 }) {
   const [iframeError, setIframeError] = useState(false);
   const joinPath = `/join/${encodeURIComponent(slug)}`;
@@ -3339,13 +3348,17 @@ function RegiePublicPreviewPanel({
         }
       : layout === "beside"
         ? {
-            flex: "0 0 34%",
+            flex: fused ? "0 0 40%" : "0 0 34%",
             minWidth: "min(100%, 300px)",
             maxWidth: "100%",
             display: "flex",
             flexDirection: "column",
-            minHeight: "min(calc(100vh - 6rem), 920px)",
-            maxHeight: "min(calc(100vh - 6rem), 920px)",
+            minHeight: fused
+              ? "min(calc(100vh - 7rem), 860px)"
+              : "min(calc(100vh - 6rem), 920px)",
+            maxHeight: fused
+              ? "min(calc(100vh - 7rem), 860px)"
+              : "min(calc(100vh - 6rem), 920px)",
           }
         : {
             width: "100%",
@@ -3359,10 +3372,14 @@ function RegiePublicPreviewPanel({
     <section
       style={{
         ...shell,
-        borderRadius: "24px",
-        border: "1px solid rgba(148, 163, 184, 0.18)",
+        borderRadius: fused ? "28px" : "24px",
+        border: fused
+          ? "1px solid rgba(255,255,255,0.08)"
+          : "1px solid rgba(148, 163, 184, 0.18)",
         background: "linear-gradient(180deg, #0f172a 0%, #111827 100%)",
-        boxShadow: "0 28px 50px rgba(15, 23, 42, 0.18)",
+        boxShadow: fused
+          ? "0 22px 44px rgba(2, 6, 23, 0.24)"
+          : "0 28px 50px rgba(15, 23, 42, 0.18)",
         overflow: "hidden",
         boxSizing: "border-box",
       }}
@@ -4066,17 +4083,19 @@ function SidebarRegieDesktop(props) {
     <aside
       style={{
         position: "sticky",
-        top: 0,
+        top: "0.7rem",
         alignSelf: "stretch",
-        width: "min(260px, 100%)",
-        maxWidth: "260px",
+        width: "min(272px, 100%)",
+        maxWidth: "272px",
         height: "100%",
         minHeight: 0,
         overflowY: "auto",
         boxSizing: "border-box",
-        padding: "1.2rem 0.9rem",
-        background: "#fff",
-        borderRight: "1px solid #e5e7eb",
+        padding: "1rem 0.9rem",
+        background: "linear-gradient(180deg, rgba(255,255,255,0.82) 0%, rgba(248,250,252,0.9) 100%)",
+        border: PREMIUM_BORDER,
+        borderRadius: "22px",
+        boxShadow: PREMIUM_SHADOW,
         display: "flex",
         flexDirection: "column",
         gap: "1rem",
@@ -4091,10 +4110,10 @@ function SidebarRegieDesktop(props) {
           style={{
             flexShrink: 0,
             width: "100%",
-            padding: "0.4rem 0.55rem",
-            borderRadius: "8px",
-            border: "1px solid #e5e7eb",
-            background: "#f8fafc",
+            padding: "0.48rem 0.6rem",
+            borderRadius: "12px",
+            border: PREMIUM_BORDER,
+            background: "rgba(255,255,255,0.76)",
             color: "#475569",
             fontSize: "0.72rem",
             fontWeight: 700,
@@ -5454,6 +5473,17 @@ export default function RegieEventPage() {
     boxSizing: "border-box",
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.85), 0 16px 34px rgba(15, 23, 42, 0.05)",
   };
+  const liveExperienceShellStyle = {
+    ...CARD,
+    padding: compactTopPanel ? "1rem" : "1.12rem 1.16rem 1.2rem",
+    border: "1px solid rgba(129, 140, 248, 0.18)",
+    borderRadius: desktop ? "30px" : "24px",
+    background:
+      "linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(238,242,255,0.98) 100%)",
+    boxShadow: "0 28px 60px rgba(15, 23, 42, 0.10)",
+    overflow: "hidden",
+  };
+  const liveBandDivider = "1px solid rgba(148, 163, 184, 0.18)";
   autoRotateRef.current = autoRotate;
   pollIdRef.current = activePollIdJs;
   displayStateRefRegie.current = displayStateUi;
@@ -6457,10 +6487,10 @@ export default function RegieEventPage() {
               ? {
                   display: "grid",
                   gridTemplateColumns: leftSidebarCollapsed
-                    ? "2.75rem minmax(360px, 1fr) minmax(252px, 300px)"
-                    : "minmax(220px, 270px) minmax(360px, 1fr) minmax(252px, 300px)",
-                  gap: "1.25rem",
-                  padding: "1.25rem 1.5rem",
+                    ? "2.75rem minmax(360px, 1fr) minmax(220px, 264px)"
+                    : "minmax(220px, 270px) minmax(360px, 1fr) minmax(220px, 264px)",
+                  gap: "1.4rem",
+                  padding: "1.35rem 1.6rem 1.7rem",
                   width: "100%",
                   alignItems: "stretch",
                   boxSizing: "border-box",
@@ -6479,7 +6509,7 @@ export default function RegieEventPage() {
             <div
               style={{
                 position: "sticky",
-                top: 0,
+                top: "0.7rem",
                 alignSelf: "stretch",
                 width: "2.75rem",
                 minWidth: "2.75rem",
@@ -6488,9 +6518,11 @@ export default function RegieEventPage() {
                 flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "flex-start",
-                padding: "0.65rem 0.2rem",
-                background: "#fff",
-                borderRight: "1px solid #e5e7eb",
+                padding: "0.7rem 0.25rem",
+                background: "linear-gradient(180deg, rgba(255,255,255,0.82) 0%, rgba(248,250,252,0.9) 100%)",
+                border: PREMIUM_BORDER,
+                borderRadius: "18px",
+                boxShadow: PREMIUM_SHADOW_SOFT,
                 boxSizing: "border-box",
               }}
             >
@@ -6502,9 +6534,9 @@ export default function RegieEventPage() {
                 aria-label="Déplier la colonne gauche"
                 style={{
                   padding: "0.55rem 0.3rem",
-                  borderRadius: "10px",
-                  border: "1px solid #c4b5fd",
-                  background: "linear-gradient(180deg, #faf5ff 0%, #f5f3ff 100%)",
+                  borderRadius: "12px",
+                  border: "1px solid rgba(167, 139, 250, 0.28)",
+                  background: "linear-gradient(180deg, rgba(250,245,255,0.98) 0%, rgba(237,233,254,0.98) 100%)",
                   color: "#5b21b6",
                   fontWeight: 800,
                   fontSize: "0.7rem",
@@ -6546,7 +6578,7 @@ export default function RegieEventPage() {
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: "1.5rem",
+              gap: "1.75rem",
               minWidth: 0,
             }}
           >
@@ -6656,14 +6688,16 @@ export default function RegieEventPage() {
             <section
               style={{
                 ...CARD,
-                padding: desktop ? "0.75rem 0.9rem" : "0.72rem 0.82rem",
+                padding: desktop ? "0.9rem 1rem" : "0.78rem 0.86rem",
                 display: "flex",
                 flexWrap: "wrap",
                 alignItems: "center",
                 justifyContent: "space-between",
                 gap: "0.75rem 0.9rem",
-                borderColor: "#e5e7eb",
-                background: "#fff",
+                borderColor: "rgba(124, 58, 237, 0.22)",
+                background:
+                  "linear-gradient(135deg, #0f172a 0%, #1e1b4b 42%, #312e81 100%)",
+                boxShadow: "0 22px 46px rgba(30, 27, 75, 0.24)",
               }}
             >
               <div
@@ -6681,7 +6715,7 @@ export default function RegieEventPage() {
                     fontWeight: 700,
                     letterSpacing: "0.08em",
                     textTransform: "uppercase",
-                    color: "#64748b",
+                    color: "rgba(224, 231, 255, 0.72)",
                   }}
                 >
                   Régie événement
@@ -6698,10 +6732,10 @@ export default function RegieEventPage() {
                   <h2
                     style={{
                       margin: 0,
-                      fontSize: desktop ? "1.2rem" : "1rem",
+                      fontSize: desktop ? "1.42rem" : "1.08rem",
                       fontWeight: 800,
-                      letterSpacing: "-0.02em",
-                      color: "#111827",
+                      letterSpacing: "-0.03em",
+                      color: "#ffffff",
                     }}
                   >
                     Console live
@@ -6709,7 +6743,7 @@ export default function RegieEventPage() {
                   <span
                     style={{
                       fontSize: "0.75rem",
-                      color: "#64748b",
+                      color: "rgba(224, 231, 255, 0.78)",
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -6739,12 +6773,12 @@ export default function RegieEventPage() {
                     display: "inline-flex",
                     alignItems: "center",
                     borderRadius: "999px",
-                    padding: "0.24rem 0.58rem",
+                    padding: "0.28rem 0.62rem",
                     fontSize: "0.72rem",
                     fontWeight: 800,
-                    border: "1px solid #dbeafe",
-                    background: "#eff6ff",
-                    color: "#1e3a8a",
+                    border: "1px solid rgba(191, 219, 254, 0.18)",
+                    background: "rgba(255,255,255,0.12)",
+                    color: "#dbeafe",
                     letterSpacing: "0.02em",
                   }}
                 >
@@ -6788,12 +6822,17 @@ export default function RegieEventPage() {
                           padding: desktop ? "0.45rem 0.8rem" : "0.42rem 0.72rem",
                           fontSize: desktop ? "0.76rem" : "0.74rem",
                           minHeight: desktop ? "2.15rem" : "2rem",
-                          borderRadius: "10px",
-                          border: "1px solid #0f172a",
-                          background: startRealDisabled ? "#e2e8f0" : "#0284c7",
-                          color: startRealDisabled ? "#64748b" : "#fff",
+                          borderRadius: "12px",
+                          border: "1px solid rgba(255,255,255,0.16)",
+                          background: startRealDisabled
+                            ? "rgba(226, 232, 240, 0.65)"
+                            : "linear-gradient(180deg, #f59e0b 0%, #ea580c 100%)",
+                          color: startRealDisabled ? "#475569" : "#fff",
                           fontWeight: 800,
                           cursor: startRealDisabled ? "not-allowed" : "pointer",
+                          boxShadow: startRealDisabled
+                            ? "none"
+                            : "0 14px 26px rgba(234, 88, 12, 0.22)",
                         }}
                       >
                         {hasCreditsValue && !hasEventCredit
@@ -6824,7 +6863,7 @@ export default function RegieEventPage() {
                     <span
                       style={{
                         fontSize: "0.66rem",
-                        color: "#64748b",
+                          color: "rgba(226, 232, 240, 0.82)",
                         fontWeight: 600,
                         textAlign: desktop ? "right" : "left",
                       }}
@@ -6847,9 +6886,10 @@ export default function RegieEventPage() {
                       ? "row"
                       : "column"
                     : "column",
-                gap: "1rem",
+                gap: "1.15rem",
                 alignItems: "stretch",
                 minWidth: 0,
+                ...liveExperienceShellStyle,
               }}
             >
               <div
@@ -6861,25 +6901,25 @@ export default function RegieEventPage() {
                   minWidth: 0,
                   display: "flex",
                   flexDirection: "column",
-                  gap: "1.5rem",
+                  gap: "1rem",
                 }}
               >
             <div
               style={{
                 display: "grid",
-                gap: compactTopPanel ? "0.75rem" : "0.9rem",
+                gap: compactTopPanel ? "0.9rem" : "1rem",
                 minWidth: 0,
               }}
             >
               <section
                 style={{
-                  ...CARD,
-                  padding: compactTopPanel ? "0.95rem 0.95rem" : "1.05rem 1.1rem",
-                  border: "1px solid rgba(196, 181, 253, 0.24)",
-                  background:
-                    "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(248,250,252,0.94) 100%)",
+                  padding: compactTopPanel ? "0 0 0.95rem 0" : "0 0 1rem 0",
+                  border: "none",
+                  borderBottom: liveBandDivider,
+                  borderRadius: 0,
+                  background: "transparent",
                   minWidth: 0,
-                  boxShadow: PREMIUM_SHADOW,
+                  boxShadow: "none",
                 }}
               >
                 <div style={{ display: "grid", gap: "0.85rem" }}>
@@ -7205,13 +7245,12 @@ export default function RegieEventPage() {
 
               <section
                 style={{
-                  ...CARD,
-                  padding: compactTopPanel ? "0.95rem 0.95rem" : "1.05rem 1.1rem",
-                  border: "1px solid rgba(196, 181, 253, 0.18)",
-                  background:
-                    "linear-gradient(180deg, rgba(255,255,255,0.97) 0%, rgba(248,250,252,0.96) 100%)",
+                  padding: compactTopPanel ? "0.1rem 0 0 0" : "0.18rem 0 0 0",
+                  border: "none",
+                  borderRadius: 0,
+                  background: "transparent",
                   minWidth: 0,
-                  boxShadow: PREMIUM_SHADOW,
+                  boxShadow: "none",
                 }}
               >
                 <div
@@ -8143,6 +8182,7 @@ export default function RegieEventPage() {
                   eventId={eventId}
                   newLeadCount={newLeadCount}
                   layout={desktopSplitWide ? "beside" : "below"}
+                  fused
                   onHide={() => persistPreviewJoinOpen(false)}
                 />
               ) : null}
