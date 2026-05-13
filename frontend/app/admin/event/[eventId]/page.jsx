@@ -3364,241 +3364,218 @@ function RegiePublicPreviewPanel({
             width: "100%",
             display: "flex",
             flexDirection: "column",
-            minHeight: "min(480px, 52vh)",
-            maxHeight: "min(640px, 62vh)",
+            minHeight: fused ? "min(560px, 66vh)" : "min(520px, 58vh)",
+            maxHeight: fused ? "min(760px, 76vh)" : "min(700px, 70vh)",
           };
 
   return (
     <section
       style={{
         ...shell,
-        borderRadius: fused ? "28px" : "24px",
-        border: fused
-          ? "1px solid rgba(255,255,255,0.08)"
-          : "1px solid rgba(148, 163, 184, 0.18)",
-        background: "linear-gradient(180deg, #0f172a 0%, #111827 100%)",
-        boxShadow: fused
-          ? "0 22px 44px rgba(2, 6, 23, 0.24)"
-          : "0 28px 50px rgba(15, 23, 42, 0.18)",
-        overflow: "hidden",
+        borderRadius: 0,
+        border: "none",
+        background: "transparent",
+        boxShadow: "none",
+        overflow: "visible",
         boxSizing: "border-box",
       }}
       aria-label="Aperçu public salle"
     >
       <div
         style={{
-          flexShrink: 0,
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "0.5rem",
-          padding: "0.8rem 0.95rem",
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
-          background: "linear-gradient(180deg, rgba(15,23,42,0.86) 0%, rgba(15,23,42,0.72) 100%)",
-          backdropFilter: "blur(14px)",
-        }}
-      >
-        <div style={{ minWidth: 0, flex: "1 1 120px" }}>
-          <p
-            style={{
-              margin: 0,
-              fontSize: "0.8rem",
-              fontWeight: 800,
-              color: "#f8fafc",
-              letterSpacing: "-0.02em",
-            }}
-          >
-            Aperçu public live
-          </p>
-          <p style={{ margin: "0.12rem 0 0 0", fontSize: "0.68rem", color: "#94a3b8" }}>
-            Vue participant en direct
-          </p>
-        </div>
-        {eventId ? (
-          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-            <Link
-              href={`/admin/event/${encodeURIComponent(eventId)}/leads`}
-              style={{
-                fontSize: "0.72rem",
-                fontWeight: 700,
-                padding: "0.38rem 0.7rem",
-                borderRadius: "999px",
-                border: "1px solid rgba(134, 239, 172, 0.18)",
-                background: "rgba(34, 197, 94, 0.12)",
-                color: "#dcfce7",
-                textDecoration: "none",
-                whiteSpace: "nowrap",
-              }}
-            >
-              Leads
-              {newLeadCount > 0 ? (
-                <span
-                  style={{
-                    marginLeft: "0.4rem",
-                    display: "inline-flex",
-                    minWidth: "1.25rem",
-                    height: "1.25rem",
-                    borderRadius: "999px",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: "0 0.35rem",
-                    background: "#dcfce7",
-                    border: "1px solid #86efac",
-                    color: "#166534",
-                    fontSize: "0.68rem",
-                    fontWeight: 800,
-                    lineHeight: 1,
-                  }}
-                  aria-label={`${newLeadCount} nouveaux leads`}
-                  title={`${newLeadCount} nouveaux leads`}
-                >
-                  {newLeadCount > 99 ? "99+" : newLeadCount}
-                </span>
-              ) : null}
-            </Link>
-            <Link
-              href={`/admin/event/${encodeURIComponent(eventId)}/analytics`}
-              style={{
-                fontSize: "0.72rem",
-                fontWeight: 700,
-                padding: "0.38rem 0.7rem",
-                borderRadius: "999px",
-                border: "1px solid rgba(191, 219, 254, 0.16)",
-                background: "rgba(59, 130, 246, 0.12)",
-                color: "#dbeafe",
-                textDecoration: "none",
-                whiteSpace: "nowrap",
-              }}
-            >
-              Statistiques
-            </Link>
-            <Link
-              href={`/admin/events/${encodeURIComponent(eventId)}/live`}
-              className="regie-universe-link regie-universe-link--live"
-              style={{
-                fontSize: "0.72rem",
-                fontWeight: 700,
-                padding: "0.38rem 0.7rem",
-                borderRadius: "999px",
-                border: "1px solid rgba(96, 165, 250, 0.18)",
-                background: "rgba(59, 130, 246, 0.12)",
-                color: "#dbeafe",
-                textDecoration: "none",
-                whiteSpace: "nowrap",
-              }}
-            >
-              <LiveMicroLabel iconSize={13} gap="0.32rem" />
-            </Link>
-            <Link
-              href={`/admin/events/${encodeURIComponent(eventId)}/landing`}
-              className="regie-universe-link regie-universe-link--landing"
-              style={{
-                fontSize: "0.72rem",
-                fontWeight: 700,
-                padding: "0.38rem 0.7rem",
-                borderRadius: "999px",
-                border: "1px solid rgba(196, 181, 253, 0.18)",
-                background: "rgba(168, 85, 247, 0.12)",
-                color: "#ede9fe",
-                textDecoration: "none",
-                whiteSpace: "nowrap",
-              }}
-            >
-              ✨ Landing événement
-            </Link>
-            <style>{`
-              .regie-universe-link {
-                transition:
-                  background-color 0.18s ease,
-                  border-color 0.18s ease,
-                  color 0.18s ease;
-              }
-              @media (hover: hover) {
-                .regie-universe-link--live:hover {
-                  background: rgba(59, 130, 246, 0.2) !important;
-                  border-color: rgba(59, 130, 246, 0.3) !important;
-                }
-                .regie-universe-link--landing:hover {
-                  background: rgba(168, 85, 247, 0.2) !important;
-                  border-color: rgba(168, 85, 247, 0.3) !important;
-                }
-              }
-            `}</style>
-          </div>
-        ) : null}
-      </div>
-      <div
-        style={{
-          flexShrink: 0,
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "0.4rem",
-          padding: "0.65rem 0.95rem",
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
-          background: "rgba(15,23,42,0.74)",
-        }}
-      >
-        <button
-          type="button"
-          onClick={() =>
-            window.open(
-              `${window.location.origin}${joinPath}`,
-              "_blank",
-              "noopener,noreferrer",
-            )
-          }
-          style={{
-            ...btnGhost,
-            fontSize: "0.72rem",
-            padding: "0.34rem 0.62rem",
-            background: "rgba(255,255,255,0.08)",
-            borderColor: "rgba(255,255,255,0.12)",
-            color: "#e2e8f0",
-            boxShadow: "none",
-          }}
-        >
-          Ouvrir dans un nouvel onglet
-        </button>
-        {onHide ? (
-          <button
-            type="button"
-            onClick={onHide}
-            style={{
-              ...btnGhost,
-              fontSize: "0.72rem",
-              padding: "0.34rem 0.62rem",
-              background: "rgba(255,255,255,0.08)",
-              borderColor: "rgba(255,255,255,0.12)",
-              color: "#e2e8f0",
-              boxShadow: "none",
-            }}
-          >
-            Masquer l’aperçu
-          </button>
-        ) : null}
-      </div>
-      <div
-        style={{
           flex: 1,
           minHeight: 0,
           position: "relative",
+          borderRadius: fused ? "32px" : "30px",
+          overflow: "hidden",
           background:
-            "radial-gradient(circle at top center, rgba(124,58,237,0.18) 0%, rgba(15,23,42,0) 34%), linear-gradient(180deg, #020617 0%, #0f172a 100%)",
-          padding: "1rem",
+            "radial-gradient(circle at 50% 0%, rgba(139,92,246,0.26) 0%, rgba(15,23,42,0) 36%), radial-gradient(circle at 15% 20%, rgba(59,130,246,0.14) 0%, rgba(15,23,42,0) 28%), linear-gradient(180deg, #020617 0%, #0f172a 56%, #111827 100%)",
+          boxShadow: fused
+            ? "0 26px 60px rgba(2, 6, 23, 0.28)"
+            : "0 24px 54px rgba(15, 23, 42, 0.20)",
+          isolation: "isolate",
         }}
       >
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 0,
+            background:
+              "radial-gradient(circle at top, rgba(167,139,250,0.18) 0%, rgba(167,139,250,0) 34%), linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 22%)",
+            pointerEvents: "none",
+          }}
+        />
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: fused ? "32px" : "30px",
+            border: "1px solid rgba(255,255,255,0.08)",
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
+            pointerEvents: "none",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            top: "0.95rem",
+            left: "1rem",
+            right: "1rem",
+            zIndex: 2,
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: "0.7rem 1rem",
+          }}
+        >
+          <div style={{ minWidth: 0, flex: "1 1 220px" }}>
+            <p
+              style={{
+                margin: 0,
+                fontSize: desktop ? "0.94rem" : "0.84rem",
+                fontWeight: 800,
+                color: "#f8fafc",
+                letterSpacing: "-0.02em",
+              }}
+            >
+              Ce que voit votre audience
+            </p>
+            <p
+              style={{
+                margin: "0.16rem 0 0 0",
+                fontSize: "0.7rem",
+                color: "rgba(226,232,240,0.72)",
+                lineHeight: 1.35,
+              }}
+            >
+              Vue participant en direct
+            </p>
+            {eventId ? (
+              <div
+                style={{
+                  marginTop: "0.42rem",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "0.5rem 0.75rem",
+                  alignItems: "center",
+                }}
+              >
+                <Link
+                  href={`/admin/event/${encodeURIComponent(eventId)}/leads`}
+                  style={{
+                    fontSize: "0.68rem",
+                    fontWeight: 700,
+                    color: "rgba(220,252,231,0.82)",
+                    textDecoration: "none",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Leads{newLeadCount > 0 ? ` (${newLeadCount > 99 ? "99+" : newLeadCount})` : ""}
+                </Link>
+                <Link
+                  href={`/admin/event/${encodeURIComponent(eventId)}/analytics`}
+                  style={{
+                    fontSize: "0.68rem",
+                    fontWeight: 700,
+                    color: "rgba(219,234,254,0.78)",
+                    textDecoration: "none",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Statistiques
+                </Link>
+                <Link
+                  href={`/admin/events/${encodeURIComponent(eventId)}/live`}
+                  style={{
+                    fontSize: "0.68rem",
+                    fontWeight: 700,
+                    color: "rgba(219,234,254,0.78)",
+                    textDecoration: "none",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Salle live
+                </Link>
+                <Link
+                  href={`/admin/events/${encodeURIComponent(eventId)}/landing`}
+                  style={{
+                    fontSize: "0.68rem",
+                    fontWeight: 700,
+                    color: "rgba(237,233,254,0.82)",
+                    textDecoration: "none",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Landing
+                </Link>
+              </div>
+            ) : null}
+          </div>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              justifyContent: "flex-end",
+              gap: "0.45rem",
+              alignItems: "center",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() =>
+                window.open(
+                  `${window.location.origin}${joinPath}`,
+                  "_blank",
+                  "noopener,noreferrer",
+                )
+              }
+              style={{
+                ...btnGhost,
+                fontSize: "0.72rem",
+                padding: "0.38rem 0.72rem",
+                background: "rgba(255,255,255,0.08)",
+                borderColor: "rgba(255,255,255,0.12)",
+                color: "#f8fafc",
+                boxShadow: "none",
+                backdropFilter: "blur(8px)",
+              }}
+            >
+              Agrandir
+            </button>
+            {onHide ? (
+              <button
+                type="button"
+                onClick={onHide}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  color: "rgba(226,232,240,0.78)",
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                  padding: "0.22rem 0.12rem",
+                  cursor: "pointer",
+                }}
+              >
+                Masquer
+              </button>
+            ) : null}
+          </div>
+        </div>
         {iframeError ? (
           <div
             style={{
+              position: "absolute",
+              inset: desktop ? "5.4rem 1rem 1rem" : "6rem 0.8rem 0.8rem",
               padding: "1.4rem",
               textAlign: "center",
               color: "#94a3b8",
               fontSize: "0.85rem",
-              borderRadius: "20px",
+              borderRadius: "24px",
               border: "1px solid rgba(255,255,255,0.08)",
               background: "rgba(15,23,42,0.55)",
-              height: "100%",
               boxSizing: "border-box",
             }}
           >
@@ -3636,14 +3613,14 @@ function RegiePublicPreviewPanel({
             onError={() => setIframeError(true)}
             style={{
               position: "absolute",
-              inset: "1rem",
-              width: "calc(100% - 2rem)",
-              height: "calc(100% - 2rem)",
+              inset: desktop ? "5.4rem 1rem 1rem" : "6rem 0.8rem 0.8rem",
+              width: "auto",
+              height: "auto",
               border: "none",
               display: "block",
-              borderRadius: "20px",
+              borderRadius: "24px",
               background: "#0f172a",
-              boxShadow: "0 18px 40px rgba(2, 6, 23, 0.32)",
+              boxShadow: "0 22px 48px rgba(2, 6, 23, 0.34)",
             }}
           />
         )}
