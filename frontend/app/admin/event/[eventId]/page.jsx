@@ -178,11 +178,16 @@ function useBreakpointMin(px) {
   return ok;
 }
 
+const PREMIUM_BORDER = "1px solid rgba(148, 163, 184, 0.18)";
+const PREMIUM_BORDER_STRONG = "1px solid rgba(148, 163, 184, 0.26)";
+const PREMIUM_SHADOW = "0 18px 40px rgba(15, 23, 42, 0.08)";
+const PREMIUM_SHADOW_SOFT = "0 10px 28px rgba(15, 23, 42, 0.06)";
+
 /** Carte type dashboard */
 const CARD = {
-  borderRadius: "12px",
-  boxShadow: "0 1px 2px rgba(0, 0, 0, 0.06)",
-  border: "1px solid #e5e7eb",
+  borderRadius: "18px",
+  boxShadow: PREMIUM_SHADOW_SOFT,
+  border: PREMIUM_BORDER,
   background: "#fff",
   padding: "1rem",
   boxSizing: "border-box",
@@ -444,20 +449,21 @@ function PollCard({
         flexWrap: "wrap",
         alignItems: "center",
         gap: desktop ? "0.45rem" : "0.5rem",
-        marginBottom: desktop ? "0.4rem" : "0.55rem",
+        marginBottom: desktop ? "0.45rem" : "0.55rem",
       }}
     >
       {isActive ? (
         <span
           title="Question actuellement reliée à l’événement (affiches & commandes). Peut être ouverte ou fermée au vote."
           style={{
-            fontSize: "0.62rem",
+            fontSize: "0.6rem",
             fontWeight: 800,
             letterSpacing: "0.06em",
-            padding: "0.15rem 0.4rem",
-            borderRadius: "4px",
-            background: "#1d4ed8",
-            color: "#fff",
+            padding: "0.16rem 0.45rem",
+            borderRadius: "999px",
+            background: "#dbeafe",
+            color: "#1d4ed8",
+            border: "1px solid #bfdbfe",
           }}
         >
           Antenne
@@ -467,8 +473,8 @@ function PollCard({
         style={{
           fontSize: "0.7rem",
           fontWeight: 700,
-          padding: "0.2rem 0.45rem",
-          borderRadius: "6px",
+          padding: "0.2rem 0.5rem",
+          borderRadius: "999px",
           background: badge.bg,
           color: badge.color,
           border: `1px solid ${badge.border}`,
@@ -479,21 +485,21 @@ function PollCard({
       <span style={{ fontSize: "0.78rem", color: "#6b7280" }}>
         Ordre {poll.order} · {poll.type}
       </span>
-          <span
-            style={{
-              fontSize: "0.66rem",
-              fontWeight: 800,
-              padding: "0.17rem 0.45rem",
-              borderRadius: "999px",
-              background: kind.bg,
-              color: kind.color,
-              border: `1px solid ${kind.border}`,
-              letterSpacing: "0.04em",
-              textTransform: "uppercase",
-            }}
-          >
-            {kind.label}
-          </span>
+      <span
+        style={{
+          fontSize: "0.64rem",
+          fontWeight: 800,
+          padding: "0.18rem 0.46rem",
+          borderRadius: "999px",
+          background: kind.bg,
+          color: kind.color,
+          border: `1px solid ${kind.border}`,
+          letterSpacing: "0.04em",
+          textTransform: "uppercase",
+        }}
+      >
+        {kind.label}
+      </span>
       <span
         style={{
           fontSize: "0.82rem",
@@ -554,14 +560,16 @@ function PollCard({
       <div
         id={`regie-poll-${poll.id}`}
         style={{
-          border: isActive ? "2px solid #2563eb" : "1px solid #e5e7eb",
-          borderRadius: "10px",
-          padding: "0.55rem 0.65rem",
-          marginBottom: "0.45rem",
-          background: isActive ? "#eff6ff" : kind.cardBg,
+          border: isActive ? "1px solid rgba(59, 130, 246, 0.35)" : PREMIUM_BORDER,
+          borderRadius: "16px",
+          padding: "0.68rem 0.72rem",
+          marginBottom: "0.5rem",
+          background: isActive
+            ? "linear-gradient(180deg, rgba(239, 246, 255, 0.96) 0%, #ffffff 100%)"
+            : "#ffffff",
           boxShadow: isActive
-            ? "0 1px 8px rgba(37, 99, 235, 0.14)"
-            : "0 1px 2px rgba(0,0,0,0.04)",
+            ? "0 16px 30px rgba(37, 99, 235, 0.10)"
+            : "0 8px 20px rgba(15, 23, 42, 0.04)",
           cursor: "default",
         }}
       >
@@ -578,13 +586,14 @@ function PollCard({
             <span
               title="Question reliée à l’événement (voir carte étendue)."
               style={{
-                fontSize: "0.58rem",
+                fontSize: "0.56rem",
                 fontWeight: 800,
                 letterSpacing: "0.05em",
-                padding: "0.12rem 0.35rem",
-                borderRadius: "4px",
-                background: "#1d4ed8",
-                color: "#fff",
+                padding: "0.13rem 0.4rem",
+                borderRadius: "999px",
+                background: "#dbeafe",
+                color: "#1d4ed8",
+                border: "1px solid #bfdbfe",
               }}
             >
               Antenne
@@ -594,8 +603,8 @@ function PollCard({
             style={{
               fontSize: "0.62rem",
               fontWeight: 700,
-              padding: "0.15rem 0.38rem",
-              borderRadius: "5px",
+              padding: "0.15rem 0.42rem",
+              borderRadius: "999px",
               background: badge.bg,
               color: badge.color,
               border: `1px solid ${badge.border}`,
@@ -611,7 +620,7 @@ function PollCard({
             style={{
               fontSize: "0.58rem",
               fontWeight: 800,
-              padding: "0.11rem 0.34rem",
+              padding: "0.13rem 0.36rem",
               borderRadius: "999px",
               background: kind.bg,
               color: kind.color,
@@ -728,14 +737,16 @@ function PollCard({
   return (
     <div
       style={{
-        border: isActive ? "2px solid #2563eb" : "1px solid #e5e7eb",
-        borderRadius: "12px",
-        padding: desktop ? "0.85rem 1.1rem" : "0.8rem 0.95rem",
+        border: isActive ? "1px solid rgba(59, 130, 246, 0.35)" : PREMIUM_BORDER,
+        borderRadius: "18px",
+        padding: desktop ? "0.95rem 1.15rem" : "0.85rem 0.98rem",
         marginBottom: desktop ? "0.6rem" : "0.7rem",
-        background: isActive ? "#eff6ff" : kind.cardBg,
+        background: isActive
+          ? "linear-gradient(180deg, rgba(239, 246, 255, 0.95) 0%, #ffffff 100%)"
+          : "#ffffff",
         boxShadow: isActive
-          ? "0 2px 12px rgba(37, 99, 235, 0.12)"
-          : "0 1px 2px rgba(0,0,0,0.04)",
+          ? "0 16px 32px rgba(37, 99, 235, 0.10)"
+          : "0 10px 24px rgba(15, 23, 42, 0.05)",
       }}
     >
       {desktop ? (
@@ -837,113 +848,121 @@ function PollCard({
 
 function btnPrimary(disabled) {
   return {
-    padding: "0.5rem 1rem",
+    padding: "0.58rem 1.05rem",
     fontSize: "0.875rem",
-    fontWeight: 600,
-    borderRadius: "8px",
-    border: "1px solid #1d4ed8",
-    background: disabled ? "#93c5fd" : "#2563eb",
+    fontWeight: 700,
+    borderRadius: "12px",
+    border: `1px solid ${disabled ? "#bfdbfe" : "#1d4ed8"}`,
+    background: disabled ? "#dbeafe" : "linear-gradient(180deg, #3b82f6 0%, #2563eb 100%)",
     color: "#fff",
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.65 : 1,
+    boxShadow: disabled ? "none" : "0 10px 20px rgba(37, 99, 235, 0.18)",
   };
 }
 
 function btnSecondary(disabled) {
   return {
-    padding: "0.5rem 1rem",
+    padding: "0.56rem 1rem",
     fontSize: "0.875rem",
-    fontWeight: 500,
-    borderRadius: "8px",
-    border: "1px solid #d1d5db",
-    background: disabled ? "#f3f4f6" : "#fff",
+    fontWeight: 600,
+    borderRadius: "12px",
+    border: PREMIUM_BORDER_STRONG,
+    background: disabled ? "#f8fafc" : "#fff",
     color: "#374151",
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.65 : 1,
+    boxShadow: disabled ? "none" : "0 6px 18px rgba(15, 23, 42, 0.04)",
   };
 }
 
 function btnLancerVote(disabled) {
   return {
-    padding: "0.5rem 1rem",
+    padding: "0.56rem 1rem",
     fontSize: "0.875rem",
-    fontWeight: 600,
-    borderRadius: "8px",
+    fontWeight: 700,
+    borderRadius: "12px",
     border: `1px solid ${disabled ? "#bbf7d0" : "#15803d"}`,
-    background: disabled ? "#f0fdf4" : "#22c55e",
+    background: disabled ? "#f0fdf4" : "linear-gradient(180deg, #22c55e 0%, #16a34a 100%)",
     color: disabled ? "#94a3b8" : "#fff",
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.7 : 1,
+    boxShadow: disabled ? "none" : "0 10px 20px rgba(22, 163, 74, 0.16)",
   };
 }
 
 function btnStopVote(disabled) {
   return {
-    padding: "0.5rem 1rem",
+    padding: "0.56rem 1rem",
     fontSize: "0.875rem",
-    fontWeight: 600,
-    borderRadius: "8px",
+    fontWeight: 700,
+    borderRadius: "12px",
     border: `1px solid ${disabled ? "#e5e7eb" : "#f87171"}`,
-    background: disabled ? "#f9fafb" : "#fef2f2",
+    background: disabled ? "#f9fafb" : "#fff5f5",
     color: disabled ? "#9ca3af" : "#b91c1c",
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.75 : 1,
+    boxShadow: disabled ? "none" : "0 8px 18px rgba(239, 68, 68, 0.08)",
   };
 }
 
 function btnAfficherResultats(disabled) {
   return {
-    padding: "0.5rem 1rem",
+    padding: "0.56rem 1rem",
     fontSize: "0.875rem",
-    fontWeight: 600,
-    borderRadius: "8px",
-    border: `1px solid ${disabled ? "#bfdbfe" : "#1d4ed8"}`,
-    background: disabled ? "#f8fafc" : "#2563eb",
+    fontWeight: 700,
+    borderRadius: "12px",
+    border: `1px solid ${disabled ? "#bfdbfe" : "#4f46e5"}`,
+    background: disabled ? "#f8fafc" : "linear-gradient(180deg, #6366f1 0%, #4f46e5 100%)",
     color: disabled ? "#9ca3af" : "#fff",
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.7 : 1,
+    boxShadow: disabled ? "none" : "0 10px 20px rgba(79, 70, 229, 0.16)",
   };
 }
 
 function btnSecondaryAction(disabled) {
   return {
-    padding: "0.46rem 0.82rem",
+    padding: "0.5rem 0.88rem",
     fontSize: "0.8rem",
     fontWeight: 700,
-    borderRadius: "8px",
-    border: "1px solid #c4b5fd",
-    background: disabled ? "#f5f3ff" : "#faf5ff",
+    borderRadius: "12px",
+    border: "1px solid rgba(167, 139, 250, 0.35)",
+    background: disabled ? "#f5f3ff" : "rgba(139, 92, 246, 0.08)",
     color: disabled ? "#a1a1aa" : "#5b21b6",
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.7 : 1,
+    boxShadow: disabled ? "none" : "0 8px 18px rgba(139, 92, 246, 0.08)",
   };
 }
 
 function btnDanger(disabled) {
   return {
-    padding: "0.55rem 1.1rem",
+    padding: "0.62rem 1.15rem",
     fontSize: "0.95rem",
-    borderRadius: "8px",
-    border: "1px solid #b91c1c",
-    background: disabled ? "#fecaca" : "#dc2626",
+    borderRadius: "12px",
+    border: "1px solid #7c3aed",
+    background: disabled ? "#ede9fe" : "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)",
     color: "#fff",
     cursor: disabled ? "not-allowed" : "pointer",
-    fontWeight: 600,
+    fontWeight: 700,
     opacity: disabled ? 0.65 : 1,
+    boxShadow: disabled ? "none" : "0 12px 22px rgba(124, 58, 237, 0.18)",
   };
 }
 
 function btnFinish(disabled) {
   return {
-    padding: "0.5rem 0.95rem",
+    padding: "0.52rem 1rem",
     fontSize: "0.82rem",
-    borderRadius: "8px",
-    border: `1px solid ${disabled ? "#e5e7eb" : "#f59e0b"}`,
-    background: disabled ? "#f9fafb" : "#fff7ed",
-    color: disabled ? "#9ca3af" : "#b45309",
+    borderRadius: "12px",
+    border: `1px solid ${disabled ? "#e5e7eb" : "#fda4af"}`,
+    background: disabled ? "#f9fafb" : "#fffafb",
+    color: disabled ? "#9ca3af" : "#be123c",
     cursor: disabled ? "not-allowed" : "pointer",
     fontWeight: 700,
     opacity: disabled ? 0.7 : 1,
+    boxShadow: disabled ? "none" : "0 8px 20px rgba(190, 24, 93, 0.08)",
   };
 }
 
@@ -2210,24 +2229,27 @@ function PanneauQrParticipant({
 
   const wrap = {
     ...CARD,
-    padding: rail ? "1.1rem" : "1rem",
+    padding: rail ? "1rem" : "0.95rem",
     ...(rail && !embedded
       ? {
           position: "sticky",
-          top: "1.5rem",
+          top: "1.25rem",
           alignSelf: "start",
-          maxWidth: "320px",
+          maxWidth: "292px",
           width: "100%",
         }
       : {}),
+    background: "rgba(255,255,255,0.78)",
+    backdropFilter: "blur(16px)",
+    boxShadow: "0 18px 34px rgba(15, 23, 42, 0.07)",
   };
 
   const toggleWrap = {
     display: "flex",
     gap: "3px",
     padding: "3px",
-    borderRadius: "10px",
-    background: "#f1f5f9",
+    borderRadius: "12px",
+    background: "rgba(15, 23, 42, 0.05)",
     marginBottom: "0.85rem",
   };
 
@@ -2255,23 +2277,23 @@ function PanneauQrParticipant({
           <h3
             style={{
               margin: "0 0 0.2rem 0",
-              fontSize: "0.98rem",
+              fontSize: "0.92rem",
               fontWeight: 800,
               color: "#0f172a",
               letterSpacing: "-0.02em",
             }}
           >
-            Participation
+            Accès audience
           </h3>
           <p
             style={{
               margin: "0 0 0.75rem 0",
               fontSize: "0.72rem",
-              color: "#94a3b8",
+              color: "#64748b",
               fontWeight: 500,
             }}
           >
-            QR & lien rapides
+            QR et lien de participation
           </p>
         </>
       )}
@@ -2290,11 +2312,11 @@ function PanneauQrParticipant({
             fontSize: "0.62rem",
             fontWeight: 800,
             letterSpacing: "0.06em",
-            padding: "0.18rem 0.45rem",
-            borderRadius: "6px",
-            background: badge.bg,
-            color: badge.color,
-            border: `1px solid ${badge.border}`,
+            padding: "0.18rem 0.46rem",
+            borderRadius: "999px",
+            background: "rgba(139, 92, 246, 0.08)",
+            color: "#6d28d9",
+            border: "1px solid rgba(167, 139, 250, 0.2)",
           }}
         >
           Participation
@@ -2336,11 +2358,12 @@ function PanneauQrParticipant({
         style={{
           display: "flex",
           justifyContent: "center",
-          padding: "0.85rem 0.65rem",
-          background: "#fafafa",
-          borderRadius: "14px",
-          border: "1px solid #e5e7eb",
-          marginBottom: "0.55rem",
+          padding: rail ? "1rem 0.75rem" : "0.9rem 0.7rem",
+          background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+          borderRadius: "20px",
+          border: PREMIUM_BORDER,
+          marginBottom: "0.65rem",
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.8), 0 12px 24px rgba(15, 23, 42, 0.04)",
         }}
       >
         {targetUrl ? (
@@ -2401,11 +2424,11 @@ function PanneauQrParticipant({
 
       <div
         style={{
-          margin: "0.2rem 0 0.7rem",
-          border: "1px solid #e2e8f0",
-          borderRadius: "12px",
-          background: "#fff",
-          padding: "0.65rem",
+          margin: "0.25rem 0 0.8rem",
+          border: PREMIUM_BORDER,
+          borderRadius: "16px",
+          background: "rgba(255,255,255,0.72)",
+          padding: "0.72rem",
         }}
       >
         <p
@@ -2483,12 +2506,12 @@ function PanneauQrParticipant({
           type="button"
           onClick={ouvrirLien}
           style={{
-            padding: "0.42rem 0.95rem",
+            padding: "0.46rem 0.95rem",
             fontSize: "0.76rem",
-            fontWeight: 600,
-            borderRadius: "8px",
-            border: "1px solid #7c3aed",
-            background: "#faf5ff",
+            fontWeight: 700,
+            borderRadius: "12px",
+            border: "1px solid rgba(167, 139, 250, 0.28)",
+            background: "rgba(139, 92, 246, 0.08)",
             color: "#5b21b6",
             cursor: "pointer",
             flex: rail ? undefined : 1,
@@ -2501,16 +2524,14 @@ function PanneauQrParticipant({
           type="button"
           onClick={copierLien}
           style={{
-            padding: "0.42rem 0.85rem",
+            padding: "0.46rem 0.85rem",
             fontSize: "0.76rem",
             fontWeight: 600,
-            borderRadius: "8px",
-            border: "1px solid transparent",
-            background: "transparent",
-            color: "#64748b",
+            borderRadius: "12px",
+            border: PREMIUM_BORDER,
+            background: "rgba(255,255,255,0.7)",
+            color: "#475569",
             cursor: "pointer",
-            textDecoration: "underline",
-            textUnderlineOffset: "3px",
             flex: rail ? undefined : 1,
             minWidth: "5rem",
           }}
@@ -2536,14 +2557,15 @@ function PanneauQrParticipant({
 
 const qrExportBtnStyle = {
   minHeight: "36px",
-  border: "1px solid #cbd5e1",
-  borderRadius: "9px",
-  background: "#fff",
+  border: PREMIUM_BORDER,
+  borderRadius: "12px",
+  background: "rgba(255,255,255,0.8)",
   color: "#334155",
   fontSize: "0.72rem",
   fontWeight: 700,
   padding: "0.45rem 0.35rem",
   cursor: "pointer",
+  boxShadow: "0 8px 18px rgba(15, 23, 42, 0.04)",
 };
 
 /** Copie du lien /screen — discret, colonne partage */
@@ -2571,10 +2593,8 @@ function CopierLienEcranLeger({ slug }) {
   return (
     <div
       style={{
-        padding: "0.65rem 0",
-        borderTop: "1px solid #e5e7eb",
-        borderBottom: "1px solid #e5e7eb",
-        margin: "0.15rem 0",
+        padding: "0.7rem 0 0.25rem",
+        margin: "0.1rem 0",
       }}
     >
       <p
@@ -2593,15 +2613,14 @@ function CopierLienEcranLeger({ slug }) {
         type="button"
         onClick={() => void copier()}
         style={{
-          border: "none",
-          background: "none",
-          padding: 0,
+          border: PREMIUM_BORDER,
+          background: "rgba(255,255,255,0.78)",
+          padding: "0.45rem 0.72rem",
           margin: 0,
           fontSize: "0.78rem",
-          fontWeight: 600,
+          fontWeight: 700,
           color: copied ? "#15803d" : "#7c3aed",
-          textDecoration: copied ? "none" : "underline",
-          textUnderlineOffset: "3px",
+          borderRadius: "12px",
           cursor: "pointer",
         }}
       >
@@ -2682,9 +2701,8 @@ function BlocOverlayStreamPresets({ slug, onCopied }) {
   return (
     <div
       style={{
-        padding: "0.7rem 0",
-        borderBottom: "1px solid #e5e7eb",
-        margin: "0 0 0.25rem 0",
+        padding: "0.15rem 0 0.35rem",
+        margin: 0,
       }}
       id="overlay-stream-top"
     >
@@ -2695,10 +2713,10 @@ function BlocOverlayStreamPresets({ slug, onCopied }) {
           fontWeight: 700,
           letterSpacing: "0.07em",
           textTransform: "uppercase",
-          color: "#155e75",
+          color: "#64748b",
         }}
       >
-        🎬 Overlay stream
+        Overlay stream
       </p>
       <p
         style={{
@@ -2713,10 +2731,10 @@ function BlocOverlayStreamPresets({ slug, onCopied }) {
       {principal ? (
         <div
           style={{
-            padding: "0.6rem 0.65rem",
-            borderRadius: "10px",
-            border: "1px solid #67e8f9",
-            background: "#ecfeff",
+            padding: "0.68rem 0.72rem",
+            borderRadius: "16px",
+            border: PREMIUM_BORDER,
+            background: "linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(248,250,252,0.9) 100%)",
             display: "flex",
             flexDirection: "column",
             gap: "0.4rem",
@@ -2726,7 +2744,7 @@ function BlocOverlayStreamPresets({ slug, onCopied }) {
             <p style={{ margin: 0, fontSize: "0.8rem", fontWeight: 800, color: "#0f172a" }}>
               {principal.label}
             </p>
-            <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.68rem", color: "#0f766e" }}>
+            <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.68rem", color: "#64748b" }}>
               {principal.desc}
             </p>
           </div>
@@ -2738,10 +2756,10 @@ function BlocOverlayStreamPresets({ slug, onCopied }) {
               padding: "0.38rem 0.7rem",
               fontSize: "0.76rem",
               fontWeight: 700,
-              borderRadius: "8px",
-              border: "1px solid #22d3ee",
-              background: copiedId === principal.id ? "#dcfce7" : "#cffafe",
-              color: copiedId === principal.id ? "#166534" : "#0e7490",
+              borderRadius: "12px",
+              border: "1px solid rgba(167, 139, 250, 0.28)",
+              background: copiedId === principal.id ? "#ecfdf5" : "rgba(139, 92, 246, 0.08)",
+              color: copiedId === principal.id ? "#166534" : "#5b21b6",
               cursor: "pointer",
             }}
           >
@@ -2773,10 +2791,10 @@ function BlocOverlayStreamPresets({ slug, onCopied }) {
             <div
               key={p.id}
               style={{
-                padding: "0.5rem 0.6rem",
-                borderRadius: "10px",
-                border: "1px solid #e2e8f0",
-                background: "#fafafa",
+                padding: "0.56rem 0.64rem",
+                borderRadius: "14px",
+                border: PREMIUM_BORDER,
+                background: "rgba(255,255,255,0.74)",
                 display: "flex",
                 flexDirection: "column",
                 gap: "0.32rem",
@@ -2805,10 +2823,10 @@ function BlocOverlayStreamPresets({ slug, onCopied }) {
                   padding: "0.32rem 0.62rem",
                   fontSize: "0.72rem",
                   fontWeight: 600,
-                  borderRadius: "8px",
-                  border: "1px solid #bae6fd",
-                  background: copiedId === p.id ? "#ecfdf5" : "#f8fafc",
-                  color: copiedId === p.id ? "#15803d" : "#0369a1",
+                  borderRadius: "12px",
+                  border: PREMIUM_BORDER,
+                  background: copiedId === p.id ? "#ecfdf5" : "rgba(255,255,255,0.9)",
+                  color: copiedId === p.id ? "#15803d" : "#475569",
                   cursor: "pointer",
                 }}
               >
@@ -2855,14 +2873,13 @@ function LiensDiffusionCompact({ slug }) {
 
   const linkAct = {
     fontSize: "0.68rem",
-    fontWeight: 600,
+    fontWeight: 700,
     color: "#7c3aed",
-    background: "none",
-    border: "none",
-    padding: "0.15rem 0",
+    background: "rgba(139, 92, 246, 0.08)",
+    border: "1px solid rgba(167, 139, 250, 0.22)",
+    padding: "0.28rem 0.55rem",
+    borderRadius: "999px",
     cursor: "pointer",
-    textDecoration: "underline",
-    textUnderlineOffset: "2px",
   };
 
   async function copier(path, key) {
@@ -2889,10 +2906,10 @@ function LiensDiffusionCompact({ slug }) {
     return (
       <div
         style={{
-          padding: "0.55rem 0.65rem",
-          borderRadius: "10px",
-          border: "1px solid #e2e8f0",
-          background: "#fff",
+          padding: "0.62rem 0.68rem",
+          borderRadius: "14px",
+          border: PREMIUM_BORDER,
+          background: "rgba(255,255,255,0.78)",
           minWidth: 0,
         }}
       >
@@ -2925,7 +2942,6 @@ function LiensDiffusionCompact({ slug }) {
           <button type="button" onClick={() => ouvrir(p.path)} style={linkAct}>
             {openLabel}
           </button>
-          <span style={{ color: "#e2e8f0", fontSize: "0.65rem" }}>·</span>
           <button type="button" onClick={() => copier(p.path, p.k)} style={linkAct}>
             {copyLabel}
           </button>
@@ -2994,14 +3010,13 @@ function SectionPartageLandingEvenement({ slug, landingEnabled, eventId }) {
 
   const linkAct = {
     fontSize: "0.68rem",
-    fontWeight: 600,
+    fontWeight: 700,
     color: "#7c3aed",
-    background: "none",
-    border: "none",
-    padding: "0.15rem 0",
+    background: "rgba(139, 92, 246, 0.08)",
+    border: "1px solid rgba(167, 139, 250, 0.22)",
+    padding: "0.28rem 0.55rem",
+    borderRadius: "999px",
     cursor: "pointer",
-    textDecoration: "underline",
-    textUnderlineOffset: "2px",
   };
 
   async function copier() {
@@ -3041,10 +3056,10 @@ function SectionPartageLandingEvenement({ slug, landingEnabled, eventId }) {
         <p style={eyebrow}>Landing événement</p>
         <div
           style={{
-            padding: "0.55rem 0.65rem",
-            borderRadius: "10px",
-            border: "1px solid #e2e8f0",
-            background: "#fff",
+            padding: "0.62rem 0.68rem",
+            borderRadius: "14px",
+            border: PREMIUM_BORDER,
+            background: "rgba(255,255,255,0.78)",
             minWidth: 0,
           }}
         >
@@ -3066,17 +3081,15 @@ function SectionPartageLandingEvenement({ slug, landingEnabled, eventId }) {
             <button type="button" onClick={() => ouvrir()} style={linkAct}>
               👁 Voir la landing
             </button>
-            <span style={{ color: "#e2e8f0", fontSize: "0.65rem" }}>·</span>
             <Link
               href={landingAdminHref}
               style={{
                 ...linkAct,
-                textDecoration: "underline",
+                textDecoration: "none",
               }}
             >
               ✨ Landing événement
             </Link>
-            <span style={{ color: "#e2e8f0", fontSize: "0.65rem" }}>·</span>
             <button type="button" onClick={() => void copier()} style={linkAct}>
               Copier le lien
             </button>
@@ -3093,10 +3106,10 @@ function SectionPartageLandingEvenement({ slug, landingEnabled, eventId }) {
     <div style={{ paddingTop: "0.55rem" }}>
       <div
         style={{
-          padding: "0.55rem 0.65rem",
-          borderRadius: "10px",
-          border: "1px solid #e5e7eb",
-          background: "#f8fafc",
+          padding: "0.62rem 0.68rem",
+          borderRadius: "14px",
+          border: PREMIUM_BORDER,
+          background: "rgba(248,250,252,0.82)",
           minWidth: 0,
           opacity: 0.92,
         }}
@@ -3123,8 +3136,8 @@ function SectionPartageLandingEvenement({ slug, landingEnabled, eventId }) {
             justifyContent: "center",
             minHeight: "2rem",
             padding: "0.4rem 0.65rem",
-            borderRadius: "9px",
-            border: "1px solid #cbd5e1",
+            borderRadius: "12px",
+            border: PREMIUM_BORDER,
             background: "#fff",
             color: "#475569",
             fontSize: "0.76rem",
@@ -3165,11 +3178,11 @@ function SidebarPartageDroit({
         top: noSticky ? undefined : "1.5rem",
         alignSelf: "start",
         width: "100%",
-        maxWidth: noSticky ? "none" : "300px",
+        maxWidth: noSticky ? "none" : "288px",
         boxSizing: "border-box",
         display: "flex",
         flexDirection: "column",
-        gap: "0.85rem",
+        gap: "0.7rem",
       }}
     >
       {showHeader ? (
@@ -3177,7 +3190,7 @@ function SidebarPartageDroit({
           <h2
             style={{
               margin: "0 0 0.2rem 0",
-              fontSize: "1.02rem",
+              fontSize: "0.94rem",
               fontWeight: 800,
               color: "#0f172a",
               letterSpacing: "-0.02em",
@@ -3201,23 +3214,23 @@ function SidebarPartageDroit({
       />
       <section
         style={{
-          border: "1px solid #e2e8f0",
-          borderRadius: "12px",
-          background: "#ffffff",
-          padding: "0.75rem 0.8rem",
-          boxShadow: "0 1px 3px rgba(15, 23, 42, 0.06)",
+          border: PREMIUM_BORDER,
+          borderRadius: "16px",
+          background: "rgba(255,255,255,0.78)",
+          padding: "0.78rem 0.82rem",
+          boxShadow: "0 12px 24px rgba(15, 23, 42, 0.05)",
         }}
       >
         <p
           style={{
             margin: 0,
-            fontSize: "0.86rem",
+            fontSize: "0.82rem",
             fontWeight: 800,
             color: "#0f172a",
             letterSpacing: "-0.01em",
           }}
         >
-          📸 Galerie live
+          Galerie live
         </p>
         <p style={{ margin: "0.3rem 0 0 0", fontSize: "0.74rem", color: "#64748b", lineHeight: 1.35 }}>
           Ajoutez des photos en direct pendant l’événement.
@@ -3231,9 +3244,9 @@ function SidebarPartageDroit({
             width: "100%",
             minHeight: "2.2rem",
             padding: "0.45rem 0.68rem",
-            borderRadius: "10px",
-            border: "1px solid #fdba74",
-            background: "linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%)",
+            borderRadius: "12px",
+            border: "1px solid rgba(251, 146, 60, 0.22)",
+            background: "linear-gradient(180deg, rgba(255,247,237,0.98) 0%, rgba(255,237,213,0.9) 100%)",
             color: "#9a3412",
             fontSize: "0.8rem",
             fontWeight: 800,
@@ -3280,14 +3293,15 @@ const REGIE_SIDEBAR_DEFAULT_DESC =
   "Pilotez la diffusion, le vote et l’écran en direct.";
 
 const btnGhost = {
-  padding: "0.35rem 0.65rem",
+  padding: "0.4rem 0.72rem",
   fontSize: "0.8125rem",
   fontWeight: 600,
-  borderRadius: "8px",
-  border: "1px solid #e5e7eb",
-  background: "#fff",
+  borderRadius: "12px",
+  border: PREMIUM_BORDER_STRONG,
+  background: "rgba(255,255,255,0.92)",
   color: "#374151",
   cursor: "pointer",
+  boxShadow: "0 8px 18px rgba(15, 23, 42, 0.04)",
 };
 
 const REGIE_PREVIEW_JOIN_LS_PREFIX = "avote_regie_preview_join_";
@@ -3345,10 +3359,10 @@ function RegiePublicPreviewPanel({
     <section
       style={{
         ...shell,
-        borderRadius: "14px",
-        border: "1px solid #cbd5e1",
-        background: "#fff",
-        boxShadow: "0 10px 40px rgba(15, 23, 42, 0.08)",
+        borderRadius: "24px",
+        border: "1px solid rgba(148, 163, 184, 0.18)",
+        background: "linear-gradient(180deg, #0f172a 0%, #111827 100%)",
+        boxShadow: "0 28px 50px rgba(15, 23, 42, 0.18)",
         overflow: "hidden",
         boxSizing: "border-box",
       }}
@@ -3362,24 +3376,25 @@ function RegiePublicPreviewPanel({
           alignItems: "center",
           justifyContent: "space-between",
           gap: "0.5rem",
-          padding: "0.55rem 0.75rem",
-          borderBottom: "1px solid #e2e8f0",
-          background: "linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)",
+          padding: "0.8rem 0.95rem",
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          background: "linear-gradient(180deg, rgba(15,23,42,0.86) 0%, rgba(15,23,42,0.72) 100%)",
+          backdropFilter: "blur(14px)",
         }}
       >
         <div style={{ minWidth: 0, flex: "1 1 120px" }}>
           <p
             style={{
               margin: 0,
-              fontSize: "0.78rem",
+              fontSize: "0.8rem",
               fontWeight: 800,
-              color: "#0f172a",
+              color: "#f8fafc",
               letterSpacing: "-0.02em",
             }}
           >
-            Aperçu public
+            Aperçu public live
           </p>
-          <p style={{ margin: "0.1rem 0 0 0", fontSize: "0.65rem", color: "#64748b" }}>
+          <p style={{ margin: "0.12rem 0 0 0", fontSize: "0.68rem", color: "#94a3b8" }}>
             Vue participant en direct
           </p>
         </div>
@@ -3390,11 +3405,11 @@ function RegiePublicPreviewPanel({
               style={{
                 fontSize: "0.72rem",
                 fontWeight: 700,
-                padding: "0.35rem 0.65rem",
-                borderRadius: "8px",
-                border: "1px solid #bbf7d0",
-                background: "#f0fdf4",
-                color: "#166534",
+                padding: "0.38rem 0.7rem",
+                borderRadius: "999px",
+                border: "1px solid rgba(134, 239, 172, 0.18)",
+                background: "rgba(34, 197, 94, 0.12)",
+                color: "#dcfce7",
                 textDecoration: "none",
                 whiteSpace: "nowrap",
               }}
@@ -3430,11 +3445,11 @@ function RegiePublicPreviewPanel({
               style={{
                 fontSize: "0.72rem",
                 fontWeight: 700,
-                padding: "0.35rem 0.65rem",
-                borderRadius: "8px",
-                border: "1px solid #bfdbfe",
-                background: "#eff6ff",
-                color: "#1d4ed8",
+                padding: "0.38rem 0.7rem",
+                borderRadius: "999px",
+                border: "1px solid rgba(191, 219, 254, 0.16)",
+                background: "rgba(59, 130, 246, 0.12)",
+                color: "#dbeafe",
                 textDecoration: "none",
                 whiteSpace: "nowrap",
               }}
@@ -3447,11 +3462,11 @@ function RegiePublicPreviewPanel({
               style={{
                 fontSize: "0.72rem",
                 fontWeight: 700,
-                padding: "0.35rem 0.65rem",
-                borderRadius: "8px",
-                border: "1px solid rgba(59, 130, 246, 0.24)",
+                padding: "0.38rem 0.7rem",
+                borderRadius: "999px",
+                border: "1px solid rgba(96, 165, 250, 0.18)",
                 background: "rgba(59, 130, 246, 0.12)",
-                color: "#1e3a8a",
+                color: "#dbeafe",
                 textDecoration: "none",
                 whiteSpace: "nowrap",
               }}
@@ -3464,11 +3479,11 @@ function RegiePublicPreviewPanel({
               style={{
                 fontSize: "0.72rem",
                 fontWeight: 700,
-                padding: "0.35rem 0.65rem",
-                borderRadius: "8px",
-                border: "1px solid rgba(168, 85, 247, 0.24)",
+                padding: "0.38rem 0.7rem",
+                borderRadius: "999px",
+                border: "1px solid rgba(196, 181, 253, 0.18)",
                 background: "rgba(168, 85, 247, 0.12)",
-                color: "#6d28d9",
+                color: "#ede9fe",
                 textDecoration: "none",
                 whiteSpace: "nowrap",
               }}
@@ -3484,12 +3499,12 @@ function RegiePublicPreviewPanel({
               }
               @media (hover: hover) {
                 .regie-universe-link--live:hover {
-                  background: rgba(59, 130, 246, 0.18) !important;
-                  border-color: rgba(59, 130, 246, 0.32) !important;
+                  background: rgba(59, 130, 246, 0.2) !important;
+                  border-color: rgba(59, 130, 246, 0.3) !important;
                 }
                 .regie-universe-link--landing:hover {
-                  background: rgba(168, 85, 247, 0.18) !important;
-                  border-color: rgba(168, 85, 247, 0.32) !important;
+                  background: rgba(168, 85, 247, 0.2) !important;
+                  border-color: rgba(168, 85, 247, 0.3) !important;
                 }
               }
             `}</style>
@@ -3502,9 +3517,9 @@ function RegiePublicPreviewPanel({
           display: "flex",
           flexWrap: "wrap",
           gap: "0.4rem",
-          padding: "0.45rem 0.75rem",
-          borderBottom: "1px solid #f1f5f9",
-          background: "#fff",
+          padding: "0.65rem 0.95rem",
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          background: "rgba(15,23,42,0.74)",
         }}
       >
         <button
@@ -3519,7 +3534,11 @@ function RegiePublicPreviewPanel({
           style={{
             ...btnGhost,
             fontSize: "0.72rem",
-            padding: "0.32rem 0.55rem",
+            padding: "0.34rem 0.62rem",
+            background: "rgba(255,255,255,0.08)",
+            borderColor: "rgba(255,255,255,0.12)",
+            color: "#e2e8f0",
+            boxShadow: "none",
           }}
         >
           Ouvrir dans un nouvel onglet
@@ -3531,7 +3550,11 @@ function RegiePublicPreviewPanel({
             style={{
               ...btnGhost,
               fontSize: "0.72rem",
-              padding: "0.32rem 0.55rem",
+              padding: "0.34rem 0.62rem",
+              background: "rgba(255,255,255,0.08)",
+              borderColor: "rgba(255,255,255,0.12)",
+              color: "#e2e8f0",
+              boxShadow: "none",
             }}
           >
             Masquer l’aperçu
@@ -3543,16 +3566,23 @@ function RegiePublicPreviewPanel({
           flex: 1,
           minHeight: 0,
           position: "relative",
-          background: "#0f172a",
+          background:
+            "radial-gradient(circle at top center, rgba(124,58,237,0.18) 0%, rgba(15,23,42,0) 34%), linear-gradient(180deg, #020617 0%, #0f172a 100%)",
+          padding: "1rem",
         }}
       >
         {iframeError ? (
           <div
             style={{
-              padding: "1.25rem",
+              padding: "1.4rem",
               textAlign: "center",
               color: "#94a3b8",
               fontSize: "0.85rem",
+              borderRadius: "20px",
+              border: "1px solid rgba(255,255,255,0.08)",
+              background: "rgba(15,23,42,0.55)",
+              height: "100%",
+              boxSizing: "border-box",
             }}
           >
             <p style={{ margin: "0 0 0.75rem 0", fontWeight: 600 }}>
@@ -3570,9 +3600,10 @@ function RegiePublicPreviewPanel({
               style={{
                 ...btnGhost,
                 fontSize: "0.78rem",
-                background: "#1e293b",
+                background: "rgba(255,255,255,0.08)",
                 color: "#e2e8f0",
-                borderColor: "#475569",
+                borderColor: "rgba(255,255,255,0.12)",
+                boxShadow: "none",
               }}
             >
               Ouvrir /join dans un nouvel onglet
@@ -3588,11 +3619,14 @@ function RegiePublicPreviewPanel({
             onError={() => setIframeError(true)}
             style={{
               position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
+              inset: "1rem",
+              width: "calc(100% - 2rem)",
+              height: "calc(100% - 2rem)",
               border: "none",
               display: "block",
+              borderRadius: "20px",
+              background: "#0f172a",
+              boxShadow: "0 18px 40px rgba(2, 6, 23, 0.32)",
             }}
           />
         )}
@@ -5401,20 +5435,24 @@ export default function RegieEventPage() {
     activePoll?.title ||
     (totalQuestions > 0 ? "Aucune question active pour le moment." : "Ajoutez une question pour commencer.");
   const topInfoCardStyle = {
-    border: "1px solid #e5e7eb",
-    borderRadius: "12px",
-    background: "#fff",
-    padding: compactTopPanel ? "0.72rem 0.78rem" : "0.78rem 0.88rem",
+    border: PREMIUM_BORDER,
+    borderRadius: "16px",
+    background: "rgba(255,255,255,0.82)",
+    backdropFilter: "blur(14px)",
+    padding: compactTopPanel ? "0.76rem 0.82rem" : "0.85rem 0.95rem",
     minWidth: 0,
     boxSizing: "border-box",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75), 0 10px 24px rgba(15, 23, 42, 0.04)",
   };
   const controlGroupCardStyle = {
-    border: "1px solid #e5e7eb",
-    borderRadius: "14px",
-    background: "#fcfcfd",
-    padding: compactTopPanel ? "0.78rem 0.82rem" : "0.85rem 0.9rem",
+    border: PREMIUM_BORDER,
+    borderRadius: "18px",
+    background: "rgba(255,255,255,0.88)",
+    backdropFilter: "blur(14px)",
+    padding: compactTopPanel ? "0.88rem 0.92rem" : "0.98rem 1rem",
     minWidth: 0,
     boxSizing: "border-box",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.85), 0 16px 34px rgba(15, 23, 42, 0.05)",
   };
   autoRotateRef.current = autoRotate;
   pollIdRef.current = activePollIdJs;
@@ -5577,9 +5615,9 @@ export default function RegieEventPage() {
     <nav
       aria-label="Liste des questions"
       style={{
-        marginTop: "0.15rem",
-        paddingTop: "0.95rem",
-        borderTop: "1px solid #e5e7eb",
+        marginTop: "0.2rem",
+        paddingTop: "1rem",
+        borderTop: PREMIUM_BORDER,
         flex: 1,
         minHeight: 0,
         display: "flex",
@@ -5589,9 +5627,9 @@ export default function RegieEventPage() {
       <p
         style={{
           margin: "0 0 0.5rem 0",
-          fontSize: "0.65rem",
+          fontSize: "0.62rem",
           fontWeight: 700,
-          letterSpacing: "0.07em",
+          letterSpacing: "0.09em",
           textTransform: "uppercase",
           color: "#64748b",
         }}
@@ -5604,16 +5642,17 @@ export default function RegieEventPage() {
         disabled={busy}
         style={{
           width: "100%",
-          marginBottom: "0.45rem",
-          padding: "0.42rem 0.55rem",
+          marginBottom: "0.55rem",
+          padding: "0.56rem 0.68rem",
           fontSize: "0.78rem",
           fontWeight: 700,
-          borderRadius: "8px",
-          border: "1px solid #7c3aed",
-          background: busy ? "#f5f3ff" : "#faf5ff",
+          borderRadius: "12px",
+          border: "1px solid rgba(167, 139, 250, 0.35)",
+          background: busy ? "#f5f3ff" : "rgba(139, 92, 246, 0.08)",
           color: busy ? "#9ca3af" : "#5b21b6",
           cursor: busy ? "not-allowed" : "pointer",
           boxSizing: "border-box",
+          boxShadow: busy ? "none" : "0 10px 22px rgba(139, 92, 246, 0.08)",
         }}
       >
         + Ajouter une question
@@ -5626,7 +5665,7 @@ export default function RegieEventPage() {
           paddingRight: "4px",
           display: "flex",
           flexDirection: "column",
-          gap: "2px",
+          gap: "4px",
         }}
       >
         {pollsOrdonnes.map((poll) => (
@@ -5986,7 +6025,8 @@ export default function RegieEventPage() {
         maxWidth: "none",
         margin: 0,
         padding: 0,
-        background: "#f1f5f9",
+        background:
+          "radial-gradient(circle at top left, rgba(167, 139, 250, 0.18) 0%, rgba(241, 245, 249, 0) 28%), radial-gradient(circle at top right, rgba(59, 130, 246, 0.14) 0%, rgba(241, 245, 249, 0) 24%), linear-gradient(180deg, #f8fafc 0%, #f1f5f9 34%, #eef2ff 100%)",
         ...shellFont,
       }}
     >
@@ -6834,10 +6874,12 @@ export default function RegieEventPage() {
               <section
                 style={{
                   ...CARD,
-                  padding: compactTopPanel ? "0.85rem 0.9rem" : "0.95rem 1rem",
-                  border: "1px solid #e5e7eb",
-                  background: "#fff",
+                  padding: compactTopPanel ? "0.95rem 0.95rem" : "1.05rem 1.1rem",
+                  border: "1px solid rgba(196, 181, 253, 0.24)",
+                  background:
+                    "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(248,250,252,0.94) 100%)",
                   minWidth: 0,
+                  boxShadow: PREMIUM_SHADOW,
                 }}
               >
                 <div style={{ display: "grid", gap: "0.85rem" }}>
@@ -6872,7 +6914,7 @@ export default function RegieEventPage() {
                             fontWeight: 700,
                             letterSpacing: "0.08em",
                             textTransform: "uppercase",
-                            color: "#64748b",
+                            color: "#6b7280",
                           }}
                         >
                           Live
@@ -6883,11 +6925,12 @@ export default function RegieEventPage() {
                             display: "inline-flex",
                             alignItems: "center",
                             borderRadius: "999px",
-                            padding: "0.2rem 0.55rem",
+                            padding: "0.22rem 0.6rem",
                             fontSize: "0.72rem",
                             fontWeight: 700,
-                            background: statePanel.pillBg,
+                            background: "rgba(255,255,255,0.72)",
                             color: statePanel.pillColor,
+                            border: `1px solid ${statePanel.accent}22`,
                           }}
                         >
                           {pilotageTag}
@@ -6898,11 +6941,11 @@ export default function RegieEventPage() {
                               display: "inline-flex",
                               alignItems: "center",
                               borderRadius: "999px",
-                              padding: "0.2rem 0.55rem",
+                              padding: "0.22rem 0.6rem",
                               fontSize: "0.72rem",
                               fontWeight: 700,
-                              border: "1px solid #fed7aa",
-                              background: "#fff7ed",
+                              border: "1px solid rgba(251, 191, 36, 0.24)",
+                              background: "rgba(255, 247, 237, 0.8)",
                               color: "#9a3412",
                             }}
                           >
@@ -6923,9 +6966,9 @@ export default function RegieEventPage() {
                         <h3
                           style={{
                             margin: 0,
-                            fontSize: desktop ? "1.2rem" : "1.05rem",
+                            fontSize: desktop ? "1.36rem" : "1.12rem",
                             fontWeight: 800,
-                            letterSpacing: "-0.02em",
+                            letterSpacing: "-0.03em",
                             color: "#111827",
                           }}
                         >
@@ -6960,10 +7003,11 @@ export default function RegieEventPage() {
                         ...topInfoCardStyle,
                         minWidth: desktop ? "180px" : "100%",
                         display: "grid",
-                        gap: "0.18rem",
+                          gap: "0.22rem",
                         alignContent: "start",
-                        background: "#faf5ff",
-                        borderColor: "#ddd6fe",
+                          background: "linear-gradient(180deg, rgba(250,245,255,0.9) 0%, rgba(255,255,255,0.88) 100%)",
+                          borderColor: "rgba(196, 181, 253, 0.4)",
+                          boxShadow: "0 18px 32px rgba(91, 33, 182, 0.08)",
                       }}
                     >
                       <p
@@ -6981,7 +7025,7 @@ export default function RegieEventPage() {
                       <p
                         style={{
                           margin: 0,
-                          fontSize: desktop ? "1.8rem" : "1.3rem",
+                          fontSize: desktop ? "2rem" : "1.4rem",
                           fontWeight: 800,
                           lineHeight: 1.05,
                           color: "#3b0764",
@@ -7023,7 +7067,7 @@ export default function RegieEventPage() {
                     style={{
                       display: "grid",
                       gridTemplateColumns: desktop ? "repeat(4, minmax(0, 1fr))" : "1fr 1fr",
-                      gap: "0.55rem",
+                      gap: "0.65rem",
                       minWidth: 0,
                     }}
                   >
@@ -7162,10 +7206,12 @@ export default function RegieEventPage() {
               <section
                 style={{
                   ...CARD,
-                  padding: compactTopPanel ? "0.85rem 0.9rem" : "0.95rem 1rem",
-                  border: "1px solid #e5e7eb",
-                  background: "#fff",
+                  padding: compactTopPanel ? "0.95rem 0.95rem" : "1.05rem 1.1rem",
+                  border: "1px solid rgba(196, 181, 253, 0.18)",
+                  background:
+                    "linear-gradient(180deg, rgba(255,255,255,0.97) 0%, rgba(248,250,252,0.96) 100%)",
                   minWidth: 0,
+                  boxShadow: PREMIUM_SHADOW,
                 }}
               >
                 <div
@@ -7209,12 +7255,12 @@ export default function RegieEventPage() {
 
                 <div
                   style={{
-                    marginTop: "0.85rem",
+                    marginTop: "0.95rem",
                     display: "grid",
                     gridTemplateColumns: desktop
                       ? "minmax(190px, 0.9fr) minmax(0, 1.5fr) minmax(220px, 1fr)"
                       : "1fr",
-                    gap: "0.75rem",
+                    gap: "0.9rem",
                     minWidth: 0,
                   }}
                 >
@@ -7222,9 +7268,11 @@ export default function RegieEventPage() {
                     style={{
                       ...controlGroupCardStyle,
                       display: "grid",
-                      gap: "0.45rem",
-                      borderColor: voteIsOpen ? "#bbf7d0" : "#e5e7eb",
-                      background: voteIsOpen ? "#f0fdf4" : "#fcfcfd",
+                      gap: "0.5rem",
+                      borderColor: voteIsOpen ? "rgba(34, 197, 94, 0.28)" : "rgba(148, 163, 184, 0.18)",
+                      background: voteIsOpen
+                        ? "linear-gradient(180deg, rgba(240,253,244,0.92) 0%, rgba(255,255,255,0.95) 100%)"
+                        : "linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(248,250,252,0.9) 100%)",
                     }}
                   >
                     <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
@@ -7242,14 +7290,19 @@ export default function RegieEventPage() {
                       }}
                       style={{
                         ...btnGhost,
-                        minHeight: desktop ? "3rem" : "2.8rem",
+                        minHeight: desktop ? "3.15rem" : "2.9rem",
                         width: "100%",
-                        padding: "0.6rem 0.9rem",
+                        padding: "0.7rem 0.95rem",
                         borderColor: voteIsOpen ? "#22c55e" : "#cbd5e1",
-                        background: voteIsOpen ? "#dcfce7" : "#fff",
+                        background: voteIsOpen
+                          ? "linear-gradient(180deg, #dcfce7 0%, #bbf7d0 100%)"
+                          : "rgba(255,255,255,0.94)",
                         color: voteIsOpen ? "#166534" : "#0f172a",
                         fontWeight: 800,
-                        fontSize: "0.9rem",
+                        fontSize: "0.94rem",
+                        boxShadow: voteIsOpen
+                          ? "0 14px 26px rgba(34, 197, 94, 0.14)"
+                          : "0 10px 22px rgba(15, 23, 42, 0.05)",
                       }}
                     >
                       {voteIsOpen ? "Stop vote" : "Ouvrir le vote"}
@@ -7263,7 +7316,9 @@ export default function RegieEventPage() {
                     style={{
                       ...controlGroupCardStyle,
                       display: "grid",
-                      gap: "0.55rem",
+                      gap: "0.7rem",
+                      background:
+                        "linear-gradient(180deg, rgba(243,244,246,0.35) 0%, rgba(255,255,255,0.96) 100%)",
                     }}
                   >
                     <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
@@ -7273,7 +7328,7 @@ export default function RegieEventPage() {
                       style={{
                         display: "grid",
                         gridTemplateColumns: desktop ? "repeat(3, minmax(0, 1fr))" : "1fr",
-                        gap: "0.55rem",
+                        gap: "0.7rem",
                       }}
                     >
                       <button
@@ -7289,20 +7344,24 @@ export default function RegieEventPage() {
                         }}
                         style={{
                           ...btnGhost,
-                          minHeight: desktop ? "3rem" : "2.8rem",
+                          minHeight: desktop ? "3.35rem" : "2.95rem",
                           width: "100%",
-                          padding: "0.65rem 0.8rem",
+                          padding: "0.82rem 0.9rem",
                           borderColor:
                             String(projectionDisplayStateUi || "").toLowerCase() === "question"
                               ? "#60a5fa"
                               : "#bfdbfe",
                           background:
                             String(projectionDisplayStateUi || "").toLowerCase() === "question"
-                              ? "#dbeafe"
-                              : "#eff6ff",
+                              ? "linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%)"
+                              : "linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%)",
                           color: "#1e3a8a",
                           fontWeight: 800,
-                          fontSize: "0.82rem",
+                          fontSize: "0.84rem",
+                          boxShadow:
+                            String(projectionDisplayStateUi || "").toLowerCase() === "question"
+                              ? "0 16px 28px rgba(59, 130, 246, 0.16)"
+                              : "0 10px 22px rgba(59, 130, 246, 0.06)",
                         }}
                       >
                         Afficher la question
@@ -7321,20 +7380,24 @@ export default function RegieEventPage() {
                         }}
                         style={{
                           ...btnGhost,
-                          minHeight: desktop ? "3rem" : "2.8rem",
+                          minHeight: desktop ? "3.35rem" : "2.95rem",
                           width: "100%",
-                          padding: "0.65rem 0.8rem",
+                          padding: "0.82rem 0.9rem",
                           borderColor:
                             String(projectionDisplayStateUi || "").toLowerCase() === "results"
                               ? "#818cf8"
                               : "#c7d2fe",
                           background:
                             String(projectionDisplayStateUi || "").toLowerCase() === "results"
-                              ? "#e0e7ff"
-                              : "#eef2ff",
+                              ? "linear-gradient(180deg, #e0e7ff 0%, #c7d2fe 100%)"
+                              : "linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%)",
                           color: "#3730a3",
                           fontWeight: 800,
-                          fontSize: "0.82rem",
+                          fontSize: "0.84rem",
+                          boxShadow:
+                            String(projectionDisplayStateUi || "").toLowerCase() === "results"
+                              ? "0 16px 28px rgba(99, 102, 241, 0.16)"
+                              : "0 10px 22px rgba(99, 102, 241, 0.06)",
                         }}
                       >
                         Afficher les résultats
@@ -7350,20 +7413,24 @@ export default function RegieEventPage() {
                         }}
                         style={{
                           ...btnGhost,
-                          minHeight: desktop ? "3rem" : "2.8rem",
+                          minHeight: desktop ? "3.35rem" : "2.95rem",
                           width: "100%",
-                          padding: "0.65rem 0.8rem",
+                          padding: "0.82rem 0.9rem",
                           borderColor:
                             String(projectionDisplayStateUi || "").toLowerCase() === "black"
                               ? "#111827"
                               : "#334155",
                           background:
                             String(projectionDisplayStateUi || "").toLowerCase() === "black"
-                              ? "#111827"
-                              : "#1e293b",
+                              ? "linear-gradient(180deg, #111827 0%, #020617 100%)"
+                              : "linear-gradient(180deg, #1e293b 0%, #0f172a 100%)",
                           color: "#f8fafc",
                           fontWeight: 800,
-                          fontSize: "0.82rem",
+                          fontSize: "0.84rem",
+                          boxShadow:
+                            String(projectionDisplayStateUi || "").toLowerCase() === "black"
+                              ? "0 16px 28px rgba(2, 6, 23, 0.22)"
+                              : "0 10px 22px rgba(15, 23, 42, 0.10)",
                         }}
                       >
                         {isScreenBlack ? "Retour au direct" : "Écran noir"}
@@ -7378,7 +7445,9 @@ export default function RegieEventPage() {
                     style={{
                       ...controlGroupCardStyle,
                       display: "grid",
-                      gap: "0.45rem",
+                      gap: "0.48rem",
+                      background:
+                        "linear-gradient(180deg, rgba(250,245,255,0.5) 0%, rgba(255,255,255,0.96) 100%)",
                     }}
                   >
                     <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
@@ -7482,13 +7551,18 @@ export default function RegieEventPage() {
                         ...btnDanger(!canGoNext),
                         marginTop: "0.2rem",
                         width: "100%",
-                        minHeight: desktop ? "2.85rem" : "2.7rem",
-                        padding: "0.55rem 0.8rem",
-                        fontSize: "0.82rem",
-                        border: "1px solid #ef4444",
-                        background: canGoNext ? "#dc2626" : "#fee2e2",
-                        color: canGoNext ? "#fff" : "#7f1d1d",
+                          minHeight: desktop ? "2.95rem" : "2.75rem",
+                          padding: "0.6rem 0.85rem",
+                          fontSize: "0.84rem",
+                          border: "1px solid #8b5cf6",
+                          background: canGoNext
+                            ? "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)"
+                            : "#ede9fe",
+                          color: canGoNext ? "#fff" : "#6d28d9",
                         fontWeight: 800,
+                          boxShadow: canGoNext
+                            ? "0 14px 24px rgba(124, 58, 237, 0.18)"
+                            : "none",
                       }}
                     >
                       Question suivante
@@ -7567,14 +7641,11 @@ export default function RegieEventPage() {
                       ...btnFinish(busy || eventFinished),
                       minHeight: "2.55rem",
                       minWidth: desktop ? "132px" : "100%",
-                      padding: "0.5rem 0.8rem",
+                      padding: "0.52rem 0.82rem",
                       fontSize: "0.8rem",
-                      border: "1px solid #f97316",
-                      background:
-                        busy || eventFinished
-                          ? "#ffedd5"
-                          : "#fed7aa",
-                      color: busy || eventFinished ? "#9a3412" : "#7c2d12",
+                      border: "1px solid #fda4af",
+                      background: busy || eventFinished ? "#fff1f2" : "#fffafb",
+                      color: busy || eventFinished ? "#9f1239" : "#be123c",
                     }}
                   >
                     Terminer
