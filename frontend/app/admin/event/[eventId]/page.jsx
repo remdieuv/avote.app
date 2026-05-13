@@ -3442,29 +3442,31 @@ function RegiePublicPreviewPanel({
             </Link>
             <Link
               href={`/admin/events/${encodeURIComponent(eventId)}/live`}
+              className="regie-universe-link regie-universe-link--live"
               style={{
                 fontSize: "0.72rem",
                 fontWeight: 700,
                 padding: "0.35rem 0.65rem",
                 borderRadius: "8px",
-                border: "1px solid #c7d2fe",
-                background: "#eef2ff",
-                color: "#3730a3",
+                border: "1px solid rgba(59, 130, 246, 0.18)",
+                background: "rgba(59, 130, 246, 0.08)",
+                color: "#1e3a8a",
                 textDecoration: "none",
                 whiteSpace: "nowrap",
               }}
             >
-              🎨 Salle live
+              🎤 Salle live
             </Link>
             <Link
               href={`/admin/events/${encodeURIComponent(eventId)}/landing`}
+              className="regie-universe-link regie-universe-link--landing"
               style={{
                 fontSize: "0.72rem",
                 fontWeight: 700,
                 padding: "0.35rem 0.65rem",
                 borderRadius: "8px",
-                border: "1px solid #ddd6fe",
-                background: "#faf5ff",
+                border: "1px solid rgba(168, 85, 247, 0.18)",
+                background: "rgba(168, 85, 247, 0.08)",
                 color: "#6d28d9",
                 textDecoration: "none",
                 whiteSpace: "nowrap",
@@ -3472,6 +3474,24 @@ function RegiePublicPreviewPanel({
             >
               ✨ Landing événement
             </Link>
+            <style>{`
+              .regie-universe-link {
+                transition:
+                  background-color 0.18s ease,
+                  border-color 0.18s ease,
+                  color 0.18s ease;
+              }
+              @media (hover: hover) {
+                .regie-universe-link--live:hover {
+                  background: rgba(59, 130, 246, 0.14) !important;
+                  border-color: rgba(59, 130, 246, 0.26) !important;
+                }
+                .regie-universe-link--landing:hover {
+                  background: rgba(168, 85, 247, 0.14) !important;
+                  border-color: rgba(168, 85, 247, 0.26) !important;
+                }
+              }
+            `}</style>
           </div>
         ) : null}
       </div>
@@ -3906,6 +3926,7 @@ function RegieSidebarInner({
                 >
                   <Link
                     href={`/admin/events/${encodeURIComponent(eventId)}/live`}
+                    className="regie-universe-tile regie-universe-tile--live"
                     style={{
                       boxSizing: "border-box",
                       textAlign: "center",
@@ -3913,16 +3934,17 @@ function RegieSidebarInner({
                       fontSize: "0.77rem",
                       fontWeight: 700,
                       borderRadius: "9px",
-                      border: "1px solid #a5b4fc",
-                      background: "#f8fafc",
-                      color: "#4338ca",
+                      border: "1px solid rgba(59, 130, 246, 0.18)",
+                      background: "rgba(59, 130, 246, 0.08)",
+                      color: "#1e3a8a",
                       textDecoration: "none",
                     }}
                   >
-                    🎨 Salle live
+                    🎤 Salle live
                   </Link>
                   <Link
                     href={`/admin/events/${encodeURIComponent(eventId)}/landing`}
+                    className="regie-universe-tile regie-universe-tile--landing"
                     style={{
                       boxSizing: "border-box",
                       textAlign: "center",
@@ -3930,8 +3952,8 @@ function RegieSidebarInner({
                       fontSize: "0.77rem",
                       fontWeight: 700,
                       borderRadius: "9px",
-                      border: "1px solid #ddd6fe",
-                      background: "#faf5ff",
+                      border: "1px solid rgba(168, 85, 247, 0.18)",
+                      background: "rgba(168, 85, 247, 0.08)",
                       color: "#6d28d9",
                       textDecoration: "none",
                     }}
@@ -3939,6 +3961,24 @@ function RegieSidebarInner({
                     ✨ Landing
                   </Link>
                 </div>
+                <style>{`
+                  .regie-universe-tile {
+                    transition:
+                      background-color 0.18s ease,
+                      border-color 0.18s ease,
+                      color 0.18s ease;
+                  }
+                  @media (hover: hover) {
+                    .regie-universe-tile--live:hover {
+                      background: rgba(59, 130, 246, 0.14) !important;
+                      border-color: rgba(59, 130, 246, 0.26) !important;
+                    }
+                    .regie-universe-tile--landing:hover {
+                      background: rgba(168, 85, 247, 0.14) !important;
+                      border-color: rgba(168, 85, 247, 0.26) !important;
+                    }
+                  }
+                `}</style>
               ) : null}
             </>
           ) : null}

@@ -438,11 +438,11 @@ export function EventDashboardCard({
             <div
               style={{
                 marginTop: "0.1rem",
-                fontSize: "0.68rem",
-                fontWeight: 800,
-                letterSpacing: "0.06em",
+                fontSize: "0.62rem",
+                fontWeight: 700,
+                letterSpacing: "0.08em",
                 textTransform: "uppercase",
-                color: "#94a3b8",
+                color: "rgba(148, 163, 184, 0.82)",
               }}
             >
               Configuration
@@ -456,6 +456,7 @@ export function EventDashboardCard({
             >
               <Link
                 href={`/admin/events/${ev.id}/live`}
+                className="avote-universe-link avote-universe-link--live"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -465,16 +466,17 @@ export function EventDashboardCard({
                   fontWeight: 600,
                   borderRadius: "10px",
                   textDecoration: "none",
-                  border: "1px solid #cbd5e1",
-                  background: "#fff",
-                  color: "#475569",
+                  border: "1px solid rgba(59, 130, 246, 0.18)",
+                  background: "rgba(59, 130, 246, 0.08)",
+                  color: "#1e3a8a",
                   textAlign: "center",
                 }}
               >
-                🎨 Salle live
+                🎤 Salle live
               </Link>
               <Link
                 href={`/admin/events/${ev.id}/landing`}
+                className="avote-universe-link avote-universe-link--landing"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -484,8 +486,8 @@ export function EventDashboardCard({
                   fontWeight: 700,
                   borderRadius: "10px",
                   textDecoration: "none",
-                  border: "1px solid #ddd6fe",
-                  background: "#faf5ff",
+                  border: "1px solid rgba(168, 85, 247, 0.18)",
+                  background: "rgba(168, 85, 247, 0.08)",
                   color: "#6d28d9",
                   textAlign: "center",
                 }}
@@ -679,6 +681,12 @@ export function EventDashboardCard({
           animation: none;
           opacity: 0.9;
         }
+        .avote-universe-link {
+          transition:
+            background-color 0.18s ease,
+            border-color 0.18s ease,
+            color 0.18s ease;
+        }
         @keyframes avoteLiveDotPulse {
           0%,
           100% {
@@ -696,6 +704,14 @@ export function EventDashboardCard({
             box-shadow:
               0 10px 32px rgba(15, 23, 42, 0.1),
               0 4px 12px rgba(15, 23, 42, 0.06);
+          }
+          .avote-universe-link--live:hover {
+            background: rgba(59, 130, 246, 0.14) !important;
+            border-color: rgba(59, 130, 246, 0.26) !important;
+          }
+          .avote-universe-link--landing:hover {
+            background: rgba(168, 85, 247, 0.14) !important;
+            border-color: rgba(168, 85, 247, 0.26) !important;
           }
           .avote-event-card--featured:hover {
             transform: translateY(-2px);
@@ -717,6 +733,7 @@ export function EventDashboardCard({
         }
         @media (prefers-reduced-motion: reduce) {
           .avote-event-card,
+          .avote-universe-link,
           .avote-event-badge {
             transition-duration: 0.05s;
           }

@@ -101,10 +101,18 @@ function EditorModeSwitch({ eventId, current }) {
         marginTop: "0.95rem",
       }}
     >
-      <Link href={liveHref} style={linkStyle(current === "live")}>
-        🎨 Salle live
+      <Link
+        href={liveHref}
+        className="editor-universe-link editor-universe-link--live"
+        style={linkStyle(current === "live")}
+      >
+        🎤 Salle live
       </Link>
-      <Link href={landingHref} style={linkStyle(current === "landing")}>
+      <Link
+        href={landingHref}
+        className="editor-universe-link editor-universe-link--landing"
+        style={linkStyle(current === "landing")}
+      >
         ✨ Landing événement
       </Link>
     </div>
@@ -720,7 +728,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
               letterSpacing: "-0.02em",
             }}
           >
-            {isLandingPage ? "✨ Landing événement" : "🎨 Salle live"}
+            {isLandingPage ? "✨ Landing événement" : "🎤 Salle live"}
           </h1>
           <p style={{ margin: 0, color: "#64748b", fontSize: "0.95rem" }}>
             {isLandingPage
@@ -1910,6 +1918,32 @@ export function EventCustomizationEditor({ mode = "live" }) {
         )}
       </div>
       <style>{`
+        .editor-universe-link {
+          transition:
+            background-color 0.18s ease,
+            border-color 0.18s ease,
+            color 0.18s ease;
+        }
+        .editor-universe-link--live {
+          background: rgba(59, 130, 246, 0.08) !important;
+          border-color: rgba(59, 130, 246, 0.18) !important;
+          color: #1e3a8a !important;
+        }
+        .editor-universe-link--landing {
+          background: rgba(168, 85, 247, 0.08) !important;
+          border-color: rgba(168, 85, 247, 0.18) !important;
+          color: #6d28d9 !important;
+        }
+        @media (hover: hover) {
+          .editor-universe-link--live:hover {
+            background: rgba(59, 130, 246, 0.14) !important;
+            border-color: rgba(59, 130, 246, 0.26) !important;
+          }
+          .editor-universe-link--landing:hover {
+            background: rgba(168, 85, 247, 0.14) !important;
+            border-color: rgba(168, 85, 247, 0.26) !important;
+          }
+        }
         @media (max-width: 900px) {
           .customization-layout {
             grid-template-columns: 1fr !important;
@@ -1982,7 +2016,7 @@ export default function EventCustomizationHubPage() {
                 color: "#1d4ed8",
               }}
             >
-              🎨 Salle live
+              🎤 Salle live
             </p>
             <p
               style={{
@@ -1997,8 +2031,8 @@ export default function EventCustomizationHubPage() {
             </p>
             <Link
               href={liveHref}
+              className="hub-universe-link hub-universe-link--live"
               style={{
-                ...btnPrimary,
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -2033,14 +2067,12 @@ export default function EventCustomizationHubPage() {
             </p>
             <Link
               href={landingHref}
+              className="hub-universe-link hub-universe-link--landing"
               style={{
-                ...btnSecondary,
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
                 textDecoration: "none",
-                borderColor: "#ddd6fe",
-                color: "#6d28d9",
               }}
             >
               Ouvrir la landing événement
@@ -2048,6 +2080,39 @@ export default function EventCustomizationHubPage() {
           </section>
         </div>
       </div>
+      <style>{`
+        .hub-universe-link {
+          padding: 0.55rem 1rem;
+          font-size: 0.88rem;
+          font-weight: 700;
+          border-radius: 10px;
+          border: 1px solid transparent;
+          transition:
+            background-color 0.18s ease,
+            border-color 0.18s ease,
+            color 0.18s ease;
+        }
+        .hub-universe-link--live {
+          background: rgba(59, 130, 246, 0.08);
+          border-color: rgba(59, 130, 246, 0.18);
+          color: #1e3a8a;
+        }
+        .hub-universe-link--landing {
+          background: rgba(168, 85, 247, 0.08);
+          border-color: rgba(168, 85, 247, 0.18);
+          color: #6d28d9;
+        }
+        @media (hover: hover) {
+          .hub-universe-link--live:hover {
+            background: rgba(59, 130, 246, 0.14);
+            border-color: rgba(59, 130, 246, 0.26);
+          }
+          .hub-universe-link--landing:hover {
+            background: rgba(168, 85, 247, 0.14);
+            border-color: rgba(168, 85, 247, 0.26);
+          }
+        }
+      `}</style>
     </main>
   );
 }
