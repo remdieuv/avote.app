@@ -5388,6 +5388,34 @@ export default function RegieEventPage() {
       : affichageEnAttente
         ? "Projection en attente — choisissez « Afficher la question » ou « Afficher les résultats »."
         : "Aucun contenu synchronisé pour l’instant.";
+  const questionProgressSummary =
+    totalQuestions > 0
+      ? eventFinished
+        ? "Événement terminé"
+        : activeQuestionIndex >= 0
+          ? `Question ${activeQuestionIndex + 1} / ${totalQuestions}`
+          : `Questions prêtes : ${totalQuestions}`
+      : "Aucune question";
+  const activeQuestionTitle =
+    activePoll?.question ||
+    activePoll?.title ||
+    (totalQuestions > 0 ? "Aucune question active pour le moment." : "Ajoutez une question pour commencer.");
+  const topInfoCardStyle = {
+    border: "1px solid #e5e7eb",
+    borderRadius: "12px",
+    background: "#fff",
+    padding: compactTopPanel ? "0.72rem 0.78rem" : "0.78rem 0.88rem",
+    minWidth: 0,
+    boxSizing: "border-box",
+  };
+  const controlGroupCardStyle = {
+    border: "1px solid #e5e7eb",
+    borderRadius: "14px",
+    background: "#fcfcfd",
+    padding: compactTopPanel ? "0.78rem 0.82rem" : "0.85rem 0.9rem",
+    minWidth: 0,
+    boxSizing: "border-box",
+  };
   autoRotateRef.current = autoRotate;
   pollIdRef.current = activePollIdJs;
   displayStateRefRegie.current = displayStateUi;
@@ -6583,314 +6611,97 @@ export default function RegieEventPage() {
                   </Link>
                 </header>
               </>
-            ) : (
+            ) : null}
+
+            <section
+              style={{
+                ...CARD,
+                padding: desktop ? "0.75rem 0.9rem" : "0.72rem 0.82rem",
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "0.75rem 0.9rem",
+                borderColor: "#e5e7eb",
+                background: "#fff",
+              }}
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gap: "0.18rem",
+                  minWidth: 0,
+                  flex: "1 1 260px",
+                }}
+              >
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "0.65rem",
+                    fontWeight: 700,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    color: "#64748b",
+                  }}
+                >
+                  Régie événement
+                </p>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    gap: "0.45rem",
+                    minWidth: 0,
+                  }}
+                >
+                  <h2
+                    style={{
+                      margin: 0,
+                      fontSize: desktop ? "1.2rem" : "1rem",
+                      fontWeight: 800,
+                      letterSpacing: "-0.02em",
+                      color: "#111827",
+                    }}
+                  >
+                    Console live
+                  </h2>
+                  <span
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "#64748b",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      maxWidth: desktop ? "28rem" : "100%",
+                    }}
+                    title={eventData.title}
+                  >
+                    {eventData.title}
+                  </span>
+                </div>
+              </div>
+
               <div
                 style={{
                   display: "flex",
                   flexWrap: "wrap",
                   alignItems: "center",
-                  gap: "0.55rem",
+                  justifyContent: desktop ? "flex-end" : "flex-start",
+                  gap: "0.5rem 0.6rem",
+                  flex: "1 1 320px",
+                  minWidth: 0,
                 }}
               >
-                <h2
-                  style={{
-                    margin: 0,
-                    fontSize: "1.35rem",
-                    fontWeight: 800,
-                    letterSpacing: "-0.02em",
-                    color: "#111827",
-                  }}
-                >
-                  Pilotage
-                </h2>
-                <span
-                  title="Mode business de l'événement"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    borderRadius: "999px",
-                    padding: "0.2rem 0.55rem",
-                    fontSize: "0.74rem",
-                    fontWeight: 900,
-                    border: `1px solid ${modeBadge.border}`,
-                    background: modeBadge.bg,
-                    color: modeBadge.color,
-                    letterSpacing: "0.02em",
-                  }}
-                >
-                  {modeBadge.label}
-                </span>
-                {canStartReal ? (
-                  <div
-                    style={{
-                      marginLeft: "0.15rem",
-                      display: "inline-flex",
-                      flexDirection: "column",
-                      gap: "0.22rem",
-                    }}
-                  >
-                    <button
-                      type="button"
-                      disabled={startRealDisabled}
-                      onClick={async () => {
-                        if (!eventId || startRealDisabled) return;
-                        const ok = window.confirm(
-                          "Vous allez démarrer l’événement réel.\n\nCela consommera 1 crédit événement. Après la fin, cet événement ne pourra plus être rejoué gratuitement.",
-                        );
-                        if (!ok) return;
-                        await postAction(
-                          `/events/${eventId}/start-real`,
-                          "Mode réel en cours",
-                        );
-                        await fetchMeCredits();
-                      }}
-                      style={{
-                        padding: "0.48rem 0.8rem",
-                        fontSize: "0.78rem",
-                        minHeight: "2.2rem",
-                        borderRadius: "10px",
-                        border: "1px solid #0f172a",
-                        background: startRealDisabled
-                          ? "#e2e8f0"
-                          : "linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%)",
-                        color: startRealDisabled ? "#64748b" : "#fff",
-                        fontWeight: 800,
-                        boxShadow: startRealDisabled ? "none" : "0 2px 10px rgba(2,132,199,0.25)",
-                        cursor: startRealDisabled ? "not-allowed" : "pointer",
-                      }}
-                    >
-                      {hasCreditsValue && !hasEventCredit
-                        ? "Aucun crédit disponible"
-                        : "▶ Démarrer l’événement réel"}
-                    </button>
-                    <span style={{ fontSize: "0.68rem", color: "#475569", fontWeight: 700 }}>
-                      {hasCreditsValue && !hasEventCredit
-                        ? "1 événement réel = 49€ jusqu’à 500 participants."
-                        : "Ce lancement consommera 1 crédit événement."}
-                    </span>
-                    {hasCreditsValue && !hasEventCredit ? (
-                      <CheckoutEventButton
-                        label="Acheter 1 événement (49€)"
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          width: "fit-content",
-                          padding: "0.34rem 0.65rem",
-                          borderRadius: "8px",
-                          border: "1px solid #fca5a5",
-                          background: "#fff",
-                          color: "#b91c1c",
-                          fontSize: "0.76rem",
-                          fontWeight: 800,
-                          textDecoration: "none",
-                        }}
-                      />
-                    ) : null}
-                  </div>
-                ) : null}
                 <span
                   title="Crédits événement disponibles"
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
                     borderRadius: "999px",
-                    padding: "0.2rem 0.55rem",
-                    fontSize: "0.74rem",
-                    fontWeight: 900,
-                    border: "1px solid #dbeafe",
-                    background: "#eff6ff",
-                    color: "#1e3a8a",
-                    letterSpacing: "0.02em",
-                  }}
-                >
-                  {`Crédits : ${creditsLabel}`}
-                </span>
-                <div
-                  title="Compteur de participants uniques pour cet événement"
-                  style={{
-                    display: "inline-flex",
-                    flexDirection: "column",
-                    gap: "0.18rem",
-                    borderRadius: "10px",
-                    padding: "0.45rem 0.65rem",
-                    ...participantsCounterStyle,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: "0.74rem",
-                      fontWeight: 800,
-                      color: participantsCounterStyle.valueColor,
-                      lineHeight: 1.2,
-                    }}
-                  >
-                    {participantsCounterLabel}
-                  </span>
-                  {hasParticipantsLimit ? (
-                    <div
-                      style={{
-                        width: "100%",
-                        height: "7px",
-                        borderRadius: "999px",
-                        background: participantsTrackColor,
-                        overflow: "hidden",
-                      }}
-                      aria-hidden
-                    >
-                      <div
-                        style={{
-                          width: `${participantsProgressPercent}%`,
-                          height: "100%",
-                          borderRadius: "999px",
-                          background: participantsFillColor,
-                          transition: "width 220ms ease",
-                        }}
-                      />
-                    </div>
-                  ) : null}
-                  {participantsStatus.message ? (
-                    <span
-                      style={{
-                        fontSize: "0.68rem",
-                        fontWeight: 700,
-                        color: participantsCounterStyle.hintColor,
-                        lineHeight: 1.2,
-                      }}
-                    >
-                      {participantsStatus.message}
-                    </span>
-                  ) : null}
-                  <span
-                    style={{
-                      fontSize: "0.64rem",
-                      fontWeight: 500,
-                      color: "#64748b",
-                      lineHeight: 1.25,
-                    }}
-                  >
-                    Chaque participant est compté une seule fois, même s’il répond à plusieurs questions.
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {desktop ? null : (
-              <div
-                style={{
-                  marginTop: "0.55rem",
-                  display: "grid",
-                  gap: "0.55rem",
-                  justifyItems: "stretch",
-                  width: "100%",
-                }}
-              >
-                <span
-                  title="Mode business de l'événement"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifySelf: "center",
-                    borderRadius: "999px",
-                    padding: "0.2rem 0.55rem",
+                    padding: "0.24rem 0.58rem",
                     fontSize: "0.72rem",
-                    fontWeight: 900,
-                    border: `1px solid ${modeBadge.border}`,
-                    background: modeBadge.bg,
-                    color: modeBadge.color,
-                    letterSpacing: "0.02em",
-                  }}
-                >
-                  {modeBadge.label}
-                </span>
-                {canStartReal ? (
-                  <div
-                    style={{
-                      display: "inline-flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      gap: "0.2rem",
-                      width: "100%",
-                    }}
-                  >
-                    <button
-                      type="button"
-                      disabled={startRealDisabled}
-                      onClick={async () => {
-                        if (!eventId || startRealDisabled) return;
-                        const ok = window.confirm(
-                          "Vous allez démarrer l’événement réel.\n\nCela consommera 1 crédit événement. Après la fin, cet événement ne pourra plus être rejoué gratuitement.",
-                        );
-                        if (!ok) return;
-                        await postAction(
-                          `/events/${eventId}/start-real`,
-                          "Mode réel en cours",
-                        );
-                        await fetchMeCredits();
-                      }}
-                      style={{
-                        padding: "0.42rem 0.7rem",
-                        fontSize: "0.74rem",
-                        minHeight: "2rem",
-                        width: "min(100%, 320px)",
-                        borderRadius: "10px",
-                        border: "1px solid #0f172a",
-                        background: startRealDisabled
-                          ? "#e2e8f0"
-                          : "linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%)",
-                        color: startRealDisabled ? "#64748b" : "#fff",
-                        fontWeight: 800,
-                        boxShadow: startRealDisabled ? "none" : "0 2px 10px rgba(2,132,199,0.25)",
-                        cursor: startRealDisabled ? "not-allowed" : "pointer",
-                      }}
-                    >
-                      {hasCreditsValue && !hasEventCredit
-                        ? "Aucun crédit disponible"
-                        : "▶ Démarrer réel"}
-                    </button>
-                    <span
-                      style={{
-                        fontSize: "0.63rem",
-                        color: "#475569",
-                        fontWeight: 700,
-                        textAlign: "center",
-                      }}
-                    >
-                      {hasCreditsValue && !hasEventCredit
-                        ? "1 événement réel = 49€ jusqu’à 500 participants."
-                        : "Ce lancement consommera 1 crédit événement."}
-                    </span>
-                    {hasCreditsValue && !hasEventCredit ? (
-                      <CheckoutEventButton
-                        label="Acheter 1 événement (49€)"
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          width: "fit-content",
-                          padding: "0.3rem 0.6rem",
-                          borderRadius: "8px",
-                          border: "1px solid #fca5a5",
-                          background: "#fff",
-                          color: "#b91c1c",
-                          fontSize: "0.72rem",
-                          fontWeight: 800,
-                          textDecoration: "none",
-                        }}
-                      />
-                    ) : null}
-                  </div>
-                ) : null}
-                <span
-                  title="Crédits événement disponibles"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifySelf: "center",
-                    borderRadius: "999px",
-                    padding: "0.2rem 0.55rem",
-                    fontSize: "0.7rem",
-                    fontWeight: 900,
+                    fontWeight: 800,
                     border: "1px solid #dbeafe",
                     background: "#eff6ff",
                     color: "#1e3a8a",
@@ -6899,78 +6710,93 @@ export default function RegieEventPage() {
                 >
                   {`Crédits : ${creditsLabel}`}
                 </span>
-                <div
-                  title="Compteur de participants uniques pour cet événement"
-                  style={{
-                    display: "inline-flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: "0.16rem",
-                    borderRadius: "10px",
-                    padding: "0.36rem 0.62rem",
-                    width: "100%",
-                    boxSizing: "border-box",
-                    ...participantsCounterStyle,
-                  }}
-                >
-                  <span
+
+                {canStartReal ? (
+                  <div
                     style={{
-                      fontSize: "0.7rem",
-                      fontWeight: 800,
-                      color: participantsCounterStyle.valueColor,
-                      lineHeight: 1.2,
+                      display: "grid",
+                      gap: "0.2rem",
+                      marginLeft: desktop ? "auto" : 0,
+                      minWidth: 0,
                     }}
                   >
-                    {participantsCounterLabel}
-                  </span>
-                  {hasParticipantsLimit ? (
                     <div
                       style={{
-                        width: "100%",
-                        height: "6px",
-                        borderRadius: "999px",
-                        background: participantsTrackColor,
-                        overflow: "hidden",
+                        display: "flex",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                        justifyContent: desktop ? "flex-end" : "flex-start",
+                        gap: "0.45rem",
                       }}
-                      aria-hidden
                     >
-                      <div
-                        style={{
-                          width: `${participantsProgressPercent}%`,
-                          height: "100%",
-                          borderRadius: "999px",
-                          background: participantsFillColor,
-                          transition: "width 220ms ease",
+                      <button
+                        type="button"
+                        disabled={startRealDisabled}
+                        onClick={async () => {
+                          if (!eventId || startRealDisabled) return;
+                          const ok = window.confirm(
+                            "Vous allez démarrer l’événement réel.\n\nCela consommera 1 crédit événement. Après la fin, cet événement ne pourra plus être rejoué gratuitement.",
+                          );
+                          if (!ok) return;
+                          await postAction(
+                            `/events/${eventId}/start-real`,
+                            "Mode réel en cours",
+                          );
+                          await fetchMeCredits();
                         }}
-                      />
+                        style={{
+                          padding: desktop ? "0.45rem 0.8rem" : "0.42rem 0.72rem",
+                          fontSize: desktop ? "0.76rem" : "0.74rem",
+                          minHeight: desktop ? "2.15rem" : "2rem",
+                          borderRadius: "10px",
+                          border: "1px solid #0f172a",
+                          background: startRealDisabled ? "#e2e8f0" : "#0284c7",
+                          color: startRealDisabled ? "#64748b" : "#fff",
+                          fontWeight: 800,
+                          cursor: startRealDisabled ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        {hasCreditsValue && !hasEventCredit
+                          ? "Aucun crédit disponible"
+                          : "Démarrer l’événement réel"}
+                      </button>
+
+                      {hasCreditsValue && !hasEventCredit ? (
+                        <CheckoutEventButton
+                          label="Acheter 1 événement (49€)"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: "fit-content",
+                            padding: "0.32rem 0.6rem",
+                            borderRadius: "8px",
+                            border: "1px solid #fca5a5",
+                            background: "#fff",
+                            color: "#b91c1c",
+                            fontSize: "0.72rem",
+                            fontWeight: 800,
+                            textDecoration: "none",
+                          }}
+                        />
+                      ) : null}
                     </div>
-                  ) : null}
-                  {participantsStatus.message ? (
                     <span
                       style={{
-                        fontSize: "0.64rem",
-                        fontWeight: 700,
-                        color: participantsCounterStyle.hintColor,
-                        lineHeight: 1.2,
+                        fontSize: "0.66rem",
+                        color: "#64748b",
+                        fontWeight: 600,
+                        textAlign: desktop ? "right" : "left",
                       }}
                     >
-                      {participantsStatus.message}
+                      {hasCreditsValue && !hasEventCredit
+                        ? "1 événement réel = 49€ jusqu’à 500 participants."
+                        : "Ce lancement consommera 1 crédit événement."}
                     </span>
-                  ) : null}
-                  <span
-                    style={{
-                      fontSize: "0.6rem",
-                      fontWeight: 500,
-                      color: "#64748b",
-                      lineHeight: 1.25,
-                      textAlign: "center",
-                    }}
-                  >
-                    Chaque participant est compté une seule fois, même s’il répond à plusieurs questions.
-                  </span>
-                </div>
+                  </div>
+                ) : null}
               </div>
-            )}
+            </section>
 
             <div
               style={{
@@ -7001,606 +6827,693 @@ export default function RegieEventPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: desktop ? "minmax(0, 1fr) minmax(260px, 320px)" : "1fr",
-                gap: desktop ? "0.55rem 0.65rem" : "0.65rem",
-                alignItems: "start",
+                gap: compactTopPanel ? "0.75rem" : "0.9rem",
+                minWidth: 0,
               }}
             >
               <section
                 style={{
                   ...CARD,
-                  padding: compactTopPanel ? "0.8rem 0.9rem" : "0.9rem 1rem",
-                  border: statePanel.border,
-                  background: statePanel.background,
-                  borderLeft: `5px solid ${statePanel.accent}`,
-                  boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
-                  gridColumn: desktop ? "1 / 2" : "1 / -1",
+                  padding: compactTopPanel ? "0.85rem 0.9rem" : "0.95rem 1rem",
+                  border: "1px solid #e5e7eb",
+                  background: "#fff",
                   minWidth: 0,
                 }}
               >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "stretch",
-                  gap: "0.85rem",
-                }}
-              >
-              <div style={{ flex: 1, minWidth: 0 }}>
-              <p
-                style={{
-                  margin: "0 0 0.35rem 0",
-                  fontSize: "0.68rem",
-                  fontWeight: 700,
-                  color: "#6b7280",
-                  letterSpacing: "0.06em",
-                  textTransform: "uppercase",
-                }}
-              >
-                État live
-              </p>
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                }}
-              >
-                <span
-                  style={{
-                    display: "inline-block",
-                    fontSize: desktop ? "1.15rem" : "1.05rem",
-                    fontWeight: 800,
-                    color: "#111827",
-                    letterSpacing: "-0.02em",
-                  }}
-                >
-                  {stateLabel}
-                </span>
-                <span
-                  title={`État technique API (liveState) : ${liveState}`}
-                  style={{
-                    fontSize: "0.72rem",
-                    fontWeight: 600,
-                    padding: "0.18rem 0.5rem",
-                    borderRadius: "9999px",
-                    background: statePanel.pillBg,
-                    color: statePanel.pillColor,
-                  }}
-                >
-                  {pilotageTag}
-                </span>
-              </div>
-              <div
-                style={{
-                  marginTop: "0.55rem",
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "0.38rem",
-                }}
-              >
-                <span
-                  title="Mode business de l'événement"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.35rem",
-                    borderRadius: "999px",
-                    padding: "0.2rem 0.55rem",
-                    fontSize: "0.74rem",
-                    fontWeight: 900,
-                    border: `1px solid ${modeBadge.border}`,
-                    background: modeBadge.bg,
-                    color: modeBadge.color,
-                    letterSpacing: "0.02em",
-                  }}
-                >
-                  {modeBadge.label}
-                </span>
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.35rem",
-                    borderRadius: "999px",
-                    padding: "0.2rem 0.55rem",
-                    fontSize: "0.74rem",
-                    fontWeight: 700,
-                    border: "1px solid #cbd5e1",
-                    background: "#fff",
-                    color: "#0f172a",
-                  }}
-                >
-                  Vote : {voteLabel}
-                </span>
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.35rem",
-                    borderRadius: "999px",
-                    padding: "0.2rem 0.55rem",
-                    fontSize: "0.74rem",
-                    fontWeight: 700,
-                    border: `1px solid ${affichageEnAttente ? "#fecaca" : "#cbd5e1"}`,
-                    background: affichageEnAttente ? "#fef2f2" : "#fff",
-                    color: affichageEnAttente ? "#991b1b" : "#0f172a",
-                  }}
-                >
-                      Affichage global :{" "}
-                      {displayLabelGlobal}
-                </span>
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "0.35rem",
-                        borderRadius: "999px",
-                        padding: "0.2rem 0.55rem",
-                        fontSize: "0.74rem",
-                        fontWeight: 700,
-                        border: "1px solid #bfdbfe",
-                        background: "#eff6ff",
-                        color: "#1e3a8a",
-                      }}
-                    >
-                      Écran B :{" "}
-                      {screenBConnected ? displayLabelScreenB : "Non connecté"}
-                    </span>
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    borderRadius: "999px",
-                    padding: "0.2rem 0.55rem",
-                    fontSize: "0.74rem",
-                    fontWeight: 700,
-                    border: `1px solid ${socketConnected ? "#86efac" : socketReconnecting ? "#fcd34d" : "#fca5a5"}`,
-                    background: socketStatusBg,
-                    color: socketStatusColor,
-                  }}
-                >
-                  {socketStatusLabel}
-                </span>
-                    {hasDisplayGap ? (
-                      <span
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          borderRadius: "999px",
-                          padding: "0.2rem 0.55rem",
-                          fontSize: "0.74rem",
-                          fontWeight: 700,
-                          border: "1px solid #fed7aa",
-                          background: "#fff7ed",
-                          color: "#9a3412",
-                        }}
-                      >
-                        Écart global / écran B
-                      </span>
-                    ) : null}
-              </div>
-              {!compactTopPanel ? (
-                <p
-                  style={{
-                    margin: "0.4rem 0 0 0",
-                    fontSize: "0.72rem",
-                    color: "#94a3b8",
-                  }}
-                >
-                  Résumé technique :{" "}
-                  <code style={{ fontSize: "0.68rem" }}>{liveState}</code>
-                </p>
-              ) : null}
-              <p
-                style={{
-                  margin: desktop ? "0.65rem 0 0 0" : "0.55rem 0 0 0",
-                  fontSize: compactTopPanel ? "0.86rem" : desktop ? "0.95rem" : "0.9rem",
-                  color: "#374151",
-                  lineHeight: 1.45,
-                }}
-              >
-                <strong style={{ color: "#111827" }}>À l’écran :</strong>{" "}
-                {ecranLabel}
-              </p>
-              </div>
-              <div
-                style={{
-                  minWidth: desktop ? "170px" : "110px",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "center",
-                  alignItems: desktop ? "flex-end" : "flex-start",
-                  textAlign: desktop ? "right" : "left",
-                }}
-              >
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: "0.62rem",
-                      fontWeight: 700,
-                      letterSpacing: "0.06em",
-                      textTransform: "uppercase",
-                      color: "#64748b",
-                    }}
-                  >
-                    Chrono scène
-                  </p>
-                  <p
-                    style={{
-                      margin: "0.2rem 0 0 0",
-                      fontSize: desktop ? "2.05rem" : "1.35rem",
-                      fontWeight: 800,
-                      lineHeight: 1.05,
-                      color: "#3b0764",
-                      fontFamily: "ui-monospace, monospace",
-                      fontVariantNumeric: "tabular-nums",
-                      letterSpacing: "-0.03em",
-                    }}
-                  >
-                    {chronoEtatLiveTexte}
-                  </p>
-                  <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.68rem", color: "#6b7280" }}>
-                    {tm?.running && !tm?.isPaused
-                      ? "en cours"
-                      : tm?.isPaused
-                        ? "en pause"
-                        : "prêt"}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={scrollToChronoPanel}
-                    style={{
-                      ...btnGhost,
-                      marginTop: "0.35rem",
-                      padding: "0.28rem 0.6rem",
-                      fontSize: "0.68rem",
-                      fontWeight: 700,
-                      borderColor: "#c4b5fd",
-                      background: "#f5f3ff",
-                      color: "#5b21b6",
-                    }}
-                  >
-                    Chrono
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.45rem",
-                minWidth: 0,
-                gridColumn: desktop ? "2 / 3" : "1 / -1",
-                gridRow: desktop ? "1 / span 2" : "auto",
-                alignSelf: "start",
-              }}
-            >
-              <aside
-                style={{
-                  ...CARD,
-                  padding: "0.5rem 0.6rem",
-                  borderColor: "#dbeafe",
-                  background: "#f8fbff",
-                  minWidth: 0,
-                }}
-              >
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "0.72rem",
-                    color: "#64748b",
-                    fontWeight: 700,
-                  }}
-                >
-                  {totalQuestions > 0
-                    ? eventFinished
-                      ? "Événement terminé · toutes les questions ont été diffusées"
-                      : activeQuestionIndex >= 0
-                        ? `Question ${activeQuestionIndex + 1}/${totalQuestions}`
-                        : `Questions prêtes : ${totalQuestions}`
-                    : "Aucune question"}
-                </p>
-                {totalQuestions > 0 ? (
+                <div style={{ display: "grid", gap: "0.85rem" }}>
                   <div
                     style={{
-                      marginTop: "0.35rem",
                       display: "flex",
-                      flexDirection: "column",
-                      gap: "0.25rem",
-                      maxHeight: desktop ? "180px" : "130px",
-                      overflowY: "auto",
-                      paddingRight: "0.1rem",
+                      flexWrap: "wrap",
+                      alignItems: "stretch",
+                      justifyContent: "space-between",
+                      gap: "0.85rem",
                     }}
                   >
-                    {pollsOrdered.map((p, idx) => {
-                      const isActive = idx === activeQuestionIndex;
-                      const status = String(p.status || "").toUpperCase();
-                      const done =
-                        eventFinished ||
-                        (!isActive &&
-                          ["CLOSED", "ARCHIVED"].includes(status) &&
-                          activeQuestionIndex > idx);
-                      return (
-                        <div
-                          key={p.id}
+                    <div
+                      style={{
+                        flex: "1 1 420px",
+                        minWidth: 0,
+                        display: "grid",
+                        gap: "0.45rem",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          alignItems: "center",
+                          gap: "0.45rem",
+                        }}
+                      >
+                        <span
                           style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.4rem",
-                            fontSize: "0.72rem",
-                            color: isActive ? "#1e3a8a" : done ? "#475569" : "#64748b",
-                            fontWeight: isActive ? 700 : 500,
+                            fontSize: "0.66rem",
+                            fontWeight: 700,
+                            letterSpacing: "0.08em",
+                            textTransform: "uppercase",
+                            color: "#64748b",
                           }}
                         >
+                          Live
+                        </span>
+                        <span
+                          title={`État technique API (liveState) : ${liveState}`}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            borderRadius: "999px",
+                            padding: "0.2rem 0.55rem",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            background: statePanel.pillBg,
+                            color: statePanel.pillColor,
+                          }}
+                        >
+                          {pilotageTag}
+                        </span>
+                        {hasDisplayGap ? (
                           <span
                             style={{
                               display: "inline-flex",
                               alignItems: "center",
-                              justifyContent: "center",
-                              minWidth: "1.25rem",
-                              height: "1.25rem",
                               borderRadius: "999px",
-                              border: `1px solid ${
-                                isActive ? "#93c5fd" : done ? "#cbd5e1" : "#e5e7eb"
-                              }`,
-                              background: isActive
-                                ? "#eff6ff"
-                                : done
-                                  ? "#f8fafc"
-                                  : "#fff",
-                              color: isActive ? "#1e40af" : "#64748b",
-                              fontSize: "0.66rem",
-                              fontWeight: 800,
-                              lineHeight: 1,
+                              padding: "0.2rem 0.55rem",
+                              fontSize: "0.72rem",
+                              fontWeight: 700,
+                              border: "1px solid #fed7aa",
+                              background: "#fff7ed",
+                              color: "#9a3412",
                             }}
                           >
-                            {idx + 1}
+                            Écart global / écran B
                           </span>
-                          <span
-                            style={{
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              flex: 1,
-                            }}
-                            title={p.question || p.title}
-                          >
-                            {p.question || p.title || `Question ${idx + 1}`}
-                          </span>
-                        </div>
-                      );
-                    })}
+                        ) : null}
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          alignItems: "baseline",
+                          gap: "0.55rem 0.75rem",
+                          minWidth: 0,
+                        }}
+                      >
+                        <h3
+                          style={{
+                            margin: 0,
+                            fontSize: desktop ? "1.2rem" : "1.05rem",
+                            fontWeight: 800,
+                            letterSpacing: "-0.02em",
+                            color: "#111827",
+                          }}
+                        >
+                          {stateLabel}
+                        </h3>
+                        <span
+                          style={{
+                            fontSize: "0.82rem",
+                            fontWeight: 700,
+                            color: "#475569",
+                          }}
+                        >
+                          {questionProgressSummary}
+                        </span>
+                      </div>
+
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: compactTopPanel ? "0.84rem" : "0.9rem",
+                          color: "#475569",
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        <strong style={{ color: "#111827" }}>À l’écran :</strong>{" "}
+                        {ecranLabel}
+                      </p>
+                    </div>
+
+                    <div
+                      style={{
+                        ...topInfoCardStyle,
+                        minWidth: desktop ? "180px" : "100%",
+                        display: "grid",
+                        gap: "0.18rem",
+                        alignContent: "start",
+                        background: "#faf5ff",
+                        borderColor: "#ddd6fe",
+                      }}
+                    >
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "0.62rem",
+                          fontWeight: 700,
+                          letterSpacing: "0.08em",
+                          textTransform: "uppercase",
+                          color: "#6b7280",
+                        }}
+                      >
+                        Chrono scène
+                      </p>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: desktop ? "1.8rem" : "1.3rem",
+                          fontWeight: 800,
+                          lineHeight: 1.05,
+                          color: "#3b0764",
+                          fontFamily: "ui-monospace, monospace",
+                          fontVariantNumeric: "tabular-nums",
+                          letterSpacing: "-0.03em",
+                        }}
+                      >
+                        {chronoEtatLiveTexte}
+                      </p>
+                      <p style={{ margin: 0, fontSize: "0.7rem", color: "#6b7280" }}>
+                        {tm?.running && !tm?.isPaused
+                          ? "en cours"
+                          : tm?.isPaused
+                            ? "en pause"
+                            : "prêt"}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={scrollToChronoPanel}
+                        style={{
+                          ...btnGhost,
+                          marginTop: "0.18rem",
+                          width: "fit-content",
+                          padding: "0.28rem 0.6rem",
+                          fontSize: "0.68rem",
+                          fontWeight: 700,
+                          borderColor: "#c4b5fd",
+                          background: "#f5f3ff",
+                          color: "#5b21b6",
+                        }}
+                      >
+                        Chrono
+                      </button>
+                    </div>
                   </div>
-                ) : null}
-                <button
-                  type="button"
-                  disabled={!canGoNext}
-                  onClick={() =>
-                    void postAction(`/events/${eventId}/next-poll`, "Question suivante diffusee")
-                  }
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: desktop ? "repeat(4, minmax(0, 1fr))" : "1fr 1fr",
+                      gap: "0.55rem",
+                      minWidth: 0,
+                    }}
+                  >
+                    <div style={{ ...topInfoCardStyle, display: "grid", gap: "0.22rem" }}>
+                      <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                        Mode
+                      </p>
+                      <p style={{ margin: 0, fontSize: "0.88rem", fontWeight: 800, color: modeBadge.color }}>
+                        {modeBadge.label}
+                      </p>
+                    </div>
+
+                    <div style={{ ...topInfoCardStyle, display: "grid", gap: "0.22rem" }}>
+                      <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                        Vote
+                      </p>
+                      <p style={{ margin: 0, fontSize: "0.88rem", fontWeight: 800, color: voteIsOpen ? "#166534" : "#334155" }}>
+                        {voteLabel}
+                      </p>
+                    </div>
+
+                    <div style={{ ...topInfoCardStyle, display: "grid", gap: "0.22rem" }}>
+                      <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                        Affichage
+                      </p>
+                      <p style={{ margin: 0, fontSize: "0.88rem", fontWeight: 800, color: affichageEnAttente ? "#991b1b" : "#111827" }}>
+                        {displayLabelGlobal}
+                      </p>
+                    </div>
+
+                    <div style={{ ...topInfoCardStyle, display: "grid", gap: "0.22rem" }}>
+                      <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                        Sync / écrans
+                      </p>
+                      <p style={{ margin: 0, fontSize: "0.88rem", fontWeight: 800, color: socketStatusColor }}>
+                        {socketStatusLabel}
+                      </p>
+                      <p style={{ margin: 0, fontSize: "0.72rem", color: "#64748b", lineHeight: 1.35 }}>
+                        {screenBConnected ? `Écran B : ${displayLabelScreenB}` : "Écran B non connecté"}
+                      </p>
+                    </div>
+
+                    <div
+                      style={{
+                        ...topInfoCardStyle,
+                        gridColumn: desktop ? "span 2" : "1 / -1",
+                        display: "grid",
+                        gap: "0.26rem",
+                        border: participantsCounterStyle.border,
+                        background: participantsCounterStyle.background,
+                      }}
+                    >
+                      <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                        Participants
+                      </p>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "0.9rem",
+                          fontWeight: 800,
+                          color: participantsCounterStyle.valueColor,
+                        }}
+                      >
+                        {participantsCounterLabel}
+                      </p>
+                      {hasParticipantsLimit ? (
+                        <div
+                          style={{
+                            width: "100%",
+                            height: "7px",
+                            borderRadius: "999px",
+                            background: participantsTrackColor,
+                            overflow: "hidden",
+                          }}
+                          aria-hidden
+                        >
+                          <div
+                            style={{
+                              width: `${participantsProgressPercent}%`,
+                              height: "100%",
+                              borderRadius: "999px",
+                              background: participantsFillColor,
+                              transition: "width 220ms ease",
+                            }}
+                          />
+                        </div>
+                      ) : null}
+                      {participantsStatus.message ? (
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            color: participantsCounterStyle.hintColor,
+                          }}
+                        >
+                          {participantsStatus.message}
+                        </p>
+                      ) : (
+                        <p style={{ margin: 0, fontSize: "0.72rem", color: "#64748b" }}>
+                          Chaque participant est compté une seule fois.
+                        </p>
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        ...topInfoCardStyle,
+                        gridColumn: desktop ? "span 2" : "1 / -1",
+                        display: "grid",
+                        gap: "0.26rem",
+                      }}
+                    >
+                      <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                        Question active
+                      </p>
+                      <p style={{ margin: 0, fontSize: "0.88rem", fontWeight: 800, color: "#111827" }}>
+                        {questionProgressSummary}
+                      </p>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "0.78rem",
+                          color: "#475569",
+                          lineHeight: 1.35,
+                          overflowWrap: "anywhere",
+                        }}
+                      >
+                        {activeQuestionTitle}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section
+                style={{
+                  ...CARD,
+                  padding: compactTopPanel ? "0.85rem 0.9rem" : "0.95rem 1rem",
+                  border: "1px solid #e5e7eb",
+                  background: "#fff",
+                  minWidth: 0,
+                }}
+              >
+                <div
                   style={{
-                    ...btnDanger(!canGoNext),
-                    marginTop: "0.65rem",
-                    width: "100%",
-                    minHeight: "2.4rem",
-                    padding: "0.45rem 0.7rem",
-                    fontSize: "0.78rem",
-                    border: "1px solid #ef4444",
-                    background: canGoNext ? "#dc2626" : "#fee2e2",
-                    color: canGoNext ? "#fff" : "#7f1d1d",
-                    fontWeight: 800,
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "baseline",
+                    justifyContent: "space-between",
+                    gap: "0.45rem 0.85rem",
                   }}
                 >
-                  ⏭ Question suivante
-                </button>
-              </aside>
-            </div>
+                  <div style={{ display: "grid", gap: "0.18rem" }}>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "0.65rem",
+                        fontWeight: 700,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "#64748b",
+                      }}
+                    >
+                      Actions principales
+                    </p>
+                    <h3
+                      style={{
+                        margin: 0,
+                        fontSize: desktop ? "1.08rem" : "0.98rem",
+                        fontWeight: 800,
+                        color: "#111827",
+                        letterSpacing: "-0.02em",
+                      }}
+                    >
+                      Contrôle de la salle
+                    </h3>
+                  </div>
+                  <p style={{ margin: 0, fontSize: "0.76rem", color: "#64748b" }}>
+                    Les commandes essentielles pendant le live.
+                  </p>
+                </div>
 
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.35rem",
-                width: "100%",
-                minWidth: 0,
-                gridColumn: desktop ? "1 / 2" : "1 / -1",
-                alignSelf: "start",
-              }}
-            >
-              <div
+                <div
                   style={{
-                    marginTop: "0.2rem",
-                    border: "1px solid #e5e7eb",
-                    background: "#f8fafc",
-                    borderRadius: "10px",
-                    padding: "0.6rem",
+                    marginTop: "0.85rem",
+                    display: "grid",
+                    gridTemplateColumns: desktop
+                      ? "minmax(190px, 0.9fr) minmax(0, 1.5fr) minmax(220px, 1fr)"
+                      : "1fr",
+                    gap: "0.75rem",
+                    minWidth: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      ...controlGroupCardStyle,
+                      display: "grid",
+                      gap: "0.45rem",
+                      borderColor: voteIsOpen ? "#bbf7d0" : "#e5e7eb",
+                      background: voteIsOpen ? "#f0fdf4" : "#fcfcfd",
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      Vote
+                    </p>
+                    <button
+                      type="button"
+                      disabled={!canToggleVote}
+                      onClick={async () => {
+                        if (!activePollIdJs) return;
+                        await postAction(
+                          `/polls/${activePollIdJs}/${voteIsOpen ? "close" : "open"}`,
+                          voteIsOpen ? "Vote ferme" : "Vote ouvert",
+                        );
+                      }}
+                      style={{
+                        ...btnGhost,
+                        minHeight: desktop ? "3rem" : "2.8rem",
+                        width: "100%",
+                        padding: "0.6rem 0.9rem",
+                        borderColor: voteIsOpen ? "#22c55e" : "#cbd5e1",
+                        background: voteIsOpen ? "#dcfce7" : "#fff",
+                        color: voteIsOpen ? "#166534" : "#0f172a",
+                        fontWeight: 800,
+                        fontSize: "0.9rem",
+                      }}
+                    >
+                      {voteIsOpen ? "Stop vote" : "Ouvrir le vote"}
+                    </button>
+                    <p style={{ margin: 0, fontSize: "0.76rem", color: "#64748b", lineHeight: 1.35 }}>
+                      État actuel : <strong style={{ color: "#111827" }}>{voteLabel}</strong>
+                    </p>
+                  </div>
+
+                  <div
+                    style={{
+                      ...controlGroupCardStyle,
+                      display: "grid",
+                      gap: "0.55rem",
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      Projection salle
+                    </p>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: desktop ? "repeat(3, minmax(0, 1fr))" : "1fr",
+                        gap: "0.55rem",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        disabled={!canShowQuestionQuick}
+                        onClick={async () => {
+                          if (!activePollIdJs) return;
+                          const ok = await postAction(
+                            `/polls/${activePollIdJs}/display-question`,
+                            "Question affichee",
+                          );
+                          if (ok) sendScreenAction("QUESTION", null);
+                        }}
+                        style={{
+                          ...btnGhost,
+                          minHeight: desktop ? "3rem" : "2.8rem",
+                          width: "100%",
+                          padding: "0.65rem 0.8rem",
+                          borderColor:
+                            String(projectionDisplayStateUi || "").toLowerCase() === "question"
+                              ? "#60a5fa"
+                              : "#bfdbfe",
+                          background:
+                            String(projectionDisplayStateUi || "").toLowerCase() === "question"
+                              ? "#dbeafe"
+                              : "#eff6ff",
+                          color: "#1e3a8a",
+                          fontWeight: 800,
+                          fontSize: "0.82rem",
+                        }}
+                      >
+                        Afficher la question
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={!canShowResultsQuick}
+                        onClick={async () => {
+                          if (!activePollIdJs) return;
+                          const ok = await postAction(
+                            `/polls/${activePollIdJs}/show-results`,
+                            "Resultats affiches",
+                          );
+                          if (ok) sendScreenAction("RESULTS", null);
+                        }}
+                        style={{
+                          ...btnGhost,
+                          minHeight: desktop ? "3rem" : "2.8rem",
+                          width: "100%",
+                          padding: "0.65rem 0.8rem",
+                          borderColor:
+                            String(projectionDisplayStateUi || "").toLowerCase() === "results"
+                              ? "#818cf8"
+                              : "#c7d2fe",
+                          background:
+                            String(projectionDisplayStateUi || "").toLowerCase() === "results"
+                              ? "#e0e7ff"
+                              : "#eef2ff",
+                          color: "#3730a3",
+                          fontWeight: 800,
+                          fontSize: "0.82rem",
+                        }}
+                      >
+                        Afficher les résultats
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => {
+                          sendScreenAction(isScreenBlack ? "WAITING" : "BLACK", null);
+                          setToastNotif(isScreenBlack ? "Retour au direct" : "Ecran noir");
+                          window.setTimeout(() => setToastNotif(null), 2200);
+                        }}
+                        style={{
+                          ...btnGhost,
+                          minHeight: desktop ? "3rem" : "2.8rem",
+                          width: "100%",
+                          padding: "0.65rem 0.8rem",
+                          borderColor:
+                            String(projectionDisplayStateUi || "").toLowerCase() === "black"
+                              ? "#111827"
+                              : "#334155",
+                          background:
+                            String(projectionDisplayStateUi || "").toLowerCase() === "black"
+                              ? "#111827"
+                              : "#1e293b",
+                          color: "#f8fafc",
+                          fontWeight: 800,
+                          fontSize: "0.82rem",
+                        }}
+                      >
+                        {isScreenBlack ? "Retour au direct" : "Écran noir"}
+                      </button>
+                    </div>
+                    <p style={{ margin: 0, fontSize: "0.76rem", color: "#64748b", lineHeight: 1.35 }}>
+                      Affichage actuel : <strong style={{ color: "#111827" }}>{displayLabelGlobal}</strong>
+                    </p>
+                  </div>
+
+                  <div
+                    style={{
+                      ...controlGroupCardStyle,
+                      display: "grid",
+                      gap: "0.45rem",
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      Progression
+                    </p>
+                    <p style={{ margin: 0, fontSize: "0.88rem", fontWeight: 800, color: "#111827" }}>
+                      {questionProgressSummary}
+                    </p>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "0.76rem",
+                        color: "#475569",
+                        lineHeight: 1.35,
+                        overflowWrap: "anywhere",
+                      }}
+                    >
+                      {activeQuestionTitle}
+                    </p>
+
+                    {totalQuestions > 0 ? (
+                      <div
+                        style={{
+                          marginTop: "0.1rem",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "0.25rem",
+                          maxHeight: desktop ? "150px" : "120px",
+                          overflowY: "auto",
+                          paddingRight: "0.1rem",
+                        }}
+                      >
+                        {pollsOrdered.map((p, idx) => {
+                          const isActive = idx === activeQuestionIndex;
+                          const status = String(p.status || "").toUpperCase();
+                          const done =
+                            eventFinished ||
+                            (!isActive &&
+                              ["CLOSED", "ARCHIVED"].includes(status) &&
+                              activeQuestionIndex > idx);
+                          return (
+                            <div
+                              key={p.id}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.4rem",
+                                fontSize: "0.72rem",
+                                color: isActive ? "#1e3a8a" : done ? "#475569" : "#64748b",
+                                fontWeight: isActive ? 700 : 500,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  minWidth: "1.25rem",
+                                  height: "1.25rem",
+                                  borderRadius: "999px",
+                                  border: `1px solid ${
+                                    isActive ? "#93c5fd" : done ? "#cbd5e1" : "#e5e7eb"
+                                  }`,
+                                  background: isActive
+                                    ? "#eff6ff"
+                                    : done
+                                      ? "#f8fafc"
+                                      : "#fff",
+                                  color: isActive ? "#1e40af" : "#64748b",
+                                  fontSize: "0.66rem",
+                                  fontWeight: 800,
+                                  lineHeight: 1,
+                                }}
+                              >
+                                {idx + 1}
+                              </span>
+                              <span
+                                style={{
+                                  whiteSpace: "nowrap",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  flex: 1,
+                                }}
+                                title={p.question || p.title}
+                              >
+                                {p.question || p.title || `Question ${idx + 1}`}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+
+                    <button
+                      type="button"
+                      disabled={!canGoNext}
+                      onClick={() =>
+                        void postAction(`/events/${eventId}/next-poll`, "Question suivante diffusee")
+                      }
+                      style={{
+                        ...btnDanger(!canGoNext),
+                        marginTop: "0.2rem",
+                        width: "100%",
+                        minHeight: desktop ? "2.85rem" : "2.7rem",
+                        padding: "0.55rem 0.8rem",
+                        fontSize: "0.82rem",
+                        border: "1px solid #ef4444",
+                        background: canGoNext ? "#dc2626" : "#fee2e2",
+                        color: canGoNext ? "#fff" : "#7f1d1d",
+                        fontWeight: 800,
+                      }}
+                    >
+                      Question suivante
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "0.75rem",
                     display: "flex",
                     flexWrap: "wrap",
                     alignItems: "center",
-                    gap: "0.45rem",
+                    gap: "0.55rem",
                   }}
                 >
-                  <button
-                    type="button"
-                    disabled={!canToggleVote}
-                    onClick={async () => {
-                      if (!activePollIdJs) return;
-                      await postAction(
-                        `/polls/${activePollIdJs}/${voteIsOpen ? "close" : "open"}`,
-                        voteIsOpen ? "Vote ferme" : "Vote ouvert",
-                      );
-                    }}
-                    style={{
-                      ...btnGhost,
-                      minHeight: "2.6rem",
-                      minWidth: "128px",
-                      padding: "0.5rem 0.75rem",
-                      borderColor: "#cbd5e1",
-                      background: "#fff",
-                      color: "#0f172a",
-                      fontWeight: 700,
-                      fontSize: "0.78rem",
-                    }}
-                  >
-                    {voteIsOpen ? "⏸ Fermer vote" : "▶ Ouvrir vote"}
-                  </button>
-                  <div style={{ display: "grid", justifyItems: "center", gap: "0.25rem" }}>
-                    <button
-                      type="button"
-                      disabled={!canShowQuestionQuick}
-                      onClick={async () => {
-                        if (!activePollIdJs) return;
-                        const ok = await postAction(
-                          `/polls/${activePollIdJs}/display-question`,
-                          "Question affichee",
-                        );
-                        if (ok) sendScreenAction("QUESTION", null);
-                      }}
-                      style={{
-                        ...btnGhost,
-                        minHeight: "2.6rem",
-                        minWidth: "112px",
-                        padding: "0.5rem 0.75rem",
-                        borderColor: "#93c5fd",
-                        background: "#eff6ff",
-                        color: "#1e3a8a",
-                        fontWeight: 700,
-                        fontSize: "0.78rem",
-                      }}
-                    >
-                      📄 Afficher question
-                    </button>
-                    <span
-                      aria-hidden
-                      style={{
-                        width: "8px",
-                        height: "8px",
-                        borderRadius: "9999px",
-                        background:
-                          String(projectionDisplayStateUi || "").toLowerCase() === "question"
-                            ? "#22c55e"
-                            : "#cbd5e1",
-                        boxShadow:
-                          String(projectionDisplayStateUi || "").toLowerCase() === "question"
-                            ? "0 0 0 3px rgba(34,197,94,0.18)"
-                            : "none",
-                      }}
-                    />
-                  </div>
-                  <div style={{ display: "grid", justifyItems: "center", gap: "0.25rem" }}>
-                    <button
-                      type="button"
-                      disabled={!canShowResultsQuick}
-                      onClick={async () => {
-                        if (!activePollIdJs) return;
-                        const ok = await postAction(
-                          `/polls/${activePollIdJs}/show-results`,
-                          "Resultats affiches",
-                        );
-                        if (ok) sendScreenAction("RESULTS", null);
-                      }}
-                      style={{
-                        ...btnGhost,
-                        minHeight: "2.6rem",
-                        minWidth: "112px",
-                        padding: "0.5rem 0.75rem",
-                        borderColor: "#a5b4fc",
-                        background: "#eef2ff",
-                        color: "#3730a3",
-                        fontWeight: 700,
-                        fontSize: "0.78rem",
-                      }}
-                    >
-                      📊 Afficher résultats
-                    </button>
-                    <span
-                      aria-hidden
-                      style={{
-                        width: "8px",
-                        height: "8px",
-                        borderRadius: "9999px",
-                        background:
-                          String(projectionDisplayStateUi || "").toLowerCase() === "results"
-                            ? "#22c55e"
-                            : "#cbd5e1",
-                        boxShadow:
-                          String(projectionDisplayStateUi || "").toLowerCase() === "results"
-                            ? "0 0 0 3px rgba(34,197,94,0.18)"
-                            : "none",
-                      }}
-                    />
-                  </div>
-                  <div style={{ display: "grid", justifyItems: "center", gap: "0.25rem" }}>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => {
-                        sendScreenAction(isScreenBlack ? "WAITING" : "BLACK", null);
-                        setToastNotif(isScreenBlack ? "Retour au direct" : "Ecran noir");
-                        window.setTimeout(() => setToastNotif(null), 2200);
-                      }}
-                      style={{
-                        ...btnGhost,
-                        minHeight: "2.6rem",
-                        minWidth: "112px",
-                        padding: "0.5rem 0.75rem",
-                        borderColor: "#334155",
-                        background: "#1e293b",
-                        color: "#f8fafc",
-                        fontWeight: 700,
-                        fontSize: "0.78rem",
-                      }}
-                    >
-                      {isScreenBlack
-                        ? "↩ Retour direct"
-                        : "⏹ Écran noir"}
-                    </button>
-                    <span
-                      aria-hidden
-                      style={{
-                        width: "8px",
-                        height: "8px",
-                        borderRadius: "9999px",
-                        background:
-                          String(projectionDisplayStateUi || "").toLowerCase() === "black"
-                            ? "#22c55e"
-                            : "#cbd5e1",
-                        boxShadow:
-                          String(projectionDisplayStateUi || "").toLowerCase() === "black"
-                            ? "0 0 0 3px rgba(34,197,94,0.18)"
-                            : "none",
-                      }}
-                    />
-                  </div>
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      borderRadius: "999px",
-                      padding: "0.2rem 0.55rem",
-                      fontSize: "0.72rem",
-                      fontWeight: 800,
-                      border: `1px solid ${isScreenBlack ? "#334155" : "#cbd5e1"}`,
-                      background: isScreenBlack ? "#111827" : "#f8fafc",
-                      color: isScreenBlack ? "#e2e8f0" : "#475569",
-                    }}
-                  >
-                    Écran noir : {isScreenBlack ? "actif" : "inactif"}
-                  </span>
-                  <div style={{ flex: 1, minWidth: "10px" }} />
                   <button
                     type="button"
                     disabled={!activePollIdJs}
                     onClick={() => setLiveAnswersOpen((v) => !v)}
                     style={{
                       ...btnGhost,
-                      minHeight: "2.6rem",
-                      minWidth: "170px",
-                      padding: "0.5rem 0.75rem",
+                      minHeight: "2.55rem",
+                      minWidth: desktop ? "186px" : "100%",
+                      padding: "0.5rem 0.8rem",
                       borderColor: "#cbd5e1",
                       background: "#fff",
                       color: "#0f172a",
@@ -7613,6 +7526,27 @@ export default function RegieEventPage() {
                       ? "Masquer les réponses en direct"
                       : "Voir les réponses en direct"}
                   </button>
+
+                  {isScreenBlack ? (
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        borderRadius: "999px",
+                        padding: "0.22rem 0.58rem",
+                        fontSize: "0.72rem",
+                        fontWeight: 800,
+                        border: "1px solid #334155",
+                        background: "#111827",
+                        color: "#e2e8f0",
+                      }}
+                    >
+                      Écran noir actif
+                    </span>
+                  ) : null}
+
+                  <div style={{ flex: 1, minWidth: "10px" }} />
+
                   <button
                     type="button"
                     disabled={busy || eventFinished}
@@ -7631,8 +7565,8 @@ export default function RegieEventPage() {
                     }}
                     style={{
                       ...btnFinish(busy || eventFinished),
-                      minHeight: "2.6rem",
-                      minWidth: "122px",
+                      minHeight: "2.55rem",
+                      minWidth: desktop ? "132px" : "100%",
                       padding: "0.5rem 0.8rem",
                       fontSize: "0.8rem",
                       border: "1px solid #f97316",
@@ -7643,108 +7577,109 @@ export default function RegieEventPage() {
                       color: busy || eventFinished ? "#9a3412" : "#7c2d12",
                     }}
                   >
-                    ⏹ Terminer
+                    Terminer
                   </button>
                 </div>
-                {desktop && liveAnswersOpen ? (
-                  <section
-                    style={{
-                      marginTop: "0.55rem",
-                      border: "1px solid #dbeafe",
-                      background: "#f8fbff",
-                      borderRadius: "10px",
-                      padding: "0.7rem 0.75rem",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: "0.5rem",
-                        marginBottom: "0.55rem",
-                      }}
-                    >
-                      <p style={{ margin: 0, fontSize: "0.82rem", fontWeight: 800, color: "#0f172a" }}>
-                        Réponses en direct
-                      </p>
-                      <span style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: 700 }}>
-                        Mise à jour live
-                      </span>
-                    </div>
-                    {liveResponsesOptions.length === 0 ? (
-                      <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", fontWeight: 600 }}>
-                        Aucune réponse à afficher pour le moment.
-                      </p>
-                    ) : (
-                      <div style={{ display: "grid", gap: "0.4rem" }}>
-                        {liveResponsesOptions.map((opt) => (
-                          <div key={opt.id} style={{ display: "grid", gap: "0.2rem" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                              <span style={{ flex: 1, fontSize: "0.78rem", fontWeight: 700, color: "#0f172a" }}>
-                                {opt.label}
-                              </span>
-                              <span style={{ fontSize: "0.74rem", fontWeight: 800, color: "#334155" }}>
-                                {opt.voteCount} · {Number(opt.pct).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}%
-                              </span>
-                            </div>
-                            <div style={{ height: "7px", borderRadius: "999px", background: "#dbeafe", overflow: "hidden" }}>
-                              <div
-                                style={{
-                                  width: `${Math.max(0, Math.min(100, opt.pct))}%`,
-                                  height: "100%",
-                                  borderRadius: "999px",
-                                  background: "#2563eb",
-                                }}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </section>
-                ) : null}
-                {isScreenBlack ? (
+              </section>
+
+              {desktop && liveAnswersOpen ? (
+                <section
+                  style={{
+                    ...CARD,
+                    border: "1px solid #dbeafe",
+                    background: "#f8fbff",
+                    padding: "0.7rem 0.75rem",
+                  }}
+                >
                   <div
                     style={{
-                      marginTop: "0.5rem",
-                      border: "1px solid #334155",
-                      background: "linear-gradient(180deg, #111827 0%, #0f172a 100%)",
-                      borderRadius: "10px",
-                      padding: "0.55rem 0.65rem",
                       display: "flex",
-                      flexWrap: "wrap",
                       alignItems: "center",
                       justifyContent: "space-between",
-                      gap: "0.55rem",
+                      gap: "0.5rem",
+                      marginBottom: "0.55rem",
                     }}
                   >
-                    <span style={{ color: "#e2e8f0", fontSize: "0.8rem", fontWeight: 800 }}>
-                      ⚫ Écran noir actif
+                    <p style={{ margin: 0, fontSize: "0.82rem", fontWeight: 800, color: "#0f172a" }}>
+                      Réponses en direct
+                    </p>
+                    <span style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: 700 }}>
+                      Mise à jour live
                     </span>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => {
-                        sendScreenAction("WAITING", null);
-                        setToastNotif("Sortie de l’écran noir");
-                        window.setTimeout(() => setToastNotif(null), 2200);
-                      }}
-                      style={{
-                        ...btnGhost,
-                        minHeight: "2.1rem",
-                        padding: "0.38rem 0.7rem",
-                        borderColor: "#93c5fd",
-                        background: "#eff6ff",
-                        color: "#1e3a8a",
-                        fontWeight: 800,
-                        fontSize: "0.76rem",
-                      }}
-                    >
-                      ↩ Quitter l’écran noir
-                    </button>
                   </div>
-                ) : null}
+                  {liveResponsesOptions.length === 0 ? (
+                    <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", fontWeight: 600 }}>
+                      Aucune réponse à afficher pour le moment.
+                    </p>
+                  ) : (
+                    <div style={{ display: "grid", gap: "0.4rem" }}>
+                      {liveResponsesOptions.map((opt) => (
+                        <div key={opt.id} style={{ display: "grid", gap: "0.2rem" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                            <span style={{ flex: 1, fontSize: "0.78rem", fontWeight: 700, color: "#0f172a" }}>
+                              {opt.label}
+                            </span>
+                            <span style={{ fontSize: "0.74rem", fontWeight: 800, color: "#334155" }}>
+                              {opt.voteCount} · {Number(opt.pct).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}%
+                            </span>
+                          </div>
+                          <div style={{ height: "7px", borderRadius: "999px", background: "#dbeafe", overflow: "hidden" }}>
+                            <div
+                              style={{
+                                width: `${Math.max(0, Math.min(100, opt.pct))}%`,
+                                height: "100%",
+                                borderRadius: "999px",
+                                background: "#2563eb",
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              ) : null}
+
+              {isScreenBlack ? (
+                <div
+                  style={{
+                    border: "1px solid #334155",
+                    background: "#111827",
+                    borderRadius: "12px",
+                    padding: "0.6rem 0.7rem",
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "0.55rem",
+                  }}
+                >
+                  <span style={{ color: "#e2e8f0", fontSize: "0.8rem", fontWeight: 800 }}>
+                    Écran noir actif
+                  </span>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      sendScreenAction("WAITING", null);
+                      setToastNotif("Sortie de l’écran noir");
+                      window.setTimeout(() => setToastNotif(null), 2200);
+                    }}
+                    style={{
+                      ...btnGhost,
+                      minHeight: "2.1rem",
+                      padding: "0.38rem 0.7rem",
+                      borderColor: "#93c5fd",
+                      background: "#eff6ff",
+                      color: "#1e3a8a",
+                      fontWeight: 800,
+                      fontSize: "0.76rem",
+                    }}
+                  >
+                    Quitter l’écran noir
+                  </button>
+                </div>
+              ) : null}
             </div>
 
             {!desktop && liveAnswersOpen ? (
@@ -7818,7 +7753,6 @@ export default function RegieEventPage() {
                 </aside>
               </>
             ) : null}
-          </div>
 
           {String(activePoll?.type || "").toUpperCase() === "CONTEST_ENTRY" ? (
             <section
