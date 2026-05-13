@@ -3917,69 +3917,71 @@ function RegieSidebarInner({
                   : "Aperçu public"}
               </button>
               {eventId ? (
-                <div
-                  style={{
-                    width: "100%",
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "0.45rem",
-                  }}
-                >
-                  <Link
-                    href={`/admin/events/${encodeURIComponent(eventId)}/live`}
-                    className="regie-universe-tile regie-universe-tile--live"
+                <>
+                  <div
                     style={{
-                      boxSizing: "border-box",
-                      textAlign: "center",
-                      padding: "0.43rem 0.6rem",
-                      fontSize: "0.77rem",
-                      fontWeight: 700,
-                      borderRadius: "9px",
-                      border: "1px solid rgba(59, 130, 246, 0.24)",
-                      background: "rgba(59, 130, 246, 0.12)",
-                      color: "#1e3a8a",
-                      textDecoration: "none",
+                      width: "100%",
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "0.45rem",
                     }}
                   >
-                    <LiveMicroLabel iconSize={13} gap="0.3rem" />
-                  </Link>
-                  <Link
-                    href={`/admin/events/${encodeURIComponent(eventId)}/landing`}
-                    className="regie-universe-tile regie-universe-tile--landing"
-                    style={{
-                      boxSizing: "border-box",
-                      textAlign: "center",
-                      padding: "0.43rem 0.6rem",
-                      fontSize: "0.77rem",
-                      fontWeight: 700,
-                      borderRadius: "9px",
-                      border: "1px solid rgba(168, 85, 247, 0.24)",
-                      background: "rgba(168, 85, 247, 0.12)",
-                      color: "#6d28d9",
-                      textDecoration: "none",
-                    }}
-                  >
-                    ✨ Landing
-                  </Link>
-                </div>
-                <style>{`
-                  .regie-universe-tile {
-                    transition:
-                      background-color 0.18s ease,
-                      border-color 0.18s ease,
-                      color 0.18s ease;
-                  }
-                  @media (hover: hover) {
-                    .regie-universe-tile--live:hover {
-                      background: rgba(59, 130, 246, 0.18) !important;
-                      border-color: rgba(59, 130, 246, 0.32) !important;
+                    <Link
+                      href={`/admin/events/${encodeURIComponent(eventId)}/live`}
+                      className="regie-universe-tile regie-universe-tile--live"
+                      style={{
+                        boxSizing: "border-box",
+                        textAlign: "center",
+                        padding: "0.43rem 0.6rem",
+                        fontSize: "0.77rem",
+                        fontWeight: 700,
+                        borderRadius: "9px",
+                        border: "1px solid rgba(59, 130, 246, 0.24)",
+                        background: "rgba(59, 130, 246, 0.12)",
+                        color: "#1e3a8a",
+                        textDecoration: "none",
+                      }}
+                    >
+                      <LiveMicroLabel iconSize={13} gap="0.3rem" />
+                    </Link>
+                    <Link
+                      href={`/admin/events/${encodeURIComponent(eventId)}/landing`}
+                      className="regie-universe-tile regie-universe-tile--landing"
+                      style={{
+                        boxSizing: "border-box",
+                        textAlign: "center",
+                        padding: "0.43rem 0.6rem",
+                        fontSize: "0.77rem",
+                        fontWeight: 700,
+                        borderRadius: "9px",
+                        border: "1px solid rgba(168, 85, 247, 0.24)",
+                        background: "rgba(168, 85, 247, 0.12)",
+                        color: "#6d28d9",
+                        textDecoration: "none",
+                      }}
+                    >
+                      ✨ Landing
+                    </Link>
+                  </div>
+                  <style>{`
+                    .regie-universe-tile {
+                      transition:
+                        background-color 0.18s ease,
+                        border-color 0.18s ease,
+                        color 0.18s ease;
                     }
-                    .regie-universe-tile--landing:hover {
-                      background: rgba(168, 85, 247, 0.18) !important;
-                      border-color: rgba(168, 85, 247, 0.32) !important;
+                    @media (hover: hover) {
+                      .regie-universe-tile--live:hover {
+                        background: rgba(59, 130, 246, 0.18) !important;
+                        border-color: rgba(59, 130, 246, 0.32) !important;
+                      }
+                      .regie-universe-tile--landing:hover {
+                        background: rgba(168, 85, 247, 0.18) !important;
+                        border-color: rgba(168, 85, 247, 0.32) !important;
+                      }
                     }
-                  }
-                `}</style>
+                  `}</style>
+                </>
               ) : null}
             </>
           ) : null}
