@@ -466,8 +466,8 @@ export function EventDashboardCard({
                   fontWeight: 600,
                   borderRadius: "10px",
                   textDecoration: "none",
-                  border: "1px solid rgba(59, 130, 246, 0.18)",
-                  background: "rgba(59, 130, 246, 0.08)",
+                  border: "1px solid rgba(59, 130, 246, 0.24)",
+                  background: "rgba(59, 130, 246, 0.12)",
                   color: "#1e3a8a",
                   textAlign: "center",
                 }}
@@ -486,8 +486,8 @@ export function EventDashboardCard({
                   fontWeight: 700,
                   borderRadius: "10px",
                   textDecoration: "none",
-                  border: "1px solid rgba(168, 85, 247, 0.18)",
-                  background: "rgba(168, 85, 247, 0.08)",
+                  border: "1px solid rgba(168, 85, 247, 0.24)",
+                  background: "rgba(168, 85, 247, 0.12)",
                   color: "#6d28d9",
                   textAlign: "center",
                 }}
@@ -706,12 +706,12 @@ export function EventDashboardCard({
               0 4px 12px rgba(15, 23, 42, 0.06);
           }
           .avote-universe-link--live:hover {
-            background: rgba(59, 130, 246, 0.14) !important;
-            border-color: rgba(59, 130, 246, 0.26) !important;
+            background: rgba(59, 130, 246, 0.18) !important;
+            border-color: rgba(59, 130, 246, 0.32) !important;
           }
           .avote-universe-link--landing:hover {
-            background: rgba(168, 85, 247, 0.14) !important;
-            border-color: rgba(168, 85, 247, 0.26) !important;
+            background: rgba(168, 85, 247, 0.18) !important;
+            border-color: rgba(168, 85, 247, 0.32) !important;
           }
           .avote-event-card--featured:hover {
             transform: translateY(-2px);

@@ -1925,23 +1925,23 @@ export function EventCustomizationEditor({ mode = "live" }) {
             color 0.18s ease;
         }
         .editor-universe-link--live {
-          background: rgba(59, 130, 246, 0.08) !important;
-          border-color: rgba(59, 130, 246, 0.18) !important;
+          background: rgba(59, 130, 246, 0.12) !important;
+          border-color: rgba(59, 130, 246, 0.24) !important;
           color: #1e3a8a !important;
         }
         .editor-universe-link--landing {
-          background: rgba(168, 85, 247, 0.08) !important;
-          border-color: rgba(168, 85, 247, 0.18) !important;
+          background: rgba(168, 85, 247, 0.12) !important;
+          border-color: rgba(168, 85, 247, 0.24) !important;
           color: #6d28d9 !important;
         }
         @media (hover: hover) {
           .editor-universe-link--live:hover {
-            background: rgba(59, 130, 246, 0.14) !important;
-            border-color: rgba(59, 130, 246, 0.26) !important;
+            background: rgba(59, 130, 246, 0.18) !important;
+            border-color: rgba(59, 130, 246, 0.32) !important;
           }
           .editor-universe-link--landing:hover {
-            background: rgba(168, 85, 247, 0.14) !important;
-            border-color: rgba(168, 85, 247, 0.26) !important;
+            background: rgba(168, 85, 247, 0.18) !important;
+            border-color: rgba(168, 85, 247, 0.32) !important;
           }
         }
         @media (max-width: 900px) {
@@ -2093,23 +2093,23 @@ export default function EventCustomizationHubPage() {
             color 0.18s ease;
         }
         .hub-universe-link--live {
-          background: rgba(59, 130, 246, 0.08);
-          border-color: rgba(59, 130, 246, 0.18);
+          background: rgba(59, 130, 246, 0.12);
+          border-color: rgba(59, 130, 246, 0.24);
           color: #1e3a8a;
         }
         .hub-universe-link--landing {
-          background: rgba(168, 85, 247, 0.08);
-          border-color: rgba(168, 85, 247, 0.18);
+          background: rgba(168, 85, 247, 0.12);
+          border-color: rgba(168, 85, 247, 0.24);
           color: #6d28d9;
         }
         @media (hover: hover) {
           .hub-universe-link--live:hover {
-            background: rgba(59, 130, 246, 0.14);
-            border-color: rgba(59, 130, 246, 0.26);
+            background: rgba(59, 130, 246, 0.18);
+            border-color: rgba(59, 130, 246, 0.32);
           }
           .hub-universe-link--landing:hover {
-            background: rgba(168, 85, 247, 0.14);
-            border-color: rgba(168, 85, 247, 0.26);
+            background: rgba(168, 85, 247, 0.18);
+            border-color: rgba(168, 85, 247, 0.32);
           }
         }
       `}</style>

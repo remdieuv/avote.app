@@ -3448,8 +3448,8 @@ function RegiePublicPreviewPanel({
                 fontWeight: 700,
                 padding: "0.35rem 0.65rem",
                 borderRadius: "8px",
-                border: "1px solid rgba(59, 130, 246, 0.18)",
-                background: "rgba(59, 130, 246, 0.08)",
+                border: "1px solid rgba(59, 130, 246, 0.24)",
+                background: "rgba(59, 130, 246, 0.12)",
                 color: "#1e3a8a",
                 textDecoration: "none",
                 whiteSpace: "nowrap",
@@ -3465,8 +3465,8 @@ function RegiePublicPreviewPanel({
                 fontWeight: 700,
                 padding: "0.35rem 0.65rem",
                 borderRadius: "8px",
-                border: "1px solid rgba(168, 85, 247, 0.18)",
-                background: "rgba(168, 85, 247, 0.08)",
+                border: "1px solid rgba(168, 85, 247, 0.24)",
+                background: "rgba(168, 85, 247, 0.12)",
                 color: "#6d28d9",
                 textDecoration: "none",
                 whiteSpace: "nowrap",
@@ -3483,12 +3483,12 @@ function RegiePublicPreviewPanel({
               }
               @media (hover: hover) {
                 .regie-universe-link--live:hover {
-                  background: rgba(59, 130, 246, 0.14) !important;
-                  border-color: rgba(59, 130, 246, 0.26) !important;
+                  background: rgba(59, 130, 246, 0.18) !important;
+                  border-color: rgba(59, 130, 246, 0.32) !important;
                 }
                 .regie-universe-link--landing:hover {
-                  background: rgba(168, 85, 247, 0.14) !important;
-                  border-color: rgba(168, 85, 247, 0.26) !important;
+                  background: rgba(168, 85, 247, 0.18) !important;
+                  border-color: rgba(168, 85, 247, 0.32) !important;
                 }
               }
             `}</style>
@@ -3934,8 +3934,8 @@ function RegieSidebarInner({
                       fontSize: "0.77rem",
                       fontWeight: 700,
                       borderRadius: "9px",
-                      border: "1px solid rgba(59, 130, 246, 0.18)",
-                      background: "rgba(59, 130, 246, 0.08)",
+                      border: "1px solid rgba(59, 130, 246, 0.24)",
+                      background: "rgba(59, 130, 246, 0.12)",
                       color: "#1e3a8a",
                       textDecoration: "none",
                     }}
@@ -3952,8 +3952,8 @@ function RegieSidebarInner({
                       fontSize: "0.77rem",
                       fontWeight: 700,
                       borderRadius: "9px",
-                      border: "1px solid rgba(168, 85, 247, 0.18)",
-                      background: "rgba(168, 85, 247, 0.08)",
+                      border: "1px solid rgba(168, 85, 247, 0.24)",
+                      background: "rgba(168, 85, 247, 0.12)",
                       color: "#6d28d9",
                       textDecoration: "none",
                     }}
@@ -3970,12 +3970,12 @@ function RegieSidebarInner({
                   }
                   @media (hover: hover) {
                     .regie-universe-tile--live:hover {
-                      background: rgba(59, 130, 246, 0.14) !important;
-                      border-color: rgba(59, 130, 246, 0.26) !important;
+                      background: rgba(59, 130, 246, 0.18) !important;
+                      border-color: rgba(59, 130, 246, 0.32) !important;
                     }
                     .regie-universe-tile--landing:hover {
-                      background: rgba(168, 85, 247, 0.14) !important;
-                      border-color: rgba(168, 85, 247, 0.26) !important;
+                      background: rgba(168, 85, 247, 0.18) !important;
+                      border-color: rgba(168, 85, 247, 0.32) !important;
                     }
                   }
                 `}</style>
