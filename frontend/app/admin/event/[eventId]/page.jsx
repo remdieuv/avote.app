@@ -6922,14 +6922,66 @@ export default function RegieEventPage() {
                   boxShadow: "none",
                 }}
               >
-                <div style={{ display: "grid", gap: "0.85rem" }}>
+                <div style={{ display: "grid", gap: "0.78rem" }}>
                   <div
                     style={{
                       display: "flex",
                       flexWrap: "wrap",
-                      alignItems: "stretch",
+                      alignItems: "center",
+                      gap: "0.42rem 0.5rem",
+                    }}
+                  >
+                    {[
+                      { label: pilotageTag, color: statePanel.pillColor, bg: "rgba(255,255,255,0.74)", border: `${statePanel.accent}22` },
+                      { label: voteLabel, color: voteIsOpen ? "#166534" : "#334155", bg: voteIsOpen ? "#dcfce7" : "rgba(255,255,255,0.74)", border: voteIsOpen ? "#86efac" : "#cbd5e1" },
+                      { label: participantsCounterLabel, color: participantsCounterStyle.valueColor, bg: participantsCounterStyle.background, border: participantsCounterStyle.borderColor || "#cbd5e1" },
+                      { label: socketStatusLabel, color: socketStatusColor, bg: "rgba(255,255,255,0.74)", border: "#cbd5e1" },
+                      { label: modeBadge.label, color: modeBadge.color, bg: modeBadge.bg, border: modeBadge.border },
+                    ].map((item) => (
+                      <span
+                        key={item.label}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          borderRadius: "999px",
+                          padding: "0.22rem 0.58rem",
+                          fontSize: "0.72rem",
+                          fontWeight: 800,
+                          background: item.bg,
+                          color: item.color,
+                          border: `1px solid ${item.border}`,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {item.label}
+                      </span>
+                    ))}
+                    {hasDisplayGap ? (
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          borderRadius: "999px",
+                          padding: "0.22rem 0.58rem",
+                          fontSize: "0.72rem",
+                          fontWeight: 800,
+                          border: "1px solid rgba(251, 191, 36, 0.24)",
+                          background: "rgba(255, 247, 237, 0.9)",
+                          color: "#9a3412",
+                        }}
+                      >
+                        Écart global / écran B
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      alignItems: "flex-start",
                       justifyContent: "space-between",
-                      gap: "0.85rem",
+                      gap: "0.85rem 1rem",
                     }}
                   >
                     <div
@@ -6937,117 +6989,53 @@ export default function RegieEventPage() {
                         flex: "1 1 420px",
                         minWidth: 0,
                         display: "grid",
-                        gap: "0.45rem",
+                        gap: "0.22rem",
                       }}
                     >
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          alignItems: "center",
-                          gap: "0.45rem",
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: "0.66rem",
-                            fontWeight: 700,
-                            letterSpacing: "0.08em",
-                            textTransform: "uppercase",
-                            color: "#6b7280",
-                          }}
-                        >
-                          Live
-                        </span>
-                        <span
-                          title={`État technique API (liveState) : ${liveState}`}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            borderRadius: "999px",
-                            padding: "0.22rem 0.6rem",
-                            fontSize: "0.72rem",
-                            fontWeight: 700,
-                            background: "rgba(255,255,255,0.72)",
-                            color: statePanel.pillColor,
-                            border: `1px solid ${statePanel.accent}22`,
-                          }}
-                        >
-                          {pilotageTag}
-                        </span>
-                        {hasDisplayGap ? (
-                          <span
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              borderRadius: "999px",
-                              padding: "0.22rem 0.6rem",
-                              fontSize: "0.72rem",
-                              fontWeight: 700,
-                              border: "1px solid rgba(251, 191, 36, 0.24)",
-                              background: "rgba(255, 247, 237, 0.8)",
-                              color: "#9a3412",
-                            }}
-                          >
-                            Écart global / écran B
-                          </span>
-                        ) : null}
-                      </div>
-
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          alignItems: "baseline",
-                          gap: "0.55rem 0.75rem",
-                          minWidth: 0,
-                        }}
-                      >
-                        <h3
-                          style={{
-                            margin: 0,
-                            fontSize: desktop ? "1.36rem" : "1.12rem",
-                            fontWeight: 800,
-                            letterSpacing: "-0.03em",
-                            color: "#111827",
-                          }}
-                        >
-                          {stateLabel}
-                        </h3>
-                        <span
-                          style={{
-                            fontSize: "0.82rem",
-                            fontWeight: 700,
-                            color: "#475569",
-                          }}
-                        >
-                          {questionProgressSummary}
-                        </span>
-                      </div>
-
                       <p
                         style={{
                           margin: 0,
-                          fontSize: compactTopPanel ? "0.84rem" : "0.9rem",
+                          fontSize: "0.74rem",
+                          fontWeight: 700,
+                          color: "#64748b",
+                        }}
+                      >
+                        {stateLabel} · {questionProgressSummary}
+                      </p>
+                      <h3
+                        style={{
+                          margin: 0,
+                          fontSize: desktop ? "1.42rem" : "1.08rem",
+                          fontWeight: 800,
+                          letterSpacing: "-0.03em",
+                          color: "#111827",
+                          lineHeight: 1.18,
+                        }}
+                      >
+                        {activeQuestionTitle}
+                      </h3>
+                      <p
+                        style={{
+                          margin: "0.1rem 0 0 0",
+                          fontSize: compactTopPanel ? "0.82rem" : "0.88rem",
                           color: "#475569",
                           lineHeight: 1.45,
                         }}
                       >
-                        <strong style={{ color: "#111827" }}>À l’écran :</strong>{" "}
-                        {ecranLabel}
+                        À l’écran : <strong style={{ color: "#111827" }}>{displayLabelGlobal}</strong>
+                        {" · "}
+                        {screenBConnected ? `Écran B : ${displayLabelScreenB}` : "Écran B non connecté"}
                       </p>
                     </div>
 
                     <div
                       style={{
-                        ...topInfoCardStyle,
-                        minWidth: desktop ? "180px" : "100%",
+                        flexShrink: 0,
+                        minWidth: desktop ? "124px" : "100%",
                         display: "grid",
-                          gap: "0.22rem",
-                        alignContent: "start",
-                          background: "linear-gradient(180deg, rgba(250,245,255,0.9) 0%, rgba(255,255,255,0.88) 100%)",
-                          borderColor: "rgba(196, 181, 253, 0.4)",
-                          boxShadow: "0 18px 32px rgba(91, 33, 182, 0.08)",
+                        gap: "0.16rem",
+                        justifyItems: desktop ? "end" : "start",
+                        textAlign: desktop ? "right" : "left",
                       }}
                     >
                       <p
@@ -7065,9 +7053,9 @@ export default function RegieEventPage() {
                       <p
                         style={{
                           margin: 0,
-                          fontSize: desktop ? "2rem" : "1.4rem",
+                          fontSize: desktop ? "1.85rem" : "1.28rem",
                           fontWeight: 800,
-                          lineHeight: 1.05,
+                          lineHeight: 1.02,
                           color: "#3b0764",
                           fontFamily: "ui-monospace, monospace",
                           fontVariantNumeric: "tabular-nums",
@@ -7088,9 +7076,9 @@ export default function RegieEventPage() {
                         onClick={scrollToChronoPanel}
                         style={{
                           ...btnGhost,
-                          marginTop: "0.18rem",
+                          marginTop: "0.12rem",
                           width: "fit-content",
-                          padding: "0.28rem 0.6rem",
+                          padding: "0.24rem 0.56rem",
                           fontSize: "0.68rem",
                           fontWeight: 700,
                           borderColor: "#c4b5fd",
@@ -7100,144 +7088,6 @@ export default function RegieEventPage() {
                       >
                         Chrono
                       </button>
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: desktop ? "repeat(4, minmax(0, 1fr))" : "1fr 1fr",
-                      gap: "0.65rem",
-                      minWidth: 0,
-                    }}
-                  >
-                    <div style={{ ...topInfoCardStyle, display: "grid", gap: "0.22rem" }}>
-                      <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                        Mode
-                      </p>
-                      <p style={{ margin: 0, fontSize: "0.88rem", fontWeight: 800, color: modeBadge.color }}>
-                        {modeBadge.label}
-                      </p>
-                    </div>
-
-                    <div style={{ ...topInfoCardStyle, display: "grid", gap: "0.22rem" }}>
-                      <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                        Vote
-                      </p>
-                      <p style={{ margin: 0, fontSize: "0.88rem", fontWeight: 800, color: voteIsOpen ? "#166534" : "#334155" }}>
-                        {voteLabel}
-                      </p>
-                    </div>
-
-                    <div style={{ ...topInfoCardStyle, display: "grid", gap: "0.22rem" }}>
-                      <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                        Affichage
-                      </p>
-                      <p style={{ margin: 0, fontSize: "0.88rem", fontWeight: 800, color: affichageEnAttente ? "#991b1b" : "#111827" }}>
-                        {displayLabelGlobal}
-                      </p>
-                    </div>
-
-                    <div style={{ ...topInfoCardStyle, display: "grid", gap: "0.22rem" }}>
-                      <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                        Sync / écrans
-                      </p>
-                      <p style={{ margin: 0, fontSize: "0.88rem", fontWeight: 800, color: socketStatusColor }}>
-                        {socketStatusLabel}
-                      </p>
-                      <p style={{ margin: 0, fontSize: "0.72rem", color: "#64748b", lineHeight: 1.35 }}>
-                        {screenBConnected ? `Écran B : ${displayLabelScreenB}` : "Écran B non connecté"}
-                      </p>
-                    </div>
-
-                    <div
-                      style={{
-                        ...topInfoCardStyle,
-                        gridColumn: desktop ? "span 2" : "1 / -1",
-                        display: "grid",
-                        gap: "0.26rem",
-                        border: participantsCounterStyle.border,
-                        background: participantsCounterStyle.background,
-                      }}
-                    >
-                      <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                        Participants
-                      </p>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: "0.9rem",
-                          fontWeight: 800,
-                          color: participantsCounterStyle.valueColor,
-                        }}
-                      >
-                        {participantsCounterLabel}
-                      </p>
-                      {hasParticipantsLimit ? (
-                        <div
-                          style={{
-                            width: "100%",
-                            height: "7px",
-                            borderRadius: "999px",
-                            background: participantsTrackColor,
-                            overflow: "hidden",
-                          }}
-                          aria-hidden
-                        >
-                          <div
-                            style={{
-                              width: `${participantsProgressPercent}%`,
-                              height: "100%",
-                              borderRadius: "999px",
-                              background: participantsFillColor,
-                              transition: "width 220ms ease",
-                            }}
-                          />
-                        </div>
-                      ) : null}
-                      {participantsStatus.message ? (
-                        <p
-                          style={{
-                            margin: 0,
-                            fontSize: "0.72rem",
-                            fontWeight: 700,
-                            color: participantsCounterStyle.hintColor,
-                          }}
-                        >
-                          {participantsStatus.message}
-                        </p>
-                      ) : (
-                        <p style={{ margin: 0, fontSize: "0.72rem", color: "#64748b" }}>
-                          Chaque participant est compté une seule fois.
-                        </p>
-                      )}
-                    </div>
-
-                    <div
-                      style={{
-                        ...topInfoCardStyle,
-                        gridColumn: desktop ? "span 2" : "1 / -1",
-                        display: "grid",
-                        gap: "0.26rem",
-                      }}
-                    >
-                      <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                        Question active
-                      </p>
-                      <p style={{ margin: 0, fontSize: "0.88rem", fontWeight: 800, color: "#111827" }}>
-                        {questionProgressSummary}
-                      </p>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: "0.78rem",
-                          color: "#475569",
-                          lineHeight: 1.35,
-                          overflowWrap: "anywhere",
-                        }}
-                      >
-                        {activeQuestionTitle}
-                      </p>
                     </div>
                   </div>
                 </div>
@@ -7296,10 +7146,8 @@ export default function RegieEventPage() {
                   style={{
                     marginTop: "0.95rem",
                     display: "grid",
-                    gridTemplateColumns: desktop
-                      ? "minmax(190px, 0.9fr) minmax(0, 1.5fr) minmax(220px, 1fr)"
-                      : "1fr",
-                    gap: "0.9rem",
+                    gridTemplateColumns: "1fr",
+                    gap: "0.95rem",
                     minWidth: 0,
                   }}
                 >
@@ -7307,305 +7155,284 @@ export default function RegieEventPage() {
                     style={{
                       ...controlGroupCardStyle,
                       display: "grid",
-                      gap: "0.5rem",
-                      borderColor: voteIsOpen ? "rgba(34, 197, 94, 0.28)" : "rgba(148, 163, 184, 0.18)",
-                      background: voteIsOpen
-                        ? "linear-gradient(180deg, rgba(240,253,244,0.92) 0%, rgba(255,255,255,0.95) 100%)"
-                        : "linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(248,250,252,0.9) 100%)",
-                    }}
-                  >
-                    <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                      Vote
-                    </p>
-                    <button
-                      type="button"
-                      disabled={!canToggleVote}
-                      onClick={async () => {
-                        if (!activePollIdJs) return;
-                        await postAction(
-                          `/polls/${activePollIdJs}/${voteIsOpen ? "close" : "open"}`,
-                          voteIsOpen ? "Vote ferme" : "Vote ouvert",
-                        );
-                      }}
-                      style={{
-                        ...btnGhost,
-                        minHeight: desktop ? "3.15rem" : "2.9rem",
-                        width: "100%",
-                        padding: "0.7rem 0.95rem",
-                        borderColor: voteIsOpen ? "#22c55e" : "#cbd5e1",
-                        background: voteIsOpen
-                          ? "linear-gradient(180deg, #dcfce7 0%, #bbf7d0 100%)"
-                          : "rgba(255,255,255,0.94)",
-                        color: voteIsOpen ? "#166534" : "#0f172a",
-                        fontWeight: 800,
-                        fontSize: "0.94rem",
-                        boxShadow: voteIsOpen
-                          ? "0 14px 26px rgba(34, 197, 94, 0.14)"
-                          : "0 10px 22px rgba(15, 23, 42, 0.05)",
-                      }}
-                    >
-                      {voteIsOpen ? "Stop vote" : "Ouvrir le vote"}
-                    </button>
-                    <p style={{ margin: 0, fontSize: "0.76rem", color: "#64748b", lineHeight: 1.35 }}>
-                      État actuel : <strong style={{ color: "#111827" }}>{voteLabel}</strong>
-                    </p>
-                  </div>
-
-                  <div
-                    style={{
-                      ...controlGroupCardStyle,
-                      display: "grid",
-                      gap: "0.7rem",
+                      gap: "0.65rem",
+                      padding: desktop ? "1.05rem 1.08rem" : "0.95rem 0.92rem",
+                      borderColor: "rgba(148, 163, 184, 0.18)",
                       background:
-                        "linear-gradient(180deg, rgba(243,244,246,0.35) 0%, rgba(255,255,255,0.96) 100%)",
+                        "linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.94) 100%)",
                     }}
                   >
-                    <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                      Projection salle
-                    </p>
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: desktop ? "repeat(3, minmax(0, 1fr))" : "1fr",
-                        gap: "0.7rem",
+                        gridTemplateColumns: desktop ? "minmax(0, 1.9fr) minmax(240px, 0.95fr)" : "1fr",
+                        gap: "0.95rem",
                       }}
                     >
-                      <button
-                        type="button"
-                        disabled={!canShowQuestionQuick}
-                        onClick={async () => {
-                          if (!activePollIdJs) return;
-                          const ok = await postAction(
-                            `/polls/${activePollIdJs}/display-question`,
-                            "Question affichee",
-                          );
-                          if (ok) sendScreenAction("QUESTION", null);
-                        }}
-                        style={{
-                          ...btnGhost,
-                          minHeight: desktop ? "3.35rem" : "2.95rem",
-                          width: "100%",
-                          padding: "0.82rem 0.9rem",
-                          borderColor:
-                            String(projectionDisplayStateUi || "").toLowerCase() === "question"
-                              ? "#60a5fa"
-                              : "#bfdbfe",
-                          background:
-                            String(projectionDisplayStateUi || "").toLowerCase() === "question"
-                              ? "linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%)"
-                              : "linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%)",
-                          color: "#1e3a8a",
-                          fontWeight: 800,
-                          fontSize: "0.84rem",
-                          boxShadow:
-                            String(projectionDisplayStateUi || "").toLowerCase() === "question"
-                              ? "0 16px 28px rgba(59, 130, 246, 0.16)"
-                              : "0 10px 22px rgba(59, 130, 246, 0.06)",
-                        }}
-                      >
-                        Afficher la question
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={!canShowResultsQuick}
-                        onClick={async () => {
-                          if (!activePollIdJs) return;
-                          const ok = await postAction(
-                            `/polls/${activePollIdJs}/show-results`,
-                            "Resultats affiches",
-                          );
-                          if (ok) sendScreenAction("RESULTS", null);
-                        }}
-                        style={{
-                          ...btnGhost,
-                          minHeight: desktop ? "3.35rem" : "2.95rem",
-                          width: "100%",
-                          padding: "0.82rem 0.9rem",
-                          borderColor:
-                            String(projectionDisplayStateUi || "").toLowerCase() === "results"
-                              ? "#818cf8"
-                              : "#c7d2fe",
-                          background:
-                            String(projectionDisplayStateUi || "").toLowerCase() === "results"
-                              ? "linear-gradient(180deg, #e0e7ff 0%, #c7d2fe 100%)"
-                              : "linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%)",
-                          color: "#3730a3",
-                          fontWeight: 800,
-                          fontSize: "0.84rem",
-                          boxShadow:
-                            String(projectionDisplayStateUi || "").toLowerCase() === "results"
-                              ? "0 16px 28px rgba(99, 102, 241, 0.16)"
-                              : "0 10px 22px rgba(99, 102, 241, 0.06)",
-                        }}
-                      >
-                        Afficher les résultats
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => {
-                          sendScreenAction(isScreenBlack ? "WAITING" : "BLACK", null);
-                          setToastNotif(isScreenBlack ? "Retour au direct" : "Ecran noir");
-                          window.setTimeout(() => setToastNotif(null), 2200);
-                        }}
-                        style={{
-                          ...btnGhost,
-                          minHeight: desktop ? "3.35rem" : "2.95rem",
-                          width: "100%",
-                          padding: "0.82rem 0.9rem",
-                          borderColor:
-                            String(projectionDisplayStateUi || "").toLowerCase() === "black"
-                              ? "#111827"
-                              : "#334155",
-                          background:
-                            String(projectionDisplayStateUi || "").toLowerCase() === "black"
-                              ? "linear-gradient(180deg, #111827 0%, #020617 100%)"
-                              : "linear-gradient(180deg, #1e293b 0%, #0f172a 100%)",
-                          color: "#f8fafc",
-                          fontWeight: 800,
-                          fontSize: "0.84rem",
-                          boxShadow:
-                            String(projectionDisplayStateUi || "").toLowerCase() === "black"
-                              ? "0 16px 28px rgba(2, 6, 23, 0.22)"
-                              : "0 10px 22px rgba(15, 23, 42, 0.10)",
-                        }}
-                      >
-                        {isScreenBlack ? "Retour au direct" : "Écran noir"}
-                      </button>
-                    </div>
-                    <p style={{ margin: 0, fontSize: "0.76rem", color: "#64748b", lineHeight: 1.35 }}>
-                      Affichage actuel : <strong style={{ color: "#111827" }}>{displayLabelGlobal}</strong>
-                    </p>
-                  </div>
-
-                  <div
-                    style={{
-                      ...controlGroupCardStyle,
-                      display: "grid",
-                      gap: "0.48rem",
-                      background:
-                        "linear-gradient(180deg, rgba(250,245,255,0.5) 0%, rgba(255,255,255,0.96) 100%)",
-                    }}
-                  >
-                    <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                      Progression
-                    </p>
-                    <p style={{ margin: 0, fontSize: "0.88rem", fontWeight: 800, color: "#111827" }}>
-                      {questionProgressSummary}
-                    </p>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "0.76rem",
-                        color: "#475569",
-                        lineHeight: 1.35,
-                        overflowWrap: "anywhere",
-                      }}
-                    >
-                      {activeQuestionTitle}
-                    </p>
-
-                    {totalQuestions > 0 ? (
                       <div
                         style={{
-                          marginTop: "0.1rem",
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: "0.25rem",
-                          maxHeight: desktop ? "150px" : "120px",
-                          overflowY: "auto",
-                          paddingRight: "0.1rem",
+                          display: "grid",
+                          gap: "0.78rem",
                         }}
                       >
-                        {pollsOrdered.map((p, idx) => {
-                          const isActive = idx === activeQuestionIndex;
-                          const status = String(p.status || "").toUpperCase();
-                          const done =
-                            eventFinished ||
-                            (!isActive &&
-                              ["CLOSED", "ARCHIVED"].includes(status) &&
-                              activeQuestionIndex > idx);
-                          return (
-                            <div
-                              key={p.id}
+                        <div style={{ display: "grid", gap: "0.2rem" }}>
+                          <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                            Contrôle live
+                          </p>
+                          <p style={{ margin: 0, fontSize: desktop ? "1rem" : "0.92rem", fontWeight: 800, color: "#111827", letterSpacing: "-0.02em" }}>
+                            Projection salle
+                          </p>
+                        </div>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: desktop ? "repeat(3, minmax(0, 1fr))" : "1fr",
+                            gap: "0.75rem",
+                          }}
+                        >
+                          <button
+                            type="button"
+                            disabled={!canShowQuestionQuick}
+                            onClick={async () => {
+                              if (!activePollIdJs) return;
+                              const ok = await postAction(
+                                `/polls/${activePollIdJs}/display-question`,
+                                "Question affichee",
+                              );
+                              if (ok) sendScreenAction("QUESTION", null);
+                            }}
+                            style={{
+                              ...btnGhost,
+                              minHeight: desktop ? "4rem" : "3rem",
+                              width: "100%",
+                              padding: "0.95rem 0.95rem",
+                              borderColor:
+                                String(projectionDisplayStateUi || "").toLowerCase() === "question"
+                                  ? "#60a5fa"
+                                  : "#bfdbfe",
+                              background:
+                                String(projectionDisplayStateUi || "").toLowerCase() === "question"
+                                  ? "linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%)"
+                                  : "linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%)",
+                              color: "#1e3a8a",
+                              fontWeight: 800,
+                              fontSize: "0.9rem",
+                              boxShadow:
+                                String(projectionDisplayStateUi || "").toLowerCase() === "question"
+                                  ? "0 18px 30px rgba(59, 130, 246, 0.16)"
+                                  : "0 10px 22px rgba(59, 130, 246, 0.06)",
+                            }}
+                          >
+                            Afficher la question
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={!canShowResultsQuick}
+                            onClick={async () => {
+                              if (!activePollIdJs) return;
+                              const ok = await postAction(
+                                `/polls/${activePollIdJs}/show-results`,
+                                "Resultats affiches",
+                              );
+                              if (ok) sendScreenAction("RESULTS", null);
+                            }}
+                            style={{
+                              ...btnGhost,
+                              minHeight: desktop ? "4rem" : "3rem",
+                              width: "100%",
+                              padding: "0.95rem 0.95rem",
+                              borderColor:
+                                String(projectionDisplayStateUi || "").toLowerCase() === "results"
+                                  ? "#818cf8"
+                                  : "#c7d2fe",
+                              background:
+                                String(projectionDisplayStateUi || "").toLowerCase() === "results"
+                                  ? "linear-gradient(180deg, #e0e7ff 0%, #c7d2fe 100%)"
+                                  : "linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%)",
+                              color: "#3730a3",
+                              fontWeight: 800,
+                              fontSize: "0.9rem",
+                              boxShadow:
+                                String(projectionDisplayStateUi || "").toLowerCase() === "results"
+                                  ? "0 18px 30px rgba(99, 102, 241, 0.16)"
+                                  : "0 10px 22px rgba(99, 102, 241, 0.06)",
+                            }}
+                          >
+                            Afficher les résultats
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                              sendScreenAction(isScreenBlack ? "WAITING" : "BLACK", null);
+                              setToastNotif(isScreenBlack ? "Retour au direct" : "Ecran noir");
+                              window.setTimeout(() => setToastNotif(null), 2200);
+                            }}
+                            style={{
+                              ...btnGhost,
+                              minHeight: desktop ? "4rem" : "3rem",
+                              width: "100%",
+                              padding: "0.95rem 0.95rem",
+                              borderColor:
+                                String(projectionDisplayStateUi || "").toLowerCase() === "black"
+                                  ? "#111827"
+                                  : "#334155",
+                              background:
+                                String(projectionDisplayStateUi || "").toLowerCase() === "black"
+                                  ? "linear-gradient(180deg, #111827 0%, #020617 100%)"
+                                  : "linear-gradient(180deg, #1e293b 0%, #0f172a 100%)",
+                              color: "#f8fafc",
+                              fontWeight: 800,
+                              fontSize: "0.9rem",
+                              boxShadow:
+                                String(projectionDisplayStateUi || "").toLowerCase() === "black"
+                                  ? "0 18px 30px rgba(2, 6, 23, 0.22)"
+                                  : "0 10px 22px rgba(15, 23, 42, 0.10)",
+                            }}
+                          >
+                            {isScreenBlack ? "Retour au direct" : "Écran noir"}
+                          </button>
+                        </div>
+                        <p style={{ margin: 0, fontSize: "0.76rem", color: "#64748b", lineHeight: 1.35 }}>
+                          Affichage actuel : <strong style={{ color: "#111827" }}>{displayLabelGlobal}</strong>
+                        </p>
+                      </div>
+
+                      <div
+                        style={{
+                          display: "grid",
+                          gap: "0.75rem",
+                          alignContent: "start",
+                        }}
+                      >
+                        <div
+                          style={{
+                            ...controlGroupCardStyle,
+                            gap: "0.55rem",
+                            padding: "0.95rem 0.95rem",
+                            background:
+                              "linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.92) 100%)",
+                          }}
+                        >
+                          <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                            Vote
+                          </p>
+                          <div style={{ display: "grid", gap: "0.55rem" }}>
+                            <button
+                              type="button"
+                              disabled={!activePollIdJs || !canToggleVote || voteIsOpen}
+                              onClick={async () => {
+                                if (!activePollIdJs) return;
+                                await postAction(`/polls/${activePollIdJs}/open`, "Vote ouvert");
+                              }}
                               style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "0.4rem",
-                                fontSize: "0.72rem",
-                                color: isActive ? "#1e3a8a" : done ? "#475569" : "#64748b",
-                                fontWeight: isActive ? 700 : 500,
+                                ...btnGhost,
+                                minHeight: "3rem",
+                                width: "100%",
+                                padding: "0.72rem 0.9rem",
+                                borderColor: "#22c55e",
+                                background: voteIsOpen ? "#f8fafc" : "linear-gradient(180deg, #dcfce7 0%, #bbf7d0 100%)",
+                                color: voteIsOpen ? "#94a3b8" : "#166534",
+                                fontWeight: 800,
+                                fontSize: "0.86rem",
+                                boxShadow: voteIsOpen ? "none" : "0 14px 24px rgba(34, 197, 94, 0.12)",
                               }}
                             >
-                              <span
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  minWidth: "1.25rem",
-                                  height: "1.25rem",
-                                  borderRadius: "999px",
-                                  border: `1px solid ${
-                                    isActive ? "#93c5fd" : done ? "#cbd5e1" : "#e5e7eb"
-                                  }`,
-                                  background: isActive
-                                    ? "#eff6ff"
-                                    : done
-                                      ? "#f8fafc"
-                                      : "#fff",
-                                  color: isActive ? "#1e40af" : "#64748b",
-                                  fontSize: "0.66rem",
-                                  fontWeight: 800,
-                                  lineHeight: 1,
-                                }}
-                              >
-                                {idx + 1}
-                              </span>
-                              <span
-                                style={{
-                                  whiteSpace: "nowrap",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  flex: 1,
-                                }}
-                                title={p.question || p.title}
-                              >
-                                {p.question || p.title || `Question ${idx + 1}`}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : null}
+                              Ouvrir le vote
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!activePollIdJs || !canToggleVote || !voteIsOpen}
+                              onClick={async () => {
+                                if (!activePollIdJs) return;
+                                await postAction(`/polls/${activePollIdJs}/close`, "Vote ferme");
+                              }}
+                              style={{
+                                ...btnGhost,
+                                minHeight: "3rem",
+                                width: "100%",
+                                padding: "0.72rem 0.9rem",
+                                borderColor: "#fca5a5",
+                                background: voteIsOpen ? "#fff5f5" : "#f8fafc",
+                                color: voteIsOpen ? "#b91c1c" : "#94a3b8",
+                                fontWeight: 800,
+                                fontSize: "0.86rem",
+                                boxShadow: voteIsOpen ? "0 12px 22px rgba(239, 68, 68, 0.08)" : "none",
+                              }}
+                            >
+                              Fermer le vote
+                            </button>
+                          </div>
+                          <p style={{ margin: 0, fontSize: "0.74rem", color: "#64748b", lineHeight: 1.35 }}>
+                            État actuel : <strong style={{ color: "#111827" }}>{voteLabel}</strong>
+                          </p>
+                        </div>
 
-                    <button
-                      type="button"
-                      disabled={!canGoNext}
-                      onClick={() =>
-                        void postAction(`/events/${eventId}/next-poll`, "Question suivante diffusee")
-                      }
+                        <div
+                          style={{
+                            ...controlGroupCardStyle,
+                            gap: "0.48rem",
+                            padding: "0.95rem 0.95rem",
+                            background:
+                              "linear-gradient(180deg, rgba(250,245,255,0.52) 0%, rgba(255,255,255,0.96) 100%)",
+                          }}
+                        >
+                          <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                            Progression
+                          </p>
+                          <p style={{ margin: 0, fontSize: "0.9rem", fontWeight: 800, color: "#111827" }}>
+                            {questionProgressSummary}
+                          </p>
+                          <p
+                            style={{
+                              margin: 0,
+                              fontSize: "0.76rem",
+                              color: "#475569",
+                              lineHeight: 1.35,
+                              overflowWrap: "anywhere",
+                            }}
+                          >
+                            {activeQuestionTitle}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
                       style={{
-                        ...btnDanger(!canGoNext),
-                        marginTop: "0.2rem",
-                        width: "100%",
-                          minHeight: desktop ? "2.95rem" : "2.75rem",
-                          padding: "0.6rem 0.85rem",
-                          fontSize: "0.84rem",
+                        display: "grid",
+                        gap: "0.65rem",
+                        justifyItems: desktop ? "center" : "stretch",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        disabled={!canGoNext}
+                        onClick={() =>
+                          void postAction(`/events/${eventId}/next-poll`, "Question suivante diffusee")
+                        }
+                        style={{
+                          ...btnDanger(!canGoNext),
+                          width: desktop ? "min(100%, 320px)" : "100%",
+                          minHeight: desktop ? "3rem" : "2.78rem",
+                          padding: "0.68rem 0.92rem",
+                          fontSize: "0.86rem",
                           border: "1px solid #8b5cf6",
                           background: canGoNext
                             ? "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)"
                             : "#ede9fe",
                           color: canGoNext ? "#fff" : "#6d28d9",
-                        fontWeight: 800,
+                          fontWeight: 800,
                           boxShadow: canGoNext
-                            ? "0 14px 24px rgba(124, 58, 237, 0.18)"
+                            ? "0 16px 28px rgba(124, 58, 237, 0.18)"
                             : "none",
-                      }}
-                    >
-                      Question suivante
-                    </button>
+                        }}
+                      >
+                        Question suivante
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -7788,6 +7615,26 @@ export default function RegieEventPage() {
                   >
                     Quitter l’écran noir
                   </button>
+                </div>
+              ) : null}
+
+              {desktop && previewJoinOpen && eventData.slug ? (
+                <div
+                  style={{
+                    marginTop: "0.35rem",
+                    paddingTop: "1rem",
+                    borderTop: liveBandDivider,
+                  }}
+                >
+                  <RegiePublicPreviewPanel
+                    key={eventData.slug}
+                    slug={eventData.slug}
+                    eventId={eventId}
+                    newLeadCount={newLeadCount}
+                    layout="below"
+                    fused
+                    onHide={() => persistPreviewJoinOpen(false)}
+                  />
                 </div>
               ) : null}
             </div>
@@ -8175,17 +8022,6 @@ export default function RegieEventPage() {
             </details>
           ) : null}
               </div>
-              {desktop && previewJoinOpen && eventData.slug ? (
-                <RegiePublicPreviewPanel
-                  key={eventData.slug}
-                  slug={eventData.slug}
-                  eventId={eventId}
-                  newLeadCount={newLeadCount}
-                  layout={desktopSplitWide ? "beside" : "below"}
-                  fused
-                  onHide={() => persistPreviewJoinOpen(false)}
-                />
-              ) : null}
             </div>
           </div>
           {desktop && eventData.slug ? (
