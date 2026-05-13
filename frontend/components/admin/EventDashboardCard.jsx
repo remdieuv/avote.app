@@ -386,7 +386,7 @@ export function EventDashboardCard({
                 </Link>
               ) : (
                 <span
-                  title="Activez la landing dans Personnalisation"
+                  title="Activez la landing dans Landing événement"
                   style={{
                     ...secondaryLinkStyle,
                     opacity: 0.5,
@@ -431,19 +431,31 @@ export function EventDashboardCard({
               textAlign: "center",
             }}
           >
-            Personnaliser ma salle
+            Configuration indisponible
           </span>
         ) : (
           <>
             <div
               style={{
+                marginTop: "0.1rem",
+                fontSize: "0.68rem",
+                fontWeight: 800,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                color: "#94a3b8",
+              }}
+            >
+              Configuration
+            </div>
+            <div
+              style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
                 gap: "0.45rem",
               }}
             >
               <Link
-                href={`/admin/events/${ev.id}/customization`}
+                href={`/admin/events/${ev.id}/live`}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -459,7 +471,26 @@ export function EventDashboardCard({
                   textAlign: "center",
                 }}
               >
-                Personnaliser
+                🎨 Salle live
+              </Link>
+              <Link
+                href={`/admin/events/${ev.id}/landing`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "0.55rem 0.95rem",
+                  fontSize: "0.84rem",
+                  fontWeight: 700,
+                  borderRadius: "10px",
+                  textDecoration: "none",
+                  border: "1px solid #ddd6fe",
+                  background: "#faf5ff",
+                  color: "#6d28d9",
+                  textAlign: "center",
+                }}
+              >
+                ✨ Landing
               </Link>
               <Link
                 href={`/admin/event/${ev.id}/leads`}

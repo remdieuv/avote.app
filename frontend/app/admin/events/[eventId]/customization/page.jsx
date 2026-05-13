@@ -61,11 +61,61 @@ const btnDanger = {
   background: "#fef2f2",
 };
 
-export default function EventCustomizationPage() {
-  const params = useParams();
+function getEventIdFromParams(params) {
   const rawId = params?.eventId;
-  const eventId =
-    typeof rawId === "string" ? rawId : Array.isArray(rawId) ? rawId[0] : null;
+  return typeof rawId === "string" ? rawId : Array.isArray(rawId) ? rawId[0] : null;
+}
+
+function EditorModeSwitch({ eventId, current }) {
+  const liveHref = eventId ? `/admin/events/${encodeURIComponent(eventId)}/live` : "/admin/events";
+  const landingHref = eventId
+    ? `/admin/events/${encodeURIComponent(eventId)}/landing`
+    : "/admin/events";
+
+  function linkStyle(active) {
+    return {
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "0.48rem 0.8rem",
+      borderRadius: "999px",
+      textDecoration: "none",
+      fontSize: "0.84rem",
+      fontWeight: 700,
+      border: active ? "1px solid #bfdbfe" : "1px solid #e2e8f0",
+      background: active ? "#eff6ff" : "#fff",
+      color: active ? "#1d4ed8" : "#475569",
+    };
+  }
+
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        gap: "0.45rem",
+        flexWrap: "wrap",
+        padding: "0.35rem",
+        borderRadius: "999px",
+        border: "1px solid #e2e8f0",
+        background: "#f8fafc",
+        marginTop: "0.95rem",
+      }}
+    >
+      <Link href={liveHref} style={linkStyle(current === "live")}>
+        🎨 Salle live
+      </Link>
+      <Link href={landingHref} style={linkStyle(current === "landing")}>
+        ✨ Landing événement
+      </Link>
+    </div>
+  );
+}
+
+export function EventCustomizationEditor({ mode = "live" }) {
+  const params = useParams();
+  const eventId = getEventIdFromParams(params);
+  const isLivePage = mode === "live";
+  const isLandingPage = mode === "landing";
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -102,6 +152,7 @@ export default function EventCustomizationPage() {
   const [landingDescription, setLandingDescription] = useState("");
   /** @type {{ id: string; url: string; createdAt: string }[]} */
   const [showcasePhotos, setShowcasePhotos] = useState([]);
+  const [landingLivePhotosCount, setLandingLivePhotosCount] = useState(0);
   const [showcasePhotoBusy, setShowcasePhotoBusy] = useState(false);
   const previewIframeRef = useRef(null);
   const [previewIframeReady, setPreviewIframeReady] = useState(false);
@@ -189,12 +240,20 @@ export default function EventCustomizationPage() {
   }, [slug]);
 
   useEffect(() => {
-    if (!slug || !previewIframeReady) return;
+    if (!isLivePage || !slug || !previewIframeReady) return;
     postPreviewToIframe();
-  }, [slug, previewIframeReady, postPreviewToIframe]);
+  }, [isLivePage, slug, previewIframeReady, postPreviewToIframe]);
 
   const dirty = useMemo(() => {
     if (!baseline) return false;
+    if (isLandingPage) {
+      return (
+        landingEnabled !== baseline.landingEnabled ||
+        landingCoverUrl !== baseline.landingCoverUrl ||
+        landingTitle !== baseline.landingTitle ||
+        landingDescription !== baseline.landingDescription
+      );
+    }
     return (
       description !== baseline.description ||
       logoUrl !== baseline.logoUrl ||
@@ -209,14 +268,11 @@ export default function EventCustomizationPage() {
       infoPrimaryCtaUrl !== baseline.infoPrimaryCtaUrl ||
       infoSecondaryCtaLabel !== baseline.infoSecondaryCtaLabel ||
       infoSecondaryCtaUrl !== baseline.infoSecondaryCtaUrl ||
-      infoShowOnFinished !== baseline.infoShowOnFinished ||
-      landingEnabled !== baseline.landingEnabled ||
-      landingCoverUrl !== baseline.landingCoverUrl ||
-      landingTitle !== baseline.landingTitle ||
-      landingDescription !== baseline.landingDescription
+      infoShowOnFinished !== baseline.infoShowOnFinished
     );
   }, [
     baseline,
+    isLandingPage,
     description,
     logoUrl,
     backgroundUrl,
@@ -272,6 +328,7 @@ export default function EventCustomizationPage() {
       const lcov = data.landingCoverUrl;
       const ltit = data.landingTitle;
       const ldesc = data.landingDescription;
+      const landingPhotos = Array.isArray(data.landingPhotos) ? data.landingPhotos : [];
 
       setDescription(desc);
       setLogoUrl(typeof lu === "string" ? resolveApiAssetUrl(lu) : "");
@@ -327,6 +384,7 @@ export default function EventCustomizationPage() {
       } else {
         setShowcasePhotos([]);
       }
+      setLandingLivePhotosCount(landingPhotos.length);
 
       setBaseline({
         description: desc,
@@ -371,17 +429,6 @@ export default function EventCustomizationPage() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || loading) return;
-    if (window.location.hash !== "#landing-page-section") return;
-    const el = document.getElementById("landing-page-section");
-    if (!el) return;
-    const t = window.setTimeout(() => {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 120);
-    return () => window.clearTimeout(t);
-  }, [loading, eventId]);
 
   async function handleUpload(kind, file) {
     if (!eventId || !file) return;
@@ -673,11 +720,14 @@ export default function EventCustomizationPage() {
               letterSpacing: "-0.02em",
             }}
           >
-            Personnalisation de la salle
+            {isLandingPage ? "✨ Landing événement" : "🎨 Salle live"}
           </h1>
           <p style={{ margin: 0, color: "#64748b", fontSize: "0.95rem" }}>
-            Configurez l’apparence publique de votre événement
+            {isLandingPage
+              ? "Créez la vitrine immersive de votre événement avant et pendant le live."
+              : "Configurez l’expérience interactive et visuelle de votre salle de vote."}
           </p>
+          <EditorModeSwitch eventId={eventId} current={isLandingPage ? "landing" : "live"} />
           {dirty ? (
             <p
               style={{
@@ -733,969 +783,1128 @@ export default function EventCustomizationPage() {
                 minWidth: 0,
               }}
             >
-              <section style={card}>
-                <h2
-                  style={{
-                    margin: "0 0 0.85rem",
-                    fontSize: "0.72rem",
-                    fontWeight: 800,
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    color: "#64748b",
-                  }}
-                >
-                  Identité
-                </h2>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.78rem",
-                    fontWeight: 600,
-                    color: "#475569",
-                    marginBottom: "0.35rem",
-                  }}
-                >
-                  Titre de l’événement
-                </label>
-                <input
-                  type="text"
-                  readOnly
-                  value={eventTitle}
-                  style={{
-                    width: "100%",
-                    boxSizing: "border-box",
-                    padding: "0.5rem 0.65rem",
-                    borderRadius: "8px",
-                    border: "1px solid #e2e8f0",
-                    background: "#f8fafc",
-                    color: "#64748b",
-                    fontSize: "0.88rem",
-                    marginBottom: "0.85rem",
-                  }}
-                />
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.78rem",
-                    fontWeight: 600,
-                    color: "#475569",
-                    marginBottom: "0.35rem",
-                  }}
-                >
-                  Description (salle /join)
-                </label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={4}
-                  maxLength={2000}
-                  placeholder="Texte affiché sous le titre pour les participants…"
-                  style={{
-                    width: "100%",
-                    boxSizing: "border-box",
-                    padding: "0.55rem 0.65rem",
-                    borderRadius: "8px",
-                    border: "1px solid #cbd5e1",
-                    fontSize: "0.88rem",
-                    resize: "vertical",
-                    fontFamily: "inherit",
-                  }}
-                />
-                <p
-                  style={{
-                    margin: "0.85rem 0 0.35rem",
-                    fontSize: "0.78rem",
-                    fontWeight: 600,
-                    color: "#475569",
-                  }}
-                >
-                  Logo
-                </p>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
-                  {logoUrl ? (
-                    <img
-                      src={logoUrl}
-                      alt="Aperçu logo"
+              {isLandingPage ? (
+                <>
+                  <section style={card}>
+                    <h2
                       style={{
-                        width: "56px",
-                        height: "56px",
-                        objectFit: "contain",
-                        borderRadius: "10px",
-                        border: "1px solid #e2e8f0",
-                        background: "#fff",
+                        margin: "0 0 0.85rem",
+                        fontSize: "0.72rem",
+                        fontWeight: 800,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "#64748b",
                       }}
-                    />
-                  ) : null}
-                  <label style={{ ...btnSecondary, display: "inline-block", cursor: "pointer" }}>
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,image/gif"
-                      style={{ display: "none" }}
-                      disabled={uploadKind !== null}
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        e.target.value = "";
-                        if (f) void handleUpload("logo", f);
-                      }}
-                    />
-                    {uploadKind === "logo" ? "Envoi…" : "Envoyer un logo"}
-                  </label>
-                  {logoUrl ? (
-                    <button type="button" style={btnDanger} onClick={clearLogo}>
-                      Retirer
-                    </button>
-                  ) : null}
-                </div>
-              </section>
-
-              <section style={card}>
-                <h2
-                  style={{
-                    margin: "0 0 0.85rem",
-                    fontSize: "0.72rem",
-                    fontWeight: 800,
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    color: "#64748b",
-                  }}
-                >
-                  Infos & liens
-                </h2>
-                <p
-                  style={{
-                    margin: "0 0 0.75rem",
-                    fontSize: "0.77rem",
-                    color: "#64748b",
-                    lineHeight: 1.45,
-                  }}
-                >
-                  Bloc d’information affiché sur la salle participant `/join`.
-                </p>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.78rem",
-                    fontWeight: 600,
-                    color: "#475569",
-                    marginBottom: "0.35rem",
-                  }}
-                >
-                  Titre du bloc
-                </label>
-                <input
-                  type="text"
-                  value={infoSectionTitle}
-                  maxLength={120}
-                  onChange={(e) => setInfoSectionTitle(e.target.value)}
-                  placeholder="Infos pratiques"
-                  style={{
-                    width: "100%",
-                    boxSizing: "border-box",
-                    padding: "0.5rem 0.65rem",
-                    borderRadius: "8px",
-                    border: "1px solid #cbd5e1",
-                    fontSize: "0.88rem",
-                    marginBottom: "0.75rem",
-                  }}
-                />
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.78rem",
-                    fontWeight: 600,
-                    color: "#475569",
-                    marginBottom: "0.35rem",
-                  }}
-                >
-                  Texte court
-                </label>
-                <textarea
-                  value={infoSectionText}
-                  onChange={(e) => setInfoSectionText(e.target.value)}
-                  rows={3}
-                  maxLength={1200}
-                  placeholder="Ex: Consultez le programme, le règlement ou nos ressources."
-                  style={{
-                    width: "100%",
-                    boxSizing: "border-box",
-                    padding: "0.55rem 0.65rem",
-                    borderRadius: "8px",
-                    border: "1px solid #cbd5e1",
-                    fontSize: "0.88rem",
-                    resize: "vertical",
-                    fontFamily: "inherit",
-                    marginBottom: "0.75rem",
-                  }}
-                />
-                <div
-                  style={{
-                    border: "1px dashed #cbd5e1",
-                    borderRadius: "10px",
-                    padding: "0.65rem",
-                    marginBottom: "0.6rem",
-                  }}
-                >
-                  <p
-                    style={{
-                      margin: "0 0 0.45rem",
-                      fontSize: "0.76rem",
-                      fontWeight: 700,
-                      color: "#475569",
-                    }}
-                  >
-                    Bouton principal
-                  </p>
-                  <input
-                    type="text"
-                    value={infoPrimaryCtaLabel}
-                    maxLength={80}
-                    onChange={(e) => setInfoPrimaryCtaLabel(e.target.value)}
-                    placeholder="Label (ex: Programme)"
-                    style={{
-                      width: "100%",
-                      boxSizing: "border-box",
-                      padding: "0.47rem 0.6rem",
-                      borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
-                      fontSize: "0.84rem",
-                      marginBottom: "0.4rem",
-                    }}
-                  />
-                  <input
-                    type="url"
-                    value={infoPrimaryCtaUrl}
-                    onChange={(e) => setInfoPrimaryCtaUrl(e.target.value)}
-                    placeholder="https://..."
-                    style={{
-                      width: "100%",
-                      boxSizing: "border-box",
-                      padding: "0.47rem 0.6rem",
-                      borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
-                      fontSize: "0.84rem",
-                    }}
-                  />
-                </div>
-                <div
-                  style={{
-                    border: "1px dashed #cbd5e1",
-                    borderRadius: "10px",
-                    padding: "0.65rem",
-                    marginBottom: "0.7rem",
-                  }}
-                >
-                  <p
-                    style={{
-                      margin: "0 0 0.45rem",
-                      fontSize: "0.76rem",
-                      fontWeight: 700,
-                      color: "#475569",
-                    }}
-                  >
-                    Bouton secondaire (optionnel)
-                  </p>
-                  <input
-                    type="text"
-                    value={infoSecondaryCtaLabel}
-                    maxLength={80}
-                    onChange={(e) => setInfoSecondaryCtaLabel(e.target.value)}
-                    placeholder="Label (ex: Règlement)"
-                    style={{
-                      width: "100%",
-                      boxSizing: "border-box",
-                      padding: "0.47rem 0.6rem",
-                      borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
-                      fontSize: "0.84rem",
-                      marginBottom: "0.4rem",
-                    }}
-                  />
-                  <input
-                    type="url"
-                    value={infoSecondaryCtaUrl}
-                    onChange={(e) => setInfoSecondaryCtaUrl(e.target.value)}
-                    placeholder="https://..."
-                    style={{
-                      width: "100%",
-                      boxSizing: "border-box",
-                      padding: "0.47rem 0.6rem",
-                      borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
-                      fontSize: "0.84rem",
-                    }}
-                  />
-                </div>
-                <label
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    fontSize: "0.82rem",
-                    color: "#334155",
-                    cursor: "pointer",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={infoShowOnFinished}
-                    onChange={(e) => setInfoShowOnFinished(e.target.checked)}
-                  />
-                  Afficher aussi après la fin de l’événement
-                </label>
-              </section>
-
-              <section id="landing-page-section" style={card}>
-                <h2
-                  style={{
-                    margin: "0 0 0.85rem",
-                    fontSize: "0.72rem",
-                    fontWeight: 800,
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    color: "#64748b",
-                  }}
-                >
-                  Landing page
-                </h2>
-                <p
-                  style={{
-                    margin: "0 0 0.85rem",
-                    fontSize: "0.77rem",
-                    color: "#64748b",
-                    lineHeight: 1.45,
-                  }}
-                >
-                  Vitrine publique <code style={{ fontSize: "0.76rem" }}>/e/[slug]</code>{" "}
-                  : couverture, galerie photo live, infos — puis accès à la salle{" "}
-                  <code style={{ fontSize: "0.76rem" }}>/join</code>.
-                  {landingPath ? (
-                    <>
-                      {" "}
-                      <Link
-                        href={landingPath}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: "#2563eb", fontWeight: 600 }}
-                      >
-                        Ouvrir la landing
-                      </Link>
-                    </>
-                  ) : null}
-                </p>
-                <label
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    fontSize: "0.85rem",
-                    color: "#334155",
-                    cursor: "pointer",
-                    marginBottom: "0.85rem",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={landingEnabled}
-                    onChange={(e) => setLandingEnabled(e.target.checked)}
-                  />
-                  Activer la landing page
-                </label>
-
-                <p
-                  style={{
-                    margin: "0 0 0.35rem",
-                    fontSize: "0.78rem",
-                    fontWeight: 600,
-                    color: "#475569",
-                  }}
-                >
-                  Image de couverture
-                </p>
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "0.5rem",
-                    alignItems: "center",
-                    marginBottom: "0.85rem",
-                  }}
-                >
-                  {landingCoverUrl ? (
-                    <img
-                      src={landingCoverUrl}
-                      alt="Couverture landing"
-                      style={{
-                        width: "140px",
-                        height: "84px",
-                        objectFit: "cover",
-                        borderRadius: "10px",
-                        border: "1px solid #e2e8f0",
-                      }}
-                    />
-                  ) : null}
-                  <label
-                    style={{
-                      ...btnSecondary,
-                      display: "inline-block",
-                      cursor:
-                        uploadKind !== null || showcasePhotoBusy
-                          ? "not-allowed"
-                          : "pointer",
-                      opacity: uploadKind !== null || showcasePhotoBusy ? 0.65 : 1,
-                    }}
-                  >
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,image/gif"
-                      style={{ display: "none" }}
-                      disabled={uploadKind !== null || showcasePhotoBusy}
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        e.target.value = "";
-                        if (f) void handleUpload("landing_cover", f);
-                      }}
-                    />
-                    {uploadKind === "landing_cover"
-                      ? "Envoi…"
-                      : "Envoyer une couverture"}
-                  </label>
-                  {landingCoverUrl ? (
-                    <button
-                      type="button"
-                      style={btnDanger}
-                      disabled={showcasePhotoBusy}
-                      onClick={clearLandingCover}
                     >
-                      Retirer
-                    </button>
-                  ) : null}
-                </div>
+                      Landing page
+                    </h2>
+                    <p
+                      style={{
+                        margin: "0 0 0.85rem",
+                        fontSize: "0.77rem",
+                        color: "#64748b",
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      Vitrine publique <code style={{ fontSize: "0.76rem" }}>/e/[slug]</code>{" "}
+                      : teaser, storytelling visuel, galerie événement et photos publiées
+                      en direct.
+                      {landingPath ? (
+                        <>
+                          {" "}
+                          <Link
+                            href={landingPath}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: "#2563eb", fontWeight: 600 }}
+                          >
+                            Ouvrir la landing
+                          </Link>
+                        </>
+                      ) : null}
+                    </p>
+                    <label
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                        fontSize: "0.85rem",
+                        color: "#334155",
+                        cursor: "pointer",
+                        marginBottom: "0.85rem",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={landingEnabled}
+                        onChange={(e) => setLandingEnabled(e.target.checked)}
+                      />
+                      Activer la landing événement
+                    </label>
 
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.78rem",
-                    fontWeight: 600,
-                    color: "#475569",
-                    marginBottom: "0.35rem",
-                  }}
-                >
-                  Titre affiché sur la landing (optionnel)
-                </label>
-                <input
-                  type="text"
-                  value={landingTitle}
-                  maxLength={200}
-                  onChange={(e) => setLandingTitle(e.target.value)}
-                  placeholder={
-                    eventTitle
-                      ? `Par défaut : ${eventTitle}`
-                      : "Sinon : titre de l’événement"
-                  }
-                  style={{
-                    width: "100%",
-                    boxSizing: "border-box",
-                    padding: "0.5rem 0.65rem",
-                    borderRadius: "8px",
-                    border: "1px solid #cbd5e1",
-                    fontSize: "0.88rem",
-                    marginBottom: "0.75rem",
-                  }}
-                />
-
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.78rem",
-                    fontWeight: 600,
-                    color: "#475569",
-                    marginBottom: "0.35rem",
-                  }}
-                >
-                  Description courte (optionnelle)
-                </label>
-                <textarea
-                  value={landingDescription}
-                  onChange={(e) => setLandingDescription(e.target.value)}
-                  rows={3}
-                  maxLength={1200}
-                  placeholder="Accroche sous le titre sur la landing uniquement."
-                  style={{
-                    width: "100%",
-                    boxSizing: "border-box",
-                    padding: "0.55rem 0.65rem",
-                    borderRadius: "8px",
-                    border: "1px solid #cbd5e1",
-                    fontSize: "0.88rem",
-                    resize: "vertical",
-                    fontFamily: "inherit",
-                    marginBottom: "0.85rem",
-                  }}
-                />
-
-                <h3
-                  style={{
-                    margin: "0 0 0.35rem",
-                    fontSize: "1rem",
-                    fontWeight: 800,
-                    color: "#0f172a",
-                  }}
-                >
-                  ✨ Galerie événement
-                </h3>
-                <p
-                  style={{
-                    margin: "0 0 0.65rem",
-                    fontSize: "0.8rem",
-                    color: "#64748b",
-                    lineHeight: 1.45,
-                  }}
-                >
-                  Teaser, ambiance, lieu, sponsors — affichées sur la landing
-                  avant et pendant le live. Les photos « moments live » se gèrent
-                  depuis la régie ou la landing.
-                </p>
-                <label
-                  style={{
-                    ...btnPrimary,
-                    display: "inline-block",
-                    cursor: showcasePhotoBusy ? "not-allowed" : "pointer",
-                    opacity: showcasePhotoBusy ? 0.65 : 1,
-                    marginBottom: "0.65rem",
-                  }}
-                >
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif"
-                    multiple
-                    style={{ display: "none" }}
-                    disabled={showcasePhotoBusy}
-                    onChange={(e) => {
-                      const raw = e.target.files;
-                      const files = raw?.length ? Array.from(raw) : [];
-                      e.target.value = "";
-                      if (files.length) void addShowcasePhotos(files);
-                    }}
-                  />
-                  {showcasePhotoBusy ? "Envoi…" : "Ajouter des photos"}
-                </label>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      "repeat(auto-fill, minmax(96px, 1fr))",
-                    gap: "0.5rem",
-                  }}
-                >
-                  {showcasePhotos.map((ph) => (
+                    <p
+                      style={{
+                        margin: "0 0 0.35rem",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: "#475569",
+                      }}
+                    >
+                      Image de couverture
+                    </p>
                     <div
-                      key={ph.id}
                       style={{
-                        position: "relative",
-                        borderRadius: "10px",
-                        overflow: "hidden",
-                        border: "1px solid #e2e8f0",
-                        aspectRatio: "1",
-                        background: "#f8fafc",
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "0.5rem",
+                        alignItems: "center",
+                        marginBottom: "0.85rem",
                       }}
                     >
-                      <img
-                        src={ph.url}
-                        alt=""
+                      {landingCoverUrl ? (
+                        <img
+                          src={landingCoverUrl}
+                          alt="Couverture landing"
+                          style={{
+                            width: "140px",
+                            height: "84px",
+                            objectFit: "cover",
+                            borderRadius: "10px",
+                            border: "1px solid #e2e8f0",
+                          }}
+                        />
+                      ) : null}
+                      <label
                         style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                          display: "block",
+                          ...btnSecondary,
+                          display: "inline-block",
+                          cursor:
+                            uploadKind !== null || showcasePhotoBusy
+                              ? "not-allowed"
+                              : "pointer",
+                          opacity:
+                            uploadKind !== null || showcasePhotoBusy ? 0.65 : 1,
+                        }}
+                      >
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/gif"
+                          style={{ display: "none" }}
+                          disabled={uploadKind !== null || showcasePhotoBusy}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            e.target.value = "";
+                            if (f) void handleUpload("landing_cover", f);
+                          }}
+                        />
+                        {uploadKind === "landing_cover"
+                          ? "Envoi…"
+                          : "Envoyer une couverture"}
+                      </label>
+                      {landingCoverUrl ? (
+                        <button
+                          type="button"
+                          style={btnDanger}
+                          disabled={showcasePhotoBusy}
+                          onClick={clearLandingCover}
+                        >
+                          Retirer
+                        </button>
+                      ) : null}
+                    </div>
+
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: "#475569",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Titre affiché sur la landing (optionnel)
+                    </label>
+                    <input
+                      type="text"
+                      value={landingTitle}
+                      maxLength={200}
+                      onChange={(e) => setLandingTitle(e.target.value)}
+                      placeholder={
+                        eventTitle
+                          ? `Par défaut : ${eventTitle}`
+                          : "Sinon : titre de l’événement"
+                      }
+                      style={{
+                        width: "100%",
+                        boxSizing: "border-box",
+                        padding: "0.5rem 0.65rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.88rem",
+                        marginBottom: "0.75rem",
+                      }}
+                    />
+
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: "#475569",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Description courte (optionnelle)
+                    </label>
+                    <textarea
+                      value={landingDescription}
+                      onChange={(e) => setLandingDescription(e.target.value)}
+                      rows={3}
+                      maxLength={1200}
+                      placeholder="Accroche sous le titre sur la landing uniquement."
+                      style={{
+                        width: "100%",
+                        boxSizing: "border-box",
+                        padding: "0.55rem 0.65rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.88rem",
+                        resize: "vertical",
+                        fontFamily: "inherit",
+                        marginBottom: "0.85rem",
+                      }}
+                    />
+
+                    <h3
+                      style={{
+                        margin: "0 0 0.35rem",
+                        fontSize: "1rem",
+                        fontWeight: 800,
+                        color: "#0f172a",
+                      }}
+                    >
+                      ✨ Galerie événement
+                    </h3>
+                    <p
+                      style={{
+                        margin: "0 0 0.65rem",
+                        fontSize: "0.8rem",
+                        color: "#64748b",
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      Teaser, ambiance, lieu, sponsors : ces visuels sont affichés sur la
+                      landing avant et pendant le live. Les moments live se publient
+                      depuis la régie ou la landing.
+                    </p>
+                    <label
+                      style={{
+                        ...btnPrimary,
+                        display: "inline-block",
+                        cursor: showcasePhotoBusy ? "not-allowed" : "pointer",
+                        opacity: showcasePhotoBusy ? 0.65 : 1,
+                        marginBottom: "0.65rem",
+                      }}
+                    >
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        multiple
+                        style={{ display: "none" }}
+                        disabled={showcasePhotoBusy}
+                        onChange={(e) => {
+                          const raw = e.target.files;
+                          const files = raw?.length ? Array.from(raw) : [];
+                          e.target.value = "";
+                          if (files.length) void addShowcasePhotos(files);
                         }}
                       />
-                      <button
-                        type="button"
-                        onClick={() => void removeShowcasePhoto(ph.id)}
-                        disabled={showcasePhotoBusy}
-                        style={{
-                          position: "absolute",
-                          top: 4,
-                          right: 4,
-                          padding: "0.2rem 0.45rem",
-                          fontSize: "0.68rem",
-                          fontWeight: 700,
-                          borderRadius: "6px",
-                          border: "1px solid #fecaca",
-                          background: "rgba(254,242,242,0.95)",
-                          color: "#b91c1c",
-                          cursor: showcasePhotoBusy ? "not-allowed" : "pointer",
-                        }}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <section style={card}>
-                <h2
-                  style={{
-                    margin: "0 0 0.85rem",
-                    fontSize: "0.72rem",
-                    fontWeight: 800,
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    color: "#64748b",
-                  }}
-                >
-                  Apparence
-                </h2>
-                <p
-                  style={{
-                    margin: "0 0 0.35rem",
-                    fontSize: "0.78rem",
-                    fontWeight: 600,
-                    color: "#475569",
-                  }}
-                >
-                  Image de fond
-                </p>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center", marginBottom: "0.85rem" }}>
-                  {backgroundUrl ? (
-                    <img
-                      src={backgroundUrl}
-                      alt=""
-                      style={{
-                        width: "120px",
-                        height: "72px",
-                        objectFit: "cover",
-                        borderRadius: "8px",
-                        border: "1px solid #e2e8f0",
-                      }}
-                    />
-                  ) : null}
-                  <label style={{ ...btnSecondary, display: "inline-block", cursor: "pointer" }}>
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,image/gif"
-                      style={{ display: "none" }}
-                      disabled={uploadKind !== null}
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        e.target.value = "";
-                        if (f) void handleUpload("background", f);
-                      }}
-                    />
-                    {uploadKind === "background" ? "Envoi…" : "Image de fond"}
-                  </label>
-                  {backgroundUrl ? (
-                    <button type="button" style={btnDanger} onClick={clearBackground}>
-                      Retirer
-                    </button>
-                  ) : null}
-                </div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.78rem",
-                    fontWeight: 600,
-                    color: "#475569",
-                    marginBottom: "0.35rem",
-                  }}
-                >
-                  Couleur de fond (sans image)
-                </label>
-                <p
-                  style={{
-                    margin: "0 0 0.4rem",
-                    fontSize: "0.72rem",
-                    color: "#64748b",
-                    lineHeight: 1.45,
-                  }}
-                >
-                  S’applique lorsque aucune image de fond n’est définie. Sinon,
-                  dégradé ou thème par défaut.
-                </p>
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "0.5rem",
-                    alignItems: "center",
-                    marginBottom: "0.85rem",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={roomBackgroundColor}
-                    onChange={(e) => setRoomBackgroundColor(e.target.value)}
-                    placeholder="#e5e7eb ou vide"
-                    style={{
-                      width: "10rem",
-                      padding: "0.45rem 0.55rem",
-                      borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
-                      fontFamily: "ui-monospace, monospace",
-                      fontSize: "0.85rem",
-                    }}
-                  />
-                  <input
-                    type="color"
-                    value={
-                      /^#[0-9A-Fa-f]{6}$/.test(roomBackgroundColor.trim())
-                        ? roomBackgroundColor.trim()
-                        : "#e5e7eb"
-                    }
-                    onChange={(e) => setRoomBackgroundColor(e.target.value)}
-                    style={{
-                      width: "2.5rem",
-                      height: "2.5rem",
-                      padding: 0,
-                      border: "1px solid #cbd5e1",
-                      borderRadius: "8px",
-                      cursor: "pointer",
-                    }}
-                  />
-                  <button
-                    type="button"
-                    style={btnDanger}
-                    onClick={() => setRoomBackgroundColor("")}
-                  >
-                    Par défaut
-                  </button>
-                </div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.78rem",
-                    fontWeight: 600,
-                    color: "#475569",
-                    marginBottom: "0.35rem",
-                  }}
-                >
-                  Couleur principale (accents)
-                </label>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
-                  <input
-                    type="text"
-                    value={primaryColor}
-                    onChange={(e) => setPrimaryColor(e.target.value)}
-                    placeholder="#2563eb"
-                    style={{
-                      width: "7rem",
-                      padding: "0.45rem 0.55rem",
-                      borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
-                      fontFamily: "ui-monospace, monospace",
-                      fontSize: "0.85rem",
-                    }}
-                  />
-                  <input
-                    type="color"
-                    value={/^#[0-9A-Fa-f]{6}$/.test(primaryColor) ? primaryColor : "#2563eb"}
-                    onChange={(e) => setPrimaryColor(e.target.value)}
-                    style={{
-                      width: "2.5rem",
-                      height: "2.5rem",
-                      padding: 0,
-                      border: "1px solid #cbd5e1",
-                      borderRadius: "8px",
-                      cursor: "pointer",
-                    }}
-                  />
-                  <span
-                    style={{
-                      width: "2rem",
-                      height: "2rem",
-                      borderRadius: "8px",
-                      border: "1px solid #e2e8f0",
-                      background: /^#[0-9A-Fa-f]{6}$/.test(primaryColor)
-                        ? primaryColor
-                        : "#2563eb",
-                    }}
-                    aria-hidden
-                  />
-                </div>
-              </section>
-
-              <section style={card}>
-                <h2
-                  style={{
-                    margin: "0 0 0.85rem",
-                    fontSize: "0.72rem",
-                    fontWeight: 800,
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    color: "#64748b",
-                  }}
-                >
-                  Ambiance
-                </h2>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.78rem",
-                    fontWeight: 600,
-                    color: "#475569",
-                    marginBottom: "0.35rem",
-                  }}
-                >
-                  Thème de base
-                </label>
-                <select
-                  value={themeMode}
-                  onChange={(e) => setThemeMode(e.target.value)}
-                  style={{
-                    width: "100%",
-                    maxWidth: "16rem",
-                    padding: "0.45rem 0.55rem",
-                    borderRadius: "8px",
-                    border: "1px solid #cbd5e1",
-                    fontSize: "0.88rem",
-                    marginBottom: "0.85rem",
-                  }}
-                >
-                  <option value="dark">Sombre</option>
-                  <option value="light">Clair</option>
-                  <option value="auto">Auto (appareil)</option>
-                </select>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.78rem",
-                    fontWeight: 600,
-                    color: "#475569",
-                    marginBottom: "0.35rem",
-                  }}
-                >
-                  Assombrissement sur l’image de fond
-                </label>
-                <select
-                  value={backgroundOverlayStrength}
-                  onChange={(e) =>
-                    setBackgroundOverlayStrength(e.target.value)
-                  }
-                  style={{
-                    width: "100%",
-                    maxWidth: "16rem",
-                    padding: "0.45rem 0.55rem",
-                    borderRadius: "8px",
-                    border: "1px solid #cbd5e1",
-                    fontSize: "0.88rem",
-                  }}
-                >
-                  <option value="low">Faible</option>
-                  <option value="medium">Moyen</option>
-                  <option value="strong">Fort</option>
-                </select>
-              </section>
-
-              <section style={card}>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem" }}>
-                  <button
-                    type="button"
-                    style={{ ...btnPrimary, opacity: saving ? 0.7 : 1 }}
-                    disabled={saving}
-                    onClick={() => void handleSave()}
-                  >
-                    {saving ? "Enregistrement…" : "Enregistrer"}
-                  </button>
-                  {joinPath ? (
-                    <button
-                      type="button"
-                      style={btnSecondary}
-                      onClick={() =>
-                        window.open(
-                          `${window.location.origin}${joinPath}`,
-                          "_blank",
-                          "noopener,noreferrer",
-                        )
-                      }
-                    >
-                      Voir la salle
-                    </button>
-                  ) : null}
-                </div>
-              </section>
-            </div>
-
-            <div style={card} className="customization-preview-card">
-                <h2
-                  style={{
-                    margin: "0 0 0.15rem",
-                    fontSize: "1rem",
-                    fontWeight: 800,
-                  }}
-                >
-                  Aperçu de la salle
-                </h2>
-                <p style={{ margin: "0 0 0.85rem", fontSize: "0.82rem", color: "#64748b" }}>
-                  Aperçu brouillon en direct (sans enregistrement) : seule la page admin reçoit ces
-                  réglages ; les participants voient la version sauvegardée côté serveur.
-                </p>
-                {joinPath ? (
-                  <>
+                      {showcasePhotoBusy ? "Envoi…" : "Ajouter des photos"}
+                    </label>
                     <div
                       style={{
-                        borderRadius: "18px",
-                        overflow: "hidden",
-                        border: "1px solid #cbd5e1",
-                        background: "#0f172a",
-                        boxShadow:
-                          "0 24px 48px rgba(15, 23, 42, 0.15), inset 0 1px 0 rgba(255,255,255,0.06)",
-                        minHeight: "min(520px, 62vh)",
-                        position: "relative",
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      {showcasePhotos.map((ph) => (
+                        <div
+                          key={ph.id}
+                          style={{
+                            position: "relative",
+                            borderRadius: "10px",
+                            overflow: "hidden",
+                            border: "1px solid #e2e8f0",
+                            aspectRatio: "1",
+                            background: "#f8fafc",
+                          }}
+                        >
+                          <img
+                            src={ph.url}
+                            alt=""
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                              display: "block",
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void removeShowcasePhoto(ph.id)}
+                            disabled={showcasePhotoBusy}
+                            style={{
+                              position: "absolute",
+                              top: 4,
+                              right: 4,
+                              padding: "0.2rem 0.45rem",
+                              fontSize: "0.68rem",
+                              fontWeight: 700,
+                              borderRadius: "6px",
+                              border: "1px solid #fecaca",
+                              background: "rgba(254,242,242,0.95)",
+                              color: "#b91c1c",
+                              cursor: showcasePhotoBusy ? "not-allowed" : "pointer",
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section style={card}>
+                    <h2
+                      style={{
+                        margin: "0 0 0.85rem",
+                        fontSize: "0.72rem",
+                        fontWeight: 800,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "#64748b",
+                      }}
+                    >
+                      Moments live
+                    </h2>
+                    <p
+                      style={{
+                        margin: "0 0 0.75rem",
+                        fontSize: "0.77rem",
+                        color: "#64748b",
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      Les photos publiées pendant l’événement enrichissent la landing en
+                      temps réel. Leur publication se pilote depuis la régie ou la
+                      landing publique.
+                    </p>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                        gap: "0.65rem",
+                        marginBottom: "0.85rem",
                       }}
                     >
                       <div
                         style={{
-                          position: "absolute",
-                          top: "10px",
-                          left: "50%",
-                          transform: "translateX(-50%)",
-                          width: "72px",
-                          height: "5px",
-                          borderRadius: "4px",
-                          background: "rgba(255,255,255,0.15)",
-                          zIndex: 2,
+                          borderRadius: "10px",
+                          border: "1px solid #e2e8f0",
+                          background: "#f8fafc",
+                          padding: "0.75rem 0.8rem",
                         }}
-                        aria-hidden
-                      />
-                      <iframe
-                        ref={previewIframeRef}
-                        key={slug ?? "join-preview"}
-                        title="Aperçu salle"
-                        src={joinPath}
-                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-                        onLoad={() => {
-                          setPreviewIframeReady(true);
-                          window.requestAnimationFrame(() => {
-                            postPreviewToIframe();
-                          });
-                        }}
+                      >
+                        <p
+                          style={{
+                            margin: "0 0 0.2rem",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            color: "#64748b",
+                          }}
+                        >
+                          Galerie événement
+                        </p>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "1.2rem",
+                            fontWeight: 800,
+                            color: "#0f172a",
+                          }}
+                        >
+                          {showcasePhotos.length}
+                        </p>
+                      </div>
+                      <div
                         style={{
-                          display: "block",
-                          width: "100%",
-                          height: "min(520px, 62vh)",
-                          border: "none",
+                          borderRadius: "10px",
+                          border: "1px solid #e2e8f0",
+                          background: "#f8fafc",
+                          padding: "0.75rem 0.8rem",
+                        }}
+                      >
+                        <p
+                          style={{
+                            margin: "0 0 0.2rem",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            color: "#64748b",
+                          }}
+                        >
+                          Photos live publiées
+                        </p>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "1.2rem",
+                            fontWeight: 800,
+                            color: "#0f172a",
+                          }}
+                        >
+                          {landingLivePhotosCount}
+                        </p>
+                      </div>
+                    </div>
+                    {eventId ? (
+                      <Link
+                        href={`/admin/event/${encodeURIComponent(eventId)}`}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: "0.55rem 0.9rem",
+                          borderRadius: "10px",
+                          textDecoration: "none",
+                          border: "1px solid #cbd5e1",
                           background: "#fff",
+                          color: "#334155",
+                          fontSize: "0.84rem",
+                          fontWeight: 700,
+                        }}
+                      >
+                        Ouvrir la régie
+                      </Link>
+                    ) : null}
+                  </section>
+
+                  <section style={card}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem" }}>
+                      <button
+                        type="button"
+                        style={{ ...btnPrimary, opacity: saving ? 0.7 : 1 }}
+                        disabled={saving}
+                        onClick={() => void handleSave()}
+                      >
+                        {saving ? "Enregistrement…" : "Enregistrer la landing"}
+                      </button>
+                      {landingPath ? (
+                        <button
+                          type="button"
+                          style={btnSecondary}
+                          onClick={() =>
+                            window.open(
+                              `${window.location.origin}${landingPath}`,
+                              "_blank",
+                              "noopener,noreferrer",
+                            )
+                          }
+                        >
+                          Voir la landing
+                        </button>
+                      ) : null}
+                    </div>
+                  </section>
+                </>
+              ) : (
+                <>
+                  <section style={card}>
+                    <h2
+                      style={{
+                        margin: "0 0 0.85rem",
+                        fontSize: "0.72rem",
+                        fontWeight: 800,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "#64748b",
+                      }}
+                    >
+                      Identité
+                    </h2>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: "#475569",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Titre de l’événement
+                    </label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={eventTitle}
+                      style={{
+                        width: "100%",
+                        boxSizing: "border-box",
+                        padding: "0.5rem 0.65rem",
+                        borderRadius: "8px",
+                        border: "1px solid #e2e8f0",
+                        background: "#f8fafc",
+                        color: "#64748b",
+                        fontSize: "0.88rem",
+                        marginBottom: "0.85rem",
+                      }}
+                    />
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: "#475569",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Description (salle /join)
+                    </label>
+                    <textarea
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      rows={4}
+                      maxLength={2000}
+                      placeholder="Texte affiché sous le titre pour les participants…"
+                      style={{
+                        width: "100%",
+                        boxSizing: "border-box",
+                        padding: "0.55rem 0.65rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.88rem",
+                        resize: "vertical",
+                        fontFamily: "inherit",
+                      }}
+                    />
+                    <p
+                      style={{
+                        margin: "0.85rem 0 0.35rem",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: "#475569",
+                      }}
+                    >
+                      Logo
+                    </p>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "0.5rem",
+                        alignItems: "center",
+                      }}
+                    >
+                      {logoUrl ? (
+                        <img
+                          src={logoUrl}
+                          alt="Aperçu logo"
+                          style={{
+                            width: "56px",
+                            height: "56px",
+                            objectFit: "contain",
+                            borderRadius: "10px",
+                            border: "1px solid #e2e8f0",
+                            background: "#fff",
+                          }}
+                        />
+                      ) : null}
+                      <label style={{ ...btnSecondary, display: "inline-block", cursor: "pointer" }}>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/gif"
+                          style={{ display: "none" }}
+                          disabled={uploadKind !== null}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            e.target.value = "";
+                            if (f) void handleUpload("logo", f);
+                          }}
+                        />
+                        {uploadKind === "logo" ? "Envoi…" : "Envoyer un logo"}
+                      </label>
+                      {logoUrl ? (
+                        <button type="button" style={btnDanger} onClick={clearLogo}>
+                          Retirer
+                        </button>
+                      ) : null}
+                    </div>
+                  </section>
+
+                  <section style={card}>
+                    <h2
+                      style={{
+                        margin: "0 0 0.85rem",
+                        fontSize: "0.72rem",
+                        fontWeight: 800,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "#64748b",
+                      }}
+                    >
+                      Infos & liens
+                    </h2>
+                    <p
+                      style={{
+                        margin: "0 0 0.75rem",
+                        fontSize: "0.77rem",
+                        color: "#64748b",
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      Bloc d’information affiché sur la salle participant `/join`.
+                    </p>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: "#475569",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Titre du bloc
+                    </label>
+                    <input
+                      type="text"
+                      value={infoSectionTitle}
+                      maxLength={120}
+                      onChange={(e) => setInfoSectionTitle(e.target.value)}
+                      placeholder="Infos pratiques"
+                      style={{
+                        width: "100%",
+                        boxSizing: "border-box",
+                        padding: "0.5rem 0.65rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.88rem",
+                        marginBottom: "0.75rem",
+                      }}
+                    />
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: "#475569",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Texte court
+                    </label>
+                    <textarea
+                      value={infoSectionText}
+                      onChange={(e) => setInfoSectionText(e.target.value)}
+                      rows={3}
+                      maxLength={1200}
+                      placeholder="Ex: Consultez le programme, le règlement ou nos ressources."
+                      style={{
+                        width: "100%",
+                        boxSizing: "border-box",
+                        padding: "0.55rem 0.65rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.88rem",
+                        resize: "vertical",
+                        fontFamily: "inherit",
+                        marginBottom: "0.75rem",
+                      }}
+                    />
+                    <div
+                      style={{
+                        border: "1px dashed #cbd5e1",
+                        borderRadius: "10px",
+                        padding: "0.65rem",
+                        marginBottom: "0.6rem",
+                      }}
+                    >
+                      <p
+                        style={{
+                          margin: "0 0 0.45rem",
+                          fontSize: "0.76rem",
+                          fontWeight: 700,
+                          color: "#475569",
+                        }}
+                      >
+                        Bouton principal
+                      </p>
+                      <input
+                        type="text"
+                        value={infoPrimaryCtaLabel}
+                        maxLength={80}
+                        onChange={(e) => setInfoPrimaryCtaLabel(e.target.value)}
+                        placeholder="Label (ex: Programme)"
+                        style={{
+                          width: "100%",
+                          boxSizing: "border-box",
+                          padding: "0.47rem 0.6rem",
+                          borderRadius: "8px",
+                          border: "1px solid #cbd5e1",
+                          fontSize: "0.84rem",
+                          marginBottom: "0.4rem",
+                        }}
+                      />
+                      <input
+                        type="url"
+                        value={infoPrimaryCtaUrl}
+                        onChange={(e) => setInfoPrimaryCtaUrl(e.target.value)}
+                        placeholder="https://..."
+                        style={{
+                          width: "100%",
+                          boxSizing: "border-box",
+                          padding: "0.47rem 0.6rem",
+                          borderRadius: "8px",
+                          border: "1px solid #cbd5e1",
+                          fontSize: "0.84rem",
                         }}
                       />
                     </div>
-                    <button
-                      type="button"
-                      style={{ ...btnSecondary, marginTop: "0.75rem", width: "100%" }}
-                      onClick={() =>
-                        window.open(
-                          `${window.location.origin}${joinPath}`,
-                          "_blank",
-                          "noopener,noreferrer",
-                        )
-                      }
+                    <div
+                      style={{
+                        border: "1px dashed #cbd5e1",
+                        borderRadius: "10px",
+                        padding: "0.65rem",
+                        marginBottom: "0.7rem",
+                      }}
                     >
-                      Ouvrir l’aperçu dans un nouvel onglet
-                    </button>
-                  </>
-                ) : (
-                  <p style={{ color: "#64748b", margin: 0 }}>Slug manquant.</p>
-                )}
+                      <p
+                        style={{
+                          margin: "0 0 0.45rem",
+                          fontSize: "0.76rem",
+                          fontWeight: 700,
+                          color: "#475569",
+                        }}
+                      >
+                        Bouton secondaire (optionnel)
+                      </p>
+                      <input
+                        type="text"
+                        value={infoSecondaryCtaLabel}
+                        maxLength={80}
+                        onChange={(e) => setInfoSecondaryCtaLabel(e.target.value)}
+                        placeholder="Label (ex: Règlement)"
+                        style={{
+                          width: "100%",
+                          boxSizing: "border-box",
+                          padding: "0.47rem 0.6rem",
+                          borderRadius: "8px",
+                          border: "1px solid #cbd5e1",
+                          fontSize: "0.84rem",
+                          marginBottom: "0.4rem",
+                        }}
+                      />
+                      <input
+                        type="url"
+                        value={infoSecondaryCtaUrl}
+                        onChange={(e) => setInfoSecondaryCtaUrl(e.target.value)}
+                        placeholder="https://..."
+                        style={{
+                          width: "100%",
+                          boxSizing: "border-box",
+                          padding: "0.47rem 0.6rem",
+                          borderRadius: "8px",
+                          border: "1px solid #cbd5e1",
+                          fontSize: "0.84rem",
+                        }}
+                      />
+                    </div>
+                    <label
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                        fontSize: "0.82rem",
+                        color: "#334155",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={infoShowOnFinished}
+                        onChange={(e) => setInfoShowOnFinished(e.target.checked)}
+                      />
+                      Afficher aussi après la fin de l’événement
+                    </label>
+                  </section>
+
+                  <section style={card}>
+                    <h2
+                      style={{
+                        margin: "0 0 0.85rem",
+                        fontSize: "0.72rem",
+                        fontWeight: 800,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "#64748b",
+                      }}
+                    >
+                      Apparence
+                    </h2>
+                    <p
+                      style={{
+                        margin: "0 0 0.35rem",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: "#475569",
+                      }}
+                    >
+                      Image de fond
+                    </p>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center", marginBottom: "0.85rem" }}>
+                      {backgroundUrl ? (
+                        <img
+                          src={backgroundUrl}
+                          alt=""
+                          style={{
+                            width: "120px",
+                            height: "72px",
+                            objectFit: "cover",
+                            borderRadius: "8px",
+                            border: "1px solid #e2e8f0",
+                          }}
+                        />
+                      ) : null}
+                      <label style={{ ...btnSecondary, display: "inline-block", cursor: "pointer" }}>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/gif"
+                          style={{ display: "none" }}
+                          disabled={uploadKind !== null}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            e.target.value = "";
+                            if (f) void handleUpload("background", f);
+                          }}
+                        />
+                        {uploadKind === "background" ? "Envoi…" : "Image de fond"}
+                      </label>
+                      {backgroundUrl ? (
+                        <button type="button" style={btnDanger} onClick={clearBackground}>
+                          Retirer
+                        </button>
+                      ) : null}
+                    </div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: "#475569",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Couleur de fond (sans image)
+                    </label>
+                    <p
+                      style={{
+                        margin: "0 0 0.4rem",
+                        fontSize: "0.72rem",
+                        color: "#64748b",
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      S’applique lorsque aucune image de fond n’est définie. Sinon,
+                      dégradé ou thème par défaut.
+                    </p>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "0.5rem",
+                        alignItems: "center",
+                        marginBottom: "0.85rem",
+                      }}
+                    >
+                      <input
+                        type="text"
+                        value={roomBackgroundColor}
+                        onChange={(e) => setRoomBackgroundColor(e.target.value)}
+                        placeholder="#e5e7eb ou vide"
+                        style={{
+                          width: "10rem",
+                          padding: "0.45rem 0.55rem",
+                          borderRadius: "8px",
+                          border: "1px solid #cbd5e1",
+                          fontFamily: "ui-monospace, monospace",
+                          fontSize: "0.85rem",
+                        }}
+                      />
+                      <input
+                        type="color"
+                        value={
+                          /^#[0-9A-Fa-f]{6}$/.test(roomBackgroundColor.trim())
+                            ? roomBackgroundColor.trim()
+                            : "#e5e7eb"
+                        }
+                        onChange={(e) => setRoomBackgroundColor(e.target.value)}
+                        style={{
+                          width: "2.5rem",
+                          height: "2.5rem",
+                          padding: 0,
+                          border: "1px solid #cbd5e1",
+                          borderRadius: "8px",
+                          cursor: "pointer",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        style={btnDanger}
+                        onClick={() => setRoomBackgroundColor("")}
+                      >
+                        Par défaut
+                      </button>
+                    </div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: "#475569",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Couleur principale (accents)
+                    </label>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
+                      <input
+                        type="text"
+                        value={primaryColor}
+                        onChange={(e) => setPrimaryColor(e.target.value)}
+                        placeholder="#2563eb"
+                        style={{
+                          width: "7rem",
+                          padding: "0.45rem 0.55rem",
+                          borderRadius: "8px",
+                          border: "1px solid #cbd5e1",
+                          fontFamily: "ui-monospace, monospace",
+                          fontSize: "0.85rem",
+                        }}
+                      />
+                      <input
+                        type="color"
+                        value={/^#[0-9A-Fa-f]{6}$/.test(primaryColor) ? primaryColor : "#2563eb"}
+                        onChange={(e) => setPrimaryColor(e.target.value)}
+                        style={{
+                          width: "2.5rem",
+                          height: "2.5rem",
+                          padding: 0,
+                          border: "1px solid #cbd5e1",
+                          borderRadius: "8px",
+                          cursor: "pointer",
+                        }}
+                      />
+                      <span
+                        style={{
+                          width: "2rem",
+                          height: "2rem",
+                          borderRadius: "8px",
+                          border: "1px solid #e2e8f0",
+                          background: /^#[0-9A-Fa-f]{6}$/.test(primaryColor)
+                            ? primaryColor
+                            : "#2563eb",
+                        }}
+                        aria-hidden
+                      />
+                    </div>
+                  </section>
+
+                  <section style={card}>
+                    <h2
+                      style={{
+                        margin: "0 0 0.85rem",
+                        fontSize: "0.72rem",
+                        fontWeight: 800,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "#64748b",
+                      }}
+                    >
+                      Ambiance
+                    </h2>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: "#475569",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Thème de base
+                    </label>
+                    <select
+                      value={themeMode}
+                      onChange={(e) => setThemeMode(e.target.value)}
+                      style={{
+                        width: "100%",
+                        maxWidth: "16rem",
+                        padding: "0.45rem 0.55rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.88rem",
+                        marginBottom: "0.85rem",
+                      }}
+                    >
+                      <option value="dark">Sombre</option>
+                      <option value="light">Clair</option>
+                      <option value="auto">Auto (appareil)</option>
+                    </select>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: "#475569",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Assombrissement sur l’image de fond
+                    </label>
+                    <select
+                      value={backgroundOverlayStrength}
+                      onChange={(e) =>
+                        setBackgroundOverlayStrength(e.target.value)
+                      }
+                      style={{
+                        width: "100%",
+                        maxWidth: "16rem",
+                        padding: "0.45rem 0.55rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.88rem",
+                      }}
+                    >
+                      <option value="low">Faible</option>
+                      <option value="medium">Moyen</option>
+                      <option value="strong">Fort</option>
+                    </select>
+                  </section>
+
+                  <section style={card}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem" }}>
+                      <button
+                        type="button"
+                        style={{ ...btnPrimary, opacity: saving ? 0.7 : 1 }}
+                        disabled={saving}
+                        onClick={() => void handleSave()}
+                      >
+                        {saving ? "Enregistrement…" : "Enregistrer la salle live"}
+                      </button>
+                      {joinPath ? (
+                        <button
+                          type="button"
+                          style={btnSecondary}
+                          onClick={() =>
+                            window.open(
+                              `${window.location.origin}${joinPath}`,
+                              "_blank",
+                              "noopener,noreferrer",
+                            )
+                          }
+                        >
+                          Voir la salle
+                        </button>
+                      ) : null}
+                    </div>
+                  </section>
+                </>
+              )}
+            </div>
+
+            <div style={card} className="customization-preview-card">
+              <h2
+                style={{
+                  margin: "0 0 0.15rem",
+                  fontSize: "1rem",
+                  fontWeight: 800,
+                }}
+              >
+                {isLandingPage ? "Aperçu landing" : "Aperçu de la salle"}
+              </h2>
+              <p style={{ margin: "0 0 0.85rem", fontSize: "0.82rem", color: "#64748b" }}>
+                {isLandingPage
+                  ? "Prévisualisation de la vitrine publique. L’aperçu reflète la dernière version enregistrée."
+                  : "Aperçu brouillon en direct (sans enregistrement) : seule la page admin reçoit ces réglages ; les participants voient la version sauvegardée côté serveur."}
+              </p>
+              {(isLandingPage ? landingPath : joinPath) ? (
+                <>
+                  <div
+                    style={{
+                      borderRadius: "18px",
+                      overflow: "hidden",
+                      border: "1px solid #cbd5e1",
+                      background: "#0f172a",
+                      boxShadow:
+                        "0 24px 48px rgba(15, 23, 42, 0.15), inset 0 1px 0 rgba(255,255,255,0.06)",
+                      minHeight: "min(520px, 62vh)",
+                      position: "relative",
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "10px",
+                        left: "50%",
+                        transform: "translateX(-50%)",
+                        width: "72px",
+                        height: "5px",
+                        borderRadius: "4px",
+                        background: "rgba(255,255,255,0.15)",
+                        zIndex: 2,
+                      }}
+                      aria-hidden
+                    />
+                    <iframe
+                      ref={previewIframeRef}
+                      key={`${mode}-${slug ?? "preview"}`}
+                      title={isLandingPage ? "Aperçu landing" : "Aperçu salle"}
+                      src={isLandingPage ? landingPath : joinPath}
+                      sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                      onLoad={() => {
+                        if (!isLivePage) return;
+                        setPreviewIframeReady(true);
+                        window.requestAnimationFrame(() => {
+                          postPreviewToIframe();
+                        });
+                      }}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        height: "min(520px, 62vh)",
+                        border: "none",
+                        background: "#fff",
+                      }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    style={{ ...btnSecondary, marginTop: "0.75rem", width: "100%" }}
+                    onClick={() =>
+                      window.open(
+                        `${window.location.origin}${isLandingPage ? landingPath : joinPath}`,
+                        "_blank",
+                        "noopener,noreferrer",
+                      )
+                    }
+                  >
+                    {isLandingPage
+                      ? "Ouvrir la landing dans un nouvel onglet"
+                      : "Ouvrir l’aperçu dans un nouvel onglet"}
+                  </button>
+                </>
+              ) : (
+                <p style={{ color: "#64748b", margin: 0 }}>Slug manquant.</p>
+              )}
             </div>
           </div>
         )}
@@ -1707,6 +1916,138 @@ export default function EventCustomizationPage() {
           }
         }
       `}</style>
+    </main>
+  );
+}
+
+export default function EventCustomizationHubPage() {
+  const params = useParams();
+  const eventId = getEventIdFromParams(params);
+  const liveHref = eventId ? `/admin/events/${encodeURIComponent(eventId)}/live` : "/admin/events";
+  const landingHref = eventId
+    ? `/admin/events/${encodeURIComponent(eventId)}/landing`
+    : "/admin/events";
+
+  return (
+    <main style={{ minHeight: "100vh", background: "#f8fafc", color: "#0f172a" }}>
+      <div
+        style={{
+          maxWidth: "980px",
+          margin: "0 auto",
+          padding: "1.25rem clamp(1rem, 3vw, 1.75rem) 2.5rem",
+          boxSizing: "border-box",
+        }}
+      >
+        <div style={{ marginBottom: "1.35rem" }}>
+          <Link
+            href="/admin/events"
+            style={{
+              fontSize: "0.9rem",
+              fontWeight: 600,
+              color: "#475569",
+              textDecoration: "none",
+            }}
+          >
+            ← Mes événements
+          </Link>
+          <h1
+            style={{
+              margin: "0.65rem 0 0.35rem",
+              fontSize: "clamp(1.35rem, 3vw, 1.65rem)",
+              fontWeight: 800,
+              letterSpacing: "-0.02em",
+            }}
+          >
+            Personnalisation de l’événement
+          </h1>
+          <p style={{ margin: 0, color: "#64748b", fontSize: "0.95rem" }}>
+            Choisissez l’espace à configurer : le live interactif ou la vitrine
+            événementielle.
+          </p>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+            gap: "1rem",
+          }}
+        >
+          <section style={card}>
+            <p
+              style={{
+                margin: "0 0 0.35rem",
+                fontSize: "0.82rem",
+                fontWeight: 800,
+                color: "#1d4ed8",
+              }}
+            >
+              🎨 Salle live
+            </p>
+            <p
+              style={{
+                margin: "0 0 0.9rem",
+                color: "#475569",
+                fontSize: "0.9rem",
+                lineHeight: 1.5,
+              }}
+            >
+              Configurez l’expérience interactive et visuelle de votre salle de
+              vote : logo, fond, couleurs, thème, infos et aperçu live.
+            </p>
+            <Link
+              href={liveHref}
+              style={{
+                ...btnPrimary,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                textDecoration: "none",
+              }}
+            >
+              Ouvrir la salle live
+            </Link>
+          </section>
+
+          <section style={card}>
+            <p
+              style={{
+                margin: "0 0 0.35rem",
+                fontSize: "0.82rem",
+                fontWeight: 800,
+                color: "#7c3aed",
+              }}
+            >
+              ✨ Landing événement
+            </p>
+            <p
+              style={{
+                margin: "0 0 0.9rem",
+                color: "#475569",
+                fontSize: "0.9rem",
+                lineHeight: 1.5,
+              }}
+            >
+              Créez la vitrine immersive de l’événement : couverture, titre,
+              description, galerie événement, moments live et aperçu landing.
+            </p>
+            <Link
+              href={landingHref}
+              style={{
+                ...btnSecondary,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                textDecoration: "none",
+                borderColor: "#ddd6fe",
+                color: "#6d28d9",
+              }}
+            >
+              Ouvrir la landing événement
+            </Link>
+          </section>
+        </div>
+      </div>
     </main>
   );
 }

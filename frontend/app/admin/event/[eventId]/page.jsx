@@ -3028,9 +3028,9 @@ function SectionPartageLandingEvenement({ slug, landingEnabled, eventId }) {
     color: "#64748b",
   };
 
-  const customizeHref =
+  const landingAdminHref =
     eventId != null
-      ? `/admin/events/${encodeURIComponent(eventId)}/customization#landing-page-section`
+      ? `/admin/events/${encodeURIComponent(eventId)}/landing`
       : "/admin/events";
 
   if (landingEnabled) {
@@ -3063,8 +3063,18 @@ function SectionPartageLandingEvenement({ slug, landingEnabled, eventId }) {
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem", alignItems: "center" }}>
             <button type="button" onClick={() => ouvrir()} style={linkAct}>
-              Ouvrir la landing
+              👁 Voir la landing
             </button>
+            <span style={{ color: "#e2e8f0", fontSize: "0.65rem" }}>·</span>
+            <Link
+              href={landingAdminHref}
+              style={{
+                ...linkAct,
+                textDecoration: "underline",
+              }}
+            >
+              ✨ Landing événement
+            </Link>
             <span style={{ color: "#e2e8f0", fontSize: "0.65rem" }}>·</span>
             <button type="button" onClick={() => void copier()} style={linkAct}>
               Copier le lien
@@ -3105,7 +3115,7 @@ function SectionPartageLandingEvenement({ slug, landingEnabled, eventId }) {
           Landing désactivée pour cet événement.
         </p>
         <Link
-          href={customizeHref}
+          href={landingAdminHref}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -3121,7 +3131,7 @@ function SectionPartageLandingEvenement({ slug, landingEnabled, eventId }) {
             textDecoration: "none",
           }}
         >
-          Configurer la landing
+          ✨ Landing événement
         </Link>
       </div>
     </div>
@@ -3431,7 +3441,7 @@ function RegiePublicPreviewPanel({
               Statistiques
             </Link>
             <Link
-              href={`/admin/events/${encodeURIComponent(eventId)}/customization`}
+              href={`/admin/events/${encodeURIComponent(eventId)}/live`}
               style={{
                 fontSize: "0.72rem",
                 fontWeight: 700,
@@ -3444,7 +3454,23 @@ function RegiePublicPreviewPanel({
                 whiteSpace: "nowrap",
               }}
             >
-              Personnalisation de la salle
+              🎨 Salle live
+            </Link>
+            <Link
+              href={`/admin/events/${encodeURIComponent(eventId)}/landing`}
+              style={{
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                padding: "0.35rem 0.65rem",
+                borderRadius: "8px",
+                border: "1px solid #ddd6fe",
+                background: "#faf5ff",
+                color: "#6d28d9",
+                textDecoration: "none",
+                whiteSpace: "nowrap",
+              }}
+            >
+              ✨ Landing événement
             </Link>
           </div>
         ) : null}
@@ -3870,24 +3896,49 @@ function RegieSidebarInner({
                   : "Aperçu public"}
               </button>
               {eventId ? (
-                <Link
-                  href={`/admin/events/${encodeURIComponent(eventId)}/customization`}
+                <div
                   style={{
                     width: "100%",
-                    boxSizing: "border-box",
-                    textAlign: "center",
-                    padding: "0.43rem 0.6rem",
-                    fontSize: "0.77rem",
-                    fontWeight: 700,
-                    borderRadius: "9px",
-                    border: "1px solid #a5b4fc",
-                    background: "#f8fafc",
-                    color: "#4338ca",
-                    textDecoration: "none",
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: "0.45rem",
                   }}
                 >
-                  Personnalisation de la salle
-                </Link>
+                  <Link
+                    href={`/admin/events/${encodeURIComponent(eventId)}/live`}
+                    style={{
+                      boxSizing: "border-box",
+                      textAlign: "center",
+                      padding: "0.43rem 0.6rem",
+                      fontSize: "0.77rem",
+                      fontWeight: 700,
+                      borderRadius: "9px",
+                      border: "1px solid #a5b4fc",
+                      background: "#f8fafc",
+                      color: "#4338ca",
+                      textDecoration: "none",
+                    }}
+                  >
+                    🎨 Salle live
+                  </Link>
+                  <Link
+                    href={`/admin/events/${encodeURIComponent(eventId)}/landing`}
+                    style={{
+                      boxSizing: "border-box",
+                      textAlign: "center",
+                      padding: "0.43rem 0.6rem",
+                      fontSize: "0.77rem",
+                      fontWeight: 700,
+                      borderRadius: "9px",
+                      border: "1px solid #ddd6fe",
+                      background: "#faf5ff",
+                      color: "#6d28d9",
+                      textDecoration: "none",
+                    }}
+                  >
+                    ✨ Landing
+                  </Link>
+                </div>
               ) : null}
             </>
           ) : null}
