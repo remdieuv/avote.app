@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { LiveMicroLabel } from "@/components/admin/LiveMicroIcon";
 import { resolveApiAssetUrl } from "@/lib/assetUrl";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
@@ -106,7 +107,7 @@ function EditorModeSwitch({ eventId, current }) {
         className="editor-universe-link editor-universe-link--live"
         style={linkStyle(current === "live")}
       >
-        🎤 Salle live
+        <LiveMicroLabel />
       </Link>
       <Link
         href={landingHref}
@@ -728,7 +729,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
               letterSpacing: "-0.02em",
             }}
           >
-            {isLandingPage ? "✨ Landing événement" : "🎤 Salle live"}
+            {isLandingPage ? "✨ Landing événement" : <LiveMicroLabel iconSize={18} gap="0.45rem" />}
           </h1>
           <p style={{ margin: 0, color: "#64748b", fontSize: "0.95rem" }}>
             {isLandingPage
@@ -2016,7 +2017,7 @@ export default function EventCustomizationHubPage() {
                 color: "#1d4ed8",
               }}
             >
-              🎤 Salle live
+              <LiveMicroLabel iconSize={15} gap="0.42rem" />
             </p>
             <p
               style={{

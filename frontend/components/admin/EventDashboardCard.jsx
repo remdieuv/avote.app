@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { getEventUxState } from "@/lib/eventUxState";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
+import { LiveMicroLabel } from "@/components/admin/LiveMicroIcon";
 
 /**
  * @param {{
@@ -472,7 +473,7 @@ export function EventDashboardCard({
                   textAlign: "center",
                 }}
               >
-                🎤 Salle live
+                <LiveMicroLabel />
               </Link>
               <Link
                 href={`/admin/events/${ev.id}/landing`}

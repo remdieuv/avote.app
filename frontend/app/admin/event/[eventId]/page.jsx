@@ -12,6 +12,7 @@ import {
 } from "@/lib/chronoFormat";
 import { AjouterQuestionLiveModal } from "@/components/AjouterQuestionLiveModal";
 import { CheckoutEventButton } from "@/components/billing/CheckoutEventButton";
+import { LiveMicroLabel } from "@/components/admin/LiveMicroIcon";
 import { adminFetch, apiBaseBrowser, SOCKET_URL as SOCKET } from "@/lib/config";
 import {
   getEventUxPanelStyles,
@@ -3455,7 +3456,7 @@ function RegiePublicPreviewPanel({
                 whiteSpace: "nowrap",
               }}
             >
-              🎤 Salle live
+              <LiveMicroLabel iconSize={13} gap="0.32rem" />
             </Link>
             <Link
               href={`/admin/events/${encodeURIComponent(eventId)}/landing`}
@@ -3940,7 +3941,7 @@ function RegieSidebarInner({
                       textDecoration: "none",
                     }}
                   >
-                    🎤 Salle live
+                    <LiveMicroLabel iconSize={13} gap="0.3rem" />
                   </Link>
                   <Link
                     href={`/admin/events/${encodeURIComponent(eventId)}/landing`}
