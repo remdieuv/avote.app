@@ -6665,194 +6665,351 @@ export default function RegieEventPage() {
             <section
               style={{
                 ...CARD,
-                padding: desktop ? "0.9rem 1rem" : "0.78rem 0.86rem",
-                display: "flex",
-                flexWrap: "wrap",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: "0.75rem 0.9rem",
+                padding: desktop ? "1.05rem 1.15rem" : "0.9rem 0.95rem",
                 borderColor: "rgba(124, 58, 237, 0.22)",
                 background:
                   "linear-gradient(135deg, #0f172a 0%, #1e1b4b 42%, #312e81 100%)",
                 boxShadow: "0 22px 46px rgba(30, 27, 75, 0.24)",
+                minWidth: 0,
               }}
+              aria-label="État live"
             >
-              <div
-                style={{
-                  display: "grid",
-                  gap: "0.18rem",
-                  minWidth: 0,
-                  flex: "1 1 260px",
-                }}
-              >
-                <p
+              <div style={{ display: "grid", gap: "0.78rem" }}>
+                <div
                   style={{
-                    margin: 0,
-                    fontSize: "0.65rem",
-                    fontWeight: 700,
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    color: "rgba(224, 231, 255, 0.72)",
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "flex-end",
+                    justifyContent: "space-between",
+                    gap: "0.55rem 0.85rem",
                   }}
                 >
-                  Régie événement
-                </p>
+                  <div style={{ display: "grid", gap: "0.18rem", minWidth: 0 }}>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "0.65rem",
+                        fontWeight: 700,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "rgba(224, 231, 255, 0.72)",
+                      }}
+                    >
+                      Console live
+                    </p>
+                    <h2
+                      style={{
+                        margin: 0,
+                        fontSize: desktop ? "1.34rem" : "1.06rem",
+                        fontWeight: 800,
+                        letterSpacing: "-0.03em",
+                        color: "#ffffff",
+                        lineHeight: 1.15,
+                      }}
+                      title={eventData.title}
+                    >
+                      {eventData.title}
+                    </h2>
+                  </div>
+                </div>
                 <div
                   style={{
                     display: "flex",
                     flexWrap: "wrap",
                     alignItems: "center",
-                    gap: "0.45rem",
-                    minWidth: 0,
+                    gap: "0.42rem 0.5rem",
                   }}
                 >
-                  <h2
+                  {[
+                    { label: pilotageTag, color: statePanel.pillColor, bg: "rgba(255,255,255,0.74)", border: `${statePanel.accent}22` },
+                    { label: voteLabel, color: voteIsOpen ? "#166534" : "#334155", bg: voteIsOpen ? "#dcfce7" : "rgba(255,255,255,0.74)", border: voteIsOpen ? "#86efac" : "#cbd5e1" },
+                    { label: participantsCounterLabel, color: participantsCounterStyle.valueColor, bg: participantsCounterStyle.background, border: participantsCounterStyle.borderColor || "#cbd5e1" },
+                    { label: socketStatusLabel, color: socketStatusColor, bg: socketStatusBg, border: "#cbd5e1" },
+                    { label: modeBadge.label, color: modeBadge.color, bg: modeBadge.bg, border: modeBadge.border },
+                  ].map((item) => (
+                    <span
+                      key={item.label}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        borderRadius: "999px",
+                        padding: "0.22rem 0.58rem",
+                        fontSize: "0.72rem",
+                        fontWeight: 800,
+                        background: item.bg,
+                        color: item.color,
+                        border: `1px solid ${item.border}`,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {item.label}
+                    </span>
+                  ))}
+                  {hasDisplayGap ? (
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        borderRadius: "999px",
+                        padding: "0.22rem 0.58rem",
+                        fontSize: "0.72rem",
+                        fontWeight: 800,
+                        border: "1px solid rgba(251, 191, 36, 0.24)",
+                        background: "rgba(255, 247, 237, 0.9)",
+                        color: "#9a3412",
+                      }}
+                    >
+                      Écart global / écran B
+                    </span>
+                  ) : null}
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "flex-start",
+                    justifyContent: "space-between",
+                    gap: "0.85rem 1rem",
+                  }}
+                >
+                  <div
                     style={{
-                      margin: 0,
-                      fontSize: desktop ? "1.42rem" : "1.08rem",
-                      fontWeight: 800,
-                      letterSpacing: "-0.03em",
-                      color: "#ffffff",
+                      flex: "1 1 420px",
+                      minWidth: 0,
+                      display: "grid",
+                      gap: "0.22rem",
                     }}
                   >
-                    Console live
-                  </h2>
-                  <span
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "0.74rem",
+                        fontWeight: 700,
+                        color: "rgba(224, 231, 255, 0.78)",
+                      }}
+                    >
+                      {stateLabel} · {questionProgressSummary}
+                    </p>
+                    <h3
+                      style={{
+                        margin: 0,
+                        fontSize: desktop ? "1.42rem" : "1.08rem",
+                        fontWeight: 800,
+                        letterSpacing: "-0.03em",
+                        color: "#ffffff",
+                        lineHeight: 1.18,
+                      }}
+                    >
+                      {activeQuestionTitle}
+                    </h3>
+                    <p
+                      style={{
+                        margin: "0.1rem 0 0 0",
+                        fontSize: compactTopPanel ? "0.82rem" : "0.88rem",
+                        color: "rgba(226, 232, 240, 0.86)",
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      À l’écran : <strong style={{ color: "#ffffff" }}>{displayLabelGlobal}</strong>
+                      {" · "}
+                      {screenBConnected ? `Écran B : ${displayLabelScreenB}` : "Écran B non connecté"}
+                    </p>
+                  </div>
+
+                  <div
                     style={{
-                      fontSize: "0.75rem",
-                      color: "rgba(224, 231, 255, 0.78)",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      maxWidth: desktop ? "28rem" : "100%",
+                      flexShrink: 0,
+                      minWidth: desktop ? "124px" : "100%",
+                      display: "grid",
+                      gap: "0.16rem",
+                      justifyItems: desktop ? "end" : "start",
+                      textAlign: desktop ? "right" : "left",
                     }}
-                    title={eventData.title}
                   >
-                    {eventData.title}
-                  </span>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "0.62rem",
+                        fontWeight: 700,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "rgba(224, 231, 255, 0.62)",
+                      }}
+                    >
+                      Chrono scène
+                    </p>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: desktop ? "1.85rem" : "1.28rem",
+                        fontWeight: 800,
+                        lineHeight: 1.02,
+                        color: "#f5f3ff",
+                        fontFamily: "ui-monospace, monospace",
+                        fontVariantNumeric: "tabular-nums",
+                        letterSpacing: "-0.03em",
+                      }}
+                    >
+                      {chronoEtatLiveTexte}
+                    </p>
+                    <p style={{ margin: 0, fontSize: "0.7rem", color: "rgba(224, 231, 255, 0.72)" }}>
+                      {tm?.running && !tm?.isPaused
+                        ? "en cours"
+                        : tm?.isPaused
+                          ? "en pause"
+                          : "prêt"}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={scrollToChronoPanel}
+                      style={{
+                        ...btnGhost,
+                        marginTop: "0.12rem",
+                        width: "fit-content",
+                        padding: "0.24rem 0.56rem",
+                        fontSize: "0.68rem",
+                        fontWeight: 700,
+                        borderColor: "rgba(196, 181, 253, 0.35)",
+                        background: "rgba(255,255,255,0.08)",
+                        color: "#ede9fe",
+                      }}
+                    >
+                      Chrono
+                    </button>
+                  </div>
                 </div>
               </div>
+            </section>
 
+            <section
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "0.45rem 0.65rem",
+                padding: desktop ? "0.55rem 0.75rem" : "0.5rem 0.68rem",
+                borderRadius: "12px",
+                border: "1px solid rgba(148, 163, 184, 0.16)",
+                background: "rgba(248, 250, 252, 0.88)",
+                minWidth: 0,
+              }}
+              aria-label="Crédits événement"
+            >
               <div
                 style={{
                   display: "flex",
                   flexWrap: "wrap",
                   alignItems: "center",
-                  justifyContent: desktop ? "flex-end" : "flex-start",
-                  gap: "0.5rem 0.6rem",
-                  flex: "1 1 320px",
+                  gap: "0.45rem 0.6rem",
                   minWidth: 0,
                 }}
               >
                 <span
                   title="Crédits événement disponibles"
                   style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    borderRadius: "999px",
-                    padding: "0.28rem 0.62rem",
                     fontSize: "0.72rem",
-                    fontWeight: 800,
-                    border: "1px solid rgba(191, 219, 254, 0.18)",
-                    background: "rgba(255,255,255,0.12)",
-                    color: "#dbeafe",
-                    letterSpacing: "0.02em",
+                    fontWeight: 700,
+                    color: "#64748b",
                   }}
                 >
                   {`Crédits : ${creditsLabel}`}
                 </span>
-
-                {canStartReal ? (
-                  <div
-                    style={{
-                      display: "grid",
-                      gap: "0.2rem",
-                      marginLeft: desktop ? "auto" : 0,
-                      minWidth: 0,
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        alignItems: "center",
-                        justifyContent: desktop ? "flex-end" : "flex-start",
-                        gap: "0.45rem",
-                      }}
-                    >
-                      <button
-                        type="button"
-                        disabled={startRealDisabled}
-                        onClick={async () => {
-                          if (!eventId || startRealDisabled) return;
-                          const ok = window.confirm(
-                            "Vous allez démarrer l’événement réel.\n\nCela consommera 1 crédit événement. Après la fin, cet événement ne pourra plus être rejoué gratuitement.",
-                          );
-                          if (!ok) return;
-                          await postAction(
-                            `/events/${eventId}/start-real`,
-                            "Mode réel en cours",
-                          );
-                          await fetchMeCredits();
-                        }}
-                        style={{
-                          padding: desktop ? "0.45rem 0.8rem" : "0.42rem 0.72rem",
-                          fontSize: desktop ? "0.76rem" : "0.74rem",
-                          minHeight: desktop ? "2.15rem" : "2rem",
-                          borderRadius: "12px",
-                          border: "1px solid rgba(255,255,255,0.16)",
-                          background: startRealDisabled
-                            ? "rgba(226, 232, 240, 0.65)"
-                            : "linear-gradient(180deg, #f59e0b 0%, #ea580c 100%)",
-                          color: startRealDisabled ? "#475569" : "#fff",
-                          fontWeight: 800,
-                          cursor: startRealDisabled ? "not-allowed" : "pointer",
-                          boxShadow: startRealDisabled
-                            ? "none"
-                            : "0 14px 26px rgba(234, 88, 12, 0.22)",
-                        }}
-                      >
-                        {hasCreditsValue && !hasEventCredit
-                          ? "Aucun crédit disponible"
-                          : "Démarrer l’événement réel"}
-                      </button>
-
-                      {hasCreditsValue && !hasEventCredit ? (
-                        <CheckoutEventButton
-                          label="Acheter 1 événement (49€)"
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            width: "fit-content",
-                            padding: "0.32rem 0.6rem",
-                            borderRadius: "8px",
-                            border: "1px solid #fca5a5",
-                            background: "#fff",
-                            color: "#b91c1c",
-                            fontSize: "0.72rem",
-                            fontWeight: 800,
-                            textDecoration: "none",
-                          }}
-                        />
-                      ) : null}
-                    </div>
-                    <span
-                      style={{
-                        fontSize: "0.66rem",
-                          color: "rgba(226, 232, 240, 0.82)",
-                        fontWeight: 600,
-                        textAlign: desktop ? "right" : "left",
-                      }}
-                    >
-                      {hasCreditsValue && !hasEventCredit
-                        ? "1 événement réel = 49€ jusqu’à 500 participants."
-                        : "Ce lancement consommera 1 crédit événement."}
-                    </span>
-                  </div>
+                {canStartReal && hasCreditsValue && !hasEventCredit ? (
+                  <span style={{ fontSize: "0.68rem", color: "#94a3b8", fontWeight: 600 }}>
+                    Aucun crédit disponible
+                  </span>
                 ) : null}
               </div>
+
+              {canStartReal ? (
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    justifyContent: desktop ? "flex-end" : "flex-start",
+                    gap: "0.4rem 0.55rem",
+                    marginLeft: desktop ? "auto" : 0,
+                    minWidth: 0,
+                  }}
+                >
+                  <button
+                    type="button"
+                    disabled={startRealDisabled}
+                    onClick={async () => {
+                      if (!eventId || startRealDisabled) return;
+                      const ok = window.confirm(
+                        "Vous allez démarrer l’événement réel.\n\nCela consommera 1 crédit événement. Après la fin, cet événement ne pourra plus être rejoué gratuitement.",
+                      );
+                      if (!ok) return;
+                      await postAction(
+                        `/events/${eventId}/start-real`,
+                        "Mode réel en cours",
+                      );
+                      await fetchMeCredits();
+                    }}
+                    style={{
+                      padding: "0.34rem 0.68rem",
+                      fontSize: "0.72rem",
+                      minHeight: "2rem",
+                      borderRadius: "10px",
+                      border: "1px solid rgba(148, 163, 184, 0.22)",
+                      background: startRealDisabled
+                        ? "rgba(226, 232, 240, 0.65)"
+                        : "linear-gradient(180deg, #f59e0b 0%, #ea580c 100%)",
+                      color: startRealDisabled ? "#64748b" : "#fff",
+                      fontWeight: 800,
+                      cursor: startRealDisabled ? "not-allowed" : "pointer",
+                      boxShadow: startRealDisabled
+                        ? "none"
+                        : "0 8px 18px rgba(234, 88, 12, 0.16)",
+                    }}
+                  >
+                    {hasCreditsValue && !hasEventCredit
+                      ? "Aucun crédit disponible"
+                      : "Démarrer l’événement réel"}
+                  </button>
+
+                  {hasCreditsValue && !hasEventCredit ? (
+                    <CheckoutEventButton
+                      label="Acheter 1 événement (49€)"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "fit-content",
+                        padding: "0.3rem 0.58rem",
+                        borderRadius: "8px",
+                        border: "1px solid #fecaca",
+                        background: "#fff",
+                        color: "#b91c1c",
+                        fontSize: "0.7rem",
+                        fontWeight: 800,
+                        textDecoration: "none",
+                      }}
+                    />
+                  ) : null}
+
+                  <span
+                    style={{
+                      flex: desktop ? "0 0 100%" : "1 1 100%",
+                      fontSize: "0.64rem",
+                      color: "#94a3b8",
+                      fontWeight: 600,
+                      textAlign: desktop ? "right" : "left",
+                    }}
+                  >
+                    {hasCreditsValue && !hasEventCredit
+                      ? "1 événement réel = 49€ jusqu’à 500 participants."
+                      : "Ce lancement consommera 1 crédit événement."}
+                  </span>
+                </div>
+              ) : null}
             </section>
+
+
 
             <div
               style={{
@@ -6888,188 +7045,6 @@ export default function RegieEventPage() {
                 minWidth: 0,
               }}
             >
-              <section
-                style={{
-                  padding: compactTopPanel ? "0 0 0.95rem 0" : "0 0 1rem 0",
-                  border: "none",
-                  borderBottom: liveBandDivider,
-                  borderRadius: 0,
-                  background: "transparent",
-                  minWidth: 0,
-                  boxShadow: "none",
-                }}
-              >
-                <div style={{ display: "grid", gap: "0.78rem" }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      alignItems: "center",
-                      gap: "0.42rem 0.5rem",
-                    }}
-                  >
-                    {[
-                      { label: pilotageTag, color: statePanel.pillColor, bg: "rgba(255,255,255,0.74)", border: `${statePanel.accent}22` },
-                      { label: voteLabel, color: voteIsOpen ? "#166534" : "#334155", bg: voteIsOpen ? "#dcfce7" : "rgba(255,255,255,0.74)", border: voteIsOpen ? "#86efac" : "#cbd5e1" },
-                      { label: participantsCounterLabel, color: participantsCounterStyle.valueColor, bg: participantsCounterStyle.background, border: participantsCounterStyle.borderColor || "#cbd5e1" },
-                      { label: socketStatusLabel, color: socketStatusColor, bg: "rgba(255,255,255,0.74)", border: "#cbd5e1" },
-                      { label: modeBadge.label, color: modeBadge.color, bg: modeBadge.bg, border: modeBadge.border },
-                    ].map((item) => (
-                      <span
-                        key={item.label}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          borderRadius: "999px",
-                          padding: "0.22rem 0.58rem",
-                          fontSize: "0.72rem",
-                          fontWeight: 800,
-                          background: item.bg,
-                          color: item.color,
-                          border: `1px solid ${item.border}`,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {item.label}
-                      </span>
-                    ))}
-                    {hasDisplayGap ? (
-                      <span
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          borderRadius: "999px",
-                          padding: "0.22rem 0.58rem",
-                          fontSize: "0.72rem",
-                          fontWeight: 800,
-                          border: "1px solid rgba(251, 191, 36, 0.24)",
-                          background: "rgba(255, 247, 237, 0.9)",
-                          color: "#9a3412",
-                        }}
-                      >
-                        Écart global / écran B
-                      </span>
-                    ) : null}
-                  </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      alignItems: "flex-start",
-                      justifyContent: "space-between",
-                      gap: "0.85rem 1rem",
-                    }}
-                  >
-                    <div
-                      style={{
-                        flex: "1 1 420px",
-                        minWidth: 0,
-                        display: "grid",
-                        gap: "0.22rem",
-                      }}
-                    >
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: "0.74rem",
-                          fontWeight: 700,
-                          color: "#64748b",
-                        }}
-                      >
-                        {stateLabel} · {questionProgressSummary}
-                      </p>
-                      <h3
-                        style={{
-                          margin: 0,
-                          fontSize: desktop ? "1.42rem" : "1.08rem",
-                          fontWeight: 800,
-                          letterSpacing: "-0.03em",
-                          color: "#111827",
-                          lineHeight: 1.18,
-                        }}
-                      >
-                        {activeQuestionTitle}
-                      </h3>
-                      <p
-                        style={{
-                          margin: "0.1rem 0 0 0",
-                          fontSize: compactTopPanel ? "0.82rem" : "0.88rem",
-                          color: "#475569",
-                          lineHeight: 1.45,
-                        }}
-                      >
-                        À l’écran : <strong style={{ color: "#111827" }}>{displayLabelGlobal}</strong>
-                        {" · "}
-                        {screenBConnected ? `Écran B : ${displayLabelScreenB}` : "Écran B non connecté"}
-                      </p>
-                    </div>
-
-                    <div
-                      style={{
-                        flexShrink: 0,
-                        minWidth: desktop ? "124px" : "100%",
-                        display: "grid",
-                        gap: "0.16rem",
-                        justifyItems: desktop ? "end" : "start",
-                        textAlign: desktop ? "right" : "left",
-                      }}
-                    >
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: "0.62rem",
-                          fontWeight: 700,
-                          letterSpacing: "0.08em",
-                          textTransform: "uppercase",
-                          color: "#6b7280",
-                        }}
-                      >
-                        Chrono scène
-                      </p>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: desktop ? "1.85rem" : "1.28rem",
-                          fontWeight: 800,
-                          lineHeight: 1.02,
-                          color: "#3b0764",
-                          fontFamily: "ui-monospace, monospace",
-                          fontVariantNumeric: "tabular-nums",
-                          letterSpacing: "-0.03em",
-                        }}
-                      >
-                        {chronoEtatLiveTexte}
-                      </p>
-                      <p style={{ margin: 0, fontSize: "0.7rem", color: "#6b7280" }}>
-                        {tm?.running && !tm?.isPaused
-                          ? "en cours"
-                          : tm?.isPaused
-                            ? "en pause"
-                            : "prêt"}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={scrollToChronoPanel}
-                        style={{
-                          ...btnGhost,
-                          marginTop: "0.12rem",
-                          width: "fit-content",
-                          padding: "0.24rem 0.56rem",
-                          fontSize: "0.68rem",
-                          fontWeight: 700,
-                          borderColor: "#c4b5fd",
-                          background: "#f5f3ff",
-                          color: "#5b21b6",
-                        }}
-                      >
-                        Chrono
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
               <section
                 style={{
                   padding: compactTopPanel ? "0.1rem 0 0 0" : "0.18rem 0 0 0",
