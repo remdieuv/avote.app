@@ -45,6 +45,12 @@ function mapApiError(body, status) {
   if (code === "NO_EVENT_CREDIT") {
     return "Vous n’avez plus de crédit événement. Achetez un événement pour lancer le live réel.";
   }
+  if (code === "EVENT_ALREADY_CONSUMED") {
+    return "Le mode réel est déjà activé pour cet événement.";
+  }
+  if (code === "EVENT_LOCKED") {
+    return "Cet événement est terminé et verrouillé.";
+  }
   return message || code || `Erreur ${status}`;
 }
 
@@ -4879,6 +4885,41 @@ export default function RegieEventPage() {
     }
   }
 
+  async function startRealLive() {
+    if (!eventId || !canStartReal) return;
+    if (typeof window !== "undefined") {
+      const ok = window.confirm(
+        "Passer en live réel ?\n\n1 crédit événement sera consommé. Vous obtiendrez des résultats exacts, le chrono libre et les exports.",
+      );
+      if (!ok) return;
+    }
+    setAutoRotate(false);
+    setBusy(true);
+    setActionError(null);
+    try {
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/events/${eventId}/start-real`,
+        { method: "POST" },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(mapApiError(body, res.status));
+      }
+      if (typeof body?.eventCredits === "number") {
+        setEventCredits(Math.max(0, Number(body.eventCredits)));
+      } else {
+        await fetchMeCredits();
+      }
+      await fetchEvent({ silent: true });
+      setToastNotif("Mode réel activé");
+      window.setTimeout(() => setToastNotif(null), 2800);
+    } catch (e) {
+      setActionError(e.message || "Activation du mode réel impossible.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submitPollEdit() {
     const pollId = String(editingPoll?.id || "");
     if (!pollId) return;
@@ -6561,6 +6602,92 @@ export default function RegieEventPage() {
                       {eventData.title}
                     </h2>
                   </div>
+                  {inTestMode && !eventLocked ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                        justifyContent: "flex-end",
+                        gap: "0.42rem 0.55rem",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {hasCreditsValue && !hasEventCredit ? (
+                        <>
+                          <span
+                            style={{
+                              fontSize: "0.72rem",
+                              fontWeight: 600,
+                              color: "rgba(224, 231, 255, 0.72)",
+                            }}
+                          >
+                            Aucun crédit événement
+                          </span>
+                          <Link
+                            href="/pricing"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              padding: "0.48rem 0.88rem",
+                              borderRadius: "999px",
+                              border: "1px solid rgba(251, 191, 36, 0.55)",
+                              background:
+                                "linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%)",
+                              color: "#422006",
+                              fontSize: "0.76rem",
+                              fontWeight: 800,
+                              textDecoration: "none",
+                              whiteSpace: "nowrap",
+                              boxShadow: "0 10px 22px rgba(245, 158, 11, 0.28)",
+                            }}
+                          >
+                            Acheter un crédit
+                          </Link>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={startRealDisabled}
+                          onClick={() => void startRealLive()}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            padding: "0.5rem 0.95rem",
+                            borderRadius: "999px",
+                            border: "1px solid #86efac",
+                            background:
+                              "linear-gradient(180deg, #22c55e 0%, #16a34a 100%)",
+                            color: "#ffffff",
+                            fontSize: "0.76rem",
+                            fontWeight: 800,
+                            letterSpacing: "0.01em",
+                            cursor: startRealDisabled ? "not-allowed" : "pointer",
+                            opacity: startRealDisabled ? 0.55 : 1,
+                            whiteSpace: "nowrap",
+                            boxShadow: "0 12px 26px rgba(34, 197, 94, 0.32)",
+                          }}
+                        >
+                          Passer en live réel
+                        </button>
+                      )}
+                      {hasCreditsValue && hasEventCredit ? (
+                        <span
+                          style={{
+                            fontSize: "0.68rem",
+                            fontWeight: 700,
+                            color: "rgba(224, 231, 255, 0.65)",
+                          }}
+                        >
+                          {Number(creditsLabel) > 1
+                            ? `${creditsLabel} crédits disponibles`
+                            : `${creditsLabel} crédit disponible`}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
                 <div
                   style={{
