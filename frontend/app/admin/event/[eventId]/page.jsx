@@ -972,10 +972,11 @@ function lienDiffusionAbsolu(path) {
 
 /**
  * Rotation automatique question / résultats (présentation uniquement).
- * @param {{ embedded?: boolean; busy: boolean; autoRotate: boolean; onAutoRotateChange: (v: boolean) => void; autoRotateAllowed: boolean; autoRotateQuestionSec: number; autoRotateResultsSec: number; onAutoRotateQuestionSecChange: (n: number) => void; onAutoRotateResultsSecChange: (n: number) => void; }} props
+ * @param {{ embedded?: boolean; auxiliaryHint?: string | null; busy: boolean; autoRotate: boolean; onAutoRotateChange: (v: boolean) => void; autoRotateAllowed: boolean; autoRotateQuestionSec: number; autoRotateResultsSec: number; onAutoRotateQuestionSecChange: (n: number) => void; onAutoRotateResultsSecChange: (n: number) => void; }} props
  */
 function RegieAutoRotatePanel({
   embedded = false,
+  auxiliaryHint = null,
   busy,
   autoRotate,
   onAutoRotateChange,
@@ -1057,6 +1058,19 @@ function RegieAutoRotatePanel({
           {autoRotate ? "Activée" : "Désactivée"}
         </button>
       </div>
+      {auxiliaryHint ? (
+        <p
+          style={{
+            margin: "0.42rem 0 0 0",
+            fontSize: "0.72rem",
+            color: "#64748b",
+            lineHeight: 1.4,
+            fontWeight: 500,
+          }}
+        >
+          {auxiliaryHint}
+        </p>
+      ) : null}
       <div
         style={{
           marginTop: "0.55rem",
@@ -1141,18 +1155,32 @@ function RegieAutoRotatePanel({
           {AUTO_ROTATE_SEC_MIN}–{AUTO_ROTATE_SEC_MAX} s chacun.
         </span>
       </div>
-      <p
-        style={{
-          margin: "0.45rem 0 0 0",
-          fontSize: "0.68rem",
-          color: "#64748b",
-          lineHeight: 1.4,
-          fontWeight: 500,
-        }}
-      >
-        Alterne la question puis les résultats live selon ces durées. Désactivée si écran noir,
-        vote fermé ou changement de question ; toute action manuelle l’arrête.
-      </p>
+      {!auxiliaryHint ? (
+        <p
+          style={{
+            margin: "0.45rem 0 0 0",
+            fontSize: "0.68rem",
+            color: "#64748b",
+            lineHeight: 1.4,
+            fontWeight: 500,
+          }}
+        >
+          Alterne la question puis les résultats live selon ces durées. Désactivée si écran noir,
+          vote fermé ou changement de question ; toute action manuelle l’arrête.
+        </p>
+      ) : (
+        <p
+          style={{
+            margin: "0.4rem 0 0 0",
+            fontSize: "0.66rem",
+            color: "#94a3b8",
+            lineHeight: 1.35,
+            fontWeight: 500,
+          }}
+        >
+          Désactivée si écran noir, vote fermé ou action manuelle.
+        </p>
+      )}
     </div>
   );
 }
@@ -1450,90 +1478,6 @@ function BlocProjectionEcran({
 
       <div
         style={{
-          marginBottom: "1.15rem",
-          padding: desktop ? "0.95rem 1rem" : "0.78rem 0.84rem",
-          borderRadius: "16px",
-          background: "rgba(255,255,255,0.74)",
-          border: "1px solid rgba(91, 33, 182, 0.16)",
-          boxShadow: "0 14px 28px rgba(15, 23, 42, 0.05)",
-        }}
-      >
-        <p
-          style={{
-            margin: "0 0 0.45rem 0",
-            fontSize: "0.65rem",
-            fontWeight: 700,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: "#7c3aed",
-            opacity: 0.9,
-          }}
-        >
-          Modes projection
-        </p>
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "0.45rem",
-          }}
-        >
-          {[
-            { id: "standard", label: "Standard" },
-            { id: "xlarge_qr", label: "Grande salle (QR XXL)" },
-            { id: "qr_fullscreen", label: "QR plein écran" },
-            { id: "results_focus", label: "Résultats focus" },
-          ].map((m) => {
-            const on = projectionMode === m.id;
-            return (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => changeProjectionMode(m.id)}
-                style={{
-                  padding: "0.46rem 0.76rem",
-                  fontSize: "0.75rem",
-                  fontWeight: 700,
-                  borderRadius: "12px",
-                  border: on ? "1px solid #7c3aed" : PREMIUM_BORDER,
-                  background: on
-                    ? "linear-gradient(180deg, #ede9fe 0%, #ddd6fe 100%)"
-                    : "rgba(255,255,255,0.9)",
-                  color: on ? "#5b21b6" : "#475569",
-                  cursor: "pointer",
-                  boxShadow: on ? "0 12px 24px rgba(124, 58, 237, 0.12)" : "none",
-                }}
-              >
-                {m.label}
-              </button>
-            );
-          })}
-        </div>
-        <p
-          style={{
-            margin: "0.45rem 0 0 0",
-            fontSize: "0.72rem",
-            color: "#64748b",
-            lineHeight: 1.35,
-          }}
-        >
-          Mode actif : <strong style={{ color: "#111827" }}>{projectionModeLabel}</strong>
-        </p>
-      </div>
-
-      <RegieAutoRotatePanel
-        busy={busy}
-        autoRotate={autoRotate}
-        onAutoRotateChange={onAutoRotateChange}
-        autoRotateAllowed={autoRotateAllowed}
-        autoRotateQuestionSec={autoRotateQuestionSec}
-        autoRotateResultsSec={autoRotateResultsSec}
-        onAutoRotateQuestionSecChange={onAutoRotateQuestionSecChange}
-        onAutoRotateResultsSecChange={onAutoRotateResultsSecChange}
-      />
-
-      <div
-        style={{
           marginBottom: "0.85rem",
         }}
       >
@@ -1546,6 +1490,59 @@ function BlocProjectionEcran({
               <p className="proj-ecran-console-col-title">Écran principal</p>
               <p className="proj-ecran-console-col-meta">{ecranConnecte ? "🟢 Connecté" : "🔴 Hors ligne"}</p>
             </div>
+            <div className="proj-ecran-console-inset">
+              <p className="proj-ecran-console-inset-title">Modes projection</p>
+              <p className="proj-ecran-console-inset-hint">
+                S’applique à l’écran principal et au lien généré pour l’écran B.
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem" }}>
+                {[
+                  { id: "standard", label: "Standard" },
+                  { id: "xlarge_qr", label: "Grande salle (QR XXL)" },
+                  { id: "qr_fullscreen", label: "QR plein écran" },
+                  { id: "results_focus", label: "Résultats focus" },
+                ].map((m) => {
+                  const on = projectionMode === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => changeProjectionMode(m.id)}
+                      style={{
+                        padding: "0.46rem 0.76rem",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        borderRadius: "12px",
+                        border: on ? "1px solid #7c3aed" : PREMIUM_BORDER,
+                        background: on
+                          ? "linear-gradient(180deg, #ede9fe 0%, #ddd6fe 100%)"
+                          : "rgba(255,255,255,0.9)",
+                        color: on ? "#5b21b6" : "#475569",
+                        cursor: "pointer",
+                        boxShadow: on ? "0 12px 24px rgba(124, 58, 237, 0.12)" : "none",
+                      }}
+                    >
+                      {m.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="proj-ecran-console-inset-active">
+                Mode actif : <strong>{projectionModeLabel}</strong>
+              </p>
+            </div>
+            <RegieAutoRotatePanel
+              embedded
+              auxiliaryHint="Enchaîne automatiquement question → résultats sur l’écran principal."
+              busy={busy}
+              autoRotate={autoRotate}
+              onAutoRotateChange={onAutoRotateChange}
+              autoRotateAllowed={autoRotateAllowed}
+              autoRotateQuestionSec={autoRotateQuestionSec}
+              autoRotateResultsSec={autoRotateResultsSec}
+              onAutoRotateQuestionSecChange={onAutoRotateQuestionSecChange}
+              onAutoRotateResultsSecChange={onAutoRotateResultsSecChange}
+            />
             <div className="proj-ecran-console-state">
               <span className="proj-ecran-console-state-label">État actuel</span>
               <span
@@ -1614,6 +1611,7 @@ function BlocProjectionEcran({
             <div className="proj-ecran-console-col-head">
               <p className="proj-ecran-console-col-title">Écran B</p>
               <p className="proj-ecran-console-col-meta">{statutEcranB}</p>
+              <p className="proj-ecran-console-col-desc">Affichage secondaire indépendant.</p>
             </div>
             <div className="proj-ecran-console-state">
               <span className="proj-ecran-console-state-label">État actuel</span>
@@ -1809,6 +1807,38 @@ function BlocProjectionEcran({
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 0.4rem;
+        }
+        .proj-ecran-console-inset {
+          padding-top: 0.55rem;
+          margin-top: 0.15rem;
+          border-top: 1px solid rgba(148, 163, 184, 0.2);
+          display: grid;
+          gap: 0.45rem;
+        }
+        .proj-ecran-console-inset-title {
+          margin: 0;
+          font-size: 0.64rem;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: #64748b;
+        }
+        .proj-ecran-console-inset-hint,
+        .proj-ecran-console-col-desc {
+          margin: 0;
+          font-size: 0.72rem;
+          color: #64748b;
+          line-height: 1.4;
+          font-weight: 500;
+        }
+        .proj-ecran-console-inset-active {
+          margin: 0;
+          font-size: 0.72rem;
+          color: #475569;
+          line-height: 1.35;
+        }
+        .proj-ecran-console-inset-active strong {
+          color: #111827;
         }
         .proj-ecran-console-actions > button {
           width: 100%;
