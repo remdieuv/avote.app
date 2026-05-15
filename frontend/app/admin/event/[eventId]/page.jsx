@@ -977,6 +977,13 @@ function lienDiffusionAbsolu(path) {
 function RegieAutoRotatePanel({
   embedded = false,
   busy,
+  autoRotate,
+  onAutoRotateChange,
+  autoRotateAllowed,
+  autoRotateQuestionSec,
+  autoRotateResultsSec,
+  onAutoRotateQuestionSecChange,
+  onAutoRotateResultsSecChange,
 }) {
   return (
     <div
