@@ -971,6 +971,186 @@ function lienDiffusionAbsolu(path) {
 }
 
 /**
+ * Rotation automatique question / résultats (présentation uniquement).
+ * @param {{ embedded?: boolean; busy: boolean; autoRotate: boolean; onAutoRotateChange: (v: boolean) => void; autoRotateAllowed: boolean; autoRotateQuestionSec: number; autoRotateResultsSec: number; onAutoRotateQuestionSecChange: (n: number) => void; onAutoRotateResultsSecChange: (n: number) => void; }} props
+ */
+function RegieAutoRotatePanel({
+  embedded = false,
+  busy,
+}) {
+  return (
+    <div
+      style={{
+        marginTop: embedded ? "0.55rem" : "0",
+        padding: embedded ? "0.72rem 0 0 0" : "0.95rem 1.05rem",
+        paddingTop: embedded ? "0.72rem" : undefined,
+        borderTop: embedded ? "1px solid rgba(148, 163, 184, 0.18)" : undefined,
+        borderRadius: embedded ? 0 : "16px",
+        background: embedded ? "transparent" : "rgba(255,255,255,0.72)",
+        border: embedded ? "none" : "1px solid rgba(91, 33, 182, 0.16)",
+        boxShadow: embedded ? "none" : "0 12px 24px rgba(15, 23, 42, 0.04)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: "0.5rem 0.75rem",
+          justifyContent: "space-between",
+        }}
+      >
+        <p
+          style={
+            embedded
+              ? {
+                  margin: 0,
+                  fontSize: "0.64rem",
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "#64748b",
+                }
+              : {
+                  margin: 0,
+                  fontSize: "0.88rem",
+                  fontWeight: 700,
+                  color: "#4c1d95",
+                }
+          }
+        >
+          Rotation automatique
+        </p>
+        <button
+          type="button"
+          disabled={busy || (!autoRotateAllowed && !autoRotate)}
+          aria-pressed={autoRotate}
+          onClick={() => onAutoRotateChange(!autoRotate)}
+          style={{
+            flexShrink: 0,
+            padding: embedded ? "0.34rem 0.82rem" : "0.42rem 1rem",
+            minWidth: embedded ? "6.75rem" : "7.5rem",
+            borderRadius: "9999px",
+            border: autoRotate ? "1px solid #15803d" : "1px solid #cbd5e1",
+            background: autoRotate
+              ? "linear-gradient(180deg, #22c55e 0%, #16a34a 100%)"
+              : "linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%)",
+            color: autoRotate ? "#fff" : "#475569",
+            fontSize: embedded ? "0.74rem" : "0.8rem",
+            fontWeight: 800,
+            letterSpacing: "0.04em",
+            cursor:
+              busy || (!autoRotateAllowed && !autoRotate) ? "not-allowed" : "pointer",
+            opacity: busy || (!autoRotateAllowed && !autoRotate) ? 0.55 : 1,
+            boxShadow: autoRotate
+              ? "0 2px 8px rgba(22, 163, 74, 0.35)"
+              : "0 1px 3px rgba(15, 23, 42, 0.08)",
+          }}
+        >
+          {autoRotate ? "Activée" : "Désactivée"}
+        </button>
+      </div>
+      <div
+        style={{
+          marginTop: "0.55rem",
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "flex-end",
+          gap: "0.65rem 0.95rem",
+        }}
+      >
+        <label
+          style={{
+            fontSize: "0.65rem",
+            fontWeight: 700,
+            color: "#64748b",
+            letterSpacing: "0.04em",
+            textTransform: "uppercase",
+          }}
+        >
+          Question (s)
+          <input
+            type="number"
+            min={AUTO_ROTATE_SEC_MIN}
+            max={AUTO_ROTATE_SEC_MAX}
+            value={autoRotateQuestionSec}
+            disabled={busy}
+            onChange={(e) =>
+              onAutoRotateQuestionSecChange(clampAutoRotateSec(e.target.value))
+            }
+            style={{
+              display: "block",
+              marginTop: "0.22rem",
+              width: "3.6rem",
+              padding: "0.28rem 0.35rem",
+              borderRadius: "6px",
+              border: "1px solid #cbd5e1",
+              fontSize: "0.8rem",
+              fontWeight: 700,
+            }}
+          />
+        </label>
+        <label
+          style={{
+            fontSize: "0.65rem",
+            fontWeight: 700,
+            color: "#64748b",
+            letterSpacing: "0.04em",
+            textTransform: "uppercase",
+          }}
+        >
+          Résultats (s)
+          <input
+            type="number"
+            min={AUTO_ROTATE_SEC_MIN}
+            max={AUTO_ROTATE_SEC_MAX}
+            value={autoRotateResultsSec}
+            disabled={busy}
+            onChange={(e) =>
+              onAutoRotateResultsSecChange(clampAutoRotateSec(e.target.value))
+            }
+            style={{
+              display: "block",
+              marginTop: "0.22rem",
+              width: "3.6rem",
+              padding: "0.28rem 0.35rem",
+              borderRadius: "6px",
+              border: "1px solid #cbd5e1",
+              fontSize: "0.8rem",
+              fontWeight: 700,
+            }}
+          />
+        </label>
+        <span
+          style={{
+            fontSize: "0.62rem",
+            color: "#94a3b8",
+            fontWeight: 500,
+            paddingBottom: "0.15rem",
+            maxWidth: embedded ? "100%" : "14rem",
+            lineHeight: 1.35,
+          }}
+        >
+          {AUTO_ROTATE_SEC_MIN}–{AUTO_ROTATE_SEC_MAX} s chacun.
+        </span>
+      </div>
+      <p
+        style={{
+          margin: "0.45rem 0 0 0",
+          fontSize: "0.68rem",
+          color: "#64748b",
+          lineHeight: 1.4,
+          fontWeight: 500,
+        }}
+      >
+        Alterne la question puis les résultats live selon ces durées. Désactivée si écran noir,
+        vote fermé ou changement de question ; toute action manuelle l’arrête.
+      </p>
+    </div>
+  );
+}
+
+/**
  * Projection salle — mis en avant sous l’état live (liens + actions + présence).
  * @param {{
  *   slug: string;
@@ -985,13 +1165,6 @@ function lienDiffusionAbsolu(path) {
  *   screenBDisplayState?: string | null;
  *   desktop: boolean;
  *   chronoSection?: import("react").ReactNode;
- *   autoRotate: boolean;
- *   onAutoRotateChange: (v: boolean) => void;
- *   autoRotateAllowed: boolean;
- *   autoRotateQuestionSec: number;
- *   autoRotateResultsSec: number;
- *   onAutoRotateQuestionSecChange: (n: number) => void;
- *   onAutoRotateResultsSecChange: (n: number) => void;
  * }} props
  */
 function BlocProjectionEcran({
@@ -1007,13 +1180,6 @@ function BlocProjectionEcran({
   screenBDisplayState = null,
   desktop,
   chronoSection = null,
-  autoRotate,
-  onAutoRotateChange,
-  autoRotateAllowed,
-  autoRotateQuestionSec,
-  autoRotateResultsSec,
-  onAutoRotateQuestionSecChange,
-  onAutoRotateResultsSecChange,
 }) {
   const [clientPret, setClientPret] = useState(false);
   const [projectionMode, setProjectionMode] = useState("standard");
@@ -1668,169 +1834,6 @@ function BlocProjectionEcran({
         </p>
       </div>
 
-      <div
-        style={{
-          marginTop: "0",
-          padding: desktop ? "0.95rem 1.05rem" : "0.8rem 0.88rem",
-          borderRadius: "16px",
-          background: "rgba(255,255,255,0.72)",
-          border: "1px solid rgba(91, 33, 182, 0.16)",
-          boxShadow: "0 12px 24px rgba(15, 23, 42, 0.04)",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: "0.65rem 0.85rem",
-            justifyContent: "space-between",
-          }}
-        >
-          <span
-            style={{
-              fontSize: "0.88rem",
-              fontWeight: 700,
-              color: "#4c1d95",
-            }}
-          >
-            Rotation automatique
-          </span>
-          <button
-            type="button"
-            disabled={busy || (!autoRotateAllowed && !autoRotate)}
-            aria-pressed={autoRotate}
-            onClick={() => onAutoRotateChange(!autoRotate)}
-            style={{
-              flexShrink: 0,
-              padding: "0.42rem 1rem",
-              minWidth: "7.5rem",
-              borderRadius: "9999px",
-              border: autoRotate
-                ? "1px solid #15803d"
-                : "1px solid #cbd5e1",
-              background: autoRotate
-                ? "linear-gradient(180deg, #22c55e 0%, #16a34a 100%)"
-                : "linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%)",
-              color: autoRotate ? "#fff" : "#475569",
-              fontSize: "0.8rem",
-              fontWeight: 800,
-              letterSpacing: "0.04em",
-              cursor:
-                busy || (!autoRotateAllowed && !autoRotate)
-                  ? "not-allowed"
-                  : "pointer",
-              opacity: busy || (!autoRotateAllowed && !autoRotate) ? 0.55 : 1,
-              boxShadow: autoRotate
-                ? "0 2px 8px rgba(22, 163, 74, 0.35)"
-                : "0 1px 3px rgba(15, 23, 42, 0.08)",
-            }}
-          >
-            {autoRotate ? "Activé" : "Désactivé"}
-          </button>
-        </div>
-        <div
-          style={{
-            marginTop: "0.65rem",
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "flex-end",
-            gap: "0.75rem 1.1rem",
-          }}
-        >
-          <label
-            style={{
-              fontSize: "0.65rem",
-              fontWeight: 700,
-              color: "#64748b",
-              letterSpacing: "0.04em",
-              textTransform: "uppercase",
-            }}
-          >
-            Question (s)
-            <input
-              type="number"
-              min={AUTO_ROTATE_SEC_MIN}
-              max={AUTO_ROTATE_SEC_MAX}
-              value={autoRotateQuestionSec}
-              disabled={busy}
-              onChange={(e) =>
-                onAutoRotateQuestionSecChange(
-                  clampAutoRotateSec(e.target.value),
-                )
-              }
-              style={{
-                display: "block",
-                marginTop: "0.22rem",
-                width: "3.6rem",
-                padding: "0.28rem 0.35rem",
-                borderRadius: "6px",
-                border: "1px solid #cbd5e1",
-                fontSize: "0.8rem",
-                fontWeight: 700,
-              }}
-            />
-          </label>
-          <label
-            style={{
-              fontSize: "0.65rem",
-              fontWeight: 700,
-              color: "#64748b",
-              letterSpacing: "0.04em",
-              textTransform: "uppercase",
-            }}
-          >
-            Résultats (s)
-            <input
-              type="number"
-              min={AUTO_ROTATE_SEC_MIN}
-              max={AUTO_ROTATE_SEC_MAX}
-              value={autoRotateResultsSec}
-              disabled={busy}
-              onChange={(e) =>
-                onAutoRotateResultsSecChange(
-                  clampAutoRotateSec(e.target.value),
-                )
-              }
-              style={{
-                display: "block",
-                marginTop: "0.22rem",
-                width: "3.6rem",
-                padding: "0.28rem 0.35rem",
-                borderRadius: "6px",
-                border: "1px solid #cbd5e1",
-                fontSize: "0.8rem",
-                fontWeight: 700,
-              }}
-            />
-          </label>
-          <span
-            style={{
-              fontSize: "0.62rem",
-              color: "#94a3b8",
-              fontWeight: 500,
-              paddingBottom: "0.15rem",
-              maxWidth: "14rem",
-              lineHeight: 1.35,
-            }}
-          >
-            {AUTO_ROTATE_SEC_MIN}–{AUTO_ROTATE_SEC_MAX} s chacun.
-          </span>
-        </div>
-        <p
-          style={{
-            margin: "0.5rem 0 0 0",
-            fontSize: "0.68rem",
-            color: "#64748b",
-            lineHeight: 1.4,
-            fontWeight: 500,
-          }}
-        >
-          Alterne la question puis les résultats live selon ces durées.
-          Désactivée si écran noir, vote fermé ou changement de question ; toute
-          action manuelle l’arrête.
-        </p>
-      </div>
 
       </div>
 
@@ -5570,15 +5573,12 @@ export default function RegieEventPage() {
 
     return () => clearInterval(id);
   }, [
-    autoRotate,
-    activePollIdJs,
+      activePollIdJs,
     displayStateUi,
     voteStateUi,
     eventId,
     fetchEvent,
-    autoRotateQuestionSec,
-    autoRotateResultsSec,
-  ]);
+      ]);
 
   const autoRotateAllowed =
     Boolean(activePollIdJs) &&
@@ -7098,6 +7098,17 @@ export default function RegieEventPage() {
                         <p style={{ margin: 0, fontSize: "0.74rem", color: "#64748b", lineHeight: 1.35 }}>
                           Affichage actuel : <strong style={{ color: "#111827" }}>{displayLabelGlobal}</strong>
                         </p>
+                    <RegieAutoRotatePanel
+                      embedded
+                      busy={busy}
+                      autoRotate={autoRotate}
+                      onAutoRotateChange={setAutoRotate}
+                      autoRotateAllowed={autoRotateAllowed}
+                      autoRotateQuestionSec={autoRotateQuestionSec}
+                      autoRotateResultsSec={autoRotateResultsSec}
+                      onAutoRotateQuestionSecChange={setAutoRotateQuestionSec}
+                      onAutoRotateResultsSecChange={setAutoRotateResultsSec}
+                    />
                   </div>
 
                   <div style={liveFunctionCardStyle}>
@@ -7718,13 +7729,6 @@ export default function RegieEventPage() {
               screenBDisplayState={screenBDisplayState}
               desktop={desktop}
               chronoSection={null}
-              autoRotate={autoRotate}
-              onAutoRotateChange={setAutoRotate}
-              autoRotateAllowed={autoRotateAllowed}
-              autoRotateQuestionSec={autoRotateQuestionSec}
-              autoRotateResultsSec={autoRotateResultsSec}
-              onAutoRotateQuestionSecChange={setAutoRotateQuestionSec}
-              onAutoRotateResultsSecChange={setAutoRotateResultsSec}
             />
           ) : null}
 
