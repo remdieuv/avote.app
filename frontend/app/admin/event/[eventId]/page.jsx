@@ -1487,8 +1487,21 @@ function BlocProjectionEcran({
         <div className="proj-ecran-console-grid">
           <div className="proj-ecran-console-col" data-screen-state={d}>
             <div className="proj-ecran-console-col-head">
-              <p className="proj-ecran-console-col-title">Écran principal</p>
-              <p className="proj-ecran-console-col-meta">{ecranConnecte ? "🟢 Connecté" : "🔴 Hors ligne"}</p>
+              <div className="proj-ecran-console-col-head-main">
+                <div className="proj-ecran-console-col-head-row">
+                  <p className="proj-ecran-console-col-title">Écran principal</p>
+                  <p className="proj-ecran-console-col-meta">{ecranConnecte ? "🟢 Connecté" : "🔴 Hors ligne"}</p>
+                </div>
+              </div>
+            </div>
+            <div className="proj-ecran-console-state">
+              <span className="proj-ecran-console-state-label">État actuel</span>
+              <span
+                className="proj-ecran-console-state-badge"
+                style={styleBadgeAffichage(d)}
+              >
+                {affichageStandardLabel}
+              </span>
             </div>
             <div className="proj-ecran-console-inset">
               <p className="proj-ecran-console-inset-title">Modes projection</p>
@@ -1543,15 +1556,6 @@ function BlocProjectionEcran({
               onAutoRotateQuestionSecChange={onAutoRotateQuestionSecChange}
               onAutoRotateResultsSecChange={onAutoRotateResultsSecChange}
             />
-            <div className="proj-ecran-console-state">
-              <span className="proj-ecran-console-state-label">État actuel</span>
-              <span
-                className="proj-ecran-console-state-badge"
-                style={styleBadgeAffichage(d)}
-              >
-                {affichageStandardLabel}
-              </span>
-            </div>
             <button type="button" onClick={ouvrirEcran} style={{ ...btnOuvrir, marginLeft: 0, marginRight: 0, maxWidth: "none", width: "100%" }}>
               Ouvrir
             </button>
@@ -1609,9 +1613,13 @@ function BlocProjectionEcran({
 
           <div className="proj-ecran-console-col" data-screen-state={screenBConnected ? ecranBDisplayLower : "waiting"}>
             <div className="proj-ecran-console-col-head">
-              <p className="proj-ecran-console-col-title">Écran B</p>
-              <p className="proj-ecran-console-col-meta">{statutEcranB}</p>
-              <p className="proj-ecran-console-col-desc">Affichage secondaire indépendant.</p>
+              <div className="proj-ecran-console-col-head-main">
+                <div className="proj-ecran-console-col-head-row">
+                  <p className="proj-ecran-console-col-title">Écran B</p>
+                  <p className="proj-ecran-console-col-meta">{statutEcranB}</p>
+                </div>
+                <p className="proj-ecran-console-col-desc">Affichage secondaire indépendant.</p>
+              </div>
             </div>
             <div className="proj-ecran-console-state">
               <span className="proj-ecran-console-state-label">État actuel</span>
@@ -1757,10 +1765,22 @@ function BlocProjectionEcran({
         }
         .proj-ecran-console-col[data-screen-state="black"] .proj-ecran-console-col-title,
         .proj-ecran-console-col[data-screen-state="black"] .proj-ecran-console-col-meta,
+        .proj-ecran-console-col[data-screen-state="black"] .proj-ecran-console-col-desc,
         .proj-ecran-console-col[data-screen-state="black"] .proj-ecran-console-state-label {
           color: #e2e8f0;
         }
         .proj-ecran-console-col-head {
+          display: flex;
+          align-items: flex-start;
+          gap: 0.35rem 0.5rem;
+        }
+        .proj-ecran-console-col-head-main {
+          flex: 1;
+          min-width: 0;
+          display: grid;
+          gap: 0.28rem;
+        }
+        .proj-ecran-console-col-head-row {
           display: flex;
           flex-wrap: wrap;
           align-items: baseline;
