@@ -1172,6 +1172,13 @@ function RegieAutoRotatePanel({
  *   screenBDisplayState?: string | null;
  *   desktop: boolean;
  *   chronoSection?: import("react").ReactNode;
+ *   autoRotate: boolean;
+ *   onAutoRotateChange: (v: boolean) => void;
+ *   autoRotateAllowed: boolean;
+ *   autoRotateQuestionSec: number;
+ *   autoRotateResultsSec: number;
+ *   onAutoRotateQuestionSecChange: (n: number) => void;
+ *   onAutoRotateResultsSecChange: (n: number) => void;
  * }} props
  */
 function BlocProjectionEcran({
@@ -1187,6 +1194,13 @@ function BlocProjectionEcran({
   screenBDisplayState = null,
   desktop,
   chronoSection = null,
+  autoRotate,
+  onAutoRotateChange,
+  autoRotateAllowed,
+  autoRotateQuestionSec,
+  autoRotateResultsSec,
+  onAutoRotateQuestionSecChange,
+  onAutoRotateResultsSecChange,
 }) {
   const [clientPret, setClientPret] = useState(false);
   const [projectionMode, setProjectionMode] = useState("standard");
@@ -1375,6 +1389,15 @@ function BlocProjectionEcran({
     opacity: extra ? 0.5 : 1,
     cursor: extra || busy ? "not-allowed" : "pointer",
   });
+  const projConsoleBtn = {
+    padding: "0.52rem 0.55rem",
+    fontSize: "0.78rem",
+    fontWeight: 700,
+    borderRadius: "10px",
+    width: "100%",
+    boxSizing: "border-box",
+  };
+
 
   return (
     <section
@@ -1446,7 +1469,7 @@ function BlocProjectionEcran({
             opacity: 0.9,
           }}
         >
-          Mode d'affichage projection
+          Modes projection
         </p>
         <div
           style={{
@@ -1498,257 +1521,127 @@ function BlocProjectionEcran({
         </p>
       </div>
 
-      <div
-        style={{
-          marginBottom: "1.1rem",
-          padding: desktop ? "1rem 1.05rem" : "0.84rem 0.86rem",
-          borderRadius: "18px",
-          background: "rgba(255,255,255,0.78)",
-          border: "1px solid rgba(91, 33, 182, 0.18)",
-          boxShadow: "0 14px 30px rgba(15, 23, 42, 0.05)",
-        }}
-      >
-        <p
-          style={{
-            margin: "0 0 0.6rem 0",
-            fontSize: "0.66rem",
-            fontWeight: 800,
-            letterSpacing: "0.09em",
-            textTransform: "uppercase",
-            color: "#6d28d9",
-          }}
-        >
-          Écran standard
-        </p>
-      <p
-        style={{
-          margin: "0 0 0.6rem 0",
-          fontSize: "0.72rem",
-          lineHeight: 1.35,
-          fontWeight: 600,
-          color: "#334155",
-        }}
-      >
-        Affichage actuel :{" "}
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            padding: "0.12rem 0.45rem",
-            borderRadius: "999px",
-            fontWeight: 800,
-            fontSize: "0.7rem",
-            letterSpacing: "0.02em",
-            ...styleBadgeAffichage(d),
-          }}
-        >
-          {affichageStandardLabel}
-        </span>
-      </p>
-      <div
-        style={{
-          display: "flex",
-          flexDirection: desktop ? "row" : "column",
-          gap: "0.7rem",
-          justifyContent: "center",
-          marginBottom: "1.1rem",
-          alignItems: "center",
-        }}
-      >
-        <button
-          type="button"
-          onClick={ouvrirEcran}
-          style={{
-            ...btnOuvrir,
-            marginLeft: 0,
-            marginRight: 0,
-            flex: desktop ? "1 1 auto" : "0 0 auto",
-          }}
-        >
-          Ouvrir l’écran
-        </button>
-        <button
-          type="button"
-          onClick={() => void copierLienEcranStandard()}
-          style={{
-            ...btnOutlineSecondaire,
-            width: desktop ? "auto" : "100%",
-            minWidth: desktop ? "9rem" : undefined,
-            padding: desktop ? "0.88rem 1.1rem" : "0.75rem 1rem",
-            borderRadius: "12px",
-            fontWeight: 700,
-            flexShrink: 0,
-          }}
-        >
-          {copiedScreenId === "standard" ? "Copié" : "Copier"}
-        </button>
-      </div>
-      <div style={{ marginBottom: "1.05rem" }}>
-        <p
-          style={{
-            margin: "0 0 0.55rem 0",
-            fontSize: "0.65rem",
-            fontWeight: 700,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: "#7c3aed",
-            opacity: 0.9,
-          }}
-        >
-          Contrôle de la scène
-        </p>
-        <div className="proj-ecran-secondaires">
-          <div className="proj-ecran-action">
-            <button
-              type="button"
-              disabled={busy || !activePollId}
-              onClick={async () => {
-                const ok = await postAction(`/polls/${activePollId}/show-results`);
-                if (ok) sendScreenAction("RESULTS", null);
-              }}
-              style={{
-                ...btnOutlineSecondaire,
-                ...secDisabled(busy || !activePollId),
-              }}
-            >
-              Afficher les résultats en direct
-            </button>
-            <p
-              style={{
-                margin: "0.35rem 0 0 0",
-                fontSize: "0.72rem",
-                lineHeight: 1.4,
-                color: "#64748b",
-                fontWeight: 500,
-              }}
-            >
-              Les votes continuent et les résultats évoluent en temps réel
-            </p>
-          </div>
-          <div className="proj-ecran-action">
-            <button
-              type="button"
-              disabled={busy || !activePollId || d !== "results"}
-              onClick={async () => {
-                const ok = await postAction(`/polls/${activePollId}/display-question`);
-                if (ok) sendScreenAction("QUESTION", null);
-              }}
-              style={{
-                ...btnOutlineSecondaire,
-                ...secDisabled(busy || !activePollId || d !== "results"),
-              }}
-            >
-              Afficher la question
-            </button>
-            <p
-              style={{
-                margin: "0.35rem 0 0 0",
-                fontSize: "0.72rem",
-                lineHeight: 1.4,
-                color: "#64748b",
-                fontWeight: 500,
-              }}
-            >
-              Les participants répondent depuis leur téléphone
-            </p>
-          </div>
-        </div>
-      </div>
+      <RegieAutoRotatePanel
+        busy={busy}
+        autoRotate={autoRotate}
+        onAutoRotateChange={onAutoRotateChange}
+        autoRotateAllowed={autoRotateAllowed}
+        autoRotateQuestionSec={autoRotateQuestionSec}
+        autoRotateResultsSec={autoRotateResultsSec}
+        onAutoRotateQuestionSecChange={onAutoRotateQuestionSecChange}
+        onAutoRotateResultsSecChange={onAutoRotateResultsSecChange}
+      />
 
       <div
         style={{
-          display: "none",
-          marginBottom: "0.8rem",
-          marginTop: "0.95rem",
-          padding: desktop ? "0.8rem 0.95rem" : "0.72rem 0.8rem",
-          borderRadius: "10px",
-          background: "rgba(255,255,255,0.58)",
-          border: "1px solid rgba(91, 33, 182, 0.2)",
+          marginBottom: "0.85rem",
         }}
       >
-        <p
-          style={{
-            margin: "0 0 0.45rem 0",
-            fontSize: "0.65rem",
-            fontWeight: 700,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: "#7c3aed",
-            opacity: 0.9,
-          }}
-        >
-          Écran supplémentaire (B)
+        <p style={{ margin: "0 0 0.72rem 0", fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#7c3aed" }}>
+          Zone écrans
         </p>
-        <p
-          style={{
-            margin: "0 0 0.5rem 0",
-            fontSize: "0.72rem",
-            lineHeight: 1.35,
-            fontWeight: 600,
-            color: screenBConnected ? "#166534" : "#991b1b",
-          }}
-        >
-          {statutEcranB}
-        </p>
-        <p
-          style={{
-            margin: "0 0 0.5rem 0",
-            fontSize: "0.72rem",
-            lineHeight: 1.35,
-            fontWeight: 600,
-            color: "#334155",
-          }}
-        >
-          Affichage actuel :{" "}
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              padding: "0.12rem 0.45rem",
-              borderRadius: "999px",
-              fontWeight: 800,
-              fontSize: "0.7rem",
-              letterSpacing: "0.02em",
-              ...styleBadgeAffichage(screenBConnected ? ecranBDisplayLower : "waiting"),
-            }}
-          >
-            {affichageBLabel}
-          </span>
-        </p>
-        <div className="proj-ecran-separated-grid">
+        <div className="proj-ecran-console-grid">
+          <div className="proj-ecran-console-col" data-screen-state={d}>
+            <div className="proj-ecran-console-col-head">
+              <p className="proj-ecran-console-col-title">Écran principal</p>
+              <p className="proj-ecran-console-col-meta">{ecranConnecte ? "🟢 Connecté" : "🔴 Hors ligne"}</p>
+            </div>
+            <div className="proj-ecran-console-state">
+              <span className="proj-ecran-console-state-label">État actuel</span>
+              <span
+                className="proj-ecran-console-state-badge"
+                style={styleBadgeAffichage(d)}
+              >
+                {affichageStandardLabel}
+              </span>
+            </div>
+            <button type="button" onClick={ouvrirEcran} style={{ ...btnOuvrir, marginLeft: 0, marginRight: 0, maxWidth: "none", width: "100%" }}>
+              Ouvrir
+            </button>
+            <div className="proj-ecran-console-actions">
+              <button
+                type="button"
+                disabled={busy || !activePollId || d !== "results"}
+                onClick={async () => {
+                  const ok = await postAction(`/polls/${activePollId}/display-question`);
+                  if (ok) sendScreenAction("QUESTION", null);
+                }}
+                style={{ ...btnOutlineSecondaire, ...projConsoleBtn, ...secDisabled(busy || !activePollId || d !== "results") }}
+              >
+                Question
+              </button>
+              <button
+                type="button"
+                disabled={busy || !activePollId}
+                onClick={async () => {
+                  const ok = await postAction(`/polls/${activePollId}/show-results`);
+                  if (ok) sendScreenAction("RESULTS", null);
+                }}
+                style={{ ...btnOutlineSecondaire, ...projConsoleBtn, ...secDisabled(busy || !activePollId) }}
+              >
+                Résultats
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  if (affichageNoir) sendScreenAction("WAITING", null);
+                  else sendScreenAction("BLACK", null);
+                }}
+                style={{ ...btnDangerNoir, ...projConsoleBtn, ...secDisabled(busy) }}
+              >
+                {affichageNoir ? "Retour direct" : "Noir"}
+              </button>
+              <button
+                type="button"
+                disabled={busy || affichageNoir}
+                onClick={() => sendScreenAction("WAITING", null)}
+                style={{ ...btnRevenirDirect, ...projConsoleBtn, ...secDisabled(busy || affichageNoir) }}
+              >
+                Attente
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => void copierLienEcranStandard()}
+              style={{ ...btnOutlineSecondaire, width: "100%", padding: "0.58rem 0.75rem", fontWeight: 700 }}
+            >
+              {copiedScreenId === "standard" ? "Lien copié" : "Copier le lien"}
+            </button>
+          </div>
+
+          <div className="proj-ecran-console-col" data-screen-state={screenBConnected ? ecranBDisplayLower : "waiting"}>
+            <div className="proj-ecran-console-col-head">
+              <p className="proj-ecran-console-col-title">Écran B</p>
+              <p className="proj-ecran-console-col-meta">{statutEcranB}</p>
+            </div>
+            <div className="proj-ecran-console-state">
+              <span className="proj-ecran-console-state-label">État actuel</span>
+              <span
+                className="proj-ecran-console-state-badge"
+                style={styleBadgeAffichage(screenBConnected ? ecranBDisplayLower : "waiting")}
+              >
+                {affichageBLabel}
+              </span>
+            </div>
           {["B"].map((sid) => (
-            <div key={sid} className="proj-ecran-separated-card">
-              <p className="proj-ecran-separated-title">Écran supplémentaire ({sid})</p>
-              <div className="proj-ecran-separated-actions">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const url = lienDiffusionAbsolu(pathScreenById(sid));
-                    if (url) window.open(url, "_blank", "noopener,noreferrer");
-                  }}
-                  style={{ ...btnOutlineSecondaire, padding: "0.45rem 0.6rem", fontSize: "0.74rem" }}
-                >
-                  Ouvrir
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void copierLienEcranCible(sid)}
-                  style={{ ...btnOutlineSecondaire, padding: "0.45rem 0.6rem", fontSize: "0.74rem" }}
-                >
-                  {copiedScreenId === sid ? "Copié" : "Copier"}
-                </button>
-              </div>
-              <div className="proj-ecran-separated-actions">
+            <div key={sid} style={{ display: "grid", gap: "0.55rem" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const url = lienDiffusionAbsolu(pathScreenById(sid));
+                  if (url) window.open(url, "_blank", "noopener,noreferrer");
+                }}
+                style={{ ...btnOuvrir, marginLeft: 0, marginRight: 0, maxWidth: "none", width: "100%" }}
+              >
+                Ouvrir
+              </button>
+              <div className="proj-ecran-console-actions">
                 <button
                   type="button"
                   disabled={busy || !activePollId}
                   onClick={() => sendScreenAction("QUESTION", sid)}
-                  style={{
-                    ...btnOutlineSecondaire,
-                    padding: "0.45rem 0.6rem",
-                    fontSize: "0.74rem",
-                    ...(busy || !activePollId ? secDisabled(true) : {}),
-                  }}
+                  style={{ ...btnOutlineSecondaire, ...projConsoleBtn, ...(busy || !activePollId ? secDisabled(true) : {}) }}
                 >
                   Question
                 </button>
@@ -1756,27 +1649,15 @@ function BlocProjectionEcran({
                   type="button"
                   disabled={busy || !activePollId}
                   onClick={() => sendScreenAction("RESULTS", sid)}
-                  style={{
-                    ...btnOutlineSecondaire,
-                    padding: "0.45rem 0.6rem",
-                    fontSize: "0.74rem",
-                    ...(busy || !activePollId ? secDisabled(true) : {}),
-                  }}
+                  style={{ ...btnOutlineSecondaire, ...projConsoleBtn, ...(busy || !activePollId ? secDisabled(true) : {}) }}
                 >
                   Résultats
                 </button>
-              </div>
-              <div className="proj-ecran-separated-actions">
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => sendScreenAction("BLACK", sid)}
-                  style={{
-                    ...btnDangerNoir,
-                    padding: "0.45rem 0.6rem",
-                    fontSize: "0.74rem",
-                    ...(busy ? secDisabled(true) : {}),
-                  }}
+                  style={{ ...btnDangerNoir, ...projConsoleBtn, ...(busy ? secDisabled(true) : {}) }}
                 >
                   Noir
                 </button>
@@ -1784,206 +1665,21 @@ function BlocProjectionEcran({
                   type="button"
                   disabled={busy}
                   onClick={() => sendScreenAction("WAITING", sid)}
-                  style={{
-                    ...btnRevenirDirect,
-                    padding: "0.45rem 0.6rem",
-                    fontSize: "0.74rem",
-                    ...(busy ? secDisabled(true) : {}),
-                  }}
+                  style={{ ...btnRevenirDirect, ...projConsoleBtn, ...(busy ? secDisabled(true) : {}) }}
                 >
                   Attente
                 </button>
               </div>
+              <button
+                type="button"
+                onClick={() => void copierLienEcranCible(sid)}
+                style={{ ...btnOutlineSecondaire, width: "100%", padding: "0.58rem 0.75rem", fontWeight: 700 }}
+              >
+                {copiedScreenId === sid ? "Lien copié" : "Copier le lien"}
+              </button>
             </div>
           ))}
-        </div>
-      </div>
-
-      <div
-        style={{
-          marginBottom: "0.95rem",
-          padding: desktop ? "1.15rem 1.05rem" : "1rem 0.9rem",
-          borderRadius: "18px",
-          border: "1px solid rgba(15, 23, 42, 0.12)",
-          background: "linear-gradient(180deg, rgba(15,23,42,0.94) 0%, rgba(30,41,59,0.98) 100%)",
-          boxShadow: "0 18px 34px rgba(2, 6, 23, 0.18)",
-        }}
-      >
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => {
-            if (affichageNoir) {
-              sendScreenAction("WAITING", null);
-            } else {
-              sendScreenAction("BLACK", null);
-            }
-          }}
-          style={
-            affichageNoir
-              ? { ...btnRevenirDirect, ...secDisabled(busy) }
-              : { ...btnDangerNoir, ...secDisabled(busy) }
-          }
-        >
-          {affichageNoir ? "Revenir au direct" : "Écran noir"}
-        </button>
-        <p
-          style={{
-            margin: "0.45rem 0 0 0",
-            fontSize: "0.7rem",
-            color: "#cbd5e1",
-            lineHeight: 1.35,
-          }}
-        >
-          {affichageNoir
-            ? "La salle est en noir (confirmé côté serveur). « Revenir au direct » enlève le noir puis affiche l’attente : vous devez choisir « Afficher la question » ou « Afficher les résultats » (le vote peut rester ouvert)."
-            : "Masque la projection sans fermer le vote. État synchronisé avec l’API après chaque action."}
-        </p>
-      </div>
-
-
-      </div>
-
-      <div
-        style={{
-          marginTop: "0.95rem",
-          marginBottom: "0.8rem",
-          padding: desktop ? "0.8rem 0.95rem" : "0.72rem 0.8rem",
-          borderRadius: "10px",
-          background: "rgba(255,255,255,0.58)",
-          border: "1px solid rgba(91, 33, 182, 0.2)",
-        }}
-      >
-        <p
-          style={{
-            margin: "0 0 0.45rem 0",
-            fontSize: "0.65rem",
-            fontWeight: 700,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: "#7c3aed",
-            opacity: 0.9,
-          }}
-        >
-          Écran supplémentaire (B)
-        </p>
-        <p
-          style={{
-            margin: "0 0 0.5rem 0",
-            fontSize: "0.72rem",
-            lineHeight: 1.35,
-            fontWeight: 600,
-            color: screenBConnected ? "#166534" : "#991b1b",
-          }}
-        >
-          {statutEcranB}
-        </p>
-        <p
-          style={{
-            margin: "0 0 0.5rem 0",
-            fontSize: "0.72rem",
-            lineHeight: 1.35,
-            fontWeight: 600,
-            color: "#334155",
-          }}
-        >
-          Affichage actuel :{" "}
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              padding: "0.12rem 0.45rem",
-              borderRadius: "999px",
-              fontWeight: 800,
-              fontSize: "0.7rem",
-              letterSpacing: "0.02em",
-              ...styleBadgeAffichage(screenBConnected ? ecranBDisplayLower : "waiting"),
-            }}
-          >
-            {affichageBLabel}
-          </span>
-        </p>
-        <div className="proj-ecran-separated-grid">
-          {["B"].map((sid) => (
-            <div key={sid} className="proj-ecran-separated-card">
-              <p className="proj-ecran-separated-title">Écran supplémentaire ({sid})</p>
-              <div className="proj-ecran-separated-actions">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const url = lienDiffusionAbsolu(pathScreenById(sid));
-                    if (url) window.open(url, "_blank", "noopener,noreferrer");
-                  }}
-                  style={{ ...btnOutlineSecondaire, padding: "0.45rem 0.6rem", fontSize: "0.74rem" }}
-                >
-                  Ouvrir
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void copierLienEcranCible(sid)}
-                  style={{ ...btnOutlineSecondaire, padding: "0.45rem 0.6rem", fontSize: "0.74rem" }}
-                >
-                  {copiedScreenId === sid ? "Copié" : "Copier"}
-                </button>
-              </div>
-              <div className="proj-ecran-separated-actions">
-                <button
-                  type="button"
-                  disabled={busy || !activePollId}
-                  onClick={() => sendScreenAction("QUESTION", sid)}
-                  style={{
-                    ...btnOutlineSecondaire,
-                    padding: "0.45rem 0.6rem",
-                    fontSize: "0.74rem",
-                    ...(busy || !activePollId ? secDisabled(true) : {}),
-                  }}
-                >
-                  Question
-                </button>
-                <button
-                  type="button"
-                  disabled={busy || !activePollId}
-                  onClick={() => sendScreenAction("RESULTS", sid)}
-                  style={{
-                    ...btnOutlineSecondaire,
-                    padding: "0.45rem 0.6rem",
-                    fontSize: "0.74rem",
-                    ...(busy || !activePollId ? secDisabled(true) : {}),
-                  }}
-                >
-                  Résultats
-                </button>
-              </div>
-              <div className="proj-ecran-separated-actions">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => sendScreenAction("BLACK", sid)}
-                  style={{
-                    ...btnDangerNoir,
-                    padding: "0.45rem 0.6rem",
-                    fontSize: "0.74rem",
-                    ...(busy ? secDisabled(true) : {}),
-                  }}
-                >
-                  Noir
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => sendScreenAction("WAITING", sid)}
-                  style={{
-                    ...btnRevenirDirect,
-                    padding: "0.45rem 0.6rem",
-                    fontSize: "0.74rem",
-                    ...(busy ? secDisabled(true) : {}),
-                  }}
-                >
-                  Attente
-                </button>
-              </div>
-            </div>
-          ))}
+          </div>
         </div>
       </div>
 
@@ -2032,6 +1728,91 @@ function BlocProjectionEcran({
       ) : null}
 
       <style>{`
+        .proj-ecran-console-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 0.75rem;
+          align-items: stretch;
+        }
+        .proj-ecran-console-col {
+          display: flex;
+          flex-direction: column;
+          gap: 0.55rem;
+          padding: 1rem 1.02rem;
+          border-radius: 16px;
+          background: rgba(255, 255, 255, 0.92);
+          border: 1px solid rgba(91, 33, 182, 0.2);
+          box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+          min-width: 0;
+        }
+        .proj-ecran-console-col[data-screen-state="question"] {
+          border-color: rgba(34, 197, 94, 0.35);
+          box-shadow: 0 14px 32px rgba(34, 197, 94, 0.1);
+        }
+        .proj-ecran-console-col[data-screen-state="results"] {
+          border-color: rgba(59, 130, 246, 0.35);
+          box-shadow: 0 14px 32px rgba(59, 130, 246, 0.1);
+        }
+        .proj-ecran-console-col[data-screen-state="black"] {
+          border-color: rgba(15, 23, 42, 0.45);
+          background: linear-gradient(180deg, rgba(15, 23, 42, 0.94) 0%, rgba(30, 41, 59, 0.98) 100%);
+        }
+        .proj-ecran-console-col[data-screen-state="black"] .proj-ecran-console-col-title,
+        .proj-ecran-console-col[data-screen-state="black"] .proj-ecran-console-col-meta,
+        .proj-ecran-console-col[data-screen-state="black"] .proj-ecran-console-state-label {
+          color: #e2e8f0;
+        }
+        .proj-ecran-console-col-head {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 0.35rem 0.5rem;
+        }
+        .proj-ecran-console-col-title {
+          margin: 0;
+          font-size: 0.66rem;
+          font-weight: 800;
+          letter-spacing: 0.09em;
+          text-transform: uppercase;
+          color: #6d28d9;
+        }
+        .proj-ecran-console-col-meta {
+          margin: 0;
+          font-size: 0.72rem;
+          font-weight: 700;
+          color: #475569;
+        }
+        .proj-ecran-console-state {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 0.45rem 0.55rem;
+        }
+        .proj-ecran-console-state-label {
+          font-size: 0.68rem;
+          font-weight: 600;
+          color: #64748b;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+        .proj-ecran-console-state-badge {
+          display: inline-flex;
+          align-items: center;
+          padding: 0.14rem 0.5rem;
+          border-radius: 999px;
+          font-weight: 800;
+          font-size: 0.72rem;
+          letter-spacing: 0.02em;
+        }
+        .proj-ecran-console-actions {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 0.4rem;
+        }
+        .proj-ecran-console-actions > button {
+          width: 100%;
+        }
         .proj-ecran-separated-grid {
           display: grid;
           grid-template-columns: 1fr;
@@ -2073,6 +1854,11 @@ function BlocProjectionEcran({
         }
         .proj-ecran-action > button {
           width: 100%;
+        }
+        @media (min-width: 768px) {
+          .proj-ecran-console-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
         }
         @media (min-width: 640px) {
           .proj-ecran-separated-grid {
@@ -7105,17 +6891,6 @@ export default function RegieEventPage() {
                         <p style={{ margin: 0, fontSize: "0.74rem", color: "#64748b", lineHeight: 1.35 }}>
                           Affichage actuel : <strong style={{ color: "#111827" }}>{displayLabelGlobal}</strong>
                         </p>
-                    <RegieAutoRotatePanel
-                      embedded
-                      busy={busy}
-                      autoRotate={autoRotate}
-                      onAutoRotateChange={setAutoRotate}
-                      autoRotateAllowed={autoRotateAllowed}
-                      autoRotateQuestionSec={autoRotateQuestionSec}
-                      autoRotateResultsSec={autoRotateResultsSec}
-                      onAutoRotateQuestionSecChange={setAutoRotateQuestionSec}
-                      onAutoRotateResultsSecChange={setAutoRotateResultsSec}
-                    />
                   </div>
 
                   <div style={liveFunctionCardStyle}>
@@ -7736,6 +7511,13 @@ export default function RegieEventPage() {
               screenBDisplayState={screenBDisplayState}
               desktop={desktop}
               chronoSection={null}
+              autoRotate={autoRotate}
+              onAutoRotateChange={setAutoRotate}
+              autoRotateAllowed={autoRotateAllowed}
+              autoRotateQuestionSec={autoRotateQuestionSec}
+              autoRotateResultsSec={autoRotateResultsSec}
+              onAutoRotateQuestionSecChange={setAutoRotateQuestionSec}
+              onAutoRotateResultsSecChange={setAutoRotateResultsSec}
             />
           ) : null}
 
