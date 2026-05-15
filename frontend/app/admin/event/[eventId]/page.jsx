@@ -4012,19 +4012,6 @@ function RegieSidebarInner({
               ) : null}
             </>
           ) : null}
-          <RegieAutoRevealCard
-            embedded
-            embeddedDividerAbove={Boolean(
-              slug &&
-                (joinPreviewDesktop
-                  ? onTogglePreviewJoin
-                  : onOpenJoinPreviewMobile),
-            )}
-            eventId={eventId}
-            autoReveal={autoReveal}
-            autoRevealDelaySec={autoRevealDelaySec}
-            onSaved={onAutoRevealSaved}
-          />
         </div>
       ) : null}
     </>
@@ -5448,6 +5435,27 @@ export default function RegieEventPage() {
     minWidth: 0,
     boxSizing: "border-box",
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.85), 0 16px 34px rgba(15, 23, 42, 0.05)",
+  };
+  const liveFunctionCardStyle = {
+    ...controlGroupCardStyle,
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.72rem",
+    padding: desktop ? "1rem 1rem 1.05rem" : "0.92rem",
+    minHeight: desktop ? "100%" : undefined,
+    height: desktop ? "100%" : "auto",
+    border: "1px solid rgba(148, 163, 184, 0.12)",
+    boxShadow: "0 14px 32px rgba(15, 23, 42, 0.05)",
+    background:
+      "linear-gradient(180deg, rgba(255,255,255,0.97) 0%, rgba(248,250,252,0.94) 100%)",
+  };
+  const liveFunctionCardTitleStyle = {
+    margin: 0,
+    fontSize: "0.64rem",
+    fontWeight: 700,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    color: "#64748b",
   };
   const liveExperienceShellStyle = {
     ...CARD,
@@ -6968,50 +6976,20 @@ export default function RegieEventPage() {
                   style={{
                     marginTop: "0.95rem",
                     display: "grid",
-                    gridTemplateColumns: "1fr",
-                    gap: "0.95rem",
+                    gridTemplateColumns: desktop ? "repeat(4, minmax(0, 1fr))" : "1fr",
+                    gap: desktop ? "0.85rem" : "0.75rem",
+                    alignItems: "stretch",
                     minWidth: 0,
                   }}
                 >
-                  <div
-                    style={{
-                      ...controlGroupCardStyle,
-                      display: "grid",
-                      gap: "0.65rem",
-                      padding: desktop ? "1.05rem 1.08rem" : "0.95rem 0.92rem",
-                      borderColor: "rgba(148, 163, 184, 0.18)",
-                      background:
-                        "linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.94) 100%)",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: desktop ? "minmax(0, 1.9fr) minmax(240px, 0.95fr)" : "1fr",
-                        gap: "0.95rem",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "grid",
-                          gap: "0.78rem",
-                        }}
-                      >
-                        <div style={{ display: "grid", gap: "0.2rem" }}>
-                          <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                            Contrôle live
-                          </p>
-                          <p style={{ margin: 0, fontSize: desktop ? "1rem" : "0.92rem", fontWeight: 800, color: "#111827", letterSpacing: "-0.02em" }}>
-                            Projection salle
+                  <div style={liveFunctionCardStyle}>
+                        <div style={{ display: "grid", gap: "0.28rem" }}>
+                          <p style={liveFunctionCardTitleStyle}>Projection</p>
+                          <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", lineHeight: 1.35 }}>
+                            Ce que voit la salle
                           </p>
                         </div>
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: desktop ? "repeat(3, minmax(0, 1fr))" : "1fr",
-                            gap: "0.75rem",
-                          }}
-                        >
+                        <div style={{ display: "grid", gap: "0.55rem", flex: 1 }}>
                           <button
                             type="button"
                             disabled={!canShowQuestionQuick}
@@ -7117,31 +7095,19 @@ export default function RegieEventPage() {
                             {isScreenBlack ? "Retour au direct" : "Écran noir"}
                           </button>
                         </div>
-                        <p style={{ margin: 0, fontSize: "0.76rem", color: "#64748b", lineHeight: 1.35 }}>
+                        <p style={{ margin: 0, fontSize: "0.74rem", color: "#64748b", lineHeight: 1.35 }}>
                           Affichage actuel : <strong style={{ color: "#111827" }}>{displayLabelGlobal}</strong>
                         </p>
-                      </div>
+                  </div>
 
-                      <div
-                        style={{
-                          display: "grid",
-                          gap: "0.75rem",
-                          alignContent: "start",
-                        }}
-                      >
-                        <div
-                          style={{
-                            ...controlGroupCardStyle,
-                            gap: "0.55rem",
-                            padding: "0.95rem 0.95rem",
-                            background:
-                              "linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.92) 100%)",
-                          }}
-                        >
-                          <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                            Vote
-                          </p>
-                          <div style={{ display: "grid", gap: "0.55rem" }}>
+                  <div style={liveFunctionCardStyle}>
+                    <div style={{ display: "grid", gap: "0.28rem" }}>
+                      <p style={liveFunctionCardTitleStyle}>Vote</p>
+                      <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", lineHeight: 1.35 }}>
+                        Participation live
+                      </p>
+                    </div>
+                    <div style={{ display: "grid", gap: "0.55rem", flex: 1 }}>
                             <button
                               type="button"
                               disabled={!activePollIdJs || !canToggleVote || voteIsOpen}
@@ -7190,45 +7156,40 @@ export default function RegieEventPage() {
                           <p style={{ margin: 0, fontSize: "0.74rem", color: "#64748b", lineHeight: 1.35 }}>
                             État actuel : <strong style={{ color: "#111827" }}>{voteLabel}</strong>
                           </p>
-                        </div>
+                    <RegieAutoRevealCard
+                      embedded
+                      embeddedDividerAbove={false}
+                      eventId={eventId}
+                      autoReveal={Boolean(eventData?.autoReveal)}
+                      autoRevealDelaySec={eventData?.autoRevealDelaySec ?? 5}
+                      onSaved={() => fetchEvent({ silent: true })}
+                    />
+                  </div>
 
-                        <div
-                          style={{
-                            ...controlGroupCardStyle,
-                            gap: "0.48rem",
-                            padding: "0.95rem 0.95rem",
-                            background:
-                              "linear-gradient(180deg, rgba(250,245,255,0.52) 0%, rgba(255,255,255,0.96) 100%)",
-                          }}
-                        >
-                          <p style={{ margin: 0, fontSize: "0.64rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                            Progression
-                          </p>
-                          <p style={{ margin: 0, fontSize: "0.9rem", fontWeight: 800, color: "#111827" }}>
-                            {questionProgressSummary}
-                          </p>
-                          <p
-                            style={{
-                              margin: 0,
-                              fontSize: "0.76rem",
-                              color: "#475569",
-                              lineHeight: 1.35,
-                              overflowWrap: "anywhere",
-                            }}
-                          >
-                            {activeQuestionTitle}
-                          </p>
-                        </div>
-                      </div>
+                  <div style={liveFunctionCardStyle}>
+                    <div style={{ display: "grid", gap: "0.28rem" }}>
+                      <p style={liveFunctionCardTitleStyle}>Progression</p>
+                      <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", lineHeight: 1.35 }}>
+                        Avancement du live
+                      </p>
                     </div>
-
-                    <div
-                      style={{
-                        display: "grid",
-                        gap: "0.65rem",
-                        justifyItems: desktop ? "center" : "stretch",
-                      }}
-                    >
+                    <div style={{ display: "grid", gap: "0.35rem", flex: 1 }}>
+                      <p style={{ margin: 0, fontSize: "0.88rem", fontWeight: 800, color: "#111827" }}>
+                        {questionProgressSummary}
+                      </p>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "0.76rem",
+                          color: "#475569",
+                          lineHeight: 1.35,
+                          overflowWrap: "anywhere",
+                        }}
+                      >
+                        {activeQuestionTitle}
+                      </p>
+                    </div>
+                    <div style={{ display: "grid", gap: "0.5rem", marginTop: "auto" }}>
                       <button
                         type="button"
                         disabled={!canGoNext}
@@ -7237,108 +7198,72 @@ export default function RegieEventPage() {
                         }
                         style={{
                           ...btnDanger(!canGoNext),
-                          width: desktop ? "min(100%, 320px)" : "100%",
-                          minHeight: desktop ? "3rem" : "2.78rem",
-                          padding: "0.68rem 0.92rem",
-                          fontSize: "0.86rem",
+                          width: "100%",
+                          minHeight: "2.95rem",
+                          padding: "0.65rem 0.85rem",
+                          fontSize: "0.84rem",
                           border: "1px solid #8b5cf6",
                           background: canGoNext
                             ? "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)"
                             : "#ede9fe",
                           color: canGoNext ? "#fff" : "#6d28d9",
                           fontWeight: 800,
-                          boxShadow: canGoNext
-                            ? "0 16px 28px rgba(124, 58, 237, 0.18)"
-                            : "none",
+                          boxShadow: canGoNext ? "0 14px 24px rgba(124, 58, 237, 0.16)" : "none",
                         }}
                       >
                         Question suivante
                       </button>
+                      <button
+                        type="button"
+                        disabled={busy || eventFinished}
+                        onClick={async () => {
+                          if (typeof window === "undefined") return;
+                          const ok = window.confirm(
+                            "Terminer l’événement maintenant ? Cette action clôture l’événement.",
+                          );
+                          if (!ok) return;
+                          const confirmWord = window.prompt(
+                            "Confirmation de sécurité : tapez TERMINER pour confirmer.",
+                            "",
+                          );
+                          if (String(confirmWord || "").trim().toUpperCase() !== "TERMINER") return;
+                          await postAction(`/events/${eventId}/finish`, "Evenement termine");
+                        }}
+                        style={{
+                          ...btnFinish(busy || eventFinished),
+                          width: "100%",
+                          minHeight: "2.35rem",
+                          padding: "0.45rem 0.75rem",
+                          fontSize: "0.76rem",
+                          border: "1px solid #fda4af",
+                          background: busy || eventFinished ? "#fff1f2" : "#fffafb",
+                          color: busy || eventFinished ? "#9f1239" : "#be123c",
+                        }}
+                      >
+                        Terminer
+                      </button>
                     </div>
+                  </div>
+
+                  <div
+                    id="regie-chrono-panel"
+                    style={{
+                      ...liveFunctionCardStyle,
+                      background:
+                        "linear-gradient(180deg, rgba(250,245,255,0.72) 0%, rgba(255,255,255,0.97) 100%)",
+                      borderColor: "rgba(196, 181, 253, 0.22)",
+                    }}
+                  >
+                    <div style={{ display: "grid", gap: "0.28rem" }}>
+                      <p style={liveFunctionCardTitleStyle}>Chrono</p>
+                      <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", lineHeight: 1.35 }}>
+                        Rythme du live
+                      </p>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>{chronoProjectionInner}</div>
                   </div>
                 </div>
 
-                <div
-                  style={{
-                    marginTop: "0.75rem",
-                    display: "flex",
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                    gap: "0.55rem",
-                  }}
-                >
-                  <button
-                    type="button"
-                    disabled={!activePollIdJs}
-                    onClick={() => setLiveAnswersOpen((v) => !v)}
-                    style={{
-                      ...btnGhost,
-                      minHeight: "2.55rem",
-                      minWidth: desktop ? "186px" : "100%",
-                      padding: "0.5rem 0.8rem",
-                      borderColor: "#cbd5e1",
-                      background: "#fff",
-                      color: "#0f172a",
-                      fontWeight: 700,
-                      fontSize: "0.78rem",
-                    }}
-                    title="Afficher les réponses en direct sans quitter la régie"
-                  >
-                    {liveAnswersOpen
-                      ? "Masquer les réponses en direct"
-                      : "Voir les réponses en direct"}
-                  </button>
-
-                  {isScreenBlack ? (
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        borderRadius: "999px",
-                        padding: "0.22rem 0.58rem",
-                        fontSize: "0.72rem",
-                        fontWeight: 800,
-                        border: "1px solid #334155",
-                        background: "#111827",
-                        color: "#e2e8f0",
-                      }}
-                    >
-                      Écran noir actif
-                    </span>
-                  ) : null}
-
-                  <div style={{ flex: 1, minWidth: "10px" }} />
-
-                  <button
-                    type="button"
-                    disabled={busy || eventFinished}
-                    onClick={async () => {
-                      if (typeof window === "undefined") return;
-                      const ok = window.confirm(
-                        "Terminer l’événement maintenant ? Cette action clôture l’événement.",
-                      );
-                      if (!ok) return;
-                      const confirmWord = window.prompt(
-                        "Confirmation de sécurité : tapez TERMINER pour confirmer.",
-                        "",
-                      );
-                      if (String(confirmWord || "").trim().toUpperCase() !== "TERMINER") return;
-                      await postAction(`/events/${eventId}/finish`, "Evenement termine");
-                    }}
-                    style={{
-                      ...btnFinish(busy || eventFinished),
-                      minHeight: "2.55rem",
-                      minWidth: desktop ? "132px" : "100%",
-                      padding: "0.52rem 0.82rem",
-                      fontSize: "0.8rem",
-                      border: "1px solid #fda4af",
-                      background: busy || eventFinished ? "#fff1f2" : "#fffafb",
-                      color: busy || eventFinished ? "#9f1239" : "#be123c",
-                    }}
-                  >
-                    Terminer
-                  </button>
-                </div>
               </section>
 
               {desktop && liveAnswersOpen ? (
@@ -7792,7 +7717,7 @@ export default function RegieEventPage() {
               screenBConnected={screenBConnected}
               screenBDisplayState={screenBDisplayState}
               desktop={desktop}
-              chronoSection={chronoProjectionInner}
+              chronoSection={null}
               autoRotate={autoRotate}
               onAutoRotateChange={setAutoRotate}
               autoRotateAllowed={autoRotateAllowed}
