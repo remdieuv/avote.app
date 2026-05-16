@@ -116,7 +116,7 @@ const MAX_EVENT_LANDING_SHOWCASE_PHOTOS = 30;
 
 const uploadMiddleware = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 3 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter(_req, file, cb) {
     const ok = /^image\/(jpeg|png|gif|webp)$/i.test(file.mimetype);
     cb(null, ok);
@@ -2420,7 +2420,7 @@ app.post("/events/:eventId/customization/upload", requireAuth, async (req, res) 
     return res.json({ url: uploadResult.secureUrl, publicId: uploadResult.publicId });
   } catch (e) {
     if (e && typeof e === "object" && e.code === "LIMIT_FILE_SIZE") {
-      return res.status(400).json({ error: "Fichier trop volumineux (max 3 Mo)." });
+      return res.status(400).json({ error: "Fichier trop volumineux (max 5 Mo)." });
     }
     console.error(e);
     return res.status(500).json({ error: e?.message || "Upload impossible." });
@@ -2471,7 +2471,7 @@ app.post("/events/:eventId/landing/photos", requireAuth, async (req, res) => {
     });
   } catch (e) {
     if (e && typeof e === "object" && e.code === "LIMIT_FILE_SIZE") {
-      return res.status(400).json({ error: "Fichier trop volumineux (max 3 Mo)." });
+      return res.status(400).json({ error: "Fichier trop volumineux (max 5 Mo)." });
     }
     console.error(e);
     return res.status(500).json({ error: e?.message || "Upload impossible." });
@@ -2552,7 +2552,7 @@ app.post("/events/:eventId/landing/showcase-photos", requireAuth, async (req, re
     });
   } catch (e) {
     if (e && typeof e === "object" && e.code === "LIMIT_FILE_SIZE") {
-      return res.status(400).json({ error: "Fichier trop volumineux (max 3 Mo)." });
+      return res.status(400).json({ error: "Fichier trop volumineux (max 5 Mo)." });
     }
     console.error(e);
     return res.status(500).json({ error: e?.message || "Upload impossible." });

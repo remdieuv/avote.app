@@ -5,6 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveApiAssetUrlNullable } from "@/lib/assetUrl";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
+import {
+  LANDING_PHOTO_TOO_HEAVY_MESSAGE,
+  prepareLandingPhotoForUpload,
+} from "@/lib/compressLandingPhoto";
 
 function mapApiError(body, status) {
   const code = String(body?.error || "").trim();
@@ -67,7 +71,10 @@ export default function EventLandingPage() {
   /** @type {null | Record<string, unknown>} */
   const [payload, setPayload] = useState(null);
   const [toastNotif, setToastNotif] = useState(null);
-  const [uploadBusy, setUploadBusy] = useState(false);
+  const [uploadPhase, setUploadPhase] = useState(
+    /** @type {null | "optimizing" | "uploading"} */ (null),
+  );
+  const uploadBusy = uploadPhase != null;
   const [uploadError, setUploadError] = useState(null);
   const [deletingPhotoId, setDeletingPhotoId] = useState(null);
   const [exitingPhotoId, setExitingPhotoId] = useState(null);
@@ -138,11 +145,15 @@ export default function EventLandingPage() {
         ? String(payload.landingPhotoUploadEventId).trim()
         : "";
       if (!can || !eventId) return;
-      setUploadBusy(true);
+      setUploadPhase("optimizing");
       setUploadError(null);
       try {
+        const prepared = await prepareLandingPhotoForUpload(file, {
+          onOptimizing: () => setUploadPhase("optimizing"),
+        });
+        setUploadPhase("uploading");
         const fd = new FormData();
-        fd.append("file", file);
+        fd.append("file", prepared);
         const res = await adminFetch(
           `${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/landing/photos`,
           { method: "POST", body: fd },
@@ -166,9 +177,16 @@ export default function EventLandingPage() {
         setToastNotif("✅ Photo publiée sur la landing");
         window.setTimeout(() => setToastNotif(null), 2600);
       } catch (err) {
-        setUploadError(err?.message || "Upload impossible.");
+        const msg = err?.message || "Upload impossible.";
+        setUploadError(
+          msg === LANDING_PHOTO_TOO_HEAVY_MESSAGE
+            ? msg
+            : msg.includes("trop volumineux")
+              ? LANDING_PHOTO_TOO_HEAVY_MESSAGE
+              : msg,
+        );
       } finally {
-        setUploadBusy(false);
+        setUploadPhase(null);
       }
     },
     [payload],
@@ -1229,7 +1247,11 @@ export default function EventLandingPage() {
                   onClick={triggerLandingPhotoPicker}
                   style={{ color: accent }}
                 >
-                  📸 Ajouter un moment live
+                  {uploadPhase === "optimizing"
+                    ? "Optimisation de la photo…"
+                    : uploadPhase === "uploading"
+                      ? "Envoi en cours…"
+                      : "📸 Ajouter un moment live"}
                 </button>
               ) : null}
             </div>
@@ -1237,7 +1259,7 @@ export default function EventLandingPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
+                accept="image/*"
                 style={{ display: "none" }}
                 onChange={onLandingPhotoSelected}
               />

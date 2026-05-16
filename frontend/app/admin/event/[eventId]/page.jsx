@@ -14,6 +14,10 @@ import { AjouterQuestionLiveModal } from "@/components/AjouterQuestionLiveModal"
 import { LiveMicroLabel } from "@/components/admin/LiveMicroIcon";
 import { adminFetch, apiBaseBrowser, SOCKET_URL as SOCKET } from "@/lib/config";
 import {
+  LANDING_PHOTO_TOO_HEAVY_MESSAGE,
+  prepareLandingPhotoForUpload,
+} from "@/lib/compressLandingPhoto";
+import {
   getEventUxPanelStyles,
   getEventUxSceneBadge,
   getEventUxSceneBadgeFromKey,
@@ -3013,7 +3017,7 @@ function SectionPartageLandingEvenement({ slug, landingEnabled, eventId }) {
 
 /**
  * Colonne droite desktop : QR + liens diffusion.
- * @param {{ slug: string; liveState: string; stateLabel: string; showHeader?: boolean; noSticky?: boolean; qrVariant?: "rail" | "mobile"; sceneBadge?: { label: string; bg: string; color: string; border: string } | null; onQuickLandingPhoto?: () => void; landingPhotoUploading?: boolean; landingPhotosCount?: number; landingEnabled?: boolean; eventId?: string | null }} props
+ * @param {{ slug: string; liveState: string; stateLabel: string; showHeader?: boolean; noSticky?: boolean; qrVariant?: "rail" | "mobile"; sceneBadge?: { label: string; bg: string; color: string; border: string } | null; onQuickLandingPhoto?: () => void; landingPhotoUploading?: boolean; landingPhotoUploadLabel?: string; landingPhotosCount?: number; landingEnabled?: boolean; eventId?: string | null }} props
  */
 function SidebarPartageDroit({
   slug,
@@ -3026,6 +3030,7 @@ function SidebarPartageDroit({
   onOverlayCopied,
   onQuickLandingPhoto,
   landingPhotoUploading = false,
+  landingPhotoUploadLabel = "📸 Publier une photo",
   landingPhotosCount = 0,
   landingEnabled = false,
   eventId = null,
@@ -3112,7 +3117,7 @@ function SidebarPartageDroit({
             cursor: landingPhotoUploading ? "not-allowed" : "pointer",
           }}
         >
-          {landingPhotoUploading ? "Envoi photo…" : "📸 Publier une photo"}
+          {landingPhotoUploadLabel}
         </button>
         <p style={{ margin: "0.42rem 0 0 0", fontSize: "0.7rem", color: "#64748b", fontWeight: 600 }}>
           {landingPhotosCount} photo{landingPhotosCount > 1 ? "s" : ""} publiée
@@ -4175,7 +4180,16 @@ export default function RegieEventPage() {
   const [previewJoinOpen, setPreviewJoinOpen] = useState(false);
   const [mobileJoinPreviewOpen, setMobileJoinPreviewOpen] = useState(false);
   const [liveAnswersOpen, setLiveAnswersOpen] = useState(false);
-  const [landingPhotoUploading, setLandingPhotoUploading] = useState(false);
+  const [landingPhotoUploadPhase, setLandingPhotoUploadPhase] = useState(
+    /** @type {null | "optimizing" | "uploading"} */ (null),
+  );
+  const landingPhotoUploading = landingPhotoUploadPhase != null;
+  const landingPhotoUploadLabel =
+    landingPhotoUploadPhase === "optimizing"
+      ? "Optimisation de la photo…"
+      : landingPhotoUploadPhase === "uploading"
+        ? "Envoi photo…"
+        : "📸 Publier une photo";
   /** Desktop : colonne gauche (questions + liens) repliée */
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
   /** Nombre de clients /screen connectés (socket room dédiée) */
@@ -4294,11 +4308,15 @@ export default function RegieEventPage() {
   const uploadQuickLandingPhoto = useCallback(
     async (file) => {
       if (!eventId || !file) return;
-      setLandingPhotoUploading(true);
+      setLandingPhotoUploadPhase("optimizing");
       setActionError(null);
       try {
+        const prepared = await prepareLandingPhotoForUpload(file, {
+          onOptimizing: () => setLandingPhotoUploadPhase("optimizing"),
+        });
+        setLandingPhotoUploadPhase("uploading");
         const fd = new FormData();
-        fd.append("file", file);
+        fd.append("file", prepared);
         const res = await adminFetch(
           `${apiBaseBrowser()}/events/${eventId}/landing/photos`,
           { method: "POST", body: fd },
@@ -4308,9 +4326,16 @@ export default function RegieEventPage() {
         setToastNotif("✅ Photo publiée sur la landing");
         window.setTimeout(() => setToastNotif(null), 2600);
       } catch (e) {
-        setActionError(e.message || "Upload photo impossible.");
+        const msg = e?.message || "Upload photo impossible.";
+        setActionError(
+          msg === LANDING_PHOTO_TOO_HEAVY_MESSAGE
+            ? msg
+            : msg.includes("trop volumineux")
+              ? LANDING_PHOTO_TOO_HEAVY_MESSAGE
+              : msg,
+        );
       } finally {
-        setLandingPhotoUploading(false);
+        setLandingPhotoUploadPhase(null);
       }
     },
     [eventId],
@@ -7609,6 +7634,7 @@ export default function RegieEventPage() {
                   qrVariant="mobile"
                   onQuickLandingPhoto={() => quickLandingPhotoInputRef.current?.click()}
                   landingPhotoUploading={landingPhotoUploading}
+                  landingPhotoUploadLabel={landingPhotoUploadLabel}
                   landingPhotosCount={landingPhotosCount}
                   landingEnabled={Boolean(eventData?.landingEnabled)}
                   eventId={eventId}
@@ -7632,6 +7658,7 @@ export default function RegieEventPage() {
                 sceneBadge={sceneBadge}
                 onQuickLandingPhoto={() => quickLandingPhotoInputRef.current?.click()}
                 landingPhotoUploading={landingPhotoUploading}
+                landingPhotoUploadLabel={landingPhotoUploadLabel}
                 landingPhotosCount={landingPhotosCount}
                 landingEnabled={Boolean(eventData?.landingEnabled)}
                 eventId={eventId}
