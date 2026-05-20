@@ -5,6 +5,10 @@ import { useEffect, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { useAdminUser } from "@/components/admin/AdminUserContext";
 import { CheckoutEventButton } from "@/components/billing/CheckoutEventButton";
+import {
+  computeActivationBalance,
+  formatDisponibles,
+} from "@/lib/activationBalance";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
 export default function AdminAccountPage() {
@@ -24,22 +28,16 @@ export default function AdminAccountPage() {
   const [passwordError, setPasswordError] = useState("");
   const [passwordSuccess, setPasswordSuccess] = useState("");
   const totalCreditsBought = payments.reduce((sum, p) => sum + Math.max(0, Number(p.credits || 0)), 0);
-  const creditCount = typeof eventCredits === "number" && !Number.isNaN(eventCredits) ? eventCredits : null;
-  const funAvailable =
-    typeof activationsAvailable?.FUN === "number" && !Number.isNaN(activationsAvailable.FUN)
-      ? activationsAvailable.FUN
-      : null;
-  const eventAvailable =
-    typeof activationsAvailable?.EVENT === "number" && !Number.isNaN(activationsAvailable.EVENT)
-      ? activationsAvailable.EVENT
-      : null;
-  const activationsLoaded = funAvailable !== null && eventAvailable !== null;
-  const hasNoTypedActivation =
-    activationsLoaded && funAvailable === 0 && eventAvailable === 0;
-  const legacyCredits =
-    activationsLoaded && creditCount != null
-      ? Math.max(0, creditCount - funAvailable - eventAvailable)
-      : null;
+  const balance = computeActivationBalance(eventCredits, activationsAvailable);
+  const {
+    fun: funAvailable,
+    event: eventAvailable,
+    legacyCredits,
+    totalAvailable,
+    typedLoaded: activationsLoaded,
+  } = balance;
+  const hasNoActivation =
+    activationsLoaded && totalAvailable !== null && totalAvailable === 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -192,20 +190,8 @@ export default function AdminAccountPage() {
             {user?.email ?? "—"}
           </p>
           <p style={{ ...ROW_TEXT, marginTop: "0.45rem" }}>
-            <span style={ROW_LABEL}>FUN : </span>
-            {!activationsLoaded
-              ? "—"
-              : funAvailable === 1
-                ? "1 disponible"
-                : `${funAvailable} disponibles`}
-          </p>
-          <p style={{ ...ROW_TEXT, marginTop: "0.35rem" }}>
-            <span style={ROW_LABEL}>EVENT : </span>
-            {!activationsLoaded
-              ? "—"
-              : eventAvailable === 1
-                ? "1 disponible"
-                : `${eventAvailable} disponibles`}
+            <span style={ROW_LABEL}>Total disponible : </span>
+            {totalAvailable === null ? "—" : formatDisponibles(totalAvailable)}
           </p>
           {createdAt ? (
             <p style={{ ...ROW_TEXT, marginTop: "0.45rem" }}>
@@ -229,44 +215,40 @@ export default function AdminAccountPage() {
             <p
               style={{
                 margin: 0,
-                color: hasNoTypedActivation ? "#b45309" : "#0f172a",
+                color: hasNoActivation ? "#b45309" : "#0f172a",
                 padding: "0.38rem 0.48rem",
                 borderRadius: "9px",
-                border: hasNoTypedActivation ? "1px solid #fdba74" : "1px solid #e2e8f0",
-                background: hasNoTypedActivation ? "#fff7ed" : "#f8fafc",
+                border: hasNoActivation ? "1px solid #fdba74" : "1px solid #e2e8f0",
+                background: hasNoActivation ? "#fff7ed" : "#f8fafc",
               }}
             >
               {!activationsLoaded
                 ? "Activations en cours de chargement..."
-                : hasNoTypedActivation
+                : hasNoActivation
                   ? "Aucune activation disponible"
                   : "Vos activations par formule"}
             </p>
-            {activationsLoaded && !hasNoTypedActivation ? (
+            {activationsLoaded && !hasNoActivation ? (
               <>
-                <p style={{ margin: 0, color: "#334155", padding: "0 0.48rem" }}>
-                  <span style={ROW_LABEL}>FUN : </span>
-                  {funAvailable === 1 ? "1 disponible" : `${funAvailable} disponibles`}
-                </p>
-                <p style={{ margin: 0, color: "#334155", padding: "0 0.48rem" }}>
-                  <span style={ROW_LABEL}>EVENT : </span>
-                  {eventAvailable === 1 ? "1 disponible" : `${eventAvailable} disponibles`}
-                </p>
+                {funAvailable != null && funAvailable > 0 ? (
+                  <p style={{ margin: 0, color: "#334155", padding: "0 0.48rem" }}>
+                    <span style={ROW_LABEL}>FUN : </span>
+                    {formatDisponibles(funAvailable)}
+                  </p>
+                ) : null}
+                {eventAvailable != null && eventAvailable > 0 ? (
+                  <p style={{ margin: 0, color: "#334155", padding: "0 0.48rem" }}>
+                    <span style={ROW_LABEL}>EVENT : </span>
+                    {formatDisponibles(eventAvailable)}
+                  </p>
+                ) : null}
+                {legacyCredits > 0 ? (
+                  <p style={{ margin: 0, color: "#334155", padding: "0 0.48rem" }}>
+                    <span style={ROW_LABEL}>Crédits non typés : </span>
+                    {formatDisponibles(legacyCredits)}
+                  </p>
+                ) : null}
               </>
-            ) : null}
-            {legacyCredits != null && legacyCredits > 0 ? (
-              <p
-                style={{
-                  margin: 0,
-                  color: "#64748b",
-                  fontSize: "0.78rem",
-                  fontWeight: 700,
-                  padding: "0 0.48rem",
-                }}
-              >
-                Compteur global : {legacyCredits} activation{legacyCredits > 1 ? "s" : ""} non
-                typée(s) — encore utilisée(s) pour passer en live réel.
-              </p>
             ) : null}
           </div>
           <p style={{ margin: "0 0 0.85rem", color: "#64748b", fontSize: "0.86rem", fontWeight: 700 }}>

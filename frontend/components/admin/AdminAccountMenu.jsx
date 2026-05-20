@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { computeActivationBalance } from "@/lib/activationBalance";
 import { useAdminUser } from "./AdminUserContext";
 
 function UserIcon({ size = 18 }) {
@@ -45,6 +46,10 @@ export function AdminAccountMenu() {
   }, [logout]);
 
   const label = "Mon compte";
+  const { totalAvailable } = computeActivationBalance(
+    user?.eventCredits,
+    user?.activationsAvailable,
+  );
 
   return (
     <div ref={wrapRef} style={{ position: "relative" }}>
@@ -118,9 +123,7 @@ export function AdminAccountMenu() {
             title="Activations événement disponibles"
           >
             {`Activations dispo. ${
-              typeof user?.eventCredits === "number" && !Number.isNaN(user.eventCredits)
-                ? user.eventCredits
-                : "—"
+              totalAvailable === null ? "—" : totalAvailable
             }`}
           </div>
           <Link

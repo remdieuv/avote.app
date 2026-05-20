@@ -13,7 +13,7 @@ export function AdminAuthShell({ children }) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState(
-    /** @type {{ id: string; email: string; eventCredits?: number | null } | null} */ (null),
+    /** @type {{ id: string; email: string; eventCredits?: number | null; activationsAvailable?: { FUN: number; EVENT: number } | null } | null} */ (null),
   );
 
   useEffect(() => {
@@ -44,6 +44,18 @@ export function AdminAuthShell({ children }) {
               : typeof u?.eventCredits === "number"
                 ? u.eventCredits
                 : null;
+          const availRaw =
+            data?.activationsAvailable ?? u?.activationsAvailable ?? null;
+          /** @type {{ FUN: number; EVENT: number } | null} */
+          let activationsAvailable = null;
+          if (availRaw && typeof availRaw === "object") {
+            const funRaw = Number(availRaw.FUN);
+            const eventRaw = Number(availRaw.EVENT);
+            activationsAvailable = {
+              FUN: Number.isFinite(funRaw) ? Math.max(0, funRaw) : 0,
+              EVENT: Number.isFinite(eventRaw) ? Math.max(0, eventRaw) : 0,
+            };
+          }
           setUser({
             id: u.id,
             email: u.email,
@@ -51,6 +63,7 @@ export function AdminAuthShell({ children }) {
               creditsRaw == null || Number.isNaN(Number(creditsRaw))
                 ? null
                 : Math.max(0, Number(creditsRaw)),
+            activationsAvailable,
           });
           setReady(true);
           return;
