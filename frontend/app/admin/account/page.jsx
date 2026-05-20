@@ -163,7 +163,7 @@ export default function AdminAccountPage() {
             {user?.email ?? "—"}
           </p>
           <p style={{ ...ROW_TEXT, marginTop: "0.45rem" }}>
-            <span style={ROW_LABEL}>Crédits disponibles : </span>
+            <span style={ROW_LABEL}>Activations disponibles : </span>
             {typeof eventCredits === "number" && !Number.isNaN(eventCredits)
               ? eventCredits
               : "—"}
@@ -177,7 +177,7 @@ export default function AdminAccountPage() {
         </article>
 
         <article style={CARD}>
-          <h2 style={CARD_TITLE}>Crédits & achat</h2>
+          <h2 style={CARD_TITLE}>Activations & formules</h2>
           <p
             style={{
               margin: "0 0 0.45rem",
@@ -191,37 +191,39 @@ export default function AdminAccountPage() {
             }}
           >
             {creditCount == null
-              ? "Crédits en cours de chargement..."
+              ? "Activations en cours de chargement..."
               : hasNoCredit
-                ? "Aucun crédit disponible"
+                ? "Aucune activation disponible"
                 : creditCount === 1
-                  ? "1 crédit disponible"
-                  : `${creditCount} crédits disponibles`}
+                  ? "1 activation disponible"
+                  : `${creditCount} activations disponibles`}
           </p>
-          <p style={{ margin: 0, color: "#64748b", fontSize: "0.86rem", fontWeight: 700 }}>
-            1 événement réel = 49€ jusqu’à 500 participants.
+          <p style={{ margin: "0 0 0.85rem", color: "#64748b", fontSize: "0.86rem", fontWeight: 700 }}>
+            Choisissez une formule selon votre événement.
           </p>
-          <div className="buy-credit-cta" style={{ marginTop: "0.95rem", maxWidth: "360px" }}>
-            <CheckoutEventButton
-              label="Acheter 1 crédit événement"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: "100%",
-                minHeight: "46px",
-                padding: "0.72rem 1rem",
-                borderRadius: "12px",
-                border: "1px solid #7c3aed",
-                background: "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 58%, #6d28d9 100%)",
-                color: "#fff",
-                fontWeight: 850,
-                fontSize: "0.9rem",
-                textDecoration: "none",
-                boxShadow: "0 12px 24px rgba(124,58,237,0.26)",
-                transition: "transform 160ms ease, box-shadow 160ms ease, filter 160ms ease",
-              }}
-            />
+          <div className="account-plan-grid">
+            <div className="account-plan-card">
+              <p className="account-plan-name">FUN — 19€</p>
+              <p className="account-plan-detail">Jusqu’à 100 participants</p>
+              <div className="buy-activation-cta">
+                <CheckoutEventButton
+                  plan="FUN"
+                  label="Acheter FUN"
+                  style={PLAN_BTN_SECONDARY}
+                />
+              </div>
+            </div>
+            <div className="account-plan-card account-plan-card-featured">
+              <p className="account-plan-name">EVENT — 49€</p>
+              <p className="account-plan-detail">Jusqu’à 500 participants</p>
+              <div className="buy-activation-cta">
+                <CheckoutEventButton
+                  plan="EVENT"
+                  label="Acheter EVENT"
+                  style={PLAN_BTN_PRIMARY}
+                />
+              </div>
+            </div>
           </div>
           <p style={{ margin: "0.55rem 0 0", color: "#64748b", fontSize: "0.8rem", fontWeight: 700 }}>
             Paiement sécurisé • Sans abonnement
@@ -236,7 +238,7 @@ export default function AdminAccountPage() {
         <article style={CARD}>
           <h2 style={CARD_TITLE}>Factures / achats</h2>
           <p style={{ margin: "0 0 0.6rem", color: "#334155", fontSize: "0.84rem", fontWeight: 800 }}>
-            Total acheté : {totalCreditsBought} crédit{totalCreditsBought > 1 ? "s" : ""}
+            Total acheté : {totalCreditsBought} activation{totalCreditsBought > 1 ? "s" : ""}
           </p>
           {payments.length === 0 ? (
             <p style={{ margin: 0, color: "#64748b", fontSize: "0.86rem", fontWeight: 600 }}>
@@ -258,7 +260,7 @@ export default function AdminAccountPage() {
                     {new Date(p.createdAt).toLocaleDateString("fr-FR")}
                   </div>
                   <div style={{ marginTop: "0.22rem", fontSize: "0.83rem", color: "#334155", fontWeight: 700 }}>
-                    {`${p.credits} crédit${p.credits > 1 ? "s" : ""}`}
+                    {`${p.credits} activation${p.credits > 1 ? "s" : ""}`}
                   </div>
                   <div style={{ marginTop: "0.16rem", fontSize: "0.95rem", color: "#0f172a", fontWeight: 850 }}>
                     {new Intl.NumberFormat("fr-FR", {
@@ -347,16 +349,52 @@ export default function AdminAccountPage() {
         </article>
       </section>
       <style>{`
-        #account-page .buy-credit-cta :is(a,button) {
+        #account-page .account-plan-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 0.75rem;
+        }
+        #account-page .account-plan-card {
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+          padding: 0.85rem 0.9rem;
+        }
+        #account-page .account-plan-card-featured {
+          border-color: #c4b5fd;
+          background:
+            radial-gradient(220px 120px at 90% -16%, rgba(196, 181, 253, 0.28), transparent 60%),
+            linear-gradient(160deg, #ffffff 0%, #faf5ff 100%);
+          box-shadow: 0 10px 24px rgba(124, 58, 237, 0.1);
+        }
+        #account-page .account-plan-name {
+          margin: 0;
+          font-size: 0.95rem;
+          font-weight: 850;
+          color: #0f172a;
+          letter-spacing: -0.02em;
+        }
+        #account-page .account-plan-detail {
+          margin: 0.28rem 0 0.72rem;
+          font-size: 0.82rem;
+          font-weight: 700;
+          color: #64748b;
+        }
+        #account-page .buy-activation-cta :is(a,button) {
           cursor: pointer;
         }
-        #account-page .buy-credit-cta :is(a,button):hover {
+        #account-page .buy-activation-cta :is(a,button):hover {
           transform: translateY(-1px);
           box-shadow: 0 14px 30px rgba(124, 58, 237, 0.3);
           filter: saturate(1.03);
         }
-        #account-page .buy-credit-cta :is(a,button):active {
+        #account-page .buy-activation-cta :is(a,button):active {
           transform: translateY(0);
+        }
+        @media (min-width: 640px) {
+          #account-page .account-plan-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
         }
         #account-page input:focus-visible {
           border-color: #93c5fd;
@@ -413,4 +451,30 @@ const INPUT_STYLE = {
   color: "#0f172a",
   fontSize: "0.88rem",
   outline: "none",
+};
+
+const PLAN_BTN_PRIMARY = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: "100%",
+  minHeight: "46px",
+  padding: "0.72rem 1rem",
+  borderRadius: "12px",
+  border: "1px solid #7c3aed",
+  background: "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 58%, #6d28d9 100%)",
+  color: "#fff",
+  fontWeight: 850,
+  fontSize: "0.9rem",
+  textDecoration: "none",
+  boxShadow: "0 12px 24px rgba(124,58,237,0.26)",
+  transition: "transform 160ms ease, box-shadow 160ms ease, filter 160ms ease",
+};
+
+const PLAN_BTN_SECONDARY = {
+  ...PLAN_BTN_PRIMARY,
+  border: "1px solid #d8b4fe",
+  background: "#fff",
+  color: "#5b21b6",
+  boxShadow: "none",
 };

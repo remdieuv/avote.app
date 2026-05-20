@@ -115,9 +115,9 @@ export function AdminAccountMenu() {
               fontSize: "0.72rem",
               fontWeight: 800,
             }}
-            title="Crédits événement disponibles"
+            title="Activations événement disponibles"
           >
-            {`Crédit dispo. ${
+            {`Activations dispo. ${
               typeof user?.eventCredits === "number" && !Number.isNaN(user.eventCredits)
                 ? user.eventCredits
                 : "—"

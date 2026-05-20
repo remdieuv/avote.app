@@ -47,7 +47,7 @@ function mapApiError(body, status) {
     return "Vous avez déjà un événement actif. Terminez-le avant d’en créer un nouveau.";
   }
   if (code === "NO_EVENT_CREDIT") {
-    return "Vous n’avez plus de crédit événement. Achetez un événement pour lancer le live réel.";
+    return "Vous n’avez plus d’activation disponible. Choisissez une formule pour lancer le live réel.";
   }
   if (code === "EVENT_ALREADY_CONSUMED") {
     return "Le mode réel est déjà activé pour cet événement.";
@@ -4914,7 +4914,7 @@ export default function RegieEventPage() {
     if (!eventId || !canStartReal) return;
     if (typeof window !== "undefined") {
       const ok = window.confirm(
-        "Passer en live réel ?\n\n1 crédit événement sera consommé. Vous obtiendrez des résultats exacts, le chrono libre et les exports.",
+        "Passer en live réel ?\n\n1 activation sera consommée. Vous obtiendrez des résultats exacts, le chrono libre et les exports.",
       );
       if (!ok) return;
     }
@@ -5990,7 +5990,7 @@ export default function RegieEventPage() {
           role="alert"
         >
           <span style={{ fontSize: "0.86rem", fontWeight: 700 }}>{actionError}</span>
-          {String(actionError).includes("Vous n’avez plus de crédit événement") ? (
+          {String(actionError).includes("Vous n’avez plus d’activation disponible") ? (
             <Link
               href="/pricing"
               style={{
@@ -6007,7 +6007,7 @@ export default function RegieEventPage() {
                 textDecoration: "none",
               }}
             >
-              Acheter un événement
+              Choisir une formule
             </Link>
           ) : null}
         </div>
@@ -6647,7 +6647,7 @@ export default function RegieEventPage() {
                               color: "rgba(224, 231, 255, 0.72)",
                             }}
                           >
-                            Aucun crédit événement
+                            Aucune activation disponible
                           </span>
                           <Link
                             href="/pricing"
@@ -6668,7 +6668,7 @@ export default function RegieEventPage() {
                               boxShadow: "0 10px 22px rgba(245, 158, 11, 0.28)",
                             }}
                           >
-                            Acheter un crédit
+                            Choisir une formule
                           </Link>
                         </>
                       ) : (
@@ -6707,8 +6707,8 @@ export default function RegieEventPage() {
                           }}
                         >
                           {Number(creditsLabel) > 1
-                            ? `${creditsLabel} crédits disponibles`
-                            : `${creditsLabel} crédit disponible`}
+                            ? `${creditsLabel} activations disponibles`
+                            : `${creditsLabel} activation disponible`}
                         </span>
                       ) : null}
                     </div>

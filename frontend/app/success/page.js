@@ -41,12 +41,12 @@ export default function SuccessPage() {
         <section style={card}>
           <p style={eyebrow}>Paiement confirmé ✅</p>
           <h1 style={title}>Votre achat a bien été validé.</h1>
-          <p style={subtitle}>1 crédit a été ajouté à votre compte.</p>
-          <p style={creditLine}>
+          <p style={subtitle}>1 activation a été ajoutée à votre compte.</p>
+          <p style={activationLine}>
             {loadingCredits
               ? "Mise à jour du solde en cours..."
               : typeof eventCredits === "number"
-                ? `Crédits disponibles maintenant : ${eventCredits}`
+                ? `Activations disponibles maintenant : ${eventCredits}`
                 : "Votre solde sera actualisé automatiquement."}
           </p>
           <div style={ctaWrap}>
@@ -115,7 +115,7 @@ const subtitle = {
   fontWeight: 700,
 };
 
-const creditLine = {
+const activationLine = {
   margin: "0.75rem 0 0",
   color: "#64748b",
   fontSize: "0.88rem",
