@@ -64,6 +64,11 @@ enum AuthProvider {
   GOOGLE
 }
 
+enum ActivationPlanType {
+  FUN
+  EVENT
+}
+
 model User {
   id           String       @id @default(cuid())
   email        String       @unique
@@ -78,7 +83,8 @@ model User {
   events       Event[]
   contestDraws ContestDraw[] @relation("ContestDrawCreatedBy")
   reportShareTokens AccountReportShareToken[]
-  payments     Payment[]
+  payments          Payment[]
+  eventActivations  EventActivation[]
 }
 
 model Event {
@@ -310,7 +316,24 @@ model Payment {
   credits         Int
   createdAt       DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventActivations EventActivation[]
 
   @@index([userId, createdAt])
+}
+
+model EventActivation {
+  id                String             @id @default(cuid())
+  userId            String
+  paymentId         String?
+  planType          ActivationPlanType
+  participantsLimit Int
+  consumedAt        DateTime?
+  createdAt         DateTime           @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payment Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([userId, consumedAt])
+  @@index([userId, planType, consumedAt])
 }

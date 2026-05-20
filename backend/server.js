@@ -887,6 +887,43 @@ async function passerAuSondageSuivant(eventId) {
   };
 }
 
+/**
+ * Lit planType / participantsLimit depuis metadata Stripe Checkout.
+ * Fallback sécurité : EVENT + 500.
+ * @param {Record<string, string> | null | undefined} metadata
+ */
+function parseActivationFromStripeMetadata(metadata) {
+  const planRaw = String(metadata?.planType || "").trim().toUpperCase();
+  const planType = planRaw === "FUN" ? "FUN" : "EVENT";
+  const limitRaw = Number(metadata?.participantsLimit);
+  const participantsLimit =
+    Number.isFinite(limitRaw) && limitRaw > 0
+      ? Math.trunc(limitRaw)
+      : planType === "FUN"
+        ? 100
+        : 500;
+  return { planType, participantsLimit };
+}
+
+/**
+ * Activations non consommées (consumedAt IS NULL), par formule.
+ * @param {string} userId
+ */
+async function countAvailableActivationsByPlan(userId) {
+  const [funCount, eventCount] = await Promise.all([
+    prisma.eventActivation.count({
+      where: { userId, planType: "FUN", consumedAt: null },
+    }),
+    prisma.eventActivation.count({
+      where: { userId, planType: "EVENT", consumedAt: null },
+    }),
+  ]);
+  return {
+    FUN: Math.max(0, funCount),
+    EVENT: Math.max(0, eventCount),
+  };
+}
+
 async function handleCheckoutCompleted(session) {
   const stripeSessionId = String(session?.id || "").trim();
   const userId = String(session?.metadata?.userId || "").trim();
@@ -897,6 +934,10 @@ async function handleCheckoutCompleted(session) {
     : 0;
   if (!stripeSessionId || !userId) return;
 
+  const { planType, participantsLimit } = parseActivationFromStripeMetadata(
+    session?.metadata,
+  );
+
   await prisma.$transaction(async (tx) => {
     const existing = await tx.payment.findUnique({
       where: { stripeSessionId },
@@ -904,11 +945,12 @@ async function handleCheckoutCompleted(session) {
     });
     if (existing) return;
 
+    // Compat prod : le compteur global reste la source pour start-real.
     await tx.user.update({
       where: { id: userId },
       data: { eventCredits: { increment: credits } },
     });
-    await tx.payment.create({
+    const payment = await tx.payment.create({
       data: {
         userId,
         stripeSessionId,
@@ -916,8 +958,18 @@ async function handleCheckoutCompleted(session) {
         credits,
       },
     });
+    for (let i = 0; i < credits; i += 1) {
+      await tx.eventActivation.create({
+        data: {
+          userId,
+          paymentId: payment.id,
+          planType,
+          participantsLimit,
+        },
+      });
+    }
   });
-  console.log("User crédité:", userId);
+  console.log("User crédité:", userId, "plan:", planType);
 }
 
 app.use(
@@ -1090,12 +1142,16 @@ app.get("/auth/me", async (req, res) => {
       clearAuthCookie(res);
       return res.status(401).json({ error: "Compte introuvable." });
     }
+    const eventCredits = Math.max(0, Number(user.eventCredits || 0));
+    const activationsAvailable = await countAvailableActivationsByPlan(payload.sub);
     return res.json({
       user: {
         ...user,
-        eventCredits: Math.max(0, Number(user.eventCredits || 0)),
+        eventCredits,
+        activationsAvailable,
       },
-      eventCredits: Math.max(0, Number(user.eventCredits || 0)),
+      eventCredits,
+      activationsAvailable,
     });
   } catch (e) {
     console.error(e);
@@ -3064,6 +3120,13 @@ app.post("/events/:eventId/finish", requireAuth, async (req, res) => {
 
 /**
  * Régie : démarrer le mode réel (consomme l'événement une seule fois).
+ *
+ * TODO (migration EventActivation) :
+ * - Vérifier une EventActivation disponible (planType + consumedAt IS NULL)
+ *   plutôt que User.eventCredits > 0.
+ * - Marquer consumedAt sur l'activation consommée.
+ * - Appliquer participantsLimit de l'activation sur Event si pertinent.
+ * - Garder eventCredits en sync ou le retirer une fois la migration complète.
  */
 app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
   const { eventId } = req.params;
@@ -3099,6 +3162,7 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
         throw err;
       }
 
+      // Compat prod : consommation via User.eventCredits (pas encore EventActivation).
       const user = await tx.user.findUnique({
         where: { id: req.userId },
         select: { eventCredits: true },
