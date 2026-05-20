@@ -1169,10 +1169,25 @@ app.post("/auth/change-password", authAttemptLimiter, requireAuth, async (req, r
 
 app.post("/billing/create-checkout-session", requireAuth, async (req, res) => {
   try {
-    const priceId = String(process.env.STRIPE_PRICE_EVENT_1 || "").trim();
+    const { plan } = req.body || {};
+    const normalizedPlan = String(plan || "").trim().toUpperCase();
+    const planType = normalizedPlan === "FUN" ? "FUN" : "EVENT";
+    const planConfig =
+      planType === "FUN"
+        ? {
+            priceId: String(process.env.STRIPE_PRICE_FUN || "").trim(),
+            participantsLimit: 100,
+            missingEnvError: "STRIPE_PRICE_FUN manquant.",
+          }
+        : {
+            priceId: String(process.env.STRIPE_PRICE_EVENT || "").trim(),
+            participantsLimit: 500,
+            missingEnvError: "STRIPE_PRICE_EVENT manquant.",
+          };
+    const { priceId, participantsLimit, missingEnvError } = planConfig;
     const clientUrl = String(process.env.CLIENT_URL || "").trim();
     if (!priceId) {
-      return res.status(500).json({ error: "STRIPE_PRICE_EVENT_1 manquant." });
+      return res.status(500).json({ error: missingEnvError });
     }
     if (!clientUrl) {
       return res.status(500).json({ error: "CLIENT_URL manquant." });
@@ -1184,6 +1199,8 @@ app.post("/billing/create-checkout-session", requireAuth, async (req, res) => {
       metadata: {
         userId: String(req.userId || ""),
         credits: "1",
+        planType,
+        participantsLimit: String(participantsLimit),
       },
       success_url: `${clientUrl.replace(/\/$/, "")}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${clientUrl.replace(/\/$/, "")}/pricing`,

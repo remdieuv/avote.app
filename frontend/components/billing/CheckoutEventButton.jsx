@@ -7,6 +7,7 @@ import { adminFetch, apiBaseBrowser } from "@/lib/config";
  * @param {{
  *   label: string;
  *   loadingLabel?: string;
+ *   plan?: "FUN" | "EVENT";
  *   style?: React.CSSProperties;
  *   className?: string;
  * }} props
@@ -14,6 +15,7 @@ import { adminFetch, apiBaseBrowser } from "@/lib/config";
 export function CheckoutEventButton({
   label,
   loadingLabel = "Redirection...",
+  plan = "EVENT",
   style,
   className,
 }) {
@@ -27,6 +29,8 @@ export function CheckoutEventButton({
     try {
       const res = await adminFetch(`${apiBaseBrowser()}/billing/create-checkout-session`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok || typeof body?.url !== "string" || !body.url) {
