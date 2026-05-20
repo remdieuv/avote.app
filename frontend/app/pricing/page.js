@@ -54,12 +54,6 @@ const btnSecondary = {
   boxShadow: "none",
 };
 
-const STRIPE_LINKS = {
-  starter: "https://buy.stripe.com/test_4gM4gB1t5a0Vc4JgO07g400",
-  pro: "https://buy.stripe.com/fZu8wOadmcrvd1A1BTcMM01",
-  premium: "https://buy.stripe.com/9B600ifxG6371iS5S9cMM02",
-};
-
 const SUBSCRIPTION_LINKS = {
   // TODO: remplacer par les vrais liens Stripe abonnements quand ils seront prêts.
   proMonthly: "/admin",
@@ -94,7 +88,8 @@ const plans = [
     unit: "/ événement",
     label: "Pour petits événements",
     cta: "Choisir Starter",
-    href: STRIPE_LINKS.starter,
+    checkoutPlan: "FUN",
+    href: "/admin",
     features: [
       "1 événement",
       "Jusqu'à 100 participants",
@@ -112,7 +107,8 @@ const plans = [
     label: "Expérience live complète",
     sublabel: "Idéal pour événements publics et animations live",
     cta: "Choisir Pro Événement",
-    href: STRIPE_LINKS.pro,
+    checkoutPlan: "EVENT",
+    href: "/admin",
     badge: "Le plus utilisé",
     featured: true,
     features: [
@@ -132,7 +128,7 @@ const plans = [
     unit: "/ événement",
     label: "Pour gros événements ponctuels",
     cta: "Choisir Premium",
-    href: STRIPE_LINKS.premium,
+    href: "/admin",
     features: [
       "1 événement",
       "Jusqu'à 5 000 participations",
@@ -251,30 +247,6 @@ const monthlyPlans = [
   },
 ];
 
-const launchPlan = {
-  key: "launch-pro-event",
-  name: "Offre Événement",
-  price: "49€",
-  unit: "/ événement",
-  label: "Prix de référence",
-  sublabel: "Offre de lancement",
-  cta: "Créer mon événement",
-  href: STRIPE_LINKS.pro,
-  badge: "Offre de lancement",
-  featured: true,
-  launchCard: true,
-  discoveryTag: "Premier événement à 19€. Puis 49€ par événement jusqu’à 500 participants uniques.",
-  features: [
-    "Jusqu’à 500 participants uniques",
-    "Un seul paiement. Aucun abonnement.",
-    "QR code + lien d’accès rapide",
-    "Votes et résultats en temps réel",
-    "Projection écran (salle / OBS)",
-    "Personnalisation (logo, couleurs)",
-    "Statistiques + export des résultats",
-  ],
-};
-
 function PlanCard({ plan }) {
   const isExternal = /^https?:\/\//i.test(plan.href);
   const discoveryText =
@@ -288,7 +260,7 @@ function PlanCard({ plan }) {
       <div className="pricing-card-badge-row external">
         {plan.badge ? <span className="pricing-plan-badge">{plan.badge}</span> : <span className="pricing-plan-badge-placeholder" aria-hidden />}
       </div>
-      <article className={`pricing-card ${plan.featured ? "featured" : ""} ${plan.launchCard ? "launch-card" : ""}`}>
+      <article className={`pricing-card ${plan.featured ? "featured" : ""}`}>
       <div className="pricing-card-top">
         <div className="pricing-card-head">
           <p className="pricing-plan-name">{plan.name}</p>
@@ -308,8 +280,9 @@ function PlanCard({ plan }) {
         ))}
       </ul>
       <div className="pricing-card-cta">
-        {plan.key === "launch-pro-event" ? (
+        {plan.checkoutPlan ? (
           <CheckoutEventButton
+            plan={plan.checkoutPlan}
             label={plan.cta}
             style={plan.featured ? btnPrimary : btnSecondary}
           />
@@ -380,25 +353,21 @@ export default function PricingPage() {
                   <>
                     Créez un événement interactif en quelques minutes et faites participer votre audience en direct.
                     <br />
-                    Une offre claire pour démarrer vite : 49€ / événement.{" "}
-                    <strong>Et pour le lancement, votre premier événement est à 19€.</strong>
-                    <br />
-                    Puis 49€ par événement jusqu&apos;à 500 participants uniques.
+                    <strong>Avote FUN</strong> pour les soirées et moments privés,{" "}
+                    <strong>Avote EVENT</strong> pour conférences et formats professionnels.
                   </>
                 )
                 : "Payez une seule fois pour un événement, ou choisissez un abonnement mensuel si vous utilisez Avote régulièrement."}
             </p>
             <p className="pricing-micro-reassurance">
-              {isLaunchMode ? (
-                <>Aucun engagement. Paiement sécurisé avec Stripe.</>
-              ) : (
-                "Aucun engagement. Paiement sécurisé avec Stripe. Offre de lancement disponible."
-              )}
+              Aucun engagement. Paiement sécurisé avec Stripe.
             </p>
             <div className="pricing-hero-cta">
               {isLaunchMode ? (
                 <div style={{ display: "grid", gap: "0.55rem", justifyItems: "center" }}>
-                  <CheckoutEventButton label="Créer mon événement" style={btnPrimary} />
+                  <Link href="#pricing-fun-event" style={btnPrimary}>
+                    Voir les formules FUN et EVENT
+                  </Link>
                   <p
                     style={{
                       margin: 0,
@@ -425,15 +394,78 @@ export default function PricingPage() {
         </section>
 
         {isLaunchMode ? (
-          <section style={sectionY} aria-labelledby="pricing-launch-title">
-            <h2 id="pricing-launch-title" className="section-title">
-              Une seule offre pour démarrer
+          <section
+            id="pricing-fun-event"
+            style={sectionY}
+            aria-labelledby="pricing-fun-event-title"
+          >
+            <h2 id="pricing-fun-event-title" className="section-title">
+              Choisissez votre formule
             </h2>
             <p className="pricing-section-subtitle">
-              Simple, clair, sans comparaison : vous comprenez, vous cliquez.
+              Deux offres ponctuelles, un paiement unique par événement : FUN pour les moments privés, EVENT pour la salle et l’analyse après coup.
             </p>
-            <div className="pricing-grid pricing-grid-launch">
-              <PlanCard plan={launchPlan} />
+            <div className="pricing-grid pricing-grid-fun-event">
+              <div className="pricing-card-wrap">
+                <div className="pricing-card-badge-row external">
+                  <span className="pricing-plan-badge">Soirées &amp; événements privés</span>
+                </div>
+                <article className="pricing-card pricing-card-offer">
+                  <div className="pricing-card-top">
+                    <div className="pricing-card-head">
+                      <p className="pricing-plan-name">Avote FUN</p>
+                    </div>
+                    <div className="pricing-price-box">
+                      <p className="pricing-price">
+                        <strong>19€</strong>
+                        <span>/ événement</span>
+                      </p>
+                    </div>
+                  </div>
+                  <p className="pricing-offer-desc">
+                    Idéal pour EVG, EVJF, mariages, anniversaires et soirées.
+                  </p>
+                  <ul className="pricing-features pricing-offer-features">
+                    <li>Jusqu’à 100 participants uniques</li>
+                    <li>QR code + lien d’accès rapide</li>
+                    <li>Votes et résultats en direct</li>
+                    <li>Aucun abonnement</li>
+                  </ul>
+                  <div className="pricing-card-cta">
+                    <CheckoutEventButton plan="FUN" label="Activer FUN" style={btnSecondary} />
+                  </div>
+                </article>
+              </div>
+              <div className="pricing-card-wrap">
+                <div className="pricing-card-badge-row external">
+                  <span className="pricing-plan-badge">Entreprises &amp; événements pro</span>
+                </div>
+                <article className="pricing-card pricing-card-offer featured">
+                  <div className="pricing-card-top">
+                    <div className="pricing-card-head">
+                      <p className="pricing-plan-name">Avote EVENT</p>
+                    </div>
+                    <div className="pricing-price-box">
+                      <p className="pricing-price">
+                        <strong>49€</strong>
+                        <span>/ événement</span>
+                      </p>
+                    </div>
+                  </div>
+                  <p className="pricing-offer-desc">
+                    Idéal pour conférences, formations, entreprises et événements professionnels.
+                  </p>
+                  <ul className="pricing-features pricing-offer-features">
+                    <li>Jusqu’à 500 participants uniques</li>
+                    <li>Projection écran / OBS</li>
+                    <li>Personnalisation logo et couleurs</li>
+                    <li>Statistiques et export des résultats</li>
+                  </ul>
+                  <div className="pricing-card-cta">
+                    <CheckoutEventButton plan="EVENT" label="Activer EVENT" style={btnPrimary} />
+                  </div>
+                </article>
+              </div>
             </div>
           </section>
         ) : (
@@ -576,7 +608,7 @@ export default function PricingPage() {
           <div className="pricing-bottom-reassurance">
             <span>Aucun engagement</span>
             <span>Paiement sécurisé avec Stripe</span>
-            <span>Premier événement à 19€</span>
+            <span>FUN ou EVENT selon vos besoins</span>
             <span>Fonctionne sans application</span>
           </div>
         </section>
@@ -750,29 +782,19 @@ export default function PricingPage() {
           grid-template-columns: 1fr;
           gap: 0.9rem;
         }
-        .pricing-grid.pricing-grid-launch {
-          max-width: 460px;
+        .pricing-grid.pricing-grid-fun-event {
+          max-width: 920px;
           margin: 0 auto;
         }
-        .pricing-grid.pricing-grid-launch .pricing-card.launch-card {
-          padding-bottom: 1.1rem;
+        .pricing-offer-desc {
+          margin: 0.62rem 0 0;
+          font-size: 0.86rem;
+          line-height: 1.46;
+          color: #64748b;
+          font-weight: 600;
         }
-        .pricing-grid.pricing-grid-launch .pricing-card.launch-card:hover {
-          transform: none;
-        }
-        .pricing-grid.pricing-grid-launch .pricing-card.launch-card .pricing-pro-discovery-tag {
-          margin-top: 0.58rem;
-          margin-bottom: 0;
-          padding: 0.5rem 0.62rem;
-          line-height: 1.3;
-          text-align: center;
-          font-size: 0.84rem;
-          font-weight: 800;
-          color: #111827;
-          letter-spacing: -0.01em;
-          border: 1px solid #ddd6fe;
-          background: linear-gradient(180deg, #faf5ff 0%, #f5f3ff 100%);
-          border-radius: 10px;
+        .pricing-card-offer .pricing-price-box {
+          margin-top: 0.28rem;
         }
         .pricing-section-subtitle {
           margin: -0.15rem auto 1rem;
@@ -1087,8 +1109,9 @@ export default function PricingPage() {
           .pricing-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
-          .pricing-grid.pricing-grid-launch {
-            grid-template-columns: 1fr;
+          .pricing-grid.pricing-grid-fun-event {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            max-width: 920px;
           }
           .pricing-monthly-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1105,8 +1128,10 @@ export default function PricingPage() {
             grid-template-columns: repeat(4, minmax(0, 1fr));
             align-items: stretch;
           }
-          .pricing-grid.pricing-grid-launch {
-            grid-template-columns: 1fr;
+          .pricing-grid.pricing-grid-fun-event {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            max-width: 920px;
+            margin-inline: auto;
           }
           .pricing-monthly-grid {
             grid-template-columns: repeat(3, minmax(0, 1fr));
