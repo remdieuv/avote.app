@@ -7293,18 +7293,6 @@ export default function RegieEventPage() {
                   }}
                 >
                   <div style={{ display: "grid", gap: "0.18rem" }}>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "0.65rem",
-                        fontWeight: 700,
-                        letterSpacing: "0.08em",
-                        textTransform: "uppercase",
-                        color: "#64748b",
-                      }}
-                    >
-                      Actions principales
-                    </p>
                     <h3
                       style={{
                         margin: 0,
@@ -7312,10 +7300,22 @@ export default function RegieEventPage() {
                         fontWeight: 800,
                         color: "#111827",
                         letterSpacing: "-0.02em",
+                        textTransform: "uppercase",
                       }}
                     >
-                      Contrôle de la salle
+                      Régie live
                     </h3>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "0.76rem",
+                        fontWeight: 600,
+                        color: "#64748b",
+                        lineHeight: 1.35,
+                      }}
+                    >
+                      Pilotage du direct
+                    </p>
                   </div>
                   <p style={{ margin: 0, fontSize: "0.76rem", color: "#64748b" }}>
                     Les commandes essentielles pendant le live.
