@@ -143,6 +143,8 @@ model Event {
   isLocked Boolean @default(false)
   /** Limite business de participants uniques (voterSessionId) sur l'événement. */
   participantsLimit Int @default(500)
+  /** Formule activée au passage en mode réel (FUN / EVENT). */
+  eventPlanType ActivationPlanType?
   /** Landing publique `/e/[slug]` (vitrine + galerie photo). */
   landingEnabled     Boolean @default(false)
   landingCoverUrl    String?

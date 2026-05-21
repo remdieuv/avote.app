@@ -924,6 +924,27 @@ async function countAvailableActivationsByPlan(userId) {
   };
 }
 
+/** @param {number} eventCredits @param {{ FUN: number; EVENT: number }} activationsAvailable */
+function computeTotalAvailableActivations(eventCredits, activationsAvailable) {
+  const credits = Math.max(0, Number(eventCredits || 0));
+  const typedTotal =
+    Math.max(0, Number(activationsAvailable?.FUN || 0)) +
+    Math.max(0, Number(activationsAvailable?.EVENT || 0));
+  const legacyCredits = Math.max(0, credits - typedTotal);
+  return typedTotal + legacyCredits;
+}
+
+/** @param {string} raw */
+function normalizeStartRealPlanType(raw) {
+  const plan = String(raw || "").trim().toUpperCase();
+  return plan === "FUN" ? "FUN" : plan === "EVENT" ? "EVENT" : null;
+}
+
+/** @param {"FUN" | "EVENT"} planType */
+function defaultParticipantsLimitForPlan(planType) {
+  return planType === "FUN" ? 100 : 500;
+}
+
 async function handleCheckoutCompleted(session) {
   const stripeSessionId = String(session?.id || "").trim();
   const userId = String(session?.metadata?.userId || "").trim();
@@ -1144,14 +1165,20 @@ app.get("/auth/me", async (req, res) => {
     }
     const eventCredits = Math.max(0, Number(user.eventCredits || 0));
     const activationsAvailable = await countAvailableActivationsByPlan(payload.sub);
+    const totalAvailable = computeTotalAvailableActivations(
+      eventCredits,
+      activationsAvailable,
+    );
     return res.json({
       user: {
         ...user,
         eventCredits,
         activationsAvailable,
+        totalAvailable,
       },
       eventCredits,
       activationsAvailable,
+      totalAvailable,
     });
   } catch (e) {
     console.error(e);
@@ -2059,6 +2086,7 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
       activePollId: event.activePollId,
       participantsLimit: Number(event.participantsLimit || 500),
       participantsUsed: participantsDistinct.length,
+      eventPlanType: event.eventPlanType ? String(event.eventPlanType) : null,
       isLiveConsumed: Boolean(event.isLiveConsumed),
       isLocked: Boolean(event.isLocked),
       autoReveal: event.autoReveal,
@@ -3119,17 +3147,17 @@ app.post("/events/:eventId/finish", requireAuth, async (req, res) => {
 });
 
 /**
- * Régie : démarrer le mode réel (consomme l'événement une seule fois).
- *
- * TODO (migration EventActivation) :
- * - Vérifier une EventActivation disponible (planType + consumedAt IS NULL)
- *   plutôt que User.eventCredits > 0.
- * - Marquer consumedAt sur l'activation consommée.
- * - Appliquer participantsLimit de l'activation sur Event si pertinent.
- * - Garder eventCredits en sync ou le retirer une fois la migration complète.
+ * Régie : démarrer le mode réel (consomme une EventActivation FUN/EVENT, ou reliquat eventCredits).
  */
 app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
   const { eventId } = req.params;
+  const planType = normalizeStartRealPlanType(req.body?.planType);
+  if (!planType) {
+    return res.status(400).json({
+      error: "INVALID_PLAN_TYPE",
+      message: "planType requis : FUN ou EVENT.",
+    });
+  }
   try {
     const result = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT 1 FROM "User" WHERE "id" = ${req.userId} FOR UPDATE`;
@@ -3162,29 +3190,68 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
         throw err;
       }
 
-      // Compat prod : consommation via User.eventCredits (pas encore EventActivation).
+      const activation = await tx.eventActivation.findFirst({
+        where: {
+          userId: req.userId,
+          planType,
+          consumedAt: null,
+        },
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          planType: true,
+          participantsLimit: true,
+        },
+      });
+
       const user = await tx.user.findUnique({
         where: { id: req.userId },
         select: { eventCredits: true },
       });
       const creditsBefore = Math.max(0, Number(user?.eventCredits || 0));
-      if (creditsBefore <= 0) {
-        const err = new Error("NO_EVENT_CREDIT");
-        err.code = "NO_EVENT_CREDIT";
+
+      let participantsLimit = defaultParticipantsLimitForPlan(planType);
+      let appliedPlanType = planType;
+      let usedLegacyCredits = false;
+
+      if (activation) {
+        await tx.eventActivation.update({
+          where: { id: activation.id },
+          data: { consumedAt: new Date() },
+        });
+        participantsLimit = Math.max(
+          1,
+          Math.trunc(Number(activation.participantsLimit || participantsLimit)),
+        );
+        appliedPlanType = activation.planType;
+      } else if (creditsBefore > 0) {
+        // Compat achats historiques sans ligne EventActivation typée.
+        usedLegacyCredits = true;
+        participantsLimit = defaultParticipantsLimitForPlan(planType);
+        appliedPlanType = planType;
+      } else {
+        const err = new Error("NO_ACTIVATION_AVAILABLE");
+        err.code = "NO_ACTIVATION_AVAILABLE";
         throw err;
       }
 
-      const remainingCredits = creditsBefore - 1;
-      await tx.user.update({
-        where: { id: req.userId },
-        data: { eventCredits: remainingCredits },
-      });
+      let remainingCredits = creditsBefore;
+      if (creditsBefore > 0) {
+        remainingCredits = creditsBefore - 1;
+        await tx.user.update({
+          where: { id: req.userId },
+          data: { eventCredits: remainingCredits },
+        });
+      }
+
       const updatedEvent = await tx.event.update({
         where: { id: eventId },
         data: {
           isLiveConsumed: true,
           consumedAt: new Date(),
           isLocked: false,
+          participantsLimit,
+          eventPlanType: appliedPlanType,
         },
         select: {
           id: true,
@@ -3192,15 +3259,25 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
           consumedAt: true,
           isLocked: true,
           participantsLimit: true,
+          eventPlanType: true,
         },
       });
-      return { updatedEvent, remainingCredits };
+      return {
+        updatedEvent,
+        remainingCredits,
+        usedLegacyCredits,
+        planType: appliedPlanType,
+      };
     });
+    const activationsAvailable = await countAvailableActivationsByPlan(req.userId);
     await emitEventLiveUpdated(io, eventId);
     return res.json({
       ok: true,
       event: result.updatedEvent,
       eventCredits: result.remainingCredits,
+      activationsAvailable,
+      planType: result.planType,
+      usedLegacyCredits: result.usedLegacyCredits,
     });
   } catch (e) {
     if (e?.code === "EVENT_NOT_FOUND") {
@@ -3211,6 +3288,12 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
     }
     if (e?.code === "EVENT_ALREADY_CONSUMED") {
       return res.status(403).json({ error: "Mode réel déjà démarré pour cet événement." });
+    }
+    if (e?.code === "NO_ACTIVATION_AVAILABLE") {
+      return res.status(402).json({
+        error: "NO_ACTIVATION_AVAILABLE",
+        message: "Aucune activation disponible pour cette formule.",
+      });
     }
     if (e?.code === "NO_EVENT_CREDIT") {
       return res.status(402).json({

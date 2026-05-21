@@ -12,6 +12,7 @@ import {
 } from "@/lib/chronoFormat";
 import { AjouterQuestionLiveModal } from "@/components/AjouterQuestionLiveModal";
 import { LiveMicroLabel } from "@/components/admin/LiveMicroIcon";
+import { computeActivationBalance } from "@/lib/activationBalance";
 import { adminFetch, apiBaseBrowser, SOCKET_URL as SOCKET } from "@/lib/config";
 import {
   LANDING_PHOTO_TOO_HEAVY_MESSAGE,
@@ -48,6 +49,9 @@ function mapApiError(body, status) {
   }
   if (code === "NO_EVENT_CREDIT") {
     return "Vous n’avez plus d’activation disponible. Choisissez une formule pour lancer le live réel.";
+  }
+  if (code === "NO_ACTIVATION_AVAILABLE") {
+    return "Aucune activation disponible pour cette formule.";
   }
   if (code === "EVENT_ALREADY_CONSUMED") {
     return "Le mode réel est déjà activé pour cet événement.";
@@ -4166,6 +4170,10 @@ export default function RegieEventPage() {
 
   const [eventData, setEventData] = useState(null);
   const [eventCredits, setEventCredits] = useState(/** @type {number | null} */ (null));
+  const [activationsAvailable, setActivationsAvailable] = useState(
+    /** @type {{ FUN: number; EVENT: number } | null} */ (null),
+  );
+  const [startRealPlanModalOpen, setStartRealPlanModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionError, setActionError] = useState(null);
@@ -4300,6 +4308,18 @@ export default function RegieEventPage() {
             ? body.user.eventCredits
             : null;
       setEventCredits(raw == null ? null : Math.max(0, Number(raw)));
+      const avail =
+        body?.activationsAvailable ?? body?.user?.activationsAvailable ?? null;
+      if (avail && typeof avail === "object") {
+        const funRaw = Number(avail.FUN);
+        const eventRaw = Number(avail.EVENT);
+        setActivationsAvailable({
+          FUN: Number.isFinite(funRaw) ? Math.max(0, funRaw) : 0,
+          EVENT: Number.isFinite(eventRaw) ? Math.max(0, eventRaw) : 0,
+        });
+      } else {
+        setActivationsAvailable({ FUN: 0, EVENT: 0 });
+      }
     } catch {
       /* ignore */
     }
@@ -4910,21 +4930,56 @@ export default function RegieEventPage() {
     }
   }
 
-  async function startRealLive() {
+  /** @returns {("FUN" | "EVENT")[]} */
+  function getStartRealPlanOptions() {
+    const balance = computeActivationBalance(eventCredits, activationsAvailable);
+    const fun = balance.fun ?? 0;
+    const event = balance.event ?? 0;
+    const legacy = balance.legacyCredits ?? 0;
+    /** @type {("FUN" | "EVENT")[]} */
+    const options = [];
+    if (fun > 0) options.push("FUN");
+    if (event > 0) options.push("EVENT");
+    if (legacy > 0) {
+      if (!options.includes("FUN")) options.push("FUN");
+      if (!options.includes("EVENT")) options.push("EVENT");
+    }
+    return options;
+  }
+
+  function handleStartRealClick() {
+    if (!canStartReal || busy) return;
+    const options = getStartRealPlanOptions();
+    if (options.length === 0) return;
+    if (options.length === 1) {
+      void startRealLive(options[0]);
+      return;
+    }
+    setStartRealPlanModalOpen(true);
+  }
+
+  /** @param {"FUN" | "EVENT"} planType */
+  async function startRealLive(planType) {
     if (!eventId || !canStartReal) return;
+    const planLabel = planType === "FUN" ? "FUN (100 participants max)" : "EVENT (500 participants max)";
     if (typeof window !== "undefined") {
       const ok = window.confirm(
-        "Passer en live réel ?\n\n1 activation sera consommée. Vous obtiendrez des résultats exacts, le chrono libre et les exports.",
+        `Passer en live réel avec la formule ${planType} ?\n\n1 activation sera consommée (${planLabel}). Vous obtiendrez des résultats exacts, le chrono libre et les exports.`,
       );
       if (!ok) return;
     }
+    setStartRealPlanModalOpen(false);
     setAutoRotate(false);
     setBusy(true);
     setActionError(null);
     try {
       const res = await adminFetch(
         `${apiBaseBrowser()}/events/${eventId}/start-real`,
-        { method: "POST" },
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ planType }),
+        },
       );
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -4932,11 +4987,19 @@ export default function RegieEventPage() {
       }
       if (typeof body?.eventCredits === "number") {
         setEventCredits(Math.max(0, Number(body.eventCredits)));
+      }
+      if (body?.activationsAvailable && typeof body.activationsAvailable === "object") {
+        const funRaw = Number(body.activationsAvailable.FUN);
+        const eventRaw = Number(body.activationsAvailable.EVENT);
+        setActivationsAvailable({
+          FUN: Number.isFinite(funRaw) ? Math.max(0, funRaw) : 0,
+          EVENT: Number.isFinite(eventRaw) ? Math.max(0, eventRaw) : 0,
+        });
       } else {
         await fetchMeCredits();
       }
       await fetchEvent({ silent: true });
-      setToastNotif("Mode réel activé");
+      setToastNotif(`Mode réel activé (${planType})`);
       window.setTimeout(() => setToastNotif(null), 2800);
     } catch (e) {
       setActionError(e.message || "Activation du mode réel impossible.");
@@ -5151,10 +5214,18 @@ export default function RegieEventPage() {
   const eventLocked = Boolean(eventData?.isLocked);
   const inTestMode = eventData?.isLiveConsumed === false;
   const canStartReal = inTestMode && !eventLocked;
-  const hasCreditsValue = typeof eventCredits === "number" && !Number.isNaN(eventCredits);
-  const hasEventCredit = hasCreditsValue && eventCredits > 0;
-  const startRealDisabled = busy || (hasCreditsValue && !hasEventCredit);
-  const creditsLabel = hasCreditsValue ? String(eventCredits) : "—";
+  const activationBalance = computeActivationBalance(eventCredits, activationsAvailable);
+  const funAvailable = activationBalance.fun;
+  const eventAvailable = activationBalance.event;
+  const activationsLoaded = activationBalance.typedLoaded;
+  const totalAvailable = activationBalance.totalAvailable;
+  const canStartRealWithActivation =
+    activationsLoaded && totalAvailable !== null && totalAvailable > 0;
+  const startRealDisabled = busy || !canStartRealWithActivation;
+  const startRealPlanOptions = getStartRealPlanOptions();
+  const eventPlanType = eventData?.eventPlanType
+    ? String(eventData.eventPlanType).toUpperCase()
+    : null;
   const canGoNext = !busy && !eventFinished && totalQuestions > 0 && !eventLocked;
 
   /** Ne jamais déduire « open » depuis liveState : lecture seule du champ API (+ défaut fermé si absent). */
@@ -5990,7 +6061,8 @@ export default function RegieEventPage() {
           role="alert"
         >
           <span style={{ fontSize: "0.86rem", fontWeight: 700 }}>{actionError}</span>
-          {String(actionError).includes("Vous n’avez plus d’activation disponible") ? (
+          {String(actionError).includes("Aucune activation disponible pour cette formule") ||
+          String(actionError).includes("Vous n’avez plus d’activation disponible") ? (
             <Link
               href="/pricing"
               style={{
@@ -6225,6 +6297,139 @@ export default function RegieEventPage() {
                 {busy ? "Enregistrement..." : "Enregistrer"}
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+      {startRealPlanModalOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="start-real-plan-title"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 10009,
+            background: "rgba(15, 23, 42, 0.48)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+            boxSizing: "border-box",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !busy) {
+              setStartRealPlanModalOpen(false);
+            }
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "26rem",
+              borderRadius: "16px",
+              background: "#fff",
+              border: "1px solid #ddd6fe",
+              boxShadow: "0 24px 60px rgba(76, 29, 149, 0.22)",
+              padding: "1.15rem 1.2rem",
+            }}
+          >
+            <h3
+              id="start-real-plan-title"
+              style={{
+                margin: 0,
+                fontSize: "1.05rem",
+                fontWeight: 850,
+                color: "#0f172a",
+                letterSpacing: "-0.02em",
+              }}
+            >
+              Choisissez une formule pour cet événement
+            </h3>
+            <p
+              style={{
+                margin: "0.5rem 0 1rem",
+                fontSize: "0.86rem",
+                color: "#64748b",
+                lineHeight: 1.45,
+              }}
+            >
+              Une activation sera consommée pour passer en mode réel.
+            </p>
+            <div style={{ display: "grid", gap: "0.65rem" }}>
+              {startRealPlanOptions.includes("FUN") ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void startRealLive("FUN")}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "flex-start",
+                    gap: "0.2rem",
+                    width: "100%",
+                    padding: "0.75rem 0.9rem",
+                    borderRadius: "12px",
+                    border: "1px solid #fcd34d",
+                    background: "linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%)",
+                    color: "#78350f",
+                    fontWeight: 800,
+                    fontSize: "0.9rem",
+                    cursor: busy ? "not-allowed" : "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  <span>FUN</span>
+                  <span style={{ fontSize: "0.78rem", fontWeight: 700, opacity: 0.9 }}>
+                    Jusqu’à 100 participants
+                  </span>
+                </button>
+              ) : null}
+              {startRealPlanOptions.includes("EVENT") ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void startRealLive("EVENT")}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "flex-start",
+                    gap: "0.2rem",
+                    width: "100%",
+                    padding: "0.75rem 0.9rem",
+                    borderRadius: "12px",
+                    border: "1px solid #c4b5fd",
+                    background: "linear-gradient(180deg, #faf5ff 0%, #ede9fe 100%)",
+                    color: "#5b21b6",
+                    fontWeight: 800,
+                    fontSize: "0.9rem",
+                    cursor: busy ? "not-allowed" : "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  <span>EVENT</span>
+                  <span style={{ fontSize: "0.78rem", fontWeight: 700, opacity: 0.9 }}>
+                    Jusqu’à 500 participants
+                  </span>
+                </button>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setStartRealPlanModalOpen(false)}
+              style={{
+                marginTop: "0.85rem",
+                padding: "0.45rem 0.65rem",
+                border: "none",
+                background: "transparent",
+                color: "#64748b",
+                fontSize: "0.82rem",
+                fontWeight: 700,
+                cursor: busy ? "not-allowed" : "pointer",
+              }}
+            >
+              Annuler
+            </button>
           </div>
         </div>
       ) : null}
@@ -6638,7 +6843,17 @@ export default function RegieEventPage() {
                         flexShrink: 0,
                       }}
                     >
-                      {hasCreditsValue && !hasEventCredit ? (
+                      {!activationsLoaded ? (
+                        <span
+                          style={{
+                            fontSize: "0.68rem",
+                            fontWeight: 700,
+                            color: "rgba(224, 231, 255, 0.65)",
+                          }}
+                        >
+                          Chargement des activations…
+                        </span>
+                      ) : !canStartRealWithActivation ? (
                         <>
                           <span
                             style={{
@@ -6675,7 +6890,7 @@ export default function RegieEventPage() {
                         <button
                           type="button"
                           disabled={startRealDisabled}
-                          onClick={() => void startRealLive()}
+                          onClick={handleStartRealClick}
                           style={{
                             display: "inline-flex",
                             alignItems: "center",
@@ -6698,18 +6913,25 @@ export default function RegieEventPage() {
                           Passer en live réel
                         </button>
                       )}
-                      {hasCreditsValue && hasEventCredit ? (
-                        <span
+                      {activationsLoaded ? (
+                        <div
                           style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "flex-end",
+                            gap: "0.12rem",
                             fontSize: "0.68rem",
                             fontWeight: 700,
                             color: "rgba(224, 231, 255, 0.65)",
                           }}
                         >
-                          {Number(creditsLabel) > 1
-                            ? `${creditsLabel} activations disponibles`
-                            : `${creditsLabel} activation disponible`}
-                        </span>
+                          <span>
+                            FUN disponible : {funAvailable ?? 0}
+                          </span>
+                          <span>
+                            EVENT disponible : {eventAvailable ?? 0}
+                          </span>
+                        </div>
                       ) : null}
                     </div>
                   ) : null}
@@ -6728,6 +6950,22 @@ export default function RegieEventPage() {
                     { label: participantsCounterLabel, color: participantsCounterStyle.valueColor, bg: participantsCounterStyle.background, border: participantsCounterStyle.borderColor || "#cbd5e1" },
                     { label: socketStatusLabel, color: socketStatusColor, bg: socketStatusBg, border: "#cbd5e1" },
                     { label: modeBadge.label, color: modeBadge.color, bg: modeBadge.bg, border: modeBadge.border },
+                    ...(!inTestMode && eventPlanType
+                      ? [
+                          {
+                            label: `Formule ${eventPlanType}`,
+                            color: eventPlanType === "FUN" ? "#92400e" : "#5b21b6",
+                            bg: eventPlanType === "FUN" ? "#fef3c7" : "#ede9fe",
+                            border: eventPlanType === "FUN" ? "#fcd34d" : "#c4b5fd",
+                          },
+                          {
+                            label: `Limite ${Number(eventData?.participantsLimit || 500)} participants`,
+                            color: "#334155",
+                            bg: "rgba(255,255,255,0.74)",
+                            border: "#cbd5e1",
+                          },
+                        ]
+                      : []),
                   ].map((item) => (
                     <span
                       key={item.label}
