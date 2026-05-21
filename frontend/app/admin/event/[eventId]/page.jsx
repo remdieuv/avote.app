@@ -3739,6 +3739,54 @@ function RegieSidebarInner({
         </p>
       </div>
 
+      {eventId ? (
+        <Link
+          href={`/admin/event/${encodeURIComponent(eventId)}/analytics`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="regie-universe-tile regie-universe-tile--analytics"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "0.35rem",
+            boxSizing: "border-box",
+            width: "100%",
+            marginBottom: "0.65rem",
+            padding: "0.43rem 0.65rem",
+            fontSize: "0.76rem",
+            fontWeight: 700,
+            borderRadius: "9px",
+            border: "1px solid rgba(16, 185, 129, 0.22)",
+            background: "rgba(16, 185, 129, 0.08)",
+            color: "#047857",
+            textDecoration: "none",
+            lineHeight: 1.25,
+          }}
+        >
+          <span aria-hidden style={{ fontSize: "0.85rem" }}>
+            📊
+          </span>
+          Statistiques de l&apos;événement
+        </Link>
+      ) : null}
+      {eventId ? (
+        <style>{`
+          .regie-universe-tile--analytics {
+            transition:
+              background-color 0.18s ease,
+              border-color 0.18s ease,
+              color 0.18s ease;
+          }
+          @media (hover: hover) {
+            .regie-universe-tile--analytics:hover {
+              background: rgba(16, 185, 129, 0.14) !important;
+              border-color: rgba(16, 185, 129, 0.32) !important;
+            }
+          }
+        `}</style>
+      ) : null}
+
       {((slug &&
         (joinPreviewDesktop ? onTogglePreviewJoin : onOpenJoinPreviewMobile)) ||
         eventId) ? (
