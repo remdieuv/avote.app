@@ -3606,44 +3606,146 @@ function RegieAutoRevealCard({
 
   if (!eventId) return null;
 
+  const moduleShell = {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.7rem",
+    padding: "clamp(0.85rem, 2.5vw, 1rem) clamp(0.9rem, 2.8vw, 1.05rem)",
+    borderRadius: "14px",
+    background:
+      "linear-gradient(145deg, rgba(237, 233, 254, 0.98) 0%, rgba(224, 231, 255, 0.92) 55%, rgba(238, 242, 255, 0.95) 100%)",
+    border: "1px solid rgba(129, 140, 248, 0.28)",
+    boxShadow:
+      "inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 10px 24px rgba(99, 102, 241, 0.1)",
+  };
+
   const inner = (
     <>
-      <label
+      <div
         style={{
           display: "flex",
           alignItems: "flex-start",
-          gap: "0.5rem",
-          fontSize: "0.78rem",
-          fontWeight: 600,
-          color: "#374151",
-          cursor: busy ? "wait" : "pointer",
+          justifyContent: "space-between",
+          gap: "0.65rem",
         }}
       >
-        <input
-          type="checkbox"
-          checked={enabled}
-          disabled={busy}
-          onChange={(e) => {
-            const v = e.target.checked;
-            setEnabled(v);
-            void patch({ autoReveal: v, autoRevealDelaySec: delaySec });
-          }}
-          style={{ marginTop: "0.12rem" }}
-        />
-        <span>Révélation automatique des résultats</span>
-      </label>
-      {enabled ? (
+        <div style={{ flex: "1 1 auto", minWidth: 0, display: "grid", gap: "0.32rem" }}>
+          <p
+            style={{
+              margin: 0,
+              fontSize: "0.84rem",
+              fontWeight: 800,
+              color: "#312e81",
+              letterSpacing: "-0.02em",
+              lineHeight: 1.3,
+            }}
+          >
+            <span aria-hidden style={{ marginRight: "0.28rem" }}>
+              ⏱
+            </span>
+            Révélation automatique des résultats
+          </p>
+          <p
+            style={{
+              margin: 0,
+              fontSize: "0.74rem",
+              fontWeight: 500,
+              color: "#4338ca",
+              lineHeight: 1.45,
+            }}
+          >
+            Affiche automatiquement les résultats après la fermeture du vote.
+          </p>
+        </div>
         <label
           style={{
+            flexShrink: 0,
+            display: "inline-flex",
+            alignItems: "center",
+            cursor: busy ? "wait" : "pointer",
+            marginTop: "0.1rem",
+          }}
+          title={enabled ? "Désactiver la révélation automatique" : "Activer la révélation automatique"}
+        >
+          <input
+            type="checkbox"
+            checked={enabled}
+            disabled={busy}
+            onChange={(e) => {
+              const v = e.target.checked;
+              setEnabled(v);
+              void patch({ autoReveal: v, autoRevealDelaySec: delaySec });
+            }}
+            style={{
+              position: "absolute",
+              width: 1,
+              height: 1,
+              padding: 0,
+              margin: -1,
+              overflow: "hidden",
+              clip: "rect(0, 0, 0, 0)",
+              whiteSpace: "nowrap",
+              border: 0,
+            }}
+            aria-label="Révélation automatique des résultats"
+          />
+          <span
+            aria-hidden
+            style={{
+              position: "relative",
+              display: "inline-block",
+              width: "2.85rem",
+              height: "1.55rem",
+              borderRadius: "999px",
+              background: enabled
+                ? "linear-gradient(180deg, #6366f1 0%, #4f46e5 100%)"
+                : "rgba(148, 163, 184, 0.55)",
+              boxShadow: enabled
+                ? "inset 0 1px 0 rgba(255,255,255,0.22), 0 4px 12px rgba(79, 70, 229, 0.35)"
+                : "inset 0 1px 2px rgba(15, 23, 42, 0.08)",
+              transition: "background 0.2s ease, box-shadow 0.2s ease",
+            }}
+          >
+            <span
+              style={{
+                position: "absolute",
+                top: "0.14rem",
+                left: enabled ? "calc(100% - 1.28rem - 0.14rem)" : "0.14rem",
+                width: "1.28rem",
+                height: "1.28rem",
+                borderRadius: "50%",
+                background: "#fff",
+                boxShadow: "0 2px 6px rgba(15, 23, 42, 0.18)",
+                transition: "left 0.2s ease",
+              }}
+            />
+          </span>
+        </label>
+      </div>
+
+      {enabled ? (
+        <div
+          style={{
             display: "flex",
-            flexDirection: "column",
-            gap: "0.25rem",
-            fontSize: "0.72rem",
-            fontWeight: 600,
-            color: "#475569",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: "0.45rem 0.6rem",
+            padding: "0.55rem 0.65rem",
+            borderRadius: "10px",
+            background: "rgba(255, 255, 255, 0.62)",
+            border: "1px solid rgba(165, 180, 252, 0.45)",
           }}
         >
-          Délai
+          <span
+            style={{
+              fontSize: "0.74rem",
+              fontWeight: 700,
+              color: "#3730a3",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Délai avant affichage&nbsp;:
+          </span>
           <select
             value={delaySec}
             disabled={busy}
@@ -3652,31 +3754,49 @@ function RegieAutoRevealCard({
               setDelaySec(n);
               void patch({ autoReveal: true, autoRevealDelaySec: n });
             }}
+            aria-label="Délai avant affichage des résultats"
             style={{
-              padding: "0.35rem 0.5rem",
-              borderRadius: "8px",
-              border: "1px solid #cbd5e1",
+              flex: "1 1 8rem",
+              minWidth: "7.5rem",
+              maxWidth: "100%",
+              padding: "0.42rem 2rem 0.42rem 0.55rem",
+              borderRadius: "9px",
+              border: "1px solid rgba(99, 102, 241, 0.35)",
               fontSize: "0.8rem",
+              fontWeight: 700,
+              color: "#1e1b4b",
+              background: "#fff",
+              cursor: busy ? "wait" : "pointer",
             }}
           >
             <option value={3}>3 secondes</option>
             <option value={5}>5 secondes</option>
             <option value={10}>10 secondes</option>
           </select>
-        </label>
+        </div>
       ) : null}
+
       {err ? (
         <p
-          style={{ color: "#b91c1c", fontSize: "0.72rem", margin: 0 }}
+          style={{ color: "#b91c1c", fontSize: "0.72rem", margin: 0, fontWeight: 600 }}
           role="alert"
         >
           {err}
         </p>
       ) : null}
-      <p style={{ fontSize: "0.65rem", color: "#94a3b8", margin: 0, lineHeight: 1.4 }}>
-        Désactivé par défaut : vous projetez les résultats quand vous voulez. Si
-        activé, un compte à rebours s’affiche puis les résultats — annulé si vous
-        enchaînez manuellement (noir, question, etc.).
+
+      <p
+        style={{
+          margin: 0,
+          fontSize: "0.68rem",
+          color: "#5b21b6",
+          lineHeight: 1.45,
+          fontWeight: 500,
+          opacity: 0.92,
+        }}
+      >
+        Le compte à rebours est annulé si vous changez manuellement l’affichage
+        (question, noir, résultats, etc.).
       </p>
     </>
   );
@@ -3686,12 +3806,14 @@ function RegieAutoRevealCard({
     return (
       <div
         style={{
-          marginTop: divider ? "0.55rem" : 0,
-          paddingTop: divider ? "0.55rem" : 0,
-          borderTop: divider ? "1px solid rgba(199, 210, 254, 0.65)" : "none",
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.5rem",
+          ...moduleShell,
+          marginTop: divider ? "0.7rem" : "0.55rem",
+          ...(divider
+            ? {
+                borderTop: "1px solid rgba(199, 210, 254, 0.5)",
+                paddingTop: "clamp(0.95rem, 2.8vw, 1.1rem)",
+              }
+            : {}),
         }}
       >
         {inner}
@@ -3700,15 +3822,7 @@ function RegieAutoRevealCard({
   }
 
   return (
-    <div
-      style={{
-        ...CARD,
-        padding: "0.65rem 0.75rem",
-        display: "flex",
-        flexDirection: "column",
-        gap: "0.5rem",
-      }}
-    >
+    <div style={moduleShell}>
       {inner}
     </div>
   );
