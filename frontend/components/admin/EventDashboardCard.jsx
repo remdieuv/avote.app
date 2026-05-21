@@ -30,8 +30,11 @@ import { LiveMicroLabel } from "@/components/admin/LiveMicroIcon";
  *   actionBusy?: boolean;
  *   onDuplicate?: (eventId: string) => void;
  *   onDelete?: (eventId: string) => void;
+ *   onRename?: (eventId: string, title: string) => Promise<void>;
  * }} props
  */
+const EVENT_TITLE_MAX_LEN = 200;
+
 export function EventDashboardCard({
   event,
   featured,
@@ -40,6 +43,7 @@ export function EventDashboardCard({
   actionBusy = false,
   onDuplicate,
   onDelete,
+  onRename,
 }) {
   const ev = event;
   const ux = getEventUxState(ev);
@@ -50,8 +54,15 @@ export function EventDashboardCard({
   );
   const [badgeStatusEnter, setBadgeStatusEnter] = useState(false);
   const [cardStatusFlash, setCardStatusFlash] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [renameError, setRenameError] = useState("");
+  const [renameSaving, setRenameSaving] = useState(false);
+  const titleInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
+  const skipBlurSaveRef = useRef(false);
 
   const isLiveUx = ux.key === "voting";
+  const canRename = Boolean(onRename) && !ev._localOnly && Boolean(ev.id);
 
   useEffect(() => {
     const prev = prevUxKeyRef.current;
@@ -71,6 +82,73 @@ export function EventDashboardCard({
       if (tFlash) clearTimeout(tFlash);
     };
   }, [ux.key, featured, reducedMotion]);
+
+  useEffect(() => {
+    if (!editingTitle) return;
+    const t = window.setTimeout(() => titleInputRef.current?.focus(), 0);
+    return () => window.clearTimeout(t);
+  }, [editingTitle]);
+
+  function startTitleEdit() {
+    if (!canRename || actionBusy || renameSaving) return;
+    setRenameError("");
+    setDraftTitle(String(ev.title || "").trim());
+    setEditingTitle(true);
+  }
+
+  function cancelTitleEdit() {
+    skipBlurSaveRef.current = true;
+    setEditingTitle(false);
+    setDraftTitle("");
+    setRenameError("");
+  }
+
+  async function commitTitleEdit() {
+    if (!editingTitle || !onRename) return;
+    const trimmed = draftTitle.trim();
+    if (!trimmed) {
+      setRenameError("Le titre ne peut pas être vide.");
+      return;
+    }
+    if (trimmed.length > EVENT_TITLE_MAX_LEN) {
+      setRenameError(`Maximum ${EVENT_TITLE_MAX_LEN} caractères.`);
+      return;
+    }
+    if (trimmed === String(ev.title || "").trim()) {
+      cancelTitleEdit();
+      return;
+    }
+    setRenameSaving(true);
+    setRenameError("");
+    try {
+      await onRename(ev.id, trimmed);
+      setEditingTitle(false);
+      setDraftTitle("");
+    } catch (e) {
+      setRenameError(e?.message || "Enregistrement impossible.");
+    } finally {
+      setRenameSaving(false);
+    }
+  }
+
+  function handleTitleKeyDown(e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      skipBlurSaveRef.current = true;
+      void commitTitleEdit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cancelTitleEdit();
+    }
+  }
+
+  async function handleTitleBlur() {
+    if (skipBlurSaveRef.current) {
+      skipBlurSaveRef.current = false;
+      return;
+    }
+    await commitTitleEdit();
+  }
 
   const pc =
     typeof ev.pollCount === "number" && !Number.isNaN(ev.pollCount)
@@ -173,20 +251,126 @@ export function EventDashboardCard({
           marginBottom: "0.65rem",
         }}
       >
-        <h2
+        <div
           style={{
-            margin: 0,
-            fontSize: "1.08rem",
-            fontWeight: 800,
-            color: "#0f172a",
-            letterSpacing: "-0.02em",
-            lineHeight: 1.3,
             flex: "1 1 12rem",
             minWidth: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.28rem",
           }}
         >
-          {ev.title}
-        </h2>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "0.35rem",
+              minWidth: 0,
+            }}
+          >
+            {editingTitle ? (
+              <input
+                ref={titleInputRef}
+                type="text"
+                value={draftTitle}
+                maxLength={EVENT_TITLE_MAX_LEN}
+                disabled={renameSaving || actionBusy}
+                onChange={(e) => {
+                  setDraftTitle(e.target.value);
+                  if (renameError) setRenameError("");
+                }}
+                onKeyDown={handleTitleKeyDown}
+                onBlur={() => void handleTitleBlur()}
+                aria-label="Nouveau titre de l’événement"
+                style={{
+                  flex: "1 1 auto",
+                  minWidth: 0,
+                  margin: 0,
+                  padding: "0.38rem 0.5rem",
+                  fontSize: "1rem",
+                  fontWeight: 800,
+                  color: "#0f172a",
+                  letterSpacing: "-0.02em",
+                  lineHeight: 1.3,
+                  borderRadius: "8px",
+                  border: "1px solid #93c5fd",
+                  background: "#fff",
+                  boxShadow: "0 0 0 3px rgba(59, 130, 246, 0.12)",
+                  boxSizing: "border-box",
+                }}
+              />
+            ) : (
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: "1.08rem",
+                  fontWeight: 800,
+                  color: "#0f172a",
+                  letterSpacing: "-0.02em",
+                  lineHeight: 1.3,
+                  flex: "1 1 auto",
+                  minWidth: 0,
+                }}
+              >
+                {ev.title}
+              </h2>
+            )}
+            {!editingTitle && canRename ? (
+              <button
+                type="button"
+                onClick={startTitleEdit}
+                disabled={actionBusy || renameSaving}
+                aria-label="Renommer l’événement"
+                title="Renommer"
+                style={{
+                  flexShrink: 0,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "2rem",
+                  height: "2rem",
+                  padding: 0,
+                  borderRadius: "8px",
+                  border: "1px solid #e2e8f0",
+                  background: "#f8fafc",
+                  color: "#475569",
+                  fontSize: "0.9rem",
+                  cursor: actionBusy || renameSaving ? "not-allowed" : "pointer",
+                  opacity: actionBusy || renameSaving ? 0.55 : 1,
+                }}
+              >
+                ✏️
+              </button>
+            ) : null}
+          </div>
+          {editingTitle ? (
+            <p
+              style={{
+                margin: 0,
+                fontSize: "0.68rem",
+                color: "#64748b",
+                fontWeight: 600,
+              }}
+            >
+              {renameSaving
+                ? "Enregistrement…"
+                : `Entrée pour enregistrer · Échap pour annuler · ${draftTitle.trim().length}/${EVENT_TITLE_MAX_LEN}`}
+            </p>
+          ) : null}
+          {renameError ? (
+            <p
+              role="alert"
+              style={{
+                margin: 0,
+                fontSize: "0.72rem",
+                color: "#b91c1c",
+                fontWeight: 700,
+              }}
+            >
+              {renameError}
+            </p>
+          ) : null}
+        </div>
         <span
           className={badgeClass}
           style={{

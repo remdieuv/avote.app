@@ -192,6 +192,50 @@ export default function AdminEventsPage() {
     [load],
   );
 
+  const renameEvent = useCallback(async (eventId, title) => {
+    const trimmed = String(title ?? "").trim();
+    if (!eventId) {
+      throw new Error("Événement introuvable.");
+    }
+    if (!trimmed) {
+      throw new Error("Le titre ne peut pas être vide.");
+    }
+    if (trimmed.length > 200) {
+      throw new Error("Le titre ne peut pas dépasser 200 caractères.");
+    }
+    setActionEventId(eventId);
+    setFetchError(null);
+    try {
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: trimmed }),
+        },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(mapApiError(body, res.status));
+      }
+      const newTitle =
+        typeof body?.title === "string" && body.title.trim()
+          ? body.title.trim()
+          : trimmed;
+      setRows((prev) =>
+        prev.map((r) =>
+          String(r.id) === String(eventId) ? { ...r, title: newTitle } : r,
+        ),
+      );
+      setToastMsg("Titre enregistré");
+      window.setTimeout(() => setToastMsg(null), 2600);
+    } catch (e) {
+      throw new Error(e?.message || "Impossible de renommer l’événement.");
+    } finally {
+      setActionEventId(null);
+    }
+  }, []);
+
   const deleteEvent = useCallback(
     async (eventId) => {
       const ev = rows.find((x) => String(x.id) === String(eventId));
@@ -441,6 +485,7 @@ export default function AdminEventsPage() {
                   actionBusy={actionEventId === ev.id}
                   onDuplicate={duplicateEvent}
                   onDelete={deleteEvent}
+                  onRename={renameEvent}
                 />
               </div>
             ))}
