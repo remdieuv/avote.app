@@ -2338,6 +2338,17 @@ function PanneauQrParticipant({
             </p>
           ) : null}
         </div>
+        <p
+          style={{
+            margin: "0 0 0.42rem",
+            fontSize: "0.74rem",
+            fontWeight: 800,
+            color: "#334155",
+            letterSpacing: "-0.01em",
+          }}
+        >
+          Télécharger le QR code
+        </p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "0.4rem" }}>
           <button
             type="button"
@@ -2345,7 +2356,14 @@ function PanneauQrParticipant({
             disabled={exportBusy !== null}
             style={qrExportBtnStyle}
           >
-            {exportBusy === "png" ? "..." : "Télécharger PNG (HD)"}
+            {exportBusy === "png" ? (
+              "..."
+            ) : (
+              <span style={qrExportBtnLabelWrap}>
+                <span style={qrExportBtnFormat}>PNG</span>
+                <span style={qrExportBtnHint}>HD</span>
+              </span>
+            )}
           </button>
           <button
             type="button"
@@ -2353,7 +2371,14 @@ function PanneauQrParticipant({
             disabled={exportBusy !== null}
             style={qrExportBtnStyle}
           >
-            {exportBusy === "pdf" ? "..." : "Télécharger PDF (A4)"}
+            {exportBusy === "pdf" ? (
+              "..."
+            ) : (
+              <span style={qrExportBtnLabelWrap}>
+                <span style={qrExportBtnFormat}>PDF</span>
+                <span style={qrExportBtnHint}>A4</span>
+              </span>
+            )}
           </button>
           <button
             type="button"
@@ -2361,7 +2386,14 @@ function PanneauQrParticipant({
             disabled={exportBusy !== null}
             style={qrExportBtnStyle}
           >
-            {exportBusy === "svg" ? "..." : "Télécharger SVG (vectoriel)"}
+            {exportBusy === "svg" ? (
+              "..."
+            ) : (
+              <span style={qrExportBtnLabelWrap}>
+                <span style={qrExportBtnFormat}>SVG</span>
+                <span style={qrExportBtnHint}>Vectoriel</span>
+              </span>
+            )}
           </button>
         </div>
       </div>
@@ -2428,16 +2460,39 @@ function PanneauQrParticipant({
 }
 
 const qrExportBtnStyle = {
-  minHeight: "36px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minHeight: "42px",
   border: PREMIUM_BORDER,
   borderRadius: "12px",
   background: "rgba(255,255,255,0.8)",
   color: "#334155",
   fontSize: "0.72rem",
   fontWeight: 700,
-  padding: "0.45rem 0.35rem",
+  padding: "0.4rem 0.28rem",
   cursor: "pointer",
   boxShadow: "0 8px 18px rgba(15, 23, 42, 0.04)",
+};
+
+const qrExportBtnLabelWrap = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: "0.06rem",
+  lineHeight: 1.1,
+};
+
+const qrExportBtnFormat = {
+  fontSize: "0.72rem",
+  fontWeight: 800,
+  letterSpacing: "0.02em",
+};
+
+const qrExportBtnHint = {
+  fontSize: "0.62rem",
+  fontWeight: 600,
+  color: "#64748b",
 };
 
 /** Copie du lien /screen — discret, colonne partage */
