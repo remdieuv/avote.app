@@ -205,6 +205,24 @@ function normalizeScreenId(raw) {
   return id.toLowerCase();
 }
 
+/** Id de présence socket : principal sans sid URL → "main", sinon id normalisé (ex. "b"). */
+const MAIN_SCREEN_PRESENCE_ID = "main";
+
+/**
+ * @param {unknown} raw
+ * @returns {string | null}
+ */
+function screenPresenceId(raw) {
+  const sid = normalizeScreenId(raw);
+  return sid || MAIN_SCREEN_PRESENCE_ID;
+}
+
+/** @param {import("socket.io").Server} io @param {string} eventId */
+async function emitAllScreenPresenceToAdmins(io, eventId) {
+  await emitScreenPresenceToAdmins(io, eventId, MAIN_SCREEN_PRESENCE_ID);
+  await emitScreenPresenceToAdmins(io, eventId, "b");
+}
+
 /**
  * Room écran = id événement brut (cuid), distinct de roomPourEvent (`event_…`).
  * @param {import("socket.io").Server} io
@@ -6078,14 +6096,14 @@ io.on("connection", (socket) => {
     const id = String(rawEventId);
     socket.join(roomPourEvent(id));
     void emitScreenCountToAdmins(io, id);
-    void emitScreenPresenceToAdmins(io, id, "b");
+    void emitAllScreenPresenceToAdmins(io, id);
   });
 
   socket.on("leave_event", (rawEventId) => {
     socket.leave(roomPourEvent(String(rawEventId)));
   });
 
-  /** Clients /screen/[slug] : room = eventId (valeur brute) */
+  /** Clients /screen/[slug] : room globale eventId + room présence screen_{eventId}__main|__b */
   socket.on("screen:join", (payload) => {
     const eventId =
       payload && typeof payload.eventId === "string"
@@ -6094,18 +6112,15 @@ io.on("connection", (socket) => {
     if (!eventId) return;
     socket.join(eventId);
     const screenId = normalizeScreenId(payload?.screenId);
-    if (screenId) {
-      const room = roomPourScreen(eventId, screenId);
-      socket.join(room);
-      socket.data.screenTargetRoom = room;
-      socket.data.screenId = screenId;
-    } else {
-      socket.data.screenTargetRoom = null;
-      socket.data.screenId = null;
-    }
+    const presenceId = screenPresenceId(payload?.screenId);
+    const room = roomPourScreen(eventId, presenceId);
+    socket.join(room);
+    socket.data.screenTargetRoom = room;
+    socket.data.screenPresenceId = presenceId;
+    socket.data.screenId = screenId;
     socket.data.screenEventId = eventId;
     void emitScreenCountToAdmins(io, eventId);
-    void emitScreenPresenceToAdmins(io, eventId, "b");
+    void emitScreenPresenceToAdmins(io, eventId, presenceId);
   });
 
   socket.on("screen:leave", (payload) => {
@@ -6117,13 +6132,19 @@ io.on("connection", (socket) => {
     socket.leave(eventId);
     const room = socket.data.screenTargetRoom;
     if (room) socket.leave(room);
+    const presenceId = socket.data.screenPresenceId;
     if (socket.data.screenEventId === eventId) {
       socket.data.screenEventId = null;
       socket.data.screenTargetRoom = null;
+      socket.data.screenPresenceId = null;
       socket.data.screenId = null;
     }
     void emitScreenCountToAdmins(io, eventId);
-    void emitScreenPresenceToAdmins(io, eventId, "b");
+    if (presenceId) {
+      void emitScreenPresenceToAdmins(io, eventId, String(presenceId));
+    } else {
+      void emitAllScreenPresenceToAdmins(io, eventId);
+    }
   });
 
   /**
@@ -6211,7 +6232,7 @@ io.on("connection", (socket) => {
     const id = socket.data.screenEventId;
     if (id) {
       void emitScreenCountToAdmins(io, id);
-      void emitScreenPresenceToAdmins(io, id, "b");
+      void emitAllScreenPresenceToAdmins(io, id);
     }
   });
 });

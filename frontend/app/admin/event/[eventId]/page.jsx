@@ -1209,7 +1209,7 @@ function RegieAutoRotatePanel({
  *   busy: boolean;
  *   postAction: (path: string) => Promise<boolean>;
  *   sendScreenAction: (type: "RESULTS" | "QUESTION" | "WAITING" | "BLACK", screenId?: string | null) => void;
- *   screenCount: number;
+ *   screenMainConnected: boolean;
  *   screenBConnected: boolean;
  *   screenBDisplayState?: string | null;
  *   desktop: boolean;
@@ -1231,7 +1231,7 @@ function BlocProjectionEcran({
   busy,
   postAction,
   sendScreenAction,
-  screenCount,
+  screenMainConnected,
   screenBConnected,
   screenBDisplayState = null,
   desktop,
@@ -1327,16 +1327,20 @@ function BlocProjectionEcran({
   const ls = String(liveState || "").toLowerCase();
   /** Aligné sur le serveur — évite un bouton « noir » désynchronisé après refresh */
   const affichageNoir = d === "black" || ls === "paused";
-  const ecranConnecte = screenCount > 0;
-  const statutEcran =
-    screenCount <= 0
-      ? "🔴 Aucun écran connecté"
-      : screenCount === 1
-        ? "🟢 1 écran connecté"
-        : `🟢 ${screenCount} écrans connectés`;
+  const statutEcranPrincipal = screenMainConnected
+    ? "🟢 Écran principal connecté"
+    : "🔴 Écran principal hors ligne";
   const statutEcranB = screenBConnected
     ? "🟢 Écran B connecté"
     : "🔴 Écran B non connecté";
+  const statutEcran =
+    !screenMainConnected && !screenBConnected
+      ? "🔴 Aucun écran connecté"
+      : screenMainConnected && screenBConnected
+        ? "🟢 Écran principal et écran B connectés"
+        : screenMainConnected
+          ? statutEcranPrincipal
+          : statutEcranB;
   const affichageStandardLabel =
     DISPLAY_STATE_LABELS[d] ?? String(d || "waiting").toUpperCase();
   const ecranBDisplayLower = String(screenBDisplayState || "").toLowerCase();
@@ -1471,7 +1475,8 @@ function BlocProjectionEcran({
             fontWeight: 700,
             letterSpacing: "-0.01em",
             lineHeight: 1.35,
-            color: ecranConnecte ? "#14532d" : "#991b1b",
+            color:
+              screenMainConnected || screenBConnected ? "#14532d" : "#991b1b",
           }}
         >
           {statutEcran}
@@ -1504,7 +1509,7 @@ function BlocProjectionEcran({
               <div className="proj-ecran-console-col-head-main">
                 <div className="proj-ecran-console-col-head-row">
                   <p className="proj-ecran-console-col-title">Écran principal</p>
-                  <p className="proj-ecran-console-col-meta">{ecranConnecte ? "🟢 Connecté" : "🔴 Hors ligne"}</p>
+                  <p className="proj-ecran-console-col-meta">{statutEcranPrincipal}</p>
                 </div>
               </div>
             </div>
@@ -4249,7 +4254,7 @@ export default function RegieEventPage() {
   /** Desktop : colonne gauche (questions + liens) repliée */
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
   /** Nombre de clients /screen connectés (socket room dédiée) */
-  const [screenCount, setScreenCount] = useState(0);
+  const [screenMainConnected, setScreenMainConnected] = useState(false);
   const [screenBConnected, setScreenBConnected] = useState(false);
   const [socketConnected, setSocketConnected] = useState(false);
   const [socketReconnecting, setSocketReconnecting] = useState(false);
@@ -4750,19 +4755,9 @@ export default function RegieEventPage() {
       });
     }
 
-    function onScreenCount(payload) {
-      if (!payload || String(payload.eventId) !== String(eventId)) return;
-      setScreenCount(
-        typeof payload.count === "number" && Number.isFinite(payload.count)
-          ? payload.count
-          : 0,
-      );
-    }
-
-    function onScreenPresence(payload) {
+    function applyScreenPresence(payload) {
       if (!payload || String(payload.eventId) !== String(eventId)) return;
       const sid = String(payload.screenId || "").trim().toLowerCase();
-      if (sid !== "b") return;
       const connectedFromCount =
         typeof payload.count === "number" && Number.isFinite(payload.count)
           ? payload.count > 0
@@ -4773,10 +4768,20 @@ export default function RegieEventPage() {
           : connectedFromCount != null
             ? connectedFromCount
             : false;
-      setScreenBConnected(connected);
-      if (!connected) {
-        setScreenBDisplayState("waiting");
+      if (sid === "main") {
+        setScreenMainConnected(connected);
+        return;
       }
+      if (sid === "b") {
+        setScreenBConnected(connected);
+        if (!connected) {
+          setScreenBDisplayState("waiting");
+        }
+      }
+    }
+
+    function onScreenPresence(payload) {
+      applyScreenPresence(payload);
     }
 
     function onScreenUpdate(payload) {
@@ -4787,6 +4792,17 @@ export default function RegieEventPage() {
       if (sid === "b") {
         setScreenBDisplayState(
           /** @type {"question" | "results" | "waiting" | "black"} */ (dsRaw),
+        );
+        return;
+      }
+      if (sid === "main") {
+        setEventData((prev) =>
+          prev
+            ? {
+                ...prev,
+                screenDisplayState: dsRaw,
+              }
+            : prev,
         );
         return;
       }
@@ -4868,7 +4884,6 @@ export default function RegieEventPage() {
     }
     socket.on("event_live_updated", onLive);
     socket.on("poll_updated", onPollUpdated);
-    socket.on("screen:count", onScreenCount);
     socket.on("screen:presence", onScreenPresence);
     socket.on("screen:update", onScreenUpdate);
 
@@ -4883,7 +4898,6 @@ export default function RegieEventPage() {
       socket.off("connect_error", onSocketConnectError);
       socket.off("event_live_updated", onLive);
       socket.off("poll_updated", onPollUpdated);
-      socket.off("screen:count", onScreenCount);
       socket.off("screen:presence", onScreenPresence);
       socket.off("screen:update", onScreenUpdate);
       socket.disconnect();
@@ -7876,7 +7890,7 @@ export default function RegieEventPage() {
               busy={busy}
               postAction={postAction}
               sendScreenAction={sendScreenAction}
-              screenCount={screenCount}
+              screenMainConnected={screenMainConnected}
               screenBConnected={screenBConnected}
               screenBDisplayState={screenBDisplayState}
               desktop={desktop}
