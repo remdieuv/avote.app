@@ -102,6 +102,40 @@ function HeroMockup() {
   );
 }
 
+/** Mockup décoratif : page publique événement (galerie + accès live). */
+function EventPublicPageMockup() {
+  return (
+    <div className="event-page-mockup-wrap" aria-hidden>
+      <div className="event-page-phone">
+        <div className="event-page-phone-top">
+          <div className="event-page-phone-notch" />
+        </div>
+        <div className="event-page-phone-screen">
+          <div className="event-page-cover" />
+          <div className="event-page-phone-body">
+            <p className="event-page-event-eyebrow">Page événement · avote.app/e/…</p>
+            <h3 className="event-page-event-title">Soirée Innovation 2026</h3>
+            <p className="event-page-event-meta">
+              Jeudi 12 juin · Paris · Accès live inclus
+            </p>
+            <p className="event-page-gallery-label">Galerie live</p>
+            <div className="event-page-gallery">
+              <span className="event-page-photo event-page-photo-a" />
+              <span className="event-page-photo event-page-photo-b" />
+              <span className="event-page-photo event-page-photo-c" />
+              <span className="event-page-photo event-page-photo-d" />
+            </div>
+            <button type="button" className="event-page-join-btn">
+              Rejoindre le live
+            </button>
+          </div>
+        </div>
+      </div>
+      <span className="event-page-link-chip">Lien unique partageable</span>
+    </div>
+  );
+}
+
 function LiveContestPreviewCard() {
   return (
     <div
@@ -727,6 +761,68 @@ export default function HomePage() {
                   <p className="how-card-line">{step.line}</p>
                 </article>
               ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Page publique événement — cycle avant / pendant / après */}
+        <section
+          id="event-page"
+          style={sectionY}
+          aria-labelledby="event-page-heading"
+        >
+          <div className="event-page-wrap">
+            <div className="event-page-head">
+              <p className="event-page-eyebrow">Votre événement, visible</p>
+              <h2 id="event-page-heading" className="event-page-title">
+                Une page publique pour tout votre événement
+              </h2>
+              <p className="event-page-subtitle">
+                Partagez un lien unique&nbsp;: informations, accès au live, photos
+                en direct et souvenir après l&apos;événement.
+              </p>
+            </div>
+
+            <div className="event-page-mockup-slot">
+              <EventPublicPageMockup />
+            </div>
+
+            <div className="event-page-steps" role="list">
+              {[
+                {
+                  icon: "📅",
+                  title: "Avant le live",
+                  line: "Invitez vos participants et partagez toutes les informations utiles avant l’événement.",
+                },
+                {
+                  icon: "⚡",
+                  title: "Pendant",
+                  line: "Un accès direct au vote live et aux interactions en temps réel depuis une seule page.",
+                },
+                {
+                  icon: "✨",
+                  title: "Après",
+                  line: "Retrouvez les photos live et prolongez l’expérience après l’événement.",
+                },
+              ].map((step) => (
+                <article key={step.title} className="event-page-step" role="listitem">
+                  <span className="event-page-step-icon" aria-hidden>
+                    {step.icon}
+                  </span>
+                  <h3 className="event-page-step-title">{step.title}</h3>
+                  <p className="event-page-step-line">{step.line}</p>
+                </article>
+              ))}
+            </div>
+
+            <div className="event-page-cta-row">
+              <Link
+                href="/e/demo"
+                className="event-page-cta-ghost"
+                style={btnSecondary}
+              >
+                Voir un exemple de page événement
+              </Link>
             </div>
           </div>
         </section>
@@ -1551,6 +1647,287 @@ export default function HomePage() {
           .how-grid {
             grid-template-columns: repeat(2, 1fr);
             gap: 0.95rem;
+          }
+        }
+        .event-page-wrap {
+          position: relative;
+          border-radius: 22px;
+          border: 1px solid #ddd6fe;
+          background:
+            radial-gradient(820px 240px at 50% 0%, rgba(124, 58, 237, 0.11), transparent 58%),
+            linear-gradient(165deg, #fafcff 0%, #ffffff 48%, #f5f3ff 100%);
+          padding: clamp(1.35rem, 3.6vw, 2.15rem);
+          box-shadow: 0 20px 44px rgba(76, 29, 149, 0.08);
+          overflow: hidden;
+        }
+        .event-page-head {
+          text-align: center;
+          max-width: 720px;
+          margin: 0 auto;
+        }
+        .event-page-eyebrow {
+          margin: 0 0 0.5rem;
+          font-size: 0.7rem;
+          font-weight: 700;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: #7c3aed;
+        }
+        .event-page-title {
+          margin: 0;
+          font-size: clamp(1.28rem, 3.1vw, 1.85rem);
+          line-height: 1.14;
+          letter-spacing: -0.03em;
+          font-weight: 800;
+          color: #0f172a;
+        }
+        .event-page-subtitle {
+          margin: 0.85rem auto 0;
+          max-width: 52ch;
+          font-size: clamp(0.9rem, 2vw, 1rem);
+          line-height: 1.55;
+          color: #64748b;
+        }
+        .event-page-mockup-slot {
+          margin-top: clamp(1.35rem, 3.2vw, 1.85rem);
+          display: flex;
+          justify-content: center;
+        }
+        .event-page-mockup-wrap {
+          position: relative;
+          width: min(100%, 320px);
+          display: flex;
+          justify-content: center;
+          isolation: isolate;
+        }
+        .event-page-mockup-wrap::before {
+          content: "";
+          position: absolute;
+          inset: 8% 5% auto;
+          height: 55%;
+          border-radius: 999px;
+          background: radial-gradient(circle, rgba(124, 58, 237, 0.2), transparent 70%);
+          filter: blur(10px);
+          z-index: 0;
+          pointer-events: none;
+        }
+        .event-page-phone {
+          position: relative;
+          z-index: 1;
+          width: min(78vw, 300px);
+          border-radius: 1.85rem;
+          padding: 0.44rem;
+          background: linear-gradient(145deg, #0f172a 0%, #334155 100%);
+          box-shadow:
+            0 28px 52px rgba(15, 23, 42, 0.22),
+            0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+          animation: eventPageFloat 5.2s ease-in-out infinite;
+        }
+        .event-page-phone-top {
+          height: 20px;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+        }
+        .event-page-phone-notch {
+          width: 64px;
+          height: 5px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.18);
+        }
+        .event-page-phone-screen {
+          border-radius: 1.35rem;
+          overflow: hidden;
+          border: 1px solid #e2e8f0;
+          background: #fff;
+          display: flex;
+          flex-direction: column;
+        }
+        .event-page-cover {
+          height: 108px;
+          background:
+            linear-gradient(125deg, rgba(15, 23, 42, 0.15) 0%, transparent 55%),
+            linear-gradient(135deg, #6366f1 0%, #7c3aed 42%, #a855f7 100%);
+        }
+        .event-page-phone-body {
+          padding: 0.75rem 0.8rem 0.9rem;
+          display: flex;
+          flex-direction: column;
+          gap: 0.35rem;
+          min-height: 0;
+        }
+        .event-page-event-eyebrow {
+          margin: 0;
+          font-size: 0.58rem;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          color: #94a3b8;
+        }
+        .event-page-event-title {
+          margin: 0;
+          font-size: 0.92rem;
+          font-weight: 800;
+          line-height: 1.25;
+          color: #0f172a;
+          letter-spacing: -0.02em;
+        }
+        .event-page-event-meta {
+          margin: 0 0 0.35rem;
+          font-size: 0.64rem;
+          line-height: 1.4;
+          color: #64748b;
+          font-weight: 500;
+        }
+        .event-page-gallery-label {
+          margin: 0.15rem 0 0;
+          font-size: 0.62rem;
+          font-weight: 700;
+          color: #6d28d9;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+        }
+        .event-page-gallery {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 0.35rem;
+        }
+        .event-page-photo {
+          display: block;
+          aspect-ratio: 1 / 1;
+          border-radius: 8px;
+          border: 1px solid #e9d5ff;
+        }
+        .event-page-photo-a {
+          background: linear-gradient(145deg, #c4b5fd 0%, #8b5cf6 100%);
+        }
+        .event-page-photo-b {
+          background: linear-gradient(145deg, #fbcfe8 0%, #f472b6 100%);
+        }
+        .event-page-photo-c {
+          background: linear-gradient(145deg, #bfdbfe 0%, #60a5fa 100%);
+        }
+        .event-page-photo-d {
+          background: linear-gradient(145deg, #fde68a 0%, #f59e0b 100%);
+        }
+        .event-page-join-btn {
+          margin-top: 0.45rem;
+          width: 100%;
+          border: 1px solid #6d28d9;
+          background: linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%);
+          color: #fff;
+          border-radius: 10px;
+          padding: 0.52rem 0.65rem;
+          font-size: 0.74rem;
+          font-weight: 760;
+          box-shadow: 0 8px 18px rgba(124, 58, 237, 0.22);
+          cursor: default;
+        }
+        .event-page-link-chip {
+          position: absolute;
+          right: -4%;
+          bottom: 14%;
+          z-index: 2;
+          max-width: 42%;
+          padding: 0.38rem 0.55rem;
+          border-radius: 10px;
+          border: 1px solid #e9d5ff;
+          background: rgba(255, 255, 255, 0.94);
+          font-size: 0.62rem;
+          font-weight: 700;
+          color: #5b21b6;
+          line-height: 1.3;
+          box-shadow: 0 10px 24px rgba(91, 33, 182, 0.12);
+          backdrop-filter: blur(8px);
+        }
+        .event-page-steps {
+          margin-top: clamp(1.25rem, 3vw, 1.65rem);
+          display: grid;
+          gap: 0.85rem;
+          grid-template-columns: 1fr;
+        }
+        .event-page-step {
+          border-radius: 16px;
+          border: 1px solid #e9d5ff;
+          background: rgba(255, 255, 255, 0.9);
+          padding: clamp(0.95rem, 2.2vw, 1.1rem);
+          box-shadow:
+            0 8px 20px rgba(15, 23, 42, 0.04),
+            inset 0 1px 0 rgba(255, 255, 255, 0.95);
+          transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+        }
+        .event-page-step:hover {
+          transform: translateY(-2px);
+          border-color: #c4b5fd;
+          box-shadow: 0 12px 28px rgba(91, 33, 182, 0.1);
+        }
+        .event-page-step-icon {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 2.1rem;
+          height: 2.1rem;
+          border-radius: 12px;
+          background: #f5f3ff;
+          border: 1px solid #ede9fe;
+          font-size: 1rem;
+          margin-bottom: 0.55rem;
+        }
+        .event-page-step-title {
+          margin: 0 0 0.32rem;
+          font-size: 0.98rem;
+          font-weight: 760;
+          color: #111827;
+          line-height: 1.25;
+        }
+        .event-page-step-line {
+          margin: 0;
+          font-size: 0.86rem;
+          line-height: 1.48;
+          color: #64748b;
+        }
+        .event-page-cta-row {
+          margin-top: clamp(1.1rem, 2.6vw, 1.45rem);
+          display: flex;
+          justify-content: center;
+        }
+        .event-page-cta-ghost {
+          padding: 0.62rem 1.05rem !important;
+          font-size: 0.88rem !important;
+          font-weight: 650 !important;
+          background: rgba(255, 255, 255, 0.72) !important;
+          border-color: #c4b5fd !important;
+          color: #5b21b6 !important;
+          box-shadow: none !important;
+        }
+        .event-page-cta-ghost:hover {
+          background: #fff !important;
+          border-color: #a78bfa !important;
+        }
+        @keyframes eventPageFloat {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-6px); }
+        }
+        @media (min-width: 900px) {
+          .event-page-steps {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.95rem;
+          }
+        }
+        @media (max-width: 759px) {
+          .event-page-link-chip {
+            right: 0;
+            bottom: auto;
+            top: 4%;
+            max-width: 48%;
+          }
+          .event-page-phone {
+            animation: none;
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .event-page-phone {
+            animation: none;
           }
         }
         .live-premium-wrap {
