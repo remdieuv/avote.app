@@ -9,6 +9,7 @@ import {
   LANDING_PHOTO_TOO_HEAVY_MESSAGE,
   prepareLandingPhotoForUpload,
 } from "@/lib/compressLandingPhoto";
+import { EventLandingDemoPage } from "@/components/event/EventLandingDemoPage";
 
 function mapApiError(body, status) {
   const code = String(body?.error || "").trim();
@@ -65,8 +66,9 @@ export default function EventLandingPage() {
   const slugParam = params?.slug;
   const slug =
     typeof slugParam === "string" ? slugParam : slugParam?.[0] ?? null;
+  const isDemoSlug = slug === "demo";
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!isDemoSlug);
   const [error, setError] = useState(null);
   /** @type {null | Record<string, unknown>} */
   const [payload, setPayload] = useState(null);
@@ -88,6 +90,12 @@ export default function EventLandingPage() {
 
   useEffect(() => {
     if (!slug) return undefined;
+    if (isDemoSlug) {
+      setLoading(false);
+      setError(null);
+      setPayload(null);
+      return undefined;
+    }
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -125,7 +133,7 @@ export default function EventLandingPage() {
     return () => {
       cancelled = true;
     };
-  }, [slug, router]);
+  }, [slug, router, isDemoSlug]);
 
   const triggerLandingPhotoPicker = useCallback(() => {
     setUploadError(null);
@@ -390,6 +398,10 @@ export default function EventLandingPage() {
         <p>Lien invalide.</p>
       </main>
     );
+  }
+
+  if (isDemoSlug) {
+    return <EventLandingDemoPage />;
   }
 
   if (loading) {
