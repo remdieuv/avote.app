@@ -149,6 +149,31 @@ export function shouldAutoNavigateJoinToPollPath() {
 }
 
 /**
+ * En Salle (`embedded`), PollExperience réutilise le socket Join — pas de 2ᵉ `io()`.
+ * En standalone `/p`, Poll ouvre sa propre connexion.
+ * @param {{ embedded?: boolean }} input
+ */
+export function shouldPollOpenOwnSocket(input = {}) {
+  return input.embedded !== true;
+}
+
+/**
+ * Un seul bandeau OFFLINE : celui de Join en Salle ; Poll le gère seulement en `/p`.
+ * @param {{ embedded?: boolean }} input
+ */
+export function shouldPollRenderOfflineBanner(input = {}) {
+  return input.embedded !== true;
+}
+
+/**
+ * Meta branding slug déjà portée par Join — inutile en embedded.
+ * @param {{ embedded?: boolean }} input
+ */
+export function shouldPollFetchEventMetaBranding(input = {}) {
+  return input.embedded !== true;
+}
+
+/**
  * Préavis lead / concours avant les choix.
  * @param {{ pollType?: string | null; leadEnabled?: boolean | null }} input
  * @returns {string | null}

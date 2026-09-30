@@ -40,6 +40,9 @@ import {
   getParticipantFullLabel,
   getParticipantOfflineLabel,
   isParticipantRoomFull,
+  shouldPollFetchEventMetaBranding,
+  shouldPollOpenOwnSocket,
+  shouldPollRenderOfflineBanner,
 } from "@/lib/participantLiveFlow";
 import {
   buildJoinPollCardSurfaces,
@@ -202,6 +205,16 @@ function chronoRestantSecondes(tm) {
  *   retourLabel?: string;
  *   slugPublic?: string | null;
  *   embedded?: boolean — Salle `/join` : panneau sans shell ni navigation
+ *   parentSocketOnline?: boolean | null — connectivité Join (embedded)
+ *   parentLiveRevision?: number — bump Join à chaque event_live / reconnect
+ *   parentEventId?: string | null;
+ *   parentLiveState?: string | null;
+ *   parentVoteState?: string | null;
+ *   parentDisplayState?: string | null;
+ *   parentIsLocked?: boolean | null;
+ *   parentPrimaryColor?: string | null;
+ *   parentThemeMode?: string | null;
+ *   parentOverlayStrength?: string | null;
  * }} props
  */
 export function PollExperience({
@@ -211,6 +224,16 @@ export function PollExperience({
   retourLabel = "← Retour",
   slugPublic = null,
   embedded = false,
+  parentSocketOnline = null,
+  parentLiveRevision = 0,
+  parentEventId = null,
+  parentLiveState = null,
+  parentVoteState = null,
+  parentDisplayState = null,
+  parentIsLocked = null,
+  parentPrimaryColor = null,
+  parentThemeMode = null,
+  parentOverlayStrength = null,
 }) {
   const [poll, setPoll] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -386,8 +409,58 @@ export function PollExperience({
   }, [slugPublic, poll?.eventSlug]);
 
   useEffect(() => {
+    if (!shouldPollFetchEventMetaBranding({ embedded })) return;
     void loadEventMetaForBranding();
-  }, [loadEventMetaForBranding]);
+  }, [embedded, loadEventMetaForBranding]);
+
+  /** Salle : branding + axes live fournis par Join — pas de 2ᵉ GET slug. */
+  useEffect(() => {
+    if (!embedded) return;
+    if (typeof parentEventId === "string" && parentEventId.trim()) {
+      setEventId(parentEventId.trim());
+    }
+    if (parentLiveState != null) {
+      setLiveScene(normalizeLiveScene(parentLiveState));
+    }
+    if (typeof parentVoteState === "string") {
+      setEventVoteStateUi(parentVoteState.toLowerCase());
+    } else if (parentVoteState == null) {
+      /* keep */
+    }
+    if (typeof parentDisplayState === "string") {
+      setEventDisplayStateUi(parentDisplayState.toLowerCase());
+    }
+    if (typeof parentIsLocked === "boolean") {
+      setEventModeUi((prev) => ({ ...prev, isLocked: parentIsLocked }));
+      setRoomFullLocal(parentIsLocked);
+    }
+    if (
+      typeof parentPrimaryColor === "string" &&
+      /^#[0-9A-Fa-f]{6}$/.test(parentPrimaryColor.trim())
+    ) {
+      setRoomPrimaryColor(parentPrimaryColor.trim());
+    }
+    if (typeof parentThemeMode === "string" && parentThemeMode.trim()) {
+      setRoomThemeMode(parentThemeMode.trim().toLowerCase());
+    }
+    if (
+      typeof parentOverlayStrength === "string" &&
+      parentOverlayStrength.trim()
+    ) {
+      setRoomOverlayStrength(parentOverlayStrength.trim().toLowerCase());
+    }
+  }, [
+    embedded,
+    parentEventId,
+    parentLiveState,
+    parentVoteState,
+    parentDisplayState,
+    parentIsLocked,
+    parentPrimaryColor,
+    parentThemeMode,
+    parentOverlayStrength,
+    parentLiveRevision,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -518,6 +591,13 @@ export function PollExperience({
     void loadPoll();
   }, [loadPoll]);
 
+  /** Salle : sync question via GET /p quand Join bump la révision live (pas de 2ᵉ socket). */
+  useEffect(() => {
+    if (!embedded) return;
+    if (!parentLiveRevision) return;
+    void loadPoll({ silent: true });
+  }, [embedded, parentLiveRevision, loadPoll]);
+
   useEffect(() => {
     const iso = poll?.autoRevealShowResultsAt;
     if (
@@ -574,12 +654,22 @@ export function PollExperience({
     void loadPoll({ silent: true });
   }, [liveScene, poll?.eventVoteState, poll?.status, secondesChronoVote, loadPoll]);
 
-  /** Socket : room événement + room poll pour les mises à jour fines */
+  /**
+   * Socket autonome : uniquement `/p` standalone.
+   * En Salle (`embedded`), Join possède le seul `io()` ; Poll se sync via parentLiveRevision + GET /p.
+   */
   useEffect(() => {
+    if (!shouldPollOpenOwnSocket({ embedded })) {
+      setSocketOnline(
+        typeof parentSocketOnline === "boolean" ? parentSocketOnline : null,
+      );
+      return undefined;
+    }
+
     const eid = eventId;
     const pid = pollId;
 
-    if (!eid && !pid) return;
+    if (!eid && !pid) return undefined;
 
     const socket = io(SOCKET_URL, {
       transports: ["websocket", "polling"],
@@ -735,7 +825,15 @@ export function PollExperience({
       socket.off("poll_updated", onPollUpdated);
       socket.disconnect();
     };
-  }, [eventId, pollId, slugPublic, loadPoll, loadEventMetaForBranding]);
+  }, [
+    embedded,
+    parentSocketOnline,
+    eventId,
+    pollId,
+    slugPublic,
+    loadPoll,
+    loadEventMetaForBranding,
+  ]);
 
   const voteStateParticipant = String(
     poll?.eventVoteState ?? eventVoteStateUi ?? "",
@@ -881,7 +979,11 @@ export function PollExperience({
     isLocked: eventModeUi.isLocked === true || eventMode.isLocked === true,
     errorCode: roomFullLocal ? "LIMIT_REACHED" : null,
   });
-  const isOffline = socketOnline === false;
+  const isOffline = embedded
+    ? parentSocketOnline === false
+    : socketOnline === false;
+  const showOfflineBanner =
+    shouldPollRenderOfflineBanner({ embedded }) && isOffline && !loading;
 
   useEffect(() => {
     if (!poll?.id || !isContestEntry || !poll?.eventSlug) {
@@ -1489,7 +1591,7 @@ export function PollExperience({
           }}
         >
           <div className="poll-live-panel" style={panelStyle}>
-      {isOffline && !loading ? (
+      {showOfflineBanner ? (
         <div
           role="status"
           style={{

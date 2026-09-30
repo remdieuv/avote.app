@@ -150,6 +150,8 @@ export function JoinLiveHub({ slug }) {
   const [isLocked, setIsLocked] = useState(false);
   /** null = pas encore de socket ; true/false = statut connexion */
   const [socketOnline, setSocketOnline] = useState(/** @type {boolean | null} */ (null));
+  /** Bump pour sync PollExperience embedded (un seul socket Join). */
+  const [liveSyncRevision, setLiveSyncRevision] = useState(0);
   /** Personnalisation salle (/admin/.../customization) */
   const [roomDescription, setRoomDescription] = useState(null);
   const [logoUrl, setLogoUrl] = useState(null);
@@ -527,6 +529,7 @@ export function JoinLiveHub({ slug }) {
     function onConnect() {
       setSocketOnline(true);
       socket.emit("join_event", eventId);
+      setLiveSyncRevision((n) => n + 1);
       void fetchMeta();
     }
 
@@ -539,6 +542,7 @@ export function JoinLiveHub({ slug }) {
       if (payload && typeof payload.isLocked === "boolean") {
         setIsLocked(Boolean(payload.isLocked));
       }
+      setLiveSyncRevision((n) => n + 1);
       void fetchMeta();
     }
 
@@ -550,6 +554,7 @@ export function JoinLiveHub({ slug }) {
       ) {
         return;
       }
+      setLiveSyncRevision((n) => n + 1);
       void fetchMeta();
     }
 
@@ -1264,6 +1269,16 @@ export function JoinLiveHub({ slug }) {
               titrePage={eventTitle || "Salle live"}
               slugPublic={slug}
               embedded
+              parentSocketOnline={socketOnline}
+              parentLiveRevision={liveSyncRevision}
+              parentEventId={eventId}
+              parentLiveState={liveState}
+              parentVoteState={voteState}
+              parentDisplayState={displayState}
+              parentIsLocked={isLocked}
+              parentPrimaryColor={effectivePrimaryColor}
+              parentThemeMode={effectiveThemeMode}
+              parentOverlayStrength={effectiveOverlayStrength}
             />
           </div>
         ) : null}

@@ -18,6 +18,9 @@ import {
   resolveEventLandingPhase,
   shouldAutoNavigateJoinToPollPath,
   shouldEmbedPollSurfaceInRoom,
+  shouldPollFetchEventMetaBranding,
+  shouldPollOpenOwnSocket,
+  shouldPollRenderOfflineBanner,
 } from "../lib/participantLiveFlow.js";
 
 /** @type {{ name: string; run: () => void }[]} */
@@ -205,6 +208,19 @@ test("OFFLINE libellé + préavis types", () => {
     getParticipantFormNotice({ pollType: "MULTIPLE_CHOICE" }),
     null,
   );
+});
+
+test("embedded : pas de 2ᵉ socket ni bandeau OFFLINE ni meta branding", () => {
+  assert.equal(shouldPollOpenOwnSocket({ embedded: true }), false);
+  assert.equal(shouldPollRenderOfflineBanner({ embedded: true }), false);
+  assert.equal(shouldPollFetchEventMetaBranding({ embedded: true }), false);
+});
+
+test("/p standalone : socket + OFFLINE + meta branding autonomes", () => {
+  assert.equal(shouldPollOpenOwnSocket({ embedded: false }), true);
+  assert.equal(shouldPollOpenOwnSocket({}), true);
+  assert.equal(shouldPollRenderOfflineBanner({ embedded: false }), true);
+  assert.equal(shouldPollFetchEventMetaBranding({}), true);
 });
 
 let failed = 0;
