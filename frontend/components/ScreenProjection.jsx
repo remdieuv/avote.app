@@ -15,8 +15,11 @@ import { ScreenQuestion } from "./ScreenQuestion";
 import { ScreenResults } from "./ScreenResults";
 import { resolveApiAssetUrlNullable } from "@/lib/assetUrl";
 import { API_URL, SOCKET_URL } from "@/lib/config";
+import { shouldShowScreenCornerQr } from "@/lib/diffusionUx";
 import {
   LIVE_UX_DETAIL_SCREEN_WAITING_SLUG,
+  LIVE_UX_LOCAL,
+  getLiveStateLabel,
   getUxState,
   getLiveStatePresentation,
   getLiveStateTone,
@@ -115,9 +118,16 @@ function roomOverlayAlpha(strength) {
  *   screenId?: string | null;
  *   getPollUrl: () => string;
  *   onSurfaceChange?: (surface: "question" | "results" | "other") => void;
+ *   onAllowCornerQrChange?: (allow: boolean) => void;
  * }} props
  */
-export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSurfaceChange }) {
+export function ScreenProjection({
+  slugPublic,
+  screenId = null,
+  getPollUrl,
+  onSurfaceChange,
+  onAllowCornerQrChange,
+}) {
   const searchParams = useSearchParams();
   const normalizedScreenId =
     typeof screenId === "string" && /^[A-Za-z0-9_-]{1,24}$/.test(screenId)
@@ -127,6 +137,8 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
   const [poll, setPoll] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  /** Slug événement introuvable / inaccessible — jamais de QR trompeur (P8). */
+  const [eventInvalid, setEventInvalid] = useState(false);
   /** GET /p/:slug → 404 alors que le slug événement est valide (contenu pas encore servi). */
   const [noPollFromHttp404, setNoPollFromHttp404] = useState(false);
   const [eventActivePollId, setEventActivePollId] = useState(
@@ -237,8 +249,9 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
         );
         if (res.status === 404) {
           evenementInvalideRef.current = true;
+          setEventInvalid(true);
           if (!silent) {
-            setError("Événement introuvable.");
+            setError(getLiveStateLabel(LIVE_UX_LOCAL.ERROR));
           }
           setEventId(null);
           setRoomCustomization(null);
@@ -246,6 +259,7 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
           setEventAutoReveal(false);
           setEventAutoRevealAt(null);
           setEventActivePollId(null);
+          setLoading(false);
           return;
         }
         if (!res.ok) {
@@ -254,6 +268,8 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
           }
           return;
         }
+        evenementInvalideRef.current = false;
+        setEventInvalid(false);
         const meta = await res.json();
         applyEventSlugMeta(meta);
       } catch {
@@ -268,9 +284,11 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
   useEffect(() => {
     if (!slugPublic) {
       evenementInvalideRef.current = false;
+      setEventInvalid(false);
       return;
     }
     evenementInvalideRef.current = false;
+    setEventInvalid(false);
     void fetchEventSlugMeta();
   }, [slugPublic, fetchEventSlugMeta]);
 
@@ -285,7 +303,10 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
         loadPollAbortRef.current = ac;
         signal = ac.signal;
 
-        setError(null);
+        // Ne pas effacer une erreur d’événement invalide (course meta vs /p).
+        if (!evenementInvalideRef.current) {
+          setError(null);
+        }
         setNoPollFromHttp404(false);
         setLoading(true);
       }
@@ -301,10 +322,14 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
         if (res.status === 404) {
           setPoll(null);
           if (slugPublic && evenementInvalideRef.current) {
+            setEventInvalid(true);
+            setError((prev) => prev || getLiveStateLabel(LIVE_UX_LOCAL.ERROR));
             return;
           }
           if (slugPublic) {
-            setError(null);
+            if (!evenementInvalideRef.current) {
+              setError(null);
+            }
             setNoPollFromHttp404(true);
           } else {
             setError("Ce sondage n’existe pas ou n’est plus actif.");
@@ -584,6 +609,10 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
 
   useEffect(() => {
     if (!onSurfaceChange) return;
+    if (loading || error || eventInvalid) {
+      onSurfaceChange("other");
+      return;
+    }
     if (enAttenteAutoReveal) {
       onSurfaceChange("other");
       return;
@@ -595,7 +624,29 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
           ? "question"
           : "other";
     onSurfaceChange(surface);
-  }, [ds, onSurfaceChange, enAttenteAutoReveal]);
+  }, [
+    ds,
+    onSurfaceChange,
+    enAttenteAutoReveal,
+    loading,
+    error,
+    eventInvalid,
+  ]);
+
+  const allowCornerQr = shouldShowScreenCornerQr({
+    loading,
+    error,
+    eventInvalid,
+    liveScene,
+    displayState: ds,
+    surface:
+      ds === "results" ? "results" : ds === "question" ? "question" : "other",
+    projectionMode,
+  });
+
+  useEffect(() => {
+    onAllowCornerQrChange?.(allowCornerQr);
+  }, [allowCornerQr, onAllowCornerQrChange]);
 
   useEffect(() => {
     finChronoRefetchEffectueRef.current = false;
@@ -1004,13 +1055,13 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
       ds === "black",
       <main style={shell}>
         <p style={{ fontSize: "clamp(1.5rem, 4vw, 2.5rem)", color: "#94a3b8" }}>
-          Chargement…
+          {getLiveStateLabel(LIVE_UX_LOCAL.LOADING)}
         </p>
       </main>,
     );
   }
 
-  if (error) {
+  if (error || eventInvalid) {
     return wrapOut(
       ds === "black",
       <main style={shell}>
@@ -1021,7 +1072,7 @@ export function ScreenProjection({ slugPublic, screenId = null, getPollUrl, onSu
           }}
           role="alert"
         >
-          {error}
+          {error || getLiveStateLabel(LIVE_UX_LOCAL.ERROR)}
         </p>
       </main>,
     );

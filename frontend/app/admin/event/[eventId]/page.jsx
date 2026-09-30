@@ -2536,6 +2536,16 @@ function CopierLienEcranLeger({ slug }) {
       >
         Projection salle
       </p>
+      <p
+        style={{
+          margin: "0 0 0.4rem 0",
+          fontSize: "0.66rem",
+          color: "#64748b",
+          lineHeight: 1.35,
+        }}
+      >
+        TV / vidéoprojecteur — distinct de l’overlay OBS.
+      </p>
       <button
         type="button"
         onClick={() => void copier()}
@@ -2647,14 +2657,34 @@ function BlocOverlayStreamPresets({ slug, onCopied }) {
       </p>
       <p
         style={{
-          margin: "0 0 0.5rem 0",
+          margin: "0 0 0.35rem 0",
           fontSize: "0.7rem",
           color: "#64748b",
           lineHeight: 1.35,
         }}
       >
-        Utilisable dans OBS, streaming ou affichage discret.
+        Fond transparent pour OBS / Twitch — distinct de l’écran salle.
       </p>
+      <ol
+        style={{
+          margin: "0 0 0.55rem 0",
+          padding: "0.45rem 0.55rem 0.45rem 1.35rem",
+          borderRadius: "12px",
+          border: "1px solid rgba(148, 163, 184, 0.28)",
+          background: "rgba(248, 250, 252, 0.72)",
+          fontSize: "0.68rem",
+          color: "#475569",
+          lineHeight: 1.45,
+        }}
+      >
+        <li style={{ marginBottom: "0.15rem" }}>
+          Copier l’URL Overlay (Stream compact)
+        </li>
+        <li style={{ marginBottom: "0.15rem" }}>
+          Ajouter une Source Navigateur dans OBS
+        </li>
+        <li>Coller l’URL et vérifier la transparence</li>
+      </ol>
       {principal ? (
         <div
           style={{
@@ -3128,6 +3158,16 @@ function SidebarPartageDroit({
           </h2>
           <p style={{ margin: 0, fontSize: "0.66rem", color: "#64748b", lineHeight: 1.35 }}>
             QR et liens pour votre audience
+          </p>
+          <p
+            style={{
+              margin: "0.28rem 0 0 0",
+              fontSize: "0.64rem",
+              color: "#64748b",
+              lineHeight: 1.35,
+            }}
+          >
+            Écran = salle / TV · Overlay = fond transparent OBS
           </p>
         </div>
       ) : null}
