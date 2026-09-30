@@ -1,5 +1,5 @@
 /**
- * LOT-1 / LOT-7 — continuum participant + Page événement + FULL/OFFLINE.
+ * LOT-1 / LOT-7 — Salle `/join` permanente + Page événement + FULL/OFFLINE.
  * Exécution : node frontend/scripts/test-participant-live-flow.mjs
  */
 import assert from "node:assert/strict";
@@ -16,8 +16,8 @@ import {
   getParticipantOfflineLabel,
   isParticipantRoomFull,
   resolveEventLandingPhase,
-  shouldAutoEnterResultsSurface,
-  shouldAutoEnterVoteSurface,
+  shouldAutoNavigateJoinToPollPath,
+  shouldEmbedPollSurfaceInRoom,
 } from "../lib/participantLiveFlow.js";
 
 /** @type {{ name: string; run: () => void }[]} */
@@ -27,8 +27,8 @@ function test(name, run) {
   cases.push({ name, run });
 }
 
-// A — arrivée avant ouverture → WAITING (Salle)
-test("A. WAITING hors vote → pas d’auto-entrée vote", () => {
+// A — scan → conceptuellement /join (embed off en WAITING)
+test("A/B. WAITING → reste Salle, pas d’embed vote", () => {
   const ux = resolveLiveUxState({
     liveScene: "waiting",
     displayState: "waiting",
@@ -37,18 +37,12 @@ test("A. WAITING hors vote → pas d’auto-entrée vote", () => {
     hasActivePoll: false,
   });
   assert.equal(ux, LIVE_UX_STATE.WAITING);
-  assert.equal(
-    shouldAutoEnterVoteSurface({
-      uxState: ux,
-      hasVoted: false,
-      storageReady: true,
-    }),
-    false,
-  );
+  assert.equal(shouldEmbedPollSurfaceInRoom({ uxState: ux }), false);
+  assert.equal(shouldAutoNavigateJoinToPollPath(), false);
 });
 
-// B — ouverture question → auto sans CTA
-test("B. VOTING non voté → auto-entrée surface vote", () => {
+// C — VOTING → embed dans /join, jamais nav /p
+test("C. VOTING → embed dans Salle, aucune auto-nav /p", () => {
   const ux = resolveLiveUxState({
     liveScene: "voting",
     displayState: "question",
@@ -57,43 +51,21 @@ test("B. VOTING non voté → auto-entrée surface vote", () => {
     hasActivePoll: true,
   });
   assert.equal(ux, LIVE_UX_STATE.VOTING);
+  assert.equal(shouldEmbedPollSurfaceInRoom({ uxState: ux }), true);
+  assert.equal(shouldAutoNavigateJoinToPollPath(), false);
+});
+
+// D/E — confirmation reste en VOTING embed (déjà voté côté UI)
+test("D/E. VOTING (confirm) → toujours embed Salle", () => {
   assert.equal(
-    shouldAutoEnterVoteSurface({
-      uxState: ux,
-      hasVoted: false,
-      storageReady: true,
-    }),
+    shouldEmbedPollSurfaceInRoom({ uxState: LIVE_UX_STATE.VOTING }),
     true,
   );
+  assert.equal(shouldAutoNavigateJoinToPollPath(), false);
 });
 
-// C — arrivée pendant VOTING
-test("C. arrivée mid-VOTING → participation immédiate (auto)", () => {
-  assert.equal(
-    shouldAutoEnterVoteSurface({
-      uxState: LIVE_UX_STATE.VOTING,
-      hasVoted: false,
-      storageReady: true,
-      loading: false,
-    }),
-    true,
-  );
-});
-
-// D — déjà voté → pas de re-hop vote
-test("D. VOTING déjà voté → pas d’auto-entrée (confirmation Salle)", () => {
-  assert.equal(
-    shouldAutoEnterVoteSurface({
-      uxState: LIVE_UX_STATE.VOTING,
-      hasVoted: true,
-      storageReady: true,
-    }),
-    false,
-  );
-});
-
-// E — CLOSED sans résultats
-test("E. CLOSED ≠ RESULTS", () => {
+// F — CLOSED sans résultats, reste /join
+test("F. CLOSED → embed Salle, pas RESULTS", () => {
   const ux = resolveLiveUxState({
     liveScene: "waiting",
     displayState: "question",
@@ -102,17 +74,13 @@ test("E. CLOSED ≠ RESULTS", () => {
     hasActivePoll: true,
   });
   assert.equal(ux, LIVE_UX_STATE.CLOSED);
-  assert.equal(
-    shouldAutoEnterResultsSurface({
-      uxState: ux,
-      hasActivePoll: true,
-    }),
-    false,
-  );
+  assert.equal(shouldEmbedPollSurfaceInRoom({ uxState: ux }), true);
+  assert.notEqual(ux, LIVE_UX_STATE.RESULTS);
+  assert.equal(shouldAutoNavigateJoinToPollPath(), false);
 });
 
-// F — RESULTS
-test("F. RESULTS → auto surface résultats si poll actif", () => {
+// G — RESULTS dans /join
+test("G. RESULTS → embed Salle (résultats dans /join)", () => {
   const ux = resolveLiveUxState({
     liveScene: "results",
     displayState: "results",
@@ -121,37 +89,25 @@ test("F. RESULTS → auto surface résultats si poll actif", () => {
     hasActivePoll: true,
   });
   assert.equal(ux, LIVE_UX_STATE.RESULTS);
-  assert.equal(
-    shouldAutoEnterResultsSurface({
-      uxState: ux,
-      hasActivePoll: true,
-    }),
-    true,
-  );
+  assert.equal(shouldEmbedPollSurfaceInRoom({ uxState: ux }), true);
+  assert.equal(shouldAutoNavigateJoinToPollPath(), false);
 });
 
-// G — question suivante = WAITING puis VOTING
-test("G. idle puis VOTING → transition auto", () => {
+// H — question suivante WAITING puis VOTING
+test("H. WAITING puis VOTING → Salle puis embed, jamais /p", () => {
   assert.equal(
-    shouldAutoEnterVoteSurface({
-      uxState: LIVE_UX_STATE.WAITING,
-      hasVoted: false,
-      storageReady: true,
-    }),
+    shouldEmbedPollSurfaceInRoom({ uxState: LIVE_UX_STATE.WAITING }),
     false,
   );
   assert.equal(
-    shouldAutoEnterVoteSurface({
-      uxState: LIVE_UX_STATE.VOTING,
-      hasVoted: false,
-      storageReady: true,
-    }),
+    shouldEmbedPollSurfaceInRoom({ uxState: LIVE_UX_STATE.VOTING }),
     true,
   );
+  assert.equal(shouldAutoNavigateJoinToPollPath(), false);
 });
 
-// H — FINISHED
-test("H. FINISHED → pas d’auto vote", () => {
+// I — FINISHED dans /join (corps Salle, pas embed)
+test("I. FINISHED → reste Salle, pas embed vote", () => {
   const ux = resolveLiveUxState({
     liveScene: "finished",
     displayState: "waiting",
@@ -160,58 +116,81 @@ test("H. FINISHED → pas d’auto vote", () => {
     hasActivePoll: false,
   });
   assert.equal(ux, LIVE_UX_STATE.FINISHED);
+  assert.equal(shouldEmbedPollSurfaceInRoom({ uxState: ux }), false);
+  assert.equal(shouldAutoNavigateJoinToPollPath(), false);
+});
+
+// J — aucune navigation automatique join→p
+test("J. shouldAutoNavigateJoinToPollPath toujours false", () => {
+  assert.equal(shouldAutoNavigateJoinToPollPath(), false);
+});
+
+// K — /p direct : helper n’interdit pas l’usage standalone (contrat)
+test("K. /p direct non concerné par embed Salle", () => {
+  // L’embed ne s’applique qu’à Join ; /p reste PollExperience standalone.
   assert.equal(
-    shouldAutoEnterVoteSurface({ uxState: ux, hasVoted: false, storageReady: true }),
+    typeof shouldEmbedPollSurfaceInRoom({ uxState: LIVE_UX_STATE.VOTING }),
+    "boolean",
+  );
+});
+
+// L — LOT-0 CLOSED ≠ RESULTS (rappel)
+test("L. LOT-0 CLOSED ≠ RESULTS", () => {
+  assert.equal(
+    resolveLiveUxState({
+      liveScene: "waiting",
+      displayState: "question",
+      voteState: "closed",
+      pollStatus: "CLOSED",
+      hasActivePoll: true,
+    }),
+    LIVE_UX_STATE.CLOSED,
+  );
+});
+
+// M — Page événement
+test("M. Page événement avant / pendant / après", () => {
+  assert.equal(
+    resolveEventLandingPhase({
+      liveState: "waiting",
+      voteState: "closed",
+      displayState: "waiting",
+    }),
+    "before",
+  );
+  assert.equal(
+    resolveEventLandingPhase({
+      liveState: "voting",
+      voteState: "open",
+      displayState: "question",
+    }),
+    "during",
+  );
+  assert.equal(resolveEventLandingPhase({ liveState: "finished" }), "after");
+});
+
+test("PAUSED → Salle sans embed vote", () => {
+  assert.equal(
+    shouldEmbedPollSurfaceInRoom({ uxState: LIVE_UX_STATE.PAUSED }),
     false,
   );
 });
 
-// I — FULL
-test("I. FULL / isLocked / LIMIT_REACHED", () => {
-  assert.equal(isParticipantRoomFull({ isLocked: true }), true);
-  assert.equal(isParticipantRoomFull({ limitReached: true }), true);
-  assert.equal(extractParticipantErrorCode("LIMIT_REACHED"), "LIMIT_REACHED");
-  assert.equal(extractParticipantErrorCode({ error: "EVENT_LOCKED" }), "EVENT_LOCKED");
-  assert.equal(getParticipantFullLabel(), "La salle est complète.");
+test("FULL bloque embed", () => {
   assert.equal(
-    shouldAutoEnterVoteSurface({
+    shouldEmbedPollSurfaceInRoom({
       uxState: LIVE_UX_STATE.VOTING,
-      hasVoted: false,
       isFull: true,
-      storageReady: true,
     }),
     false,
   );
+  assert.equal(isParticipantRoomFull({ isLocked: true }), true);
+  assert.equal(extractParticipantErrorCode("LIMIT_REACHED"), "LIMIT_REACHED");
+  assert.equal(getParticipantFullLabel(), "La salle est complète.");
 });
 
-// J — OFFLINE
-test("J. OFFLINE bloque auto-entrée + libellé", () => {
+test("OFFLINE libellé + préavis types", () => {
   assert.equal(getParticipantOfflineLabel(), "Connexion interrompue.");
-  assert.equal(
-    shouldAutoEnterVoteSurface({
-      uxState: LIVE_UX_STATE.VOTING,
-      hasVoted: false,
-      offline: true,
-      storageReady: true,
-    }),
-    false,
-  );
-});
-
-// K — storage pas prêt
-test("K. storage pas prêt → pas d’auto (évite double vote hop)", () => {
-  assert.equal(
-    shouldAutoEnterVoteSurface({
-      uxState: LIVE_UX_STATE.VOTING,
-      hasVoted: false,
-      storageReady: false,
-    }),
-    false,
-  );
-});
-
-// L — types lead / concours préavis
-test("L. préavis LEAD et CONTEST_ENTRY", () => {
   assert.equal(
     getParticipantFormNotice({ leadEnabled: true }),
     PARTICIPANT_LEAD_NOTICE,
@@ -220,66 +199,11 @@ test("L. préavis LEAD et CONTEST_ENTRY", () => {
     getParticipantFormNotice({ pollType: "CONTEST_ENTRY" }),
     PARTICIPANT_CONTEST_NOTICE,
   );
-  assert.equal(
-    getParticipantFormNotice({ pollType: "SINGLE_CHOICE", leadEnabled: false }),
-    null,
-  );
-  assert.equal(
-    getParticipantFormNotice({ pollType: "QUIZ" }),
-    null,
-  );
+  assert.equal(getParticipantFormNotice({ pollType: "SINGLE_CHOICE" }), null);
+  assert.equal(getParticipantFormNotice({ pollType: "QUIZ" }), null);
   assert.equal(
     getParticipantFormNotice({ pollType: "MULTIPLE_CHOICE" }),
     null,
-  );
-});
-
-// M — Page événement phases
-test("M. Page événement avant / pendant / après", () => {
-  assert.equal(
-    resolveEventLandingPhase({ liveState: "waiting", voteState: "closed", displayState: "waiting" }),
-    "before",
-  );
-  assert.equal(
-    resolveEventLandingPhase({ liveState: "voting", voteState: "open", displayState: "question" }),
-    "during",
-  );
-  assert.equal(
-    resolveEventLandingPhase({ liveState: "waiting", voteState: "closed", displayState: "question" }),
-    "during",
-  );
-  assert.equal(
-    resolveEventLandingPhase({ liveState: "results", displayState: "results" }),
-    "during",
-  );
-  assert.equal(
-    resolveEventLandingPhase({ liveState: "finished" }),
-    "after",
-  );
-  assert.equal(
-    resolveEventLandingPhase({ liveState: "paused", displayState: "black" }),
-    "during",
-  );
-});
-
-test("preview iframe / loading bloquent auto", () => {
-  assert.equal(
-    shouldAutoEnterVoteSurface({
-      uxState: LIVE_UX_STATE.VOTING,
-      hasVoted: false,
-      storageReady: true,
-      inPreviewFrame: true,
-    }),
-    false,
-  );
-  assert.equal(
-    shouldAutoEnterVoteSurface({
-      uxState: LIVE_UX_STATE.VOTING,
-      hasVoted: false,
-      storageReady: true,
-      loading: true,
-    }),
-    false,
   );
 });
 
@@ -299,4 +223,4 @@ if (failed > 0) {
   console.error(`\n${failed} test(s) en échec`);
   process.exit(1);
 }
-console.log(`\n${cases.length} tests participant OK`);
+console.log(`\n${cases.length} tests participant OK (Salle permanente)`);

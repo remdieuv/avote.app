@@ -201,6 +201,7 @@ function chronoRestantSecondes(tm) {
  *   retourHref?: string;
  *   retourLabel?: string;
  *   slugPublic?: string | null;
+ *   embedded?: boolean — Salle `/join` : panneau sans shell ni navigation
  * }} props
  */
 export function PollExperience({
@@ -209,6 +210,7 @@ export function PollExperience({
   retourHref = "/",
   retourLabel = "← Retour",
   slugPublic = null,
+  embedded = false,
 }) {
   const [poll, setPoll] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1372,9 +1374,11 @@ export function PollExperience({
     [palette, isDark, accent, resultsCardTokens],
   );
 
+  const ShellTag = embedded ? "div" : "main";
+
   return (
     <>
-      {roomBackgroundUrl ? (
+      {!embedded && roomBackgroundUrl ? (
         <>
           <div
             aria-hidden
@@ -1399,11 +1403,20 @@ export function PollExperience({
           />
         </>
       ) : null}
-      <main
-        style={{
-          ...shellStyle,
-          lineHeight: 1.5,
-        }}
+      <ShellTag
+        style={
+          embedded
+            ? {
+                width: "100%",
+                maxWidth: "min(36rem, 100%)",
+                lineHeight: 1.5,
+                boxSizing: "border-box",
+              }
+            : {
+                ...shellStyle,
+                lineHeight: 1.5,
+              }
+        }
       >
         <style>{`
           @media (max-width: 640px) {
@@ -1420,16 +1433,21 @@ export function PollExperience({
               min-height: 50px !important;
               font-size: 1rem !important;
             }
+            .poll-live-embedded .poll-live-zone {
+              padding: 0 !important;
+            }
           }
         `}</style>
-        <ExperienceHeader
-          backHref={retourHref}
-          backLabel={retourLabel}
-          title={eventTitleFromApi ?? titrePage}
-          logoUrl={roomLogoUrl}
-          palette={palette}
-          isDark={isDark}
-        />
+        {!embedded ? (
+          <ExperienceHeader
+            backHref={retourHref}
+            backLabel={retourLabel}
+            title={eventTitleFromApi ?? titrePage}
+            logoUrl={roomLogoUrl}
+            palette={palette}
+            isDark={isDark}
+          />
+        ) : null}
 
         {eventMode.isTestMode || eventModeFromSocket.isTestMode ? (
           <div
@@ -1457,15 +1475,16 @@ export function PollExperience({
         ) : null}
 
         <div
-          className="poll-live-zone"
+          className={embedded ? "poll-live-zone poll-live-embedded" : "poll-live-zone"}
           style={{
             flex: 1,
             width: "100%",
             display: "flex",
             justifyContent: "center",
             alignItems: "flex-start",
-            padding:
-              "clamp(1rem, 4vw, 1.75rem) clamp(1rem, 5vw, 2rem) max(2rem, env(safe-area-inset-bottom, 0px))",
+            padding: embedded
+              ? 0
+              : "clamp(1rem, 4vw, 1.75rem) clamp(1rem, 5vw, 2rem) max(2rem, env(safe-area-inset-bottom, 0px))",
             boxSizing: "border-box",
           }}
         >
@@ -2594,29 +2613,31 @@ export function PollExperience({
       )}
           </div>
         </div>
-        <footer
-          style={{
-            flexShrink: 0,
-            padding: "0.85rem clamp(1rem, 4vw, 1.5rem)",
-            borderTop: `1px solid ${palette.headerBorder}`,
-            background: palette.footerBg,
-            backdropFilter: "blur(8px)",
-            textAlign: "center",
-          }}
-        >
-          <Link
-            href={retourHref}
+        {!embedded ? (
+          <footer
             style={{
-              color: palette.muted,
-              fontSize: "0.82rem",
-              fontWeight: 600,
-              textDecoration: "none",
+              flexShrink: 0,
+              padding: "0.85rem clamp(1rem, 4vw, 1.5rem)",
+              borderTop: `1px solid ${palette.headerBorder}`,
+              background: palette.footerBg,
+              backdropFilter: "blur(8px)",
+              textAlign: "center",
             }}
           >
-            {retourLabel}
-          </Link>
-        </footer>
-      </main>
+            <Link
+              href={retourHref}
+              style={{
+                color: palette.muted,
+                fontSize: "0.82rem",
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
+            >
+              {retourLabel}
+            </Link>
+          </footer>
+        ) : null}
+      </ShellTag>
     </>
   );
 }

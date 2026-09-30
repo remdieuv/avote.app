@@ -1,10 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { io } from "socket.io-client";
-import { formatCountdownVerbose } from "@/lib/chronoFormat";
 import {
   buildJoinRoomShellStyle,
   createJoinRoomPalette,
@@ -15,46 +13,27 @@ import {
 import { resolveApiAssetUrlNullable } from "@/lib/assetUrl";
 import { API_URL, SOCKET_URL } from "@/lib/config";
 import {
-  LIVE_UX_BODY_CLOSED_WAIT_RESULTS,
   LIVE_UX_BODY_FINISHED_MERCI,
-  LIVE_UX_BODY_JOIN_AFTER_RESULTS,
   LIVE_UX_BODY_JOIN_PAUSED,
   LIVE_UX_BODY_JOIN_WAITING,
   LIVE_UX_STATE,
-  LIVE_UX_SUBTITLE_REVEAL_PENDING,
   getUxState,
   getLiveStatePresentation,
   getLiveStateTone,
 } from "@/lib/liveStateUx";
 import {
-  PARTICIPANT_ENTERING_VOTE,
   getParticipantFullLabel,
   getParticipantOfflineLabel,
   isParticipantRoomFull,
-  shouldAutoEnterResultsSurface,
-  shouldAutoEnterVoteSurface,
+  shouldEmbedPollSurfaceInRoom,
 } from "@/lib/participantLiveFlow";
 import {
   buildJoinPollCardSurfaces,
   getLiveStateVisualTokens,
-  stateBadgeTypography,
 } from "@/lib/liveStateVisual";
 import { ExperienceHeader } from "@/components/navigation/ExperienceHeader";
+import { PollExperience } from "@/components/PollExperience";
 import { getOrCreateVoterSessionId } from "@/lib/votes/voter-session";
-
-/** @param {Record<string, unknown> | null | undefined} tm */
-function chronoRestantSecondes(tm) {
-  if (!tm || typeof tm.totalSec !== "number") return null;
-  if (!tm.running || tm.isPaused) {
-    return typeof tm.remainingSec === "number" ? tm.remainingSec : null;
-  }
-  if (typeof tm.startedAt !== "string") return tm.remainingSec ?? null;
-  const seg = Math.floor(
-    (Date.now() - new Date(tm.startedAt).getTime()) / 1000,
-  );
-  const acc = typeof tm.accumulatedSec === "number" ? tm.accumulatedSec : 0;
-  return Math.max(0, tm.totalSec - acc - seg);
-}
 
 /**
  * @param {{ accent: string; pulseAllowed: boolean }} props
@@ -138,11 +117,11 @@ function AttenteAnimee({ accent, pulseAllowed }) {
 }
 
 /**
- * Hub salle live /join : écran d’attente et lien vers /p/[slug].
+ * Salle live permanente `/join/[slug]` — le contenu évolue (WAITING→…→FINISHED)
+ * sans navigation automatique vers `/p`.
  * @param {{ slug: string }} props
  */
 export function JoinLiveHub({ slug }) {
-  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [eventId, setEventId] = useState(null);
@@ -168,12 +147,9 @@ export function JoinLiveHub({ slug }) {
   const [pastPolls, setPastPolls] = useState([]);
   /** @type {Record<string, boolean>} */
   const [contestWinByPollId, setContestWinByPollId] = useState({});
-  const [hasVotedActivePoll, setHasVotedActivePoll] = useState(false);
-  const [storageReady, setStorageReady] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   /** null = pas encore de socket ; true/false = statut connexion */
   const [socketOnline, setSocketOnline] = useState(/** @type {boolean | null} */ (null));
-  const [chronoTick, setChronoTick] = useState(0);
   /** Personnalisation salle (/admin/.../customization) */
   const [roomDescription, setRoomDescription] = useState(null);
   const [logoUrl, setLogoUrl] = useState(null);
@@ -631,37 +607,6 @@ export function JoinLiveHub({ slug }) {
     );
   }, [vs, ds, scene, autoRevealShowResultsAt]);
 
-  const chronoVoteActif =
-    scene === "voting" &&
-    questionTimer &&
-    typeof questionTimer.totalSec === "number";
-
-  const tickReveal = enAttenteRevealAuto;
-  const tickChronoVote =
-    !!chronoVoteActif &&
-    !!questionTimer &&
-    questionTimer.running &&
-    !questionTimer.isPaused;
-
-  useEffect(() => {
-    if (!tickReveal && !tickChronoVote) return;
-    const id = window.setInterval(() => setChronoTick((t) => t + 1), 1000);
-    return () => window.clearInterval(id);
-  }, [tickReveal, tickChronoVote]);
-
-  const secondesChronoQuestion = useMemo(() => {
-    void chronoTick;
-    return chronoRestantSecondes(questionTimer);
-  }, [questionTimer, chronoTick]);
-
-  const secondesAvantResultats = useMemo(() => {
-    void chronoTick;
-    if (!autoRevealShowResultsAt) return null;
-    const t = new Date(autoRevealShowResultsAt).getTime();
-    if (Number.isNaN(t)) return null;
-    return Math.max(0, Math.ceil((t - Date.now()) / 1000));
-  }, [autoRevealShowResultsAt, chronoTick]);
-
   const joinUxContext = useMemo(
     () => ({
       ...joinUxContextBase,
@@ -685,84 +630,23 @@ export function JoinLiveHub({ slug }) {
     [sceneRaw, scene, vs, ds],
   );
 
-  const votePath = `/p/${encodeURIComponent(slug)}`;
-
   const roomIsFull = isParticipantRoomFull({ isLocked });
   const isOffline = socketOnline === false;
 
-  useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-    if (!activePollId) {
-      setHasVotedActivePoll(false);
-      setStorageReady(true);
-      return undefined;
-    }
-    const key = `avote_voted_poll_${activePollId}`;
-    const sync = () => {
-      try {
-        const v = window.localStorage.getItem(key);
-        setHasVotedActivePoll(v === "true" || v === "1");
-      } catch {
-        setHasVotedActivePoll(false);
-      } finally {
-        setStorageReady(true);
-      }
-    };
-    setStorageReady(false);
-    sync();
-    window.addEventListener("focus", sync);
-    document.addEventListener("visibilitychange", sync);
-    return () => {
-      window.removeEventListener("focus", sync);
-      document.removeEventListener("visibilitychange", sync);
-    };
-  }, [activePollId]);
-
-  const inPreviewFrame =
-    typeof window !== "undefined" && window.parent !== window;
-
-  const autoEnterVote = shouldAutoEnterVoteSurface({
+  /** Vote / confirmation / CLOSED / RESULTS — dans la Salle, sans quitter `/join`. */
+  const embedPollSurface = shouldEmbedPollSurfaceInRoom({
     uxState: scene,
-    hasVoted: hasVotedActivePoll,
     isFull: roomIsFull,
-    offline: isOffline,
-    loading,
-    storageReady,
-    inPreviewFrame,
+    loading: loading || !!error || !eventId,
   });
 
-  const autoEnterResults = shouldAutoEnterResultsSurface({
-    uxState: scene,
-    hasActivePoll: Boolean(activePollId),
-    isFull: roomIsFull,
-    offline: isOffline,
-    loading,
-    inPreviewFrame,
-  });
-
-  /** Continuité Salle → vote / résultats sans CTA intermédiaire obligatoire. */
-  useEffect(() => {
-    if (!eventId || error) return;
-    if (autoEnterVote) {
-      router.replace(votePath);
-      return;
+  const getPollUrlForRoom = useCallback(() => {
+    const base = `${API_URL}/p/${encodeURIComponent(slug)}`;
+    if (activePollId) {
+      return `${base}?poll=${encodeURIComponent(activePollId)}`;
     }
-    if (autoEnterResults) {
-      const href =
-        activePollId != null
-          ? `${votePath}?poll=${encodeURIComponent(activePollId)}`
-          : votePath;
-      router.replace(href);
-    }
-  }, [
-    eventId,
-    error,
-    autoEnterVote,
-    autoEnterResults,
-    router,
-    votePath,
-    activePollId,
-  ]);
+    return base;
+  }, [slug, activePollId]);
 
   const progressionLigne = useMemo(() => {
     if (!pollsProgress) return null;
@@ -961,35 +845,16 @@ export function JoinLiveHub({ slug }) {
     [joinCardSurfaces],
   );
 
-  const joinBadgeEtat = useMemo(
-    () => ({
-      ...stateBadgeTypography(joinVisualTokens),
-      fontSize: "0.75rem",
-      color: accent,
-    }),
-    [joinVisualTokens, accent],
-  );
-
   const piedEncouragement =
-    roomIsFull
+    roomIsFull || embedPollSurface
       ? null
       : scene === "finished"
-      ? null
-      : scene === "voting"
-        ? hasVotedActivePoll
-          ? "Réponse envoyée. Tu peux garder cet écran ouvert."
-          : autoEnterVote
-            ? "La question arrive tout de suite."
-            : "La question s’affiche ici dès qu’elle est prête."
-        : scene === "results"
-          ? "Les résultats sont visibles ici, puis la prochaine question arrive."
-          : scene === "closed"
-            ? LIVE_UX_BODY_CLOSED_WAIT_RESULTS
-            : "Garde cette page ouverte : la session continue en direct.";
+        ? null
+        : "Garde cette page ouverte : la session continue en direct.";
 
   let corps = null;
 
-  if (!loading && !error && eventId) {
+  if (!loading && !error && eventId && !embedPollSurface) {
     if (roomIsFull) {
       corps = (
         <>
@@ -1044,258 +909,6 @@ export function JoinLiveHub({ slug }) {
           >
             {LIVE_UX_BODY_FINISHED_MERCI}
           </p>
-        </>
-      );
-    } else if (enAttenteRevealAuto) {
-      corps =
-        secondesAvantResultats != null ? (
-          <>
-            <p style={{ margin: 0, ...joinBadgeEtat }}>{joinPres.title}</p>
-            <p
-              style={{
-                margin: "0.65rem 0 0 0",
-                fontSize: "clamp(1rem, 3.5vw, 1.2rem)",
-                fontWeight: 600,
-                color: palette.muted2,
-              }}
-            >
-              Résultats dans
-            </p>
-            <p
-              style={{
-                margin: "0.35rem 0 0 0",
-                fontSize: "clamp(3.25rem, 14vw, 5.5rem)",
-                fontWeight: 800,
-                lineHeight: 1,
-                letterSpacing: "-0.03em",
-                fontVariantNumeric: "tabular-nums",
-                color: accent,
-                textShadow: `0 0 36px color-mix(in srgb, ${accent} 40%, transparent)`,
-              }}
-            >
-              {formatCountdownVerbose(secondesAvantResultats)}
-            </p>
-          </>
-        ) : (
-          <>
-            <p style={{ margin: 0, ...joinBadgeEtat }}>{joinPres.title}</p>
-            <p
-              style={{
-                margin: "0.75rem 0 0 0",
-                fontSize: "clamp(1.1rem, 3.5vw, 1.35rem)",
-                fontWeight: 600,
-                color: palette.muted2,
-              }}
-            >
-              {joinPres.subtitle ?? LIVE_UX_SUBTITLE_REVEAL_PENDING}
-            </p>
-            <div style={{ marginTop: "1.25rem" }}>
-              <AttenteAnimee
-                accent={accent}
-                pulseAllowed={joinVisualTokens.pulseAllowed}
-              />
-            </div>
-          </>
-        );
-    } else if (scene === "voting") {
-      corps = (
-        <>
-          <p style={{ margin: 0, ...joinBadgeEtat }}>
-            {hasVotedActivePoll
-              ? getUxState({
-                  liveState: "CLOSED",
-                  voteState: "CLOSED",
-                  displayState: "QUESTION",
-                }).label
-              : joinPres.title}
-          </p>
-          <h2
-            style={{
-              margin: "0.65rem 0 0 0",
-              fontSize: `clamp(${1.2 * joinVisualTokens.titleClampMul}rem, ${4.2 * joinVisualTokens.titleClampMul}vw, ${1.65 * joinVisualTokens.titleClampMul}rem)`,
-              fontWeight: 800,
-              lineHeight: 1.35,
-              letterSpacing: "-0.02em",
-              color: palette.fg,
-            }}
-          >
-            {activePollQuestion || "—"}
-          </h2>
-          {chronoVoteActif && secondesChronoQuestion != null ? (
-            <>
-          <p
-            style={{
-              margin: "1rem 0 0 0",
-              fontSize: "0.88rem",
-              fontWeight: 600,
-              color: palette.link,
-              letterSpacing: "0.02em",
-            }}
-          >
-            {questionTimer && questionTimer.isPaused
-              ? "Chrono en pause"
-              : "Temps restant pour voter"}
-          </p>
-              <p
-                style={{
-                  margin: "0.25rem 0 0 0",
-                  fontSize: "clamp(2.5rem, 11vw, 4rem)",
-                  fontWeight: 800,
-                  lineHeight: 1,
-                  fontVariantNumeric: "tabular-nums",
-                  color:
-                    questionTimer && questionTimer.isPaused
-                      ? palette.muted
-                      : accent,
-                }}
-              >
-                {formatCountdownVerbose(secondesChronoQuestion)}
-              </p>
-            </>
-          ) : null}
-          {hasVotedActivePoll ? (
-            <p
-              style={{
-                margin: "1.15rem 0 0 0",
-                fontSize: "clamp(0.98rem, 3vw, 1.1rem)",
-                fontWeight: 600,
-                color: palette.muted2,
-                lineHeight: 1.5,
-              }}
-            >
-              Vote pris en compte. Garde cet écran ouvert pour la suite.
-            </p>
-          ) : (
-            <>
-              <p
-                style={{
-                  margin: "1.1rem 0 0 0",
-                  fontSize: "clamp(1rem, 3.2vw, 1.15rem)",
-                  fontWeight: 600,
-                  color: palette.muted2,
-                }}
-              >
-                {PARTICIPANT_ENTERING_VOTE}
-              </p>
-              <div style={{ marginTop: "1.15rem" }}>
-                <AttenteAnimee
-                  accent={accent}
-                  pulseAllowed={joinVisualTokens.pulseAllowed}
-                />
-              </div>
-            </>
-          )}
-        </>
-      );
-    } else if (scene === "results") {
-      const resultHref =
-        activePollId != null
-          ? `/p/${encodeURIComponent(slug)}?poll=${encodeURIComponent(activePollId)}`
-          : null;
-      corps = (
-        <>
-          <p
-            style={{
-              margin: 0,
-              ...joinBadgeEtat,
-              color: `color-mix(in srgb, ${accent} 72%, ${palette.fg})`,
-            }}
-          >
-            {joinPres.title}
-          </p>
-          <h2
-            style={{
-              margin: "0.75rem 0 0 0",
-              fontSize: `clamp(${1.15 * joinVisualTokens.titleClampMul}rem, ${4 * joinVisualTokens.titleClampMul}vw, ${1.55 * joinVisualTokens.titleClampMul}rem)`,
-              fontWeight: 800,
-              lineHeight: 1.35,
-              letterSpacing: "-0.02em",
-              color: palette.fg,
-            }}
-          >
-            {activePollQuestion || "—"}
-          </h2>
-          <div style={{ marginTop: "1rem" }}>
-            {resultHref ? (
-              <Link
-                href={resultHref}
-                style={{
-                  display: "inline-block",
-                  fontSize: "1rem",
-                  fontWeight: 700,
-                  color: palette.link,
-                  textDecoration: "underline",
-                  textUnderlineOffset: "4px",
-                }}
-              >
-                Consulter les résultats
-              </Link>
-            ) : (
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "0.9rem",
-                  fontWeight: 600,
-                  color: palette.muted,
-                }}
-              >
-                Le détail des scores s’affiche dès que la page vote est à jour.
-              </p>
-            )}
-          </div>
-          <p
-            style={{
-              margin: "1.15rem 0 0 0",
-              fontSize: "clamp(0.95rem, 3vw, 1.08rem)",
-              fontWeight: 500,
-              color: palette.muted,
-              lineHeight: 1.55,
-              maxWidth: "28rem",
-              marginLeft: "auto",
-              marginRight: "auto",
-            }}
-          >
-            {LIVE_UX_BODY_JOIN_AFTER_RESULTS}
-          </p>
-        </>
-      );
-    } else if (scene === "closed") {
-      corps = (
-        <>
-          <p style={{ margin: 0, ...joinBadgeEtat }}>{joinPres.title}</p>
-          <p
-            style={{
-              margin: "0.85rem 0 0 0",
-              fontSize: "clamp(0.98rem, 3.1vw, 1.12rem)",
-              fontWeight: 500,
-              color: palette.muted,
-              lineHeight: 1.55,
-              maxWidth: "26rem",
-              marginLeft: "auto",
-              marginRight: "auto",
-            }}
-          >
-            {LIVE_UX_BODY_CLOSED_WAIT_RESULTS}
-          </p>
-          {activePollQuestion ? (
-            <h2
-              style={{
-                margin: "1rem 0 0 0",
-                fontSize: `clamp(${1.05 * joinVisualTokens.titleClampMul}rem, ${3.6 * joinVisualTokens.titleClampMul}vw, ${1.4 * joinVisualTokens.titleClampMul}rem)`,
-                fontWeight: 700,
-                lineHeight: 1.35,
-                color: palette.fg2,
-              }}
-            >
-              {activePollQuestion}
-            </h2>
-          ) : null}
-          <div style={{ marginTop: "1.35rem" }}>
-            <AttenteAnimee
-              accent={accent}
-              pulseAllowed={joinVisualTokens.pulseAllowed}
-            />
-          </div>
         </>
       );
     } else if (scene === "paused") {
@@ -1636,7 +1249,26 @@ export function JoinLiveHub({ slug }) {
           </div>
         ) : null}
 
-        {!loading && !error && corps ? (
+        {!loading && !error && embedPollSurface ? (
+          <div
+            style={{
+              width: "100%",
+              display: "flex",
+              justifyContent: "center",
+              boxSizing: "border-box",
+            }}
+          >
+            <PollExperience
+              key={`room-poll-${activePollId || "live"}`}
+              getPollUrl={getPollUrlForRoom}
+              titrePage={eventTitle || "Salle live"}
+              slugPublic={slug}
+              embedded
+            />
+          </div>
+        ) : null}
+
+        {!loading && !error && !embedPollSurface && corps ? (
           <div className="join-live-card" style={carteCentral}>
             <div
               className="text-center text-sm opacity-80 mb-2"

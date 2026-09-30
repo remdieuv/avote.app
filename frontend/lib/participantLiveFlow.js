@@ -1,5 +1,5 @@
 /**
- * LOT-1 / LOT-7 — continuum participant (Salle → vote → états live).
+ * LOT-1 / LOT-7 — continuum participant (Salle permanente `/join`).
  * Pure helpers : pas de second moteur d’état — consomme resolveLiveUxState / LIVE_UX_*.
  */
 
@@ -16,10 +16,6 @@ export const PARTICIPANT_LEAD_NOTICE =
 /** Préavis concours avant choix (F-A). */
 export const PARTICIPANT_CONTEST_NOTICE =
   "Après ton choix, on te demandera tes coordonnées pour le tirage.";
-
-/** Transition douce join → vote (pas de CTA « Voter maintenant »). */
-export const PARTICIPANT_ENTERING_VOTE =
-  "La question s’affiche…";
 
 /**
  * Phase Page événement `/e` pour hiérarchie CTA.
@@ -122,50 +118,34 @@ export function getParticipantOfflineLabel() {
 }
 
 /**
- * Auto-présentation vote : surface `/p` sans clic « Voter maintenant ».
- * Ne remplace PAS la Salle en permanence — uniquement si participation immédiate requise.
+ * Surface vote/confirmation/CLOSED/RESULTS à afficher DANS la Salle `/join`
+ * (pas de navigation vers `/p`).
  *
  * @param {{
  *   uxState?: string | null;
- *   hasVoted?: boolean;
  *   isFull?: boolean;
- *   offline?: boolean;
  *   loading?: boolean;
- *   storageReady?: boolean;
- *   inPreviewFrame?: boolean;
  * }} input
  * @returns {boolean}
  */
-export function shouldAutoEnterVoteSurface(input = {}) {
+export function shouldEmbedPollSurfaceInRoom(input = {}) {
   if (input.loading) return false;
-  if (input.inPreviewFrame) return false;
-  if (input.offline) return false;
   if (input.isFull) return false;
-  if (input.storageReady === false) return false;
-  if (input.hasVoted) return false;
   const ux = String(input.uxState ?? "").toUpperCase();
-  return ux === LIVE_UX_STATE.VOTING;
+  return (
+    ux === LIVE_UX_STATE.VOTING ||
+    ux === LIVE_UX_STATE.CLOSED ||
+    ux === LIVE_UX_STATE.RESULTS
+  );
 }
 
 /**
- * Afficher les résultats détaillés sur `/p` dès RESULTS (lien Salle → détail fluide).
- * @param {{
- *   uxState?: string | null;
- *   hasActivePoll?: boolean;
- *   isFull?: boolean;
- *   offline?: boolean;
- *   loading?: boolean;
- *   inPreviewFrame?: boolean;
- * }} input
+ * Le parcours Salle standard ne doit jamais auto-naviguer vers `/p`.
+ * Toujours false — gardé pour tests de non-régression explicites.
+ * @returns {false}
  */
-export function shouldAutoEnterResultsSurface(input = {}) {
-  if (input.loading) return false;
-  if (input.inPreviewFrame) return false;
-  if (input.offline) return false;
-  if (input.isFull) return false;
-  if (!input.hasActivePoll) return false;
-  const ux = String(input.uxState ?? "").toUpperCase();
-  return ux === LIVE_UX_STATE.RESULTS;
+export function shouldAutoNavigateJoinToPollPath() {
+  return false;
 }
 
 /**
