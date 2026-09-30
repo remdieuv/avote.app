@@ -386,10 +386,23 @@ export function ScreenProjection({
           return;
         }
         setPoll(null);
-        setError(
-          e.message ||
-            "Impossible de charger le sondage (API sur le port 4000 ?)",
-        );
+        if (evenementInvalideRef.current) {
+          setEventInvalid(true);
+          setError((prev) => prev || getLiveStateLabel(LIVE_UX_LOCAL.ERROR));
+        } else {
+          const msg = String(e?.message || "");
+          const network =
+            !msg ||
+            /failed to fetch|networkerror|load failed|network request failed/i.test(
+              msg,
+            );
+          setError(
+            network
+              ? "Impossible de joindre l’API (port 4000 ?)."
+              : msg ||
+                  "Impossible de charger le sondage (API sur le port 4000 ?)",
+          );
+        }
       } finally {
         if (!silent) {
           setLoading(false);
@@ -975,7 +988,7 @@ export function ScreenProjection({
   const wrap = (blackoutFlag, node) =>
     wrapWithBlackout(blackoutFlag, node, modeAutoProjection);
 
-  const wrapOut = (blackoutFlag, node) => (
+  const wrapOut = (blackoutFlag, node, opts = {}) => (
     <>
       {ambientBg}
       {projectionModeHint ? (
@@ -1023,7 +1036,8 @@ export function ScreenProjection({
           Écran {screenIdLabel}
         </div>
       ) : null}
-      {!poll || (ds !== "question" && ds !== "results") ? (
+      {!opts.hideStatePill &&
+      (!poll || (ds !== "question" && ds !== "results")) ? (
         <div
           className="text-center text-sm opacity-80 mb-2"
           style={{
@@ -1058,6 +1072,7 @@ export function ScreenProjection({
           {getLiveStateLabel(LIVE_UX_LOCAL.LOADING)}
         </p>
       </main>,
+      { hideStatePill: true },
     );
   }
 
@@ -1075,6 +1090,7 @@ export function ScreenProjection({
           {error || getLiveStateLabel(LIVE_UX_LOCAL.ERROR)}
         </p>
       </main>,
+      { hideStatePill: true },
     );
   }
 

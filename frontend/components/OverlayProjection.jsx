@@ -296,10 +296,14 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
   useEffect(() => {
     if (typeof window === "undefined" || !slugPublic) return;
     document.documentElement.style.background = "transparent";
+    document.documentElement.style.backgroundColor = "transparent";
     document.body.style.background = "transparent";
+    document.body.style.backgroundColor = "transparent";
     return () => {
       document.documentElement.style.background = "";
+      document.documentElement.style.backgroundColor = "";
       document.body.style.background = "";
+      document.body.style.backgroundColor = "";
     };
   }, [slugPublic]);
 
@@ -448,10 +452,22 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
           return;
         }
         setPoll(null);
-        setError(
-          e.message ||
-            "Impossible de charger le sondage (API sur le port 4000 ?)",
-        );
+        if (evenementInvalideRef.current) {
+          setEventInvalid(true);
+          setError((prev) => prev || getLiveStateLabel(LIVE_UX_LOCAL.ERROR));
+        } else {
+          const msg = String(e?.message || "");
+          const network =
+            !msg ||
+            /failed to fetch|networkerror|load failed|network request failed/i.test(
+              msg,
+            );
+          setError(
+            network
+              ? "Impossible de joindre l’API."
+              : msg || "Impossible de charger le sondage (API sur le port 4000 ?)",
+          );
+        }
       } finally {
         if (!silent) {
           setLoading(false);
