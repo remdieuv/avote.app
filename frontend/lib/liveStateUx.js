@@ -1,5 +1,14 @@
 /**
- * Source unique de vérité : libellés et tons UX des états live (/join, /p, /screen).
+ * Source unique de vérité : libellés et résolution UX des états live (/join, /p, /screen).
+ *
+ * Contrat AVOTE V1 (LOT-0) — ne pas inventer d’enum Prisma :
+ * - Axes métier : voteState (OPEN|CLOSED) × displayState (QUESTION|RESULTS|BLACK|WAITING)
+ *   + liveState legacy (WAITING|VOTING|RESULTS|PAUSED|FINISHED).
+ * - CLOSED / FULL / OFFLINE = états UX frontend dérivés, jamais de nouvelles valeurs Prisma.
+ * - FULL ← LIMIT_REACHED / isLocked / limitReached (présentation locale).
+ * - OFFLINE ← drop socket / erreur réseau FE.
+ * - PAUSED UX ← display BLACK ou liveState PAUSED (pas de nouvel état backend V1).
+ *
  * @typedef {'WAITING'|'VOTING'|'CLOSED'|'RESULTS'|'PAUSED'|'FINISHED'} LiveUxState
  */
 
@@ -12,14 +21,33 @@ export const LIVE_UX_STATE = {
   FINISHED: "FINISHED",
 };
 
+/**
+ * Présentations UI locales (hors machine live Prisma) — pour lots suivants.
+ * Ne pas confondre avec LiveUxState.
+ */
+export const LIVE_UX_LOCAL = {
+  FULL: "FULL",
+  OFFLINE: "OFFLINE",
+  ERROR: "ERROR",
+  LOADING: "LOADING",
+};
+
 /** @type {Record<LiveUxState, string>} */
 const LABELS = {
-  WAITING: "Préparez-vous à répondre",
-  VOTING: "Choisissez votre réponse",
-  CLOSED: "Votre réponse est prise en compte",
-  RESULTS: "Résultats en direct",
-  PAUSED: "Pause en cours",
-  FINISHED: "Événement terminé",
+  WAITING: "Ça va bientôt commencer",
+  VOTING: "Choisis ta réponse",
+  CLOSED: "Merci ! Ton vote est pris en compte",
+  RESULTS: "Résultats",
+  PAUSED: "Petite pause",
+  FINISHED: "Merci d’avoir participé !",
+};
+
+/** @type {Record<string, string>} */
+const LOCAL_LABELS = {
+  FULL: "La salle est complète.",
+  OFFLINE: "Connexion interrompue.",
+  ERROR: "Ce lien ne correspond à aucun événement.",
+  LOADING: "Chargement…",
 };
 
 /**
@@ -70,7 +98,7 @@ const TONES = {
  */
 export function getLiveStateLabel(uxState) {
   const k = String(uxState ?? "").toUpperCase();
-  return LABELS[k] ?? LABELS.WAITING;
+  return LABELS[k] ?? LOCAL_LABELS[k] ?? LABELS.WAITING;
 }
 
 /**
@@ -98,6 +126,7 @@ export function deriveDisplayStateFromLive(liveScene) {
 
 /**
  * Résout l’état UX canonique sans modifier la logique métier (vote / régie).
+ * Consommer cette fonction sur Join et /p — ne pas réinterpréter vote×display localement.
  * @param {{
  *   liveScene: string | null | undefined;
  *   displayState: string | null | undefined;
@@ -132,13 +161,22 @@ export function resolveLiveUxState(ctx) {
 
   const voteClosed = vs === "closed";
   const pollClosed = ps === "CLOSED";
-  if (
-    voteClosed &&
-    ds !== "results" &&
-    ls !== "results" &&
-    (pollClosed || (ds === "waiting" && hasActive && !pollActive))
-  ) {
-    return LIVE_UX_STATE.CLOSED;
+
+  /**
+   * CLOSED UX : vote fermé, résultats salle pas encore révélés.
+   * display QUESTION → toujours confirmation.
+   * display WAITING → CLOSED si sondage clos / contexte poll actif ; sinon WAITING idle.
+   */
+  if (voteClosed && ds !== "results" && ls !== "results") {
+    if (ds === "question") {
+      return LIVE_UX_STATE.CLOSED;
+    }
+    if (
+      pollClosed ||
+      (ds === "waiting" && hasActive && (ps === "" || !pollActive))
+    ) {
+      return LIVE_UX_STATE.CLOSED;
+    }
   }
 
   if (voteClosed && pollActive) {
@@ -175,33 +213,39 @@ export function getLiveStateSubtitle(ctx) {
 export const LIVE_UX_SUBTITLE_REVEAL_PENDING =
   "Résultats dans quelques instants.";
 
-/** Sous-texte /p : attente sans sondage chargé (contenu pédagogique, sous le titre WAITING). */
-export const LIVE_UX_BODY_POLL_WAITING = `Rien ne fonctionne mal : vous êtes sur la bonne page pour cet événement. Pour l’instant, la salle est en pause ou entre deux moments — le vote et les résultats sont lancés depuis la régie. Dès que l’organisateur ouvrira le vote ou affichera les résultats, ils apparaîtront ici automatiquement. Vous pouvez garder cet onglet ouvert ; inutile d’actualiser en continu.`;
+/** Sous-texte /p : attente sans sondage chargé. */
+export const LIVE_UX_BODY_POLL_WAITING =
+  "Garde cet écran ouvert — la question s’affichera toute seule.";
 
 /** Sous-texte /p : aucun JSON poll (slug public, message d’info). */
 export const LIVE_UX_BODY_POLL_NO_POLL_SLUG =
-  "Aucun sondage à l’écran pour l’instant — la régie contrôle la suite du live.";
+  "Aucun sondage à l’écran pour l’instant — la suite du live arrive ici.";
 
 /** Sous-texte /screen : attente sans contenu poll après GET /p 404 (slug valide). */
 export const LIVE_UX_DETAIL_SCREEN_WAITING_SLUG =
-  "La régie affichera la prochaine question ou les résultats.";
+  "La prochaine question ou les résultats s’afficheront ici.";
 
 /** Sous-texte projection résultats : vote encore ouvert côté événement. */
 export const LIVE_UX_BODY_RESULTS_VOTES_OPEN =
   "Les votes continuent en direct.";
 
 /** Sous-texte /join : événement terminé. */
-export const LIVE_UX_BODY_FINISHED_MERCI = "Merci d’avoir participé.";
+export const LIVE_UX_BODY_FINISHED_MERCI = "Merci d’avoir participé !";
 
 /** Sous-texte /join : attente générique (sous le titre WAITING). */
-export const LIVE_UX_BODY_JOIN_WAITING = "La régie prépare la suite du live.";
+export const LIVE_UX_BODY_JOIN_WAITING =
+  "Garde cet écran ouvert — la question s’affichera toute seule.";
 
 /** Sous-texte /join : phase résultats côté hub. */
 export const LIVE_UX_BODY_JOIN_AFTER_RESULTS =
-  "Préparez-vous pour la suite du direct.";
+  "Prépare-toi pour la suite du direct.";
 
 /** Sous-texte /join : pause. */
-export const LIVE_UX_BODY_JOIN_PAUSED = "La reprise du direct est imminente.";
+export const LIVE_UX_BODY_JOIN_PAUSED = "On reprend dans un instant.";
+
+/** Sous-texte confirmation CLOSED (Join / /p). */
+export const LIVE_UX_BODY_CLOSED_WAIT_RESULTS =
+  "Les résultats s’afficheront ici quand ce sera le moment.";
 
 /**
  * Pilule /screen lorsque l’affichage = résultats (barres ou notation).

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:live-ux": "node scripts/test-live-ux-state.mjs"
   },
   "dependencies": {
     "jspdf": "^4.2.1",
