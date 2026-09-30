@@ -27,6 +27,14 @@ import {
   getLiveStateTone,
 } from "@/lib/liveStateUx";
 import {
+  PARTICIPANT_ENTERING_VOTE,
+  getParticipantFullLabel,
+  getParticipantOfflineLabel,
+  isParticipantRoomFull,
+  shouldAutoEnterResultsSurface,
+  shouldAutoEnterVoteSurface,
+} from "@/lib/participantLiveFlow";
+import {
   buildJoinPollCardSurfaces,
   getLiveStateVisualTokens,
   stateBadgeTypography,
@@ -161,6 +169,10 @@ export function JoinLiveHub({ slug }) {
   /** @type {Record<string, boolean>} */
   const [contestWinByPollId, setContestWinByPollId] = useState({});
   const [hasVotedActivePoll, setHasVotedActivePoll] = useState(false);
+  const [storageReady, setStorageReady] = useState(false);
+  const [isLocked, setIsLocked] = useState(false);
+  /** null = pas encore de socket ; true/false = statut connexion */
+  const [socketOnline, setSocketOnline] = useState(/** @type {boolean | null} */ (null));
   const [chronoTick, setChronoTick] = useState(0);
   /** Personnalisation salle (/admin/.../customization) */
   const [roomDescription, setRoomDescription] = useState(null);
@@ -236,6 +248,7 @@ export function JoinLiveHub({ slug }) {
       setInfoSecondaryCtaUrl(null);
       setInfoShowOnFinished(true);
       setLandingEnabled(false);
+      setIsLocked(false);
       setPreviewCustomization(null);
       return;
     }
@@ -245,6 +258,7 @@ export function JoinLiveHub({ slug }) {
     }
     const data = await res.json();
     setError(null);
+    setIsLocked(Boolean(data.isLocked));
     setEventId(data.id ?? null);
     setEventTitle(
       typeof data.title === "string" && data.title.trim()
@@ -535,11 +549,20 @@ export function JoinLiveHub({ slug }) {
     });
 
     function onConnect() {
+      setSocketOnline(true);
       socket.emit("join_event", eventId);
+      void fetchMeta();
     }
 
-    /** @param {any} _payload */
-    function onEventLive(_payload) {
+    function onDisconnect() {
+      setSocketOnline(false);
+    }
+
+    /** @param {any} payload */
+    function onEventLive(payload) {
+      if (payload && typeof payload.isLocked === "boolean") {
+        setIsLocked(Boolean(payload.isLocked));
+      }
       void fetchMeta();
     }
 
@@ -555,13 +578,16 @@ export function JoinLiveHub({ slug }) {
     }
 
     socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
     if (socket.connected) onConnect();
+    else setSocketOnline(false);
     socket.on("event_live_updated", onEventLive);
     socket.on("event:customization_updated", onCustomizationUpdated);
 
     return () => {
       socket.emit("leave_event", eventId);
       socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
       socket.off("event_live_updated", onEventLive);
       socket.off("event:customization_updated", onCustomizationUpdated);
       socket.disconnect();
@@ -661,14 +687,14 @@ export function JoinLiveHub({ slug }) {
 
   const votePath = `/p/${encodeURIComponent(slug)}`;
 
-  function participer() {
-    router.push(votePath);
-  }
+  const roomIsFull = isParticipantRoomFull({ isLocked });
+  const isOffline = socketOnline === false;
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
     if (!activePollId) {
       setHasVotedActivePoll(false);
+      setStorageReady(true);
       return undefined;
     }
     const key = `avote_voted_poll_${activePollId}`;
@@ -678,8 +704,11 @@ export function JoinLiveHub({ slug }) {
         setHasVotedActivePoll(v === "true" || v === "1");
       } catch {
         setHasVotedActivePoll(false);
+      } finally {
+        setStorageReady(true);
       }
     };
+    setStorageReady(false);
     sync();
     window.addEventListener("focus", sync);
     document.addEventListener("visibilitychange", sync);
@@ -688,6 +717,52 @@ export function JoinLiveHub({ slug }) {
       document.removeEventListener("visibilitychange", sync);
     };
   }, [activePollId]);
+
+  const inPreviewFrame =
+    typeof window !== "undefined" && window.parent !== window;
+
+  const autoEnterVote = shouldAutoEnterVoteSurface({
+    uxState: scene,
+    hasVoted: hasVotedActivePoll,
+    isFull: roomIsFull,
+    offline: isOffline,
+    loading,
+    storageReady,
+    inPreviewFrame,
+  });
+
+  const autoEnterResults = shouldAutoEnterResultsSurface({
+    uxState: scene,
+    hasActivePoll: Boolean(activePollId),
+    isFull: roomIsFull,
+    offline: isOffline,
+    loading,
+    inPreviewFrame,
+  });
+
+  /** Continuité Salle → vote / résultats sans CTA intermédiaire obligatoire. */
+  useEffect(() => {
+    if (!eventId || error) return;
+    if (autoEnterVote) {
+      router.replace(votePath);
+      return;
+    }
+    if (autoEnterResults) {
+      const href =
+        activePollId != null
+          ? `${votePath}?poll=${encodeURIComponent(activePollId)}`
+          : votePath;
+      router.replace(href);
+    }
+  }, [
+    eventId,
+    error,
+    autoEnterVote,
+    autoEnterResults,
+    router,
+    votePath,
+    activePollId,
+  ]);
 
   const progressionLigne = useMemo(() => {
     if (!pollsProgress) return null;
@@ -864,7 +939,8 @@ export function JoinLiveHub({ slug }) {
       justifyContent: "center",
       alignItems: "center",
       width: "100%",
-      padding: "clamp(1rem, 4vw, 2rem) clamp(1rem, 5vw, 2.5rem) 2rem",
+      padding:
+        "clamp(1rem, 4vw, 2rem) clamp(1rem, 5vw, 2.5rem) max(2rem, env(safe-area-inset-bottom, 0px))",
       boxSizing: "border-box",
     }),
     [],
@@ -894,19 +970,17 @@ export function JoinLiveHub({ slug }) {
     [joinVisualTokens, accent],
   );
 
-  const joinCtaGradient = useMemo(
-    () =>
-      `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 40%, ${isDark ? "#1e1b4b" : "#c7d2fe"}))`,
-    [accent, isDark],
-  );
-
   const piedEncouragement =
-    scene === "finished"
+    roomIsFull
+      ? null
+      : scene === "finished"
       ? null
       : scene === "voting"
         ? hasVotedActivePoll
-          ? "Réponse envoyée. Tu peux suivre le direct depuis cette page."
-          : "Le vote est ouvert : appuie sur « Voter maintenant »."
+          ? "Réponse envoyée. Tu peux garder cet écran ouvert."
+          : autoEnterVote
+            ? "La question arrive tout de suite."
+            : "La question s’affiche ici dès qu’elle est prête."
         : scene === "results"
           ? "Les résultats sont visibles ici, puis la prochaine question arrive."
           : scene === "closed"
@@ -916,7 +990,37 @@ export function JoinLiveHub({ slug }) {
   let corps = null;
 
   if (!loading && !error && eventId) {
-    if (scene === "finished") {
+    if (roomIsFull) {
+      corps = (
+        <>
+          <p
+            style={{
+              margin: 0,
+              fontSize: `clamp(${1.2 * joinVisualTokens.titleClampMul}rem, ${4.2 * joinVisualTokens.titleClampMul}vw, ${1.75 * joinVisualTokens.titleClampMul}rem)`,
+              fontWeight: joinVisualTokens.stateBadgeWeight,
+              lineHeight: 1.35,
+              color: palette.fg2,
+            }}
+          >
+            {getParticipantFullLabel()}
+          </p>
+          <p
+            style={{
+              margin: "0.85rem 0 0 0",
+              fontSize: "clamp(0.98rem, 3.1vw, 1.12rem)",
+              fontWeight: 500,
+              color: palette.muted,
+              lineHeight: 1.55,
+              maxWidth: "26rem",
+              marginLeft: "auto",
+              marginRight: "auto",
+            }}
+          >
+            Impossible de rejoindre le vote pour le moment. Réessaie plus tard ou demande à l’organisateur.
+          </p>
+        </>
+      );
+    } else if (scene === "finished") {
       corps = (
         <>
           <p
@@ -1049,29 +1153,38 @@ export function JoinLiveHub({ slug }) {
               </p>
             </>
           ) : null}
-          <button
-            className="join-live-cta"
-            type="button"
-            onClick={participer}
-            style={{
-              marginTop: "1.35rem",
-              width: "100%",
-              maxWidth: "20rem",
-              alignSelf: "center",
-              padding: `${1.05 * joinVisualTokens.ctaScale}rem ${1.4 * joinVisualTokens.ctaScale}rem`,
-              fontSize: `clamp(${1.05 * joinVisualTokens.ctaScale}rem, 3.5vw, ${1.15 * joinVisualTokens.ctaScale}rem)`,
-              fontWeight: 800,
-              border: "none",
-              borderRadius: "14px",
-              background: hasVotedActivePoll ? "transparent" : joinCtaGradient,
-              color: hasVotedActivePoll ? palette.link : "#fff",
-              border: hasVotedActivePoll ? `1px solid ${palette.cardBorder}` : "none",
-              cursor: "pointer",
-              boxShadow: `0 ${Math.round(8 * joinVisualTokens.shadowScale)}px ${Math.round(30 * joinVisualTokens.shadowScale)}px rgba(0, 0, 0, ${isDark ? 0.32 : 0.18})`,
-            }}
-          >
-            {hasVotedActivePoll ? "Voir mon vote" : "Voter maintenant"}
-          </button>
+          {hasVotedActivePoll ? (
+            <p
+              style={{
+                margin: "1.15rem 0 0 0",
+                fontSize: "clamp(0.98rem, 3vw, 1.1rem)",
+                fontWeight: 600,
+                color: palette.muted2,
+                lineHeight: 1.5,
+              }}
+            >
+              Vote pris en compte. Garde cet écran ouvert pour la suite.
+            </p>
+          ) : (
+            <>
+              <p
+                style={{
+                  margin: "1.1rem 0 0 0",
+                  fontSize: "clamp(1rem, 3.2vw, 1.15rem)",
+                  fontWeight: 600,
+                  color: palette.muted2,
+                }}
+              >
+                {PARTICIPANT_ENTERING_VOTE}
+              </p>
+              <div style={{ marginTop: "1.15rem" }}>
+                <AttenteAnimee
+                  accent={accent}
+                  pulseAllowed={joinVisualTokens.pulseAllowed}
+                />
+              </div>
+            </>
+          )}
         </>
       );
     } else if (scene === "results") {
@@ -1291,17 +1404,12 @@ export function JoinLiveHub({ slug }) {
         }
         @media (max-width: 640px) {
           .join-live-zone {
-            padding: 0.75rem 0.8rem 1.25rem !important;
+            padding: 0.75rem 0.8rem max(1.25rem, env(safe-area-inset-bottom, 0px)) !important;
           }
           .join-live-card {
             max-width: 100% !important;
             padding: 1rem 0.9rem !important;
             border-radius: 16px !important;
-          }
-          .join-live-cta {
-            max-width: 100% !important;
-            min-height: 50px !important;
-            font-size: 1rem !important;
           }
           .join-landing-link-label-long {
             display: none !important;
@@ -1460,6 +1568,51 @@ export function JoinLiveHub({ slug }) {
       </ExperienceHeader>
 
       <div className="join-live-zone" style={zoneMain}>
+        {isOffline && !loading ? (
+          <div
+            role="status"
+            style={{
+              width: "100%",
+              maxWidth: "min(36rem, 100%)",
+              marginBottom: "0.85rem",
+              padding: "0.85rem 1rem",
+              borderRadius: "14px",
+              border: isDark
+                ? "1px solid rgba(251, 191, 36, 0.4)"
+                : "1px solid rgba(217, 119, 6, 0.35)",
+              background: isDark
+                ? "rgba(120, 53, 15, 0.35)"
+                : "rgba(254, 243, 199, 0.95)",
+              color: isDark ? "#fde68a" : "#92400e",
+              boxSizing: "border-box",
+              textAlign: "center",
+            }}
+          >
+            <p style={{ margin: 0, fontWeight: 700, fontSize: "0.95rem" }}>
+              {getParticipantOfflineLabel()}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                void fetchMeta();
+              }}
+              style={{
+                marginTop: "0.65rem",
+                minHeight: "44px",
+                padding: "0.55rem 1.1rem",
+                borderRadius: "10px",
+                border: "none",
+                fontWeight: 700,
+                cursor: "pointer",
+                background: accent,
+                color: "#fff",
+              }}
+            >
+              Réessayer
+            </button>
+          </div>
+        ) : null}
+
         {loading ? (
           <div className="join-live-card" style={carteCentral}>
             <p

@@ -1954,6 +1954,7 @@ app.get("/events/slug/:slug", async (req, res) => {
       pastPollLabels,
       pastPolls,
       questionTimer: questionTimerSnapshot(eventApres),
+      isLocked: Boolean(eventApres.isLocked),
     });
   } catch (e) {
     console.error(e);
@@ -2046,6 +2047,11 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       infoSecondaryCtaLabel: info.infoSecondaryCtaLabel,
       infoSecondaryCtaUrl: info.infoSecondaryCtaUrl,
       joinPath: `/join/${event.slug}`,
+      /** Phase Page événement (LOT-1/7) — pas de nouvel enum ; axes live existants. */
+      liveState: String(event.liveState || "").toLowerCase(),
+      voteState: String(event.voteState || "").toLowerCase(),
+      displayState: String(event.displayState || "").toLowerCase(),
+      isLocked: Boolean(event.isLocked),
     });
   } catch (e) {
     console.error(e);

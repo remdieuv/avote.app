@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:live-ux": "node scripts/test-live-ux-state.mjs"
+    "test:live-ux": "node scripts/test-live-ux-state.mjs",
+    "test:participant": "node scripts/test-participant-live-flow.mjs",
+    "test:lot0-lot1": "npm run test:live-ux && npm run test:participant"
   },
   "dependencies": {
     "jspdf": "^4.2.1",

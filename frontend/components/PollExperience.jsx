@@ -35,6 +35,13 @@ import {
   getLiveStateTone,
 } from "@/lib/liveStateUx";
 import {
+  extractParticipantErrorCode,
+  getParticipantFormNotice,
+  getParticipantFullLabel,
+  getParticipantOfflineLabel,
+  isParticipantRoomFull,
+} from "@/lib/participantLiveFlow";
+import {
   buildJoinPollCardSurfaces,
   getLiveStateVisualTokens,
   mergeCardBorderWithAccent,
@@ -257,6 +264,10 @@ export function PollExperience({
     isLiveConsumed: null,
     isLocked: null,
   });
+  /** null = pas encore branché ; false = drop socket */
+  const [socketOnline, setSocketOnline] = useState(/** @type {boolean | null} */ (null));
+  /** FULL local après LIMIT_REACHED / EVENT_LOCKED sur vote */
+  const [roomFullLocal, setRoomFullLocal] = useState(false);
 
   const eventMode = useEventMode(poll);
   const eventModeFromSocket = useEventMode(eventModeUi);
@@ -320,6 +331,13 @@ export function PollExperience({
           ? meta.displayState.toLowerCase()
           : null,
       );
+      if (typeof meta.isLocked === "boolean") {
+        setEventModeUi((prev) => ({
+          ...prev,
+          isLocked: meta.isLocked,
+        }));
+        setRoomFullLocal(Boolean(meta.isLocked));
+      }
 
       setEventTitleFromApi(
         typeof meta.title === "string" && meta.title.trim()
@@ -566,8 +584,13 @@ export function PollExperience({
     });
 
     function rejoindreSalles() {
+      setSocketOnline(true);
       if (eid) socket.emit("join_event", eid);
       if (pid) socket.emit("join_poll", pid);
+    }
+
+    function onDisconnect() {
+      setSocketOnline(false);
     }
 
     function onEventLiveUpdated(payload) {
@@ -685,8 +708,11 @@ export function PollExperience({
     }
 
     socket.on("connect", rejoindreSalles);
+    socket.on("disconnect", onDisconnect);
     if (socket.connected) {
       rejoindreSalles();
+    } else {
+      setSocketOnline(false);
     }
 
     socket.on("event_live_updated", onEventLiveUpdated);
@@ -701,6 +727,7 @@ export function PollExperience({
         socket.emit("leave_poll", pid);
       }
       socket.off("connect", rejoindreSalles);
+      socket.off("disconnect", onDisconnect);
       socket.off("event_live_updated", onEventLiveUpdated);
       socket.off("event:customization_updated", onCustomizationUpdated);
       socket.off("poll_updated", onPollUpdated);
@@ -844,6 +871,15 @@ export function PollExperience({
 
   const isMultipleChoice = poll?.type === "MULTIPLE_CHOICE";
   const isContestEntry = String(poll?.type || "").toUpperCase() === "CONTEST_ENTRY";
+  const formNotice = getParticipantFormNotice({
+    pollType: poll?.type,
+    leadEnabled: Boolean(poll?.leadEnabled),
+  });
+  const roomIsFull = isParticipantRoomFull({
+    isLocked: eventModeUi.isLocked === true || eventMode.isLocked === true,
+    errorCode: roomFullLocal ? "LIMIT_REACHED" : null,
+  });
+  const isOffline = socketOnline === false;
 
   useEffect(() => {
     if (!poll?.id || !isContestEntry || !poll?.eventSlug) {
@@ -944,6 +980,11 @@ export function PollExperience({
       });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
+        const code = extractParticipantErrorCode(errBody);
+        if (code === "LIMIT_REACHED" || code === "EVENT_LOCKED") {
+          setRoomFullLocal(true);
+          throw new Error(code);
+        }
         throw new Error(errBody.error || `Erreur ${res.status}`);
       }
 
@@ -976,9 +1017,15 @@ export function PollExperience({
         setLeadError(null);
       });
     } catch (e) {
-      setVoteError(
-        e.message || "Impossible d’enregistrer ton vote. Réessaie plus tard.",
-      );
+      const code = extractParticipantErrorCode(e?.message);
+      if (code === "LIMIT_REACHED" || code === "EVENT_LOCKED") {
+        setRoomFullLocal(true);
+        setVoteError(getParticipantFullLabel());
+      } else {
+        setVoteError(
+          e.message || "Impossible d’enregistrer ton vote. Réessaie plus tard.",
+        );
+      }
     } finally {
       voteLockRef.current = false;
       setVoteSubmitting(false);
@@ -1036,6 +1083,7 @@ export function PollExperience({
     ? selectedOptionIds.length > 0
     : !!selectedOptionId;
   const votesBloques =
+    roomIsFull ||
     !voteOuvert ||
     aDejaVoteEnStockage ||
     merciPourVote ||
@@ -1360,7 +1408,7 @@ export function PollExperience({
         <style>{`
           @media (max-width: 640px) {
             .poll-live-zone {
-              padding: 0.8rem 0.8rem 1.35rem !important;
+              padding: 0.8rem 0.8rem max(1.35rem, env(safe-area-inset-bottom, 0px)) !important;
             }
             .poll-live-panel {
               max-width: 100% !important;
@@ -1387,7 +1435,7 @@ export function PollExperience({
           <div
             style={{
               position: "fixed",
-              top: 14,
+              top: "max(14px, env(safe-area-inset-top, 0px))",
               left: "50%",
               transform: "translateX(-50%)",
               zIndex: 2147483647,
@@ -1417,12 +1465,82 @@ export function PollExperience({
             justifyContent: "center",
             alignItems: "flex-start",
             padding:
-              "clamp(1rem, 4vw, 1.75rem) clamp(1rem, 5vw, 2rem) 2rem",
+              "clamp(1rem, 4vw, 1.75rem) clamp(1rem, 5vw, 2rem) max(2rem, env(safe-area-inset-bottom, 0px))",
             boxSizing: "border-box",
           }}
         >
           <div className="poll-live-panel" style={panelStyle}>
-      {!loading && !error ? (
+      {isOffline && !loading ? (
+        <div
+          role="status"
+          style={{
+            marginBottom: "1rem",
+            padding: "0.85rem 1rem",
+            borderRadius: "12px",
+            border: isDark
+              ? "1px solid rgba(251, 191, 36, 0.4)"
+              : "1px solid rgba(217, 119, 6, 0.35)",
+            background: isDark
+              ? "rgba(120, 53, 15, 0.35)"
+              : "rgba(254, 243, 199, 0.95)",
+            color: isDark ? "#fde68a" : "#92400e",
+            textAlign: "center",
+          }}
+        >
+          <p style={{ margin: 0, fontWeight: 700 }}>{getParticipantOfflineLabel()}</p>
+          <button
+            type="button"
+            onClick={() => {
+              void loadPoll({ silent: true });
+              void loadEventMetaForBranding();
+            }}
+            style={{
+              marginTop: "0.6rem",
+              minHeight: "44px",
+              padding: "0.5rem 1rem",
+              borderRadius: "10px",
+              border: "none",
+              fontWeight: 700,
+              cursor: "pointer",
+              background: accent,
+              color: "#fff",
+            }}
+          >
+            Réessayer
+          </button>
+        </div>
+      ) : null}
+
+      {roomIsFull && !loading ? (
+        <div
+          role="status"
+          style={{
+            marginBottom: "1rem",
+            padding: "1rem 1.15rem",
+            borderRadius: "14px",
+            border: `1px solid ${palette.cardBorder}`,
+            background: isDark ? "rgba(15, 23, 42, 0.45)" : "rgba(255,255,255,0.6)",
+            color: palette.fg2,
+            textAlign: "center",
+          }}
+        >
+          <h2
+            style={{
+              margin: "0 0 0.5rem 0",
+              fontSize: "clamp(1.15rem, 3.5vw, 1.35rem)",
+              fontWeight: 800,
+              color: palette.fg,
+            }}
+          >
+            {getParticipantFullLabel()}
+          </h2>
+          <p style={{ margin: 0, lineHeight: 1.5, color: palette.muted }}>
+            Impossible de voter pour le moment. Garde cet écran ou reviens plus tard.
+          </p>
+        </div>
+      ) : null}
+
+      {!loading && !error && !roomIsFull ? (
         <div
           className="text-center text-sm opacity-80 mb-2"
           style={{
@@ -1529,7 +1647,7 @@ export function PollExperience({
 
       {!loading && poll && (
         <>
-          {voteOuvert && (
+          {voteOuvert && !roomIsFull && (
             <div style={{ marginBottom: "1rem" }}>
               <p
                 style={{
@@ -1695,7 +1813,7 @@ export function PollExperience({
                   fontWeight: 600,
                 }}
               >
-                Merci pour votre vote !
+                Merci ! Ton vote est pris en compte.
               </p>
               {showLeadForm ? (
                 <div
@@ -1709,7 +1827,7 @@ export function PollExperience({
                   }}
                 >
                   <p style={{ margin: "0 0 0.65rem", fontWeight: 700, color: palette.fg }}>
-                    Restez en contact
+                    Laisse-nous tes coordonnées
                   </p>
                   <div style={{ display: "grid", gap: "0.5rem" }}>
                     <input
@@ -1797,7 +1915,7 @@ export function PollExperience({
                   fontWeight: 500,
                 }}
               >
-                Vous avez déjà voté pour ce sondage.
+                Tu as déjà voté pour ce sondage.
               </p>
             )}
           {isQuiz && quizRevealed && quizVotedOptionIds.length > 0 ? (
@@ -1844,7 +1962,7 @@ export function PollExperience({
             </p>
           )}
 
-          {voteOuvert ? (
+          {voteOuvert && !roomIsFull ? (
             <div
               style={{
                 opacity: merciPourVote ? 0.58 : 1,
@@ -1866,8 +1984,26 @@ export function PollExperience({
                   color: accent,
                 }}
               >
-                Votre choix
+                Ton choix
               </h3>
+              {!votesBloques && formNotice ? (
+                <p
+                  style={{
+                    fontSize: "0.88rem",
+                    color: palette.muted2,
+                    marginBottom: "0.75rem",
+                    lineHeight: 1.45,
+                    padding: "0.65rem 0.75rem",
+                    borderRadius: "10px",
+                    background: isDark
+                      ? "rgba(15, 23, 42, 0.4)"
+                      : "rgba(255,255,255,0.55)",
+                    border: `1px solid ${palette.cardBorder}`,
+                  }}
+                >
+                  {formNotice}
+                </p>
+              ) : null}
               {!votesBloques && (
                 <p
                   style={{
@@ -1915,7 +2051,7 @@ export function PollExperience({
                     color: palette.muted,
                   }}
                 >
-                  Votre vote est bien enregistré.
+                  Ton vote est bien enregistré.
                 </p>
               ) : (
                 <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
