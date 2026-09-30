@@ -15,9 +15,12 @@ import {
 import { resolveApiAssetUrlNullable } from "@/lib/assetUrl";
 import { API_URL, SOCKET_URL } from "@/lib/config";
 import {
+  LIVE_UX_BODY_CLOSED_WAIT_RESULTS,
   LIVE_UX_BODY_FINISHED_MERCI,
+  LIVE_UX_BODY_JOIN_AFTER_RESULTS,
   LIVE_UX_BODY_JOIN_PAUSED,
   LIVE_UX_BODY_JOIN_WAITING,
+  LIVE_UX_STATE,
   LIVE_UX_SUBTITLE_REVEAL_PENDING,
   getUxState,
   getLiveStatePresentation,
@@ -567,18 +570,40 @@ export function JoinLiveHub({ slug }) {
 
   const sceneRaw = String(liveState || "").toLowerCase();
   const vs = String(voteState || "").toLowerCase();
-  const scene =
-    sceneRaw === "finished" ? "finished" : vs === "open" ? "voting" : "waiting";
-  const ds = scene === "voting" ? "question" : "waiting";
+  /** displayState API/socket réel — ne pas reconstruire depuis un collapse 3 états */
+  const ds =
+    typeof displayState === "string" && displayState.trim()
+      ? displayState.toLowerCase()
+      : null;
+
+  const joinUxContextBase = useMemo(
+    () => ({
+      liveScene: sceneRaw || null,
+      displayState: ds,
+      voteState: vs || null,
+      pollStatus: null,
+      hasActivePoll: Boolean(activePollId),
+    }),
+    [sceneRaw, ds, vs, activePollId],
+  );
+
+  const joinPresCore = useMemo(
+    () => getLiveStatePresentation(joinUxContextBase),
+    [joinUxContextBase],
+  );
+
+  /** Scène UX canonique (6 états) via resolveLiveUxState — plus de finished|voting|waiting seul */
+  const scene = String(joinPresCore.ux || LIVE_UX_STATE.WAITING).toLowerCase();
 
   const enAttenteRevealAuto = useMemo(() => {
     if (vs !== "closed") return false;
-    if (ds === "results") return false;
+    if (String(ds || "").toLowerCase() === "results") return false;
+    if (scene === "results" || scene === "finished") return false;
     if (typeof autoRevealShowResultsAt !== "string") return false;
     return (
       new Date(autoRevealShowResultsAt).getTime() > Date.now() - 500
     );
-  }, [vs, ds, autoRevealShowResultsAt]);
+  }, [vs, ds, scene, autoRevealShowResultsAt]);
 
   const chronoVoteActif =
     scene === "voting" &&
@@ -613,22 +638,11 @@ export function JoinLiveHub({ slug }) {
 
   const joinUxContext = useMemo(
     () => ({
-      liveScene: scene,
-      displayState: ds,
-      voteState: vs,
-      pollStatus: null,
-      hasActivePoll: Boolean(activePollId),
+      ...joinUxContextBase,
       autoReveal: enAttenteRevealAuto,
       autoRevealShowResultsAt,
     }),
-    [
-      scene,
-      ds,
-      vs,
-      activePollId,
-      enAttenteRevealAuto,
-      autoRevealShowResultsAt,
-    ],
+    [joinUxContextBase, enAttenteRevealAuto, autoRevealShowResultsAt],
   );
 
   const joinPres = useMemo(
@@ -636,8 +650,13 @@ export function JoinLiveHub({ slug }) {
     [joinUxContext],
   );
   const ux = useMemo(
-    () => getUxState({ liveState: scene, voteState: vs, displayState: ds }),
-    [scene, vs, ds],
+    () =>
+      getUxState({
+        liveState: sceneRaw || scene,
+        voteState: vs,
+        displayState: ds,
+      }),
+    [sceneRaw, scene, vs, ds],
   );
 
   const votePath = `/p/${encodeURIComponent(slug)}`;
@@ -886,11 +905,13 @@ export function JoinLiveHub({ slug }) {
       ? null
       : scene === "voting"
         ? hasVotedActivePoll
-          ? "Réponse envoyée. Vous pouvez suivre le direct depuis cette page."
-          : "Le vote est ouvert : appuyez sur « Voter maintenant »."
+          ? "Réponse envoyée. Tu peux suivre le direct depuis cette page."
+          : "Le vote est ouvert : appuie sur « Voter maintenant »."
         : scene === "results"
           ? "Les résultats sont visibles ici, puis la prochaine question arrive."
-          : "Gardez cette page ouverte : la session continue en direct.";
+          : scene === "closed"
+            ? LIVE_UX_BODY_CLOSED_WAIT_RESULTS
+            : "Garde cette page ouverte : la session continue en direct.";
 
   let corps = null;
 
@@ -976,7 +997,13 @@ export function JoinLiveHub({ slug }) {
       corps = (
         <>
           <p style={{ margin: 0, ...joinBadgeEtat }}>
-            {hasVotedActivePoll ? "Votre réponse est prise en compte" : joinPres.title}
+            {hasVotedActivePoll
+              ? getUxState({
+                  liveState: "CLOSED",
+                  voteState: "CLOSED",
+                  displayState: "QUESTION",
+                }).label
+              : joinPres.title}
           </p>
           <h2
             style={{
@@ -1099,7 +1126,7 @@ export function JoinLiveHub({ slug }) {
                   color: palette.muted,
                 }}
               >
-                Détail des scores : ouvrez l’onglet vote dès qu’il sera à jour.
+                Le détail des scores s’affiche dès que la page vote est à jour.
               </p>
             )}
           </div>
@@ -1115,8 +1142,47 @@ export function JoinLiveHub({ slug }) {
               marginRight: "auto",
             }}
           >
-            La prochaine question arrive bientôt. Restez sur cette page.
+            {LIVE_UX_BODY_JOIN_AFTER_RESULTS}
           </p>
+        </>
+      );
+    } else if (scene === "closed") {
+      corps = (
+        <>
+          <p style={{ margin: 0, ...joinBadgeEtat }}>{joinPres.title}</p>
+          <p
+            style={{
+              margin: "0.85rem 0 0 0",
+              fontSize: "clamp(0.98rem, 3.1vw, 1.12rem)",
+              fontWeight: 500,
+              color: palette.muted,
+              lineHeight: 1.55,
+              maxWidth: "26rem",
+              marginLeft: "auto",
+              marginRight: "auto",
+            }}
+          >
+            {LIVE_UX_BODY_CLOSED_WAIT_RESULTS}
+          </p>
+          {activePollQuestion ? (
+            <h2
+              style={{
+                margin: "1rem 0 0 0",
+                fontSize: `clamp(${1.05 * joinVisualTokens.titleClampMul}rem, ${3.6 * joinVisualTokens.titleClampMul}vw, ${1.4 * joinVisualTokens.titleClampMul}rem)`,
+                fontWeight: 700,
+                lineHeight: 1.35,
+                color: palette.fg2,
+              }}
+            >
+              {activePollQuestion}
+            </h2>
+          ) : null}
+          <div style={{ marginTop: "1.35rem" }}>
+            <AttenteAnimee
+              accent={accent}
+              pulseAllowed={joinVisualTokens.pulseAllowed}
+            />
+          </div>
         </>
       );
     } else if (scene === "paused") {

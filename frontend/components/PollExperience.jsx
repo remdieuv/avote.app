@@ -72,16 +72,12 @@ function contestEligibleCountFromPoll(poll) {
 }
 
 /**
- * /p ne doit pas suivre les bascules d'affichage projection.
- * On garde une scène participant stable: vote ouvert => voting, sinon waiting, sauf finished.
+ * Normalise liveState API/socket (ne collapse plus en finished|voting|waiting).
  * @param {string | null | undefined} liveState
- * @param {string | null | undefined} voteState
  */
-function deriveParticipantLiveScene(liveState, voteState) {
-  const ls = String(liveState || "").toLowerCase();
-  if (ls === "finished") return "finished";
-  const vs = String(voteState || "").toLowerCase();
-  return vs === "open" ? "voting" : "waiting";
+function normalizeLiveScene(liveState) {
+  const ls = String(liveState || "").toLowerCase().trim();
+  return ls || null;
 }
 
 /**
@@ -138,7 +134,7 @@ function CarteVoteTermineAttenteResultats({ accent, isDark }) {
             lineHeight: 1.45,
           }}
         >
-          Les résultats vont être affichés dans quelques instants
+          Les résultats s’afficheront ici quand ce sera le moment
           <span
             aria-hidden
             style={{
@@ -460,9 +456,7 @@ export function PollExperience({
 
         if (signal?.aborted) return;
 
-        setLiveScene(
-          deriveParticipantLiveScene(data.eventLiveState, data.eventVoteState),
-        );
+        setLiveScene(normalizeLiveScene(data.eventLiveState));
         if (data.eventId) {
           setEventId(data.eventId);
         }
@@ -584,9 +578,7 @@ export function PollExperience({
       loadPollAbortRef.current?.abort();
       setLoading(false);
 
-      setLiveScene(
-        deriveParticipantLiveScene(payload.liveState, payload.voteState),
-      );
+      setLiveScene(normalizeLiveScene(payload.liveState));
 
       if (
         typeof payload.isLiveConsumed === "boolean" ||
@@ -611,9 +603,8 @@ export function PollExperience({
       if (payload.poll) {
         setPoll(payload.poll);
         setLiveScene(
-          deriveParticipantLiveScene(
-            payload.poll?.eventLiveState,
-            payload.poll?.eventVoteState,
+          normalizeLiveScene(
+            payload.poll?.eventLiveState ?? payload.liveState,
           ),
         );
         const pv = payload.poll?.eventVoteState;
@@ -677,9 +668,7 @@ export function PollExperience({
         }
         return prev;
       });
-      setLiveScene(
-        deriveParticipantLiveScene(data.eventLiveState, data.eventVoteState),
-      );
+      setLiveScene(normalizeLiveScene(data.eventLiveState));
       if (
         typeof data.eventIsLiveConsumed === "boolean" ||
         typeof data.eventIsLocked === "boolean"
@@ -722,22 +711,22 @@ export function PollExperience({
   const voteStateParticipant = String(
     poll?.eventVoteState ?? eventVoteStateUi ?? "",
   ).toLowerCase();
-  const sceneParticipant =
-    String(liveScene || "").toLowerCase() === "finished"
-      ? "finished"
-      : voteStateParticipant === "open"
-        ? "voting"
-        : "waiting";
+  const displayStateParticipant = String(
+    (typeof poll?.eventDisplayState === "string" && poll.eventDisplayState.trim()
+      ? poll.eventDisplayState
+      : eventDisplayStateUi) ?? "",
+  ).toLowerCase();
+  /** Résultats publics = scène salle RESULTS (P2) — plus dès vote fermé */
   const affichageResultatsPublic =
-    voteStateParticipant === "closed" ||
-    String(liveScene || "").toLowerCase() === "finished";
+    displayStateParticipant === "results" ||
+    String(liveScene || "").toLowerCase() === "results";
 
-  /** Bloc sous le formulaire : après vote, déjà voté (stockage), ou régie en mode résultats live */
+  /** Bloc résultats : révélation salle, ou totaux live après mon vote tant que le vote est ouvert */
   const showBlocResultatsEnDirect =
     !!poll &&
-    (merciPourVote ||
-      aDejaVoteEnStockage ||
-      affichageResultatsPublic);
+    (affichageResultatsPublic ||
+      (voteStateParticipant === "open" &&
+        (merciPourVote || aDejaVoteEnStockage)));
 
   const optionsPourVote = useMemo(() => {
     return [...(poll?.options ?? [])].sort(
@@ -1124,8 +1113,13 @@ export function PollExperience({
 
   const evtVoteState = String(poll?.eventVoteState ?? "").toLowerCase();
   const voteFerme = evtVoteState === "closed";
-  /** voteState CLOSED et pas de projection résultats (displayState !== results, cf. affichageResultatsPublic) */
-  const attenteProjectionResultats = voteFerme && !affichageResultatsPublic;
+  const liveSceneNorm = String(liveScene || "").toLowerCase();
+  /** voteState CLOSED et pas de projection résultats (displayState !== results) — hors FINISHED/PAUSED */
+  const attenteProjectionResultats =
+    voteFerme &&
+    !affichageResultatsPublic &&
+    liveSceneNorm !== "finished" &&
+    liveSceneNorm !== "paused";
 
   /** Auto-reveal actif : délai avant passage écran résultats (aligné ~800 ms avec la projection). */
   const enAttenteAutoRevealResultats = useMemo(() => {
@@ -1158,16 +1152,28 @@ export function PollExperience({
     return eventVoteStateUi;
   }, [poll, eventVoteStateUi]);
   const displayStateForUx = useMemo(() => {
-    return voteStateForUx === "open" ? "question" : "waiting";
-  }, [voteStateForUx]);
+    if (
+      poll &&
+      typeof poll.eventDisplayState === "string" &&
+      poll.eventDisplayState.trim()
+    ) {
+      return poll.eventDisplayState.toLowerCase();
+    }
+    if (
+      typeof eventDisplayStateUi === "string" &&
+      eventDisplayStateUi.trim()
+    ) {
+      return eventDisplayStateUi.toLowerCase();
+    }
+    return null;
+  }, [poll, eventDisplayStateUi]);
   const liveStateForUx = useMemo(() => {
-    if (String(liveScene || "").toLowerCase() === "finished") return "finished";
-    return voteStateForUx === "open" ? "voting" : "waiting";
-  }, [liveScene, voteStateForUx]);
+    return normalizeLiveScene(liveScene);
+  }, [liveScene]);
 
   const pollUxCtx = useMemo(
     () => ({
-      liveScene,
+      liveScene: liveStateForUx,
       displayState: displayStateForUx,
       voteState: voteStateForUx,
       pollStatus: poll?.status ?? null,
@@ -1176,7 +1182,7 @@ export function PollExperience({
       autoRevealShowResultsAt: poll?.autoRevealShowResultsAt ?? null,
     }),
     [
-      liveScene,
+      liveStateForUx,
       displayStateForUx,
       voteStateForUx,
       poll?.id,
@@ -1191,6 +1197,9 @@ export function PollExperience({
     () => getLiveStatePresentation(pollUxCtx),
     [pollUxCtx],
   );
+  const sceneParticipant = String(
+    pollUxPres.ux || LIVE_UX_STATE.WAITING,
+  ).toLowerCase();
   const ux = useMemo(
     () =>
       getUxState({
@@ -1293,9 +1302,7 @@ export function PollExperience({
     [pollVisualTokens],
   );
 
-  const resultsLook =
-    pollUxPres.ux === LIVE_UX_STATE.RESULTS ||
-    (!voteOuvert && affichageResultatsPublic);
+  const resultsLook = pollUxPres.ux === LIVE_UX_STATE.RESULTS;
 
   const resultsCardTokens = useMemo(
     () =>
@@ -1374,8 +1381,6 @@ export function PollExperience({
           logoUrl={roomLogoUrl}
           palette={palette}
           isDark={isDark}
-          badgeText="Page votant"
-          badgeColor={accent}
         />
 
         {eventMode.isTestMode || eventModeFromSocket.isTestMode ? (
@@ -1514,7 +1519,7 @@ export function PollExperience({
                   }}
                 >
                   {pollFetch404Slug
-                    ? "La salle est en attente d’une question active. Revenez ici dès l’ouverture du vote."
+                    ? "La salle attend une question active. Reviens dès l’ouverture du vote."
                     : LIVE_UX_BODY_POLL_WAITING}
                 </p>
               </>
@@ -1660,23 +1665,6 @@ export function PollExperience({
                 }}
               >
                 {poll.question}
-              </p>
-            ) : null}
-            <p style={{ margin: 0, fontSize: "0.85rem", color: palette.muted }}>
-              Créé le :{" "}
-              {poll.createdAt
-                ? new Date(poll.createdAt).toLocaleString("fr-FR")
-                : "—"}
-            </p>
-            {poll.eventSlug ? (
-              <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.82rem" }}>
-                Lien public :{" "}
-                <Link
-                  href={`/p/${poll.eventSlug}`}
-                  style={{ color: palette.link, fontWeight: 600 }}
-                >
-                  /p/{poll.eventSlug}
-                </Link>
               </p>
             ) : null}
           </section>
@@ -2377,7 +2365,8 @@ export function PollExperience({
 
           {!voteOuvert &&
           !showBlocResultatsEnDirect &&
-          !attenteProjectionResultats ? (
+          !attenteProjectionResultats &&
+          String(liveScene || "").toLowerCase() === "finished" ? (
             <>
               <h3
                 style={{
