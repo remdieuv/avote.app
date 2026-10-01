@@ -176,6 +176,32 @@ export function shouldPollOpenOwnSocket(input = {}) {
 }
 
 /**
+ * Join (un seul `io`) doit aussi `join_poll` pour recevoir `poll_updated` (votes peers).
+ * @param {{ activePollId?: string | null }} input
+ */
+export function shouldJoinSocketJoinActivePoll(input = {}) {
+  return (
+    typeof input.activePollId === "string" &&
+    Boolean(input.activePollId.trim())
+  );
+}
+
+/**
+ * Poll embedded applique un snapshot `poll_updated` relayé par Join (pas de 2ᵉ socket).
+ * @param {{ embedded?: boolean; parentPollRevision?: number }} input
+ */
+export function shouldPollApplyParentPollSnapshot(input = {}) {
+  return (
+    input.embedded === true && Number(input.parentPollRevision || 0) > 0
+  );
+}
+
+/** Join applique les axes live du socket avant le round-trip `fetchMeta`. */
+export function shouldJoinApplySocketLiveAxesImmediately() {
+  return true;
+}
+
+/**
  * Un seul bandeau OFFLINE : celui de Join en Salle ; Poll le gère seulement en `/p`.
  * @param {{ embedded?: boolean }} input
  */

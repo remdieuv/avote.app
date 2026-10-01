@@ -29,7 +29,9 @@ import { API_URL, SOCKET_URL } from "@/lib/config";
 import {
   LIVE_UX_BODY_POLL_NO_POLL_SLUG,
   LIVE_UX_BODY_POLL_WAITING,
+  LIVE_UX_LABEL_VOTE_CONFIRMED,
   LIVE_UX_STATE,
+  getClosedParticipantTitle,
   getUxState,
   getLiveStatePresentation,
   getLiveStateTone,
@@ -39,6 +41,7 @@ import {
   getParticipantFormNotice,
   getParticipantFullLabel,
   getParticipantOfflineLabel,
+  shouldPollApplyParentPollSnapshot,
   shouldPollFetchEventMetaBranding,
   shouldPollOpenOwnSocket,
   shouldPollRenderOfflineBanner,
@@ -92,10 +95,12 @@ function normalizeLiveScene(liveState) {
 
 /**
  * Carte « vote clos, résultats pas encore à la salle » — teintée par l’accent événement.
- * @param {{ accent: string; isDark: boolean }} props
+ * Merci uniquement si le participant a voté (A2).
+ * @param {{ accent: string; isDark: boolean; hasVoted?: boolean }} props
  */
-function CarteVoteTermineAttenteResultats({ accent, isDark }) {
+function CarteVoteTermineAttenteResultats({ accent, isDark, hasVoted = false }) {
   const a = joinRoomAccent(accent);
+  const title = getClosedParticipantTitle(Boolean(hasVoted));
   return (
     <>
       <style>
@@ -133,7 +138,7 @@ function CarteVoteTermineAttenteResultats({ accent, isDark }) {
             letterSpacing: "-0.02em",
           }}
         >
-          {getUxState({ liveState: "CLOSED" }).label}
+          {title}
         </h3>
         <p
           style={{
@@ -207,6 +212,8 @@ function chronoRestantSecondes(tm) {
  *   embedded?: boolean — Salle `/join` : panneau sans shell ni navigation
  *   parentSocketOnline?: boolean | null — connectivité Join (embedded)
  *   parentLiveRevision?: number — bump Join à chaque event_live / reconnect
+ *   parentPollSnapshot?: object | null — poll_updated relayé par le socket Join
+ *   parentPollRevision?: number — bump quand un snapshot peer arrive
  *   parentEventId?: string | null;
  *   parentLiveState?: string | null;
  *   parentVoteState?: string | null;
@@ -226,6 +233,8 @@ export function PollExperience({
   embedded = false,
   parentSocketOnline = null,
   parentLiveRevision = 0,
+  parentPollSnapshot = null,
+  parentPollRevision = 0,
   parentEventId = null,
   parentLiveState = null,
   parentVoteState = null,
@@ -597,6 +606,55 @@ export function PollExperience({
     if (!parentLiveRevision) return;
     void loadPoll({ silent: true });
   }, [embedded, parentLiveRevision, loadPoll]);
+
+  /**
+   * Salle : applique `poll_updated` relayé par Join (même io, join_poll) —
+   * totaux peers en direct sans second socket ni attendre event_live.
+   */
+  useEffect(() => {
+    if (
+      !shouldPollApplyParentPollSnapshot({
+        embedded,
+        parentPollRevision,
+      })
+    ) {
+      return;
+    }
+    if (!parentPollSnapshot || typeof parentPollSnapshot !== "object") return;
+    const snap = /** @type {Record<string, unknown>} */ (parentPollSnapshot);
+    if (!snap.id) return;
+    setPoll(/** @type {any} */ (snap));
+    setLoading(false);
+    setError(null);
+    setPollFetch404Slug(false);
+    if (typeof snap.eventLiveState === "string") {
+      setLiveScene(normalizeLiveScene(snap.eventLiveState));
+    }
+    if (typeof snap.eventVoteState === "string") {
+      setEventVoteStateUi(String(snap.eventVoteState).toLowerCase());
+    }
+    if (typeof snap.eventDisplayState === "string") {
+      setEventDisplayStateUi(String(snap.eventDisplayState).toLowerCase());
+    }
+    if (typeof snap.eventId === "string" && snap.eventId.trim()) {
+      setEventId(String(snap.eventId).trim());
+    }
+    if (
+      typeof snap.eventIsLiveConsumed === "boolean" ||
+      typeof snap.eventIsLocked === "boolean"
+    ) {
+      setEventModeUi((prev) => ({
+        isLiveConsumed:
+          typeof snap.eventIsLiveConsumed === "boolean"
+            ? snap.eventIsLiveConsumed
+            : prev.isLiveConsumed,
+        isLocked:
+          typeof snap.eventIsLocked === "boolean"
+            ? snap.eventIsLocked
+            : prev.isLocked,
+      }));
+    }
+  }, [embedded, parentPollRevision, parentPollSnapshot]);
 
   useEffect(() => {
     const iso = poll?.autoRevealShowResultsAt;
@@ -1380,17 +1438,14 @@ export function PollExperience({
       }).label,
     [],
   );
-  const voteTakenLabel = useMemo(
-    () =>
-      getUxState({
-        liveState: "CLOSED",
-        voteState: "CLOSED",
-        displayState: "QUESTION",
-      }).label,
-    [],
-  );
+  const voteTakenLabel = LIVE_UX_LABEL_VOTE_CONFIRMED;
+  const hasVotedLocal = Boolean(merciPourVote || aDejaVoteEnStockage);
+  /** Merci uniquement si la personne a voté — jamais en WAITING / non-votant (A1/A2). */
   const topUxLabel =
-    voteOuvert && (merciPourVote || aDejaVoteEnStockage)
+    hasVotedLocal &&
+    (voteOuvert ||
+      attenteProjectionResultats ||
+      sansPollMaisVoteFermeSansResultatsSalle)
       ? voteTakenLabel
       : ux.label;
 
@@ -1730,6 +1785,7 @@ export function PollExperience({
               <CarteVoteTermineAttenteResultats
                 accent={accent}
                 isDark={isDark}
+                hasVoted={Boolean(merciPourVote || aDejaVoteEnStockage)}
               />
             ) : sceneParticipant === "waiting" ||
               pollFetch404Slug ? (
@@ -1913,6 +1969,7 @@ export function PollExperience({
             <CarteVoteTermineAttenteResultats
               accent={accent}
               isDark={isDark}
+              hasVoted={Boolean(merciPourVote || aDejaVoteEnStockage)}
             />
           ) : null}
 
@@ -1935,7 +1992,7 @@ export function PollExperience({
                   fontWeight: 600,
                 }}
               >
-                Merci ! Ton vote est pris en compte.
+                {LIVE_UX_LABEL_VOTE_CONFIRMED}
               </p>
               {showLeadForm ? (
                 <div

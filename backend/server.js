@@ -305,6 +305,20 @@ function questionTimerSnapshot(event) {
  *   event?: import("@prisma/client").Event | null;
  * }} poll
  */
+/**
+ * Masque un compteur option en MODE TEST (RESULTS).
+ * Aligné `frontend/lib/testModeResultsMask.js` — ne jamais transformer 1 → 0.
+ * @param {unknown} raw
+ * @param {number} [bucket]
+ */
+function maskTestModeOptionVoteCount(raw, bucket = 10) {
+  const n = Math.max(0, Number(raw) || 0);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  const b = Math.max(1, Number(bucket) || 10);
+  if (n < b) return Math.floor(n);
+  return Math.round(n / b) * b;
+}
+
 function pollToJson(poll) {
   const eventIsTestMode = poll?.event?.isLiveConsumed === false;
   const eventDisplayStateUpper = String(poll?.event?.displayState || "").toUpperCase();
@@ -315,13 +329,12 @@ function pollToJson(poll) {
     voteCounts[v.optionId] = (voteCounts[v.optionId] || 0) + 1;
   }
 
-  // En mode TEST, on masque fortement la précision des résultats en "bucketisant"
-  // les votes bruts avant le calcul des pourcentages côté écran.
+  // En mode TEST + RESULTS : bucket /10 pour obscurcir, mais totaux < 10 restent bruts
+  // (sinon 1 vote → 0 et régie/Salle/screen divergent).
   if (maskResultsInTestMode) {
-    const bucket = 10; // faible granularité = plus difficile d'exploiter via réseau
+    const bucket = 10;
     for (const k of Object.keys(voteCounts)) {
-      const raw = voteCounts[k] || 0;
-      voteCounts[k] = Math.round(raw / bucket) * bucket;
+      voteCounts[k] = maskTestModeOptionVoteCount(voteCounts[k] || 0, bucket);
     }
   }
 

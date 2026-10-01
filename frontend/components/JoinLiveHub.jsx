@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import {
   buildJoinRoomShellStyle,
@@ -17,7 +17,6 @@ import {
   LIVE_UX_BODY_JOIN_PAUSED,
   LIVE_UX_BODY_JOIN_WAITING,
   LIVE_UX_STATE,
-  getUxState,
   getLiveStatePresentation,
   getLiveStateTone,
 } from "@/lib/liveStateUx";
@@ -26,6 +25,8 @@ import {
   getParticipantOfflineLabel,
   resolveJoinHistoriqueQuestions,
   shouldEmbedPollSurfaceInRoom,
+  shouldJoinApplySocketLiveAxesImmediately,
+  shouldJoinSocketJoinActivePoll,
   shouldShowParticipantFullUi,
 } from "@/lib/participantLiveFlow";
 import {
@@ -154,6 +155,14 @@ export function JoinLiveHub({ slug }) {
   const [socketOnline, setSocketOnline] = useState(/** @type {boolean | null} */ (null));
   /** Bump pour sync PollExperience embedded (un seul socket Join). */
   const [liveSyncRevision, setLiveSyncRevision] = useState(0);
+  /** Snapshot `poll_updated` relayé (peers) — même io Join, pas de 2ᵉ socket. */
+  const [embeddedPollSnapshot, setEmbeddedPollSnapshot] = useState(
+    /** @type {object | null} */ (null),
+  );
+  const [embeddedPollRevision, setEmbeddedPollRevision] = useState(0);
+  const socketRef = useRef(/** @type {import("socket.io-client").Socket | null} */ (null));
+  const activePollIdRef = useRef(/** @type {string | null} */ (null));
+  const joinedPollIdRef = useRef(/** @type {string | null} */ (null));
   /** Personnalisation salle (/admin/.../customization) */
   const [roomDescription, setRoomDescription] = useState(null);
   const [logoUrl, setLogoUrl] = useState(null);
@@ -524,15 +533,36 @@ export function JoinLiveHub({ slug }) {
   }, [fetchMeta]);
 
   useEffect(() => {
+    activePollIdRef.current = activePollId;
+  }, [activePollId]);
+
+  useEffect(() => {
     if (!eventId) return;
 
     const socket = io(SOCKET_URL, {
       transports: ["websocket", "polling"],
     });
+    socketRef.current = socket;
+
+    function syncPollRoom(pollId) {
+      const next =
+        typeof pollId === "string" && pollId.trim() ? pollId.trim() : null;
+      const prev = joinedPollIdRef.current;
+      if (prev && prev !== next) {
+        socket.emit("leave_poll", prev);
+      }
+      if (next && shouldJoinSocketJoinActivePoll({ activePollId: next })) {
+        socket.emit("join_poll", next);
+        joinedPollIdRef.current = next;
+      } else {
+        joinedPollIdRef.current = null;
+      }
+    }
 
     function onConnect() {
       setSocketOnline(true);
       socket.emit("join_event", eventId);
+      syncPollRoom(activePollIdRef.current);
       setLiveSyncRevision((n) => n + 1);
       void fetchMeta();
     }
@@ -543,11 +573,80 @@ export function JoinLiveHub({ slug }) {
 
     /** @param {any} payload */
     function onEventLive(payload) {
-      if (payload && typeof payload.isLocked === "boolean") {
-        setIsLocked(Boolean(payload.isLocked));
+      if (
+        payload?.eventId != null &&
+        String(payload.eventId) !== String(eventId)
+      ) {
+        return;
+      }
+      // A8 — axes live immédiats, puis réconciliation fetchMeta (activePollStatus, pastPolls…).
+      if (shouldJoinApplySocketLiveAxesImmediately()) {
+        if (typeof payload?.liveState === "string" && payload.liveState.trim()) {
+          setLiveState(String(payload.liveState).toLowerCase());
+        }
+        if (typeof payload?.voteState === "string" && payload.voteState.trim()) {
+          setVoteState(String(payload.voteState).toLowerCase());
+        }
+        if (
+          typeof payload?.displayState === "string" &&
+          payload.displayState.trim()
+        ) {
+          setDisplayState(String(payload.displayState).toLowerCase());
+        }
+        if (typeof payload?.isLocked === "boolean") {
+          setIsLocked(Boolean(payload.isLocked));
+        }
+        if (payload?.activePollId != null) {
+          const ap =
+            typeof payload.activePollId === "string" &&
+            payload.activePollId.trim()
+              ? payload.activePollId.trim()
+              : null;
+          setActivePollId(ap);
+          activePollIdRef.current = ap;
+          syncPollRoom(ap);
+        }
+        if (typeof payload?.autoRevealShowResultsAt === "string") {
+          setAutoRevealShowResultsAt(payload.autoRevealShowResultsAt);
+        } else if (payload && "autoRevealShowResultsAt" in payload) {
+          setAutoRevealShowResultsAt(null);
+        }
+        if (payload?.questionTimer && typeof payload.questionTimer === "object") {
+          setQuestionTimer(payload.questionTimer);
+        }
+        if (payload?.poll && typeof payload.poll === "object") {
+          const st = payload.poll.status;
+          if (typeof st === "string" && st.trim()) {
+            setActivePollStatus(String(st).trim().toUpperCase());
+          }
+          setEmbeddedPollSnapshot(payload.poll);
+          setEmbeddedPollRevision((n) => n + 1);
+        }
       }
       setLiveSyncRevision((n) => n + 1);
       void fetchMeta();
+    }
+
+    /** A3 — votes peers via room poll, sans second io(). */
+    /** @param {any} payload */
+    function onPollUpdated(payload) {
+      if (!payload || typeof payload !== "object" || !payload.id) return;
+      const current = activePollIdRef.current;
+      if (current && String(payload.id) !== String(current)) return;
+      setEmbeddedPollSnapshot(payload);
+      setEmbeddedPollRevision((n) => n + 1);
+      if (typeof payload.status === "string" && payload.status.trim()) {
+        setActivePollStatus(String(payload.status).trim().toUpperCase());
+      }
+      if (typeof payload.eventLiveState === "string") {
+        setLiveState(String(payload.eventLiveState).toLowerCase());
+      }
+      if (typeof payload.eventVoteState === "string") {
+        setVoteState(String(payload.eventVoteState).toLowerCase());
+      }
+      if (typeof payload.eventDisplayState === "string") {
+        setDisplayState(String(payload.eventDisplayState).toLowerCase());
+      }
     }
 
     /** @param {any} payload */
@@ -567,17 +666,43 @@ export function JoinLiveHub({ slug }) {
     if (socket.connected) onConnect();
     else setSocketOnline(false);
     socket.on("event_live_updated", onEventLive);
+    socket.on("poll_updated", onPollUpdated);
     socket.on("event:customization_updated", onCustomizationUpdated);
 
     return () => {
+      const prevPoll = joinedPollIdRef.current;
+      if (prevPoll) socket.emit("leave_poll", prevPoll);
+      joinedPollIdRef.current = null;
       socket.emit("leave_event", eventId);
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
       socket.off("event_live_updated", onEventLive);
+      socket.off("poll_updated", onPollUpdated);
       socket.off("event:customization_updated", onCustomizationUpdated);
       socket.disconnect();
+      socketRef.current = null;
     };
   }, [eventId, fetchMeta]);
+
+  /** Quand activePollId change (meta/socket), rejoindre la room poll sur le même io. */
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket?.connected) return;
+    const next =
+      typeof activePollId === "string" && activePollId.trim()
+        ? activePollId.trim()
+        : null;
+    const prev = joinedPollIdRef.current;
+    if (prev && prev !== next) {
+      socket.emit("leave_poll", prev);
+    }
+    if (next && shouldJoinSocketJoinActivePoll({ activePollId: next })) {
+      socket.emit("join_poll", next);
+      joinedPollIdRef.current = next;
+    } else if (!next) {
+      joinedPollIdRef.current = null;
+    }
+  }, [activePollId]);
 
   const sceneRaw = String(liveState || "").toLowerCase();
   const vs = String(voteState || "").toLowerCase();
@@ -629,15 +754,6 @@ export function JoinLiveHub({ slug }) {
   const joinPres = useMemo(
     () => getLiveStatePresentation(joinUxContext),
     [joinUxContext],
-  );
-  const ux = useMemo(
-    () =>
-      getUxState({
-        liveState: sceneRaw || scene,
-        voteState: vs,
-        displayState: ds,
-      }),
-    [sceneRaw, scene, vs, ds],
   );
 
   /** isLocked peut être true après Terminer (réel) — ne pas confondre avec FULL. */
@@ -1276,6 +1392,8 @@ export function JoinLiveHub({ slug }) {
               embedded
               parentSocketOnline={socketOnline}
               parentLiveRevision={liveSyncRevision}
+              parentPollSnapshot={embeddedPollSnapshot}
+              parentPollRevision={embeddedPollRevision}
               parentEventId={eventId}
               parentLiveState={liveState}
               parentVoteState={voteState}
@@ -1300,7 +1418,7 @@ export function JoinLiveHub({ slug }) {
                 color: palette.muted,
               }}
             >
-              {ux.label}
+              {joinPres.title}
             </div>
             {corps}
           </div>

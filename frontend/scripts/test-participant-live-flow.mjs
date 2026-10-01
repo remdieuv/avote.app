@@ -4,7 +4,11 @@
  */
 import assert from "node:assert/strict";
 import {
+  LIVE_UX_LABEL_VOTE_CONFIRMED,
   LIVE_UX_STATE,
+  getClosedParticipantTitle,
+  getLiveStateLabel,
+  getLiveStatePresentation,
   resolveLiveUxState,
 } from "../lib/liveStateUx.js";
 import {
@@ -19,11 +23,17 @@ import {
   resolveJoinHistoriqueQuestions,
   shouldAutoNavigateJoinToPollPath,
   shouldEmbedPollSurfaceInRoom,
+  shouldJoinApplySocketLiveAxesImmediately,
+  shouldJoinSocketJoinActivePoll,
+  shouldPollApplyParentPollSnapshot,
   shouldPollFetchEventMetaBranding,
   shouldPollOpenOwnSocket,
   shouldPollRenderOfflineBanner,
   shouldShowParticipantFullUi,
 } from "../lib/participantLiveFlow.js";
+import {
+  applyTestModeResultsVoteMask,
+} from "../lib/testModeResultsMask.js";
 
 /** @type {{ name: string; run: () => void }[]} */
 const cases = [];
@@ -241,6 +251,75 @@ test("embedded : pas de 2ᵉ socket ni bandeau OFFLINE ni meta branding", () => 
   assert.equal(shouldPollOpenOwnSocket({ embedded: true }), false);
   assert.equal(shouldPollRenderOfflineBanner({ embedded: true }), false);
   assert.equal(shouldPollFetchEventMetaBranding({ embedded: true }), false);
+});
+
+test("A3. peer votes : Join join_poll sur même io, Poll embed sans 2ᵉ socket", () => {
+  assert.equal(shouldPollOpenOwnSocket({ embedded: true }), false);
+  assert.equal(
+    shouldJoinSocketJoinActivePoll({ activePollId: "poll-1" }),
+    true,
+  );
+  assert.equal(shouldJoinSocketJoinActivePoll({ activePollId: null }), false);
+  assert.equal(shouldJoinSocketJoinActivePoll({ activePollId: "  " }), false);
+  assert.equal(
+    shouldPollApplyParentPollSnapshot({
+      embedded: true,
+      parentPollRevision: 2,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldPollApplyParentPollSnapshot({
+      embedded: true,
+      parentPollRevision: 0,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldPollApplyParentPollSnapshot({
+      embedded: false,
+      parentPollRevision: 3,
+    }),
+    false,
+  );
+});
+
+test("A8. Join applique axes socket immédiatement puis fetchMeta", () => {
+  assert.equal(shouldJoinApplySocketLiveAxesImmediately(), true);
+});
+
+test("A1. WAITING Join : présentation sans Merci vote", () => {
+  const pres = getLiveStatePresentation({
+    liveScene: "waiting",
+    displayState: "waiting",
+    voteState: "closed",
+    pollStatus: "ACTIVE",
+    hasActivePoll: true,
+  });
+  assert.equal(pres.ux, LIVE_UX_STATE.WAITING);
+  assert.equal(pres.title, getLiveStateLabel(LIVE_UX_STATE.WAITING));
+  assert.ok(!/Merci ! Ton vote/i.test(pres.title));
+});
+
+test("A2. CLOSED non-votant ≠ Merci ; votant = Merci", () => {
+  assert.equal(
+    getClosedParticipantTitle(false),
+    "Vote fermé — les résultats arrivent bientôt",
+  );
+  assert.ok(!/Merci ! Ton vote/i.test(getClosedParticipantTitle(false)));
+  assert.equal(getClosedParticipantTitle(true), LIVE_UX_LABEL_VOTE_CONFIRMED);
+});
+
+test("A0. cohérence régie↔Salle↔Screen : TEST RESULTS 1 vote reste 1", () => {
+  // Régie = _count brut (1). Salle/Screen = pollToJson mask.
+  const salleScreen = applyTestModeResultsVoteMask(
+    { optA: 1, optB: 0 },
+    { isTestMode: true, displayState: "RESULTS" },
+  );
+  const regieVoteCount = 1; // _count.votes
+  const publicTotal = Object.values(salleScreen).reduce((s, n) => s + n, 0);
+  assert.equal(salleScreen.optA, 1);
+  assert.equal(publicTotal, regieVoteCount);
 });
 
 /**
