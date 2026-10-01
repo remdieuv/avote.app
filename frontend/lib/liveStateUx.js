@@ -32,15 +32,30 @@ export const LIVE_UX_LOCAL = {
   LOADING: "LOADING",
 };
 
+/** Confirmation personnelle après un vote réussi (pas le label d’état CLOSED). */
+export const LIVE_UX_LABEL_VOTE_CONFIRMED =
+  "Merci ! Ton vote est pris en compte";
+
 /** @type {Record<LiveUxState, string>} */
 const LABELS = {
   WAITING: "Ça va bientôt commencer",
   VOTING: "Choisis ta réponse",
-  CLOSED: "Merci ! Ton vote est pris en compte",
+  // CLOSED = vote clos pour tous (votants et non-votants) — pas une ack personnelle.
+  CLOSED: "Vote fermé — les résultats arrivent bientôt",
   RESULTS: "Résultats",
   PAUSED: "Petite pause",
   FINISHED: "Merci d’avoir participé !",
 };
+
+/**
+ * Titre carte CLOSED participant : Merci seulement si la personne a voté.
+ * @param {boolean} hasVoted
+ */
+export function getClosedParticipantTitle(hasVoted) {
+  return hasVoted
+    ? LIVE_UX_LABEL_VOTE_CONFIRMED
+    : LABELS.CLOSED;
+}
 
 /** @type {Record<string, string>} */
 const LOCAL_LABELS = {

@@ -292,29 +292,36 @@ assert.equal(
 assert.equal(formatScreenQuestionProgressLabel(null, "voting"), null);
 console.log("ok  progression Question x/y");
 
-// --- Votes reçus (pas de répartition) ---
+// --- Votes reçus = participants (pas somme des sélections MULTIPLE) ---
 const single = countScreenVotesReceived({
   type: "SINGLE_CHOICE",
+  votersCount: 24,
   options: [
     { id: "a", votes: 10 },
     { id: "b", votes: 14 },
   ],
 });
 assert.equal(single.count, 24);
+assert.equal(single.source, "votersCount");
 assert.equal(single.isMultipleChoice, false);
 assert.equal(single.label, "24 votes reçus");
 
+/** 10 participants × 3 options cochées → somme options = 30, afficher 10. */
 const multi = countScreenVotesReceived({
   type: "MULTIPLE_CHOICE",
+  votersCount: 10,
   options: [
-    { id: "a", voteCount: 5 },
-    { id: "b", voteCount: 7 },
+    { id: "a", voteCount: 10 },
+    { id: "b", voteCount: 10 },
+    { id: "c", voteCount: 10 },
   ],
 });
-assert.equal(multi.count, 12);
+assert.equal(multi.count, 10);
+assert.equal(multi.source, "votersCount");
 assert.equal(multi.isMultipleChoice, true);
-assert.match(multi.label, /12 votes reçus/);
-console.log("ok  compteur votes (SINGLE + MULTIPLE, sans répartition)");
+assert.equal(multi.label, "10 votes reçus");
+assert.notEqual(multi.count, 30, "MULTIPLE_CHOICE ≠ somme des sélections");
+console.log("ok  compteur votes (SINGLE + MULTIPLE = participants)");
 
 // --- Options A/B/C/D ---
 const sorted = sortScreenOptions([

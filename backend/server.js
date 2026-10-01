@@ -305,23 +305,41 @@ function questionTimerSnapshot(event) {
  *   event?: import("@prisma/client").Event | null;
  * }} poll
  */
+/**
+ * Masque un compteur option en MODE TEST (RESULTS).
+ * Aligné `frontend/lib/testModeResultsMask.js` — ne jamais transformer 1 → 0.
+ * @param {unknown} raw
+ * @param {number} [bucket]
+ */
+function maskTestModeOptionVoteCount(raw, bucket = 10) {
+  const n = Math.max(0, Number(raw) || 0);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  const b = Math.max(1, Number(bucket) || 10);
+  if (n < b) return Math.floor(n);
+  return Math.round(n / b) * b;
+}
+
 function pollToJson(poll) {
   const eventIsTestMode = poll?.event?.isLiveConsumed === false;
   const eventDisplayStateUpper = String(poll?.event?.displayState || "").toUpperCase();
   const maskResultsInTestMode = eventIsTestMode && eventDisplayStateUpper === "RESULTS";
 
   const voteCounts = {};
-  for (const v of poll.votes) {
+  /** Participants distincts ayant voté (1 voterSessionId = 1, même en MULTIPLE_CHOICE). */
+  const uniqueVoterSessions = new Set();
+  for (const v of poll.votes || []) {
     voteCounts[v.optionId] = (voteCounts[v.optionId] || 0) + 1;
+    if (v.voterSessionId != null && String(v.voterSessionId).trim()) {
+      uniqueVoterSessions.add(String(v.voterSessionId));
+    }
   }
 
-  // En mode TEST, on masque fortement la précision des résultats en "bucketisant"
-  // les votes bruts avant le calcul des pourcentages côté écran.
+  // En mode TEST + RESULTS : bucket /10 pour obscurcir, mais totaux < 10 restent bruts
+  // (sinon 1 vote → 0 et régie/Salle/screen divergent).
   if (maskResultsInTestMode) {
-    const bucket = 10; // faible granularité = plus difficile d'exploiter via réseau
+    const bucket = 10;
     for (const k of Object.keys(voteCounts)) {
-      const raw = voteCounts[k] || 0;
-      voteCounts[k] = Math.round(raw / bucket) * bucket;
+      voteCounts[k] = maskTestModeOptionVoteCount(voteCounts[k] || 0, bucket);
     }
   }
 
@@ -362,17 +380,27 @@ function pollToJson(poll) {
       ? questionTimerSnapshot(poll.event)
       : null,
     options: poll.options.map((option) => {
+      const n = voteCounts[option.id] || 0;
       const base = {
         id: option.id,
         label: option.label,
         order: option.order,
-        votes: voteCounts[option.id] || 0,
+        votes: n,
+        /** Alias régie / FE (voteCount ?? votes). */
+        voteCount: n,
       };
       if (poll.quizRevealed) {
         return { ...base, isCorrect: Boolean(option.isCorrect) };
       }
       return base;
     }),
+    /** Bump après tirage concours — refresh contest-status côté clients. */
+    contestWinnersCount: Number(poll._count?.contestWinners || 0),
+    /**
+     * Nombre de participants ayant voté (distinct voterSessionId).
+     * Screen VOTING : à préférer à la somme des options (MULTIPLE_CHOICE).
+     */
+    votersCount: uniqueVoterSessions.size,
   };
 }
 
@@ -412,6 +440,7 @@ async function loadPollFull(pollId) {
       event: true,
       options: { orderBy: { order: "asc" } },
       votes: true,
+      _count: { select: { contestWinners: true } },
     },
   });
 }
@@ -433,6 +462,7 @@ async function loadPublicPollPourSlug(slug) {
       event: true,
       options: { orderBy: { order: "asc" } },
       votes: true,
+      _count: { select: { contestWinners: true } },
     },
   });
   if (!poll) return null;
@@ -1884,15 +1914,21 @@ app.get("/events/slug/:slug", async (req, res) => {
     if (eventApres) await repairStaleVotingLiveState(eventApres);
 
     let activePollQuestion = null;
+    /** Statut du poll pointé (Join : distinguer attente jamais lancée vs vote fermé). */
+    let activePollStatus = null;
     if (eventApres.activePollId) {
       const p = await prisma.poll.findFirst({
         where: { id: eventApres.activePollId, eventId: eventApres.id },
-        select: { question: true, title: true },
+        select: { question: true, title: true, status: true },
       });
       if (p) {
         const q = (p.question && p.question.trim()) || "";
         const t = (p.title && p.title.trim()) || "";
         activePollQuestion = q || t || null;
+        activePollStatus =
+          typeof p.status === "string" && p.status.trim()
+            ? String(p.status).toUpperCase()
+            : null;
       }
     }
 
@@ -1950,10 +1986,12 @@ app.get("/events/slug/:slug", async (req, res) => {
       autoRevealShowResultsAt:
         eventApres.autoRevealShowResultsAt?.toISOString() ?? null,
       activePollQuestion,
+      activePollStatus,
       pollsProgress,
       pastPollLabels,
       pastPolls,
       questionTimer: questionTimerSnapshot(eventApres),
+      isLocked: Boolean(eventApres.isLocked),
     });
   } catch (e) {
     console.error(e);
@@ -2046,6 +2084,11 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       infoSecondaryCtaLabel: info.infoSecondaryCtaLabel,
       infoSecondaryCtaUrl: info.infoSecondaryCtaUrl,
       joinPath: `/join/${event.slug}`,
+      /** Phase Page événement (LOT-1/7) — pas de nouvel enum ; axes live existants. */
+      liveState: String(event.liveState || "").toLowerCase(),
+      voteState: String(event.voteState || "").toLowerCase(),
+      displayState: String(event.displayState || "").toLowerCase(),
+      isLocked: Boolean(event.isLocked),
     });
   } catch (e) {
     console.error(e);
@@ -2069,7 +2112,8 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
         polls: {
           orderBy: { order: "asc" },
           include: {
-            _count: { select: { votes: true } },
+            options: { orderBy: { order: "asc" } },
+            _count: { select: { votes: true, contestWinners: true } },
           },
         },
         landingPhotos: {
@@ -2089,6 +2133,17 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
       distinct: ["voterSessionId"],
       select: { voterSessionId: true },
     });
+    /** Régie « Réponses en direct » : totaux bruts par option (pas de mask TEST). */
+    const optionVoteRows = await prisma.vote.findMany({
+      where: { poll: { eventId: event.id } },
+      select: { optionId: true },
+    });
+    const optionVoteCounts = {};
+    for (const row of optionVoteRows) {
+      const oid = row.optionId;
+      if (!oid) continue;
+      optionVoteCounts[oid] = (optionVoteCounts[oid] || 0) + 1;
+    }
     return res.json({
       id: event.id,
       title: event.title,
@@ -2118,6 +2173,7 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
         question: p.question,
         contestPrize: p.contestPrize ?? null,
         contestWinnerCount: Number(p.contestWinnerCount || 1),
+        contestWinnersCount: Number(p._count?.contestWinners || 0),
         quizRevealed: Boolean(p.quizRevealed),
         order: p.order,
         status: p.status,
@@ -2125,6 +2181,16 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
         leadEnabled: Boolean(p.leadEnabled),
         leadTriggerOptionId: p.leadTriggerOptionId ?? null,
         voteCount: p._count.votes,
+        options: (p.options || []).map((option) => {
+          const n = optionVoteCounts[option.id] || 0;
+          return {
+            id: option.id,
+            label: option.label,
+            order: option.order,
+            votes: n,
+            voteCount: n,
+          };
+        }),
       })),
       landingPhotos: (event.landingPhotos || []).map((ph) => ({
         id: ph.id,
@@ -4476,6 +4542,11 @@ app.post("/polls/:pollId/draw", requireAuth, async (req, res) => {
       });
       return createdDraw;
     });
+
+    // G9 — surfaces publiques (Salle / Screen / Overlay) via rooms existantes.
+    // poll_updated bump contestWinnersCount → refetch contest-status côté clients.
+    await emitPollUpdated(io, pollId);
+    await emitEventLiveUpdated(io, poll.eventId);
 
     return res.json({
       ok: true,

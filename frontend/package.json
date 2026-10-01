@@ -9,7 +9,11 @@
     "lint": "eslint",
     "test:live-ux": "node scripts/test-live-ux-state.mjs",
     "test:diffusion": "node scripts/test-diffusion-ux.mjs",
-    "test:lot0-lot2": "npm run test:live-ux && npm run test:diffusion"
+    "test:participant": "node scripts/test-participant-live-flow.mjs",
+    "test:normalize-live": "node scripts/test-normalize-live-payload.mjs",
+    "test:lot0-lot1": "npm run test:live-ux && npm run test:participant && npm run test:normalize-live",
+    "test:lot0-lot2": "npm run test:live-ux && npm run test:diffusion",
+    "test:lot0-lot1-lot2": "npm run test:lot0-lot1 && npm run test:diffusion"
   },
   "dependencies": {
     "jspdf": "^4.2.1",

@@ -89,28 +89,36 @@ export function formatScreenQuestionProgressLabel(progress, phase = "voting") {
 
 /**
  * Compteur « votes reçus » pour le Screen pendant VOTING.
- * Somme des votes par option (payload public pollToJson).
+ * Priorité : `poll.votersCount` = participants distincts (voterSessionId).
+ * Fallback : somme des options (approx. OK en SINGLE_CHOICE uniquement).
  *
- * SINGLE_CHOICE : ≈ nombre de participants ayant voté.
- * MULTIPLE_CHOICE : compte les sélections d’options (pas les voters uniques) —
- * le payload public n’expose pas de distinct voterSessionId ; ne pas inventer
- * de règle métier / backend hors LOT-2.
+ * Règle métier : même en MULTIPLE_CHOICE, afficher le nombre de participants
+ * ayant voté — pas le total des sélections d’options.
  *
- * @param {{ options?: Array<{ votes?: unknown; voteCount?: unknown }> | null; type?: string | null } | null | undefined} poll
- * @returns {{ count: number; isMultipleChoice: boolean; label: string }}
+ * @param {{
+ *   options?: Array<{ votes?: unknown; voteCount?: unknown }> | null;
+ *   type?: string | null;
+ *   votersCount?: unknown;
+ * } | null | undefined} poll
+ * @returns {{ count: number; isMultipleChoice: boolean; label: string; source: "votersCount" | "optionsSum" }}
  */
 export function countScreenVotesReceived(poll) {
+  const isMultipleChoice =
+    String(poll?.type || "").toUpperCase() === "MULTIPLE_CHOICE";
+  const fromVoters = Number(poll?.votersCount);
+  if (Number.isFinite(fromVoters) && fromVoters >= 0) {
+    const n = Math.max(0, Math.floor(fromVoters));
+    const label = n === 1 ? "1 vote reçu" : `${n} votes reçus`;
+    return { count: n, isMultipleChoice, label, source: "votersCount" };
+  }
   const opts = Array.isArray(poll?.options) ? poll.options : [];
   const count = opts.reduce(
     (sum, o) => sum + (Number(o?.voteCount ?? o?.votes ?? 0) || 0),
     0,
   );
-  const isMultipleChoice =
-    String(poll?.type || "").toUpperCase() === "MULTIPLE_CHOICE";
   const n = Math.max(0, Math.floor(count));
-  const label =
-    n === 1 ? "1 vote reçu" : `${n} votes reçus`;
-  return { count: n, isMultipleChoice, label };
+  const label = n === 1 ? "1 vote reçu" : `${n} votes reçus`;
+  return { count: n, isMultipleChoice, label, source: "optionsSum" };
 }
 
 /**
