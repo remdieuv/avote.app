@@ -24,6 +24,10 @@ import {
   getEventUxSceneBadgeFromKey,
   getEventUxState,
 } from "@/lib/eventUxState";
+import {
+  normalizePollOptions,
+  optionVoteCount,
+} from "@/lib/normalizeLivePayload";
 
 const VOTE_STATE_LABELS = {
   open: "Vote ouvert",
@@ -2536,6 +2540,16 @@ function CopierLienEcranLeger({ slug }) {
       >
         Projection salle
       </p>
+      <p
+        style={{
+          margin: "0 0 0.4rem 0",
+          fontSize: "0.66rem",
+          color: "#64748b",
+          lineHeight: 1.35,
+        }}
+      >
+        TV / vidéoprojecteur — distinct de l’overlay OBS.
+      </p>
       <button
         type="button"
         onClick={() => void copier()}
@@ -2647,14 +2661,34 @@ function BlocOverlayStreamPresets({ slug, onCopied }) {
       </p>
       <p
         style={{
-          margin: "0 0 0.5rem 0",
+          margin: "0 0 0.35rem 0",
           fontSize: "0.7rem",
           color: "#64748b",
           lineHeight: 1.35,
         }}
       >
-        Utilisable dans OBS, streaming ou affichage discret.
+        Fond transparent pour OBS / Twitch — distinct de l’écran salle.
       </p>
+      <ol
+        style={{
+          margin: "0 0 0.55rem 0",
+          padding: "0.45rem 0.55rem 0.45rem 1.35rem",
+          borderRadius: "12px",
+          border: "1px solid rgba(148, 163, 184, 0.28)",
+          background: "rgba(248, 250, 252, 0.72)",
+          fontSize: "0.68rem",
+          color: "#475569",
+          lineHeight: 1.45,
+        }}
+      >
+        <li style={{ marginBottom: "0.15rem" }}>
+          Copier l’URL Overlay (Stream compact)
+        </li>
+        <li style={{ marginBottom: "0.15rem" }}>
+          Ajouter une Source Navigateur dans OBS
+        </li>
+        <li>Coller l’URL et vérifier la transparence</li>
+      </ol>
       {principal ? (
         <div
           style={{
@@ -3128,6 +3162,16 @@ function SidebarPartageDroit({
           </h2>
           <p style={{ margin: 0, fontSize: "0.66rem", color: "#64748b", lineHeight: 1.35 }}>
             QR et liens pour votre audience
+          </p>
+          <p
+            style={{
+              margin: "0.28rem 0 0 0",
+              fontSize: "0.64rem",
+              color: "#64748b",
+              lineHeight: 1.35,
+            }}
+          >
+            Écran = salle / TV · Overlay = fond transparent OBS
           </p>
         </div>
       ) : null}
@@ -5027,6 +5071,31 @@ export default function RegieEventPage() {
       if (!data?.id) return;
       if (!eventPollIdsRef.current.has(String(data.id))) return;
       loadPollAbortRef.current?.abort();
+      // Merge immédiat pour « Réponses en direct » ; refetch réconcilie (totaux bruts régie).
+      // En TEST+RESULTS, pollToJson peut masker : ne pas écraser les totaux régie.
+      setEventData((prev) => {
+        if (!prev?.polls) return prev;
+        const inTestResults =
+          prev.isLiveConsumed === false &&
+          String(prev.displayState || "").toLowerCase() === "results";
+        if (inTestResults) return prev;
+        return {
+          ...prev,
+          polls: prev.polls.map((p) => {
+            if (String(p.id) !== String(data.id)) return p;
+            const opts = normalizePollOptions(data.options);
+            return {
+              ...p,
+              options: opts,
+              voteCount: opts.reduce((a, o) => a + optionVoteCount(o), 0),
+              contestWinnersCount:
+                data.contestWinnersCount != null
+                  ? Math.max(0, Number(data.contestWinnersCount) || 0)
+                  : p.contestWinnersCount,
+            };
+          }),
+        };
+      });
       void fetchEvent({ silent: true });
     }
 
@@ -5393,14 +5462,17 @@ export default function RegieEventPage() {
     (p) => p.id === eventData.activePollId,
   );
   const liveResponsesOptions = useMemo(() => {
-    const opts = Array.isArray(activePoll?.options) ? activePoll.options : [];
+    const opts = normalizePollOptions(activePoll?.options);
     const totalVotesSafe = Math.max(
       0,
-      Number(activePoll?.voteCount || opts.reduce((acc, o) => acc + Number(o?.voteCount || 0), 0)),
+      Number(
+        activePoll?.voteCount ||
+          opts.reduce((acc, o) => acc + optionVoteCount(o), 0),
+      ),
     );
     return opts
       .map((o, i) => {
-        const voteCount = Math.max(0, Number(o?.voteCount || 0));
+        const voteCount = optionVoteCount(o);
         const pctRaw = Number(o?.votePct);
         const pct =
           Number.isFinite(pctRaw) && pctRaw >= 0

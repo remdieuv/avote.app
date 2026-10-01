@@ -8,9 +8,12 @@ import {
 } from "@/lib/notationPoll";
 import {
   LIVE_UX_BODY_RESULTS_VOTES_OPEN,
-  getUxState,
   getScreenResultsPillLabel,
 } from "@/lib/liveStateUx";
+import {
+  formatScreenQuestionProgressLabel,
+  getScreenDiffusionLabel,
+} from "@/lib/diffusionUx";
 import { API_URL } from "@/lib/config";
 
 const RESULTATS_TOP_N = 8;
@@ -92,6 +95,7 @@ function ScreenResultsNotation({
   chronoTick,
   voteOuvertResultats,
   barsAnimated,
+  questionProgress = null,
 }) {
   const isTestMode = poll?.eventIsLiveConsumed === false;
   const secondesChronoVote = useMemo(() => {
@@ -251,18 +255,19 @@ function ScreenResultsNotation({
           <span
             style={{
               display: "inline-block",
-              fontSize: "clamp(0.6rem, 1.15vw, 0.72rem)",
-              fontWeight: 800,
-              letterSpacing: "0.1em",
+              fontSize: "clamp(0.85rem, 2vw, 1.15rem)",
+              fontWeight: 900,
+              letterSpacing: "0.12em",
               textTransform: "uppercase",
-              padding: "0.28rem 0.62rem",
+              padding: "0.35rem 0.75rem",
               borderRadius: "9999px",
               background: pill.bg,
               color: pill.color,
               border: pill.border,
             }}
           >
-            {getScreenResultsPillLabel(voteOuvertResultats)}
+            {formatScreenQuestionProgressLabel(questionProgress, "results") ||
+              getScreenResultsPillLabel(voteOuvertResultats)}
           </span>
           {voteOuvertResultats ? (
             ligneChrono
@@ -274,7 +279,7 @@ function ScreenResultsNotation({
                 color: "#64748b",
               }}
             >
-              {getUxState({ liveState: "CLOSED" }).label}
+              {getScreenResultsPillLabel(false)}
             </span>
           )}
         </div>
@@ -516,6 +521,7 @@ function ScreenResultsChoixClassiques({
   chronoTick,
   voteOuvertResultats,
   barsAnimated,
+  questionProgress = null,
 }) {
   const isTestMode = poll?.eventIsLiveConsumed === false;
   const secondesChronoVote = useMemo(() => {
@@ -562,14 +568,13 @@ function ScreenResultsChoixClassiques({
     : "clamp(14px, 2.2vw, 24px)";
 
   const pill = voteOuvertResultats ? PILL_LIVE : PILL_FINAL;
+  const progressLabel =
+    formatScreenQuestionProgressLabel(questionProgress, "results") ||
+    getScreenDiffusionLabel("RESULTS");
 
   const ligneVoteChrono = (() => {
     if (!voteOuvertResultats) return null;
-    const resultLabel = getUxState({
-      liveState: "RESULTS",
-      voteState: "OPEN",
-      displayState: "RESULTS",
-    }).label;
+    const resultLabel = getScreenDiffusionLabel("RESULTS");
     if (!chronometreApi) {
       return (
         <span style={{ color: "#64748b", fontWeight: 600 }}>
@@ -674,11 +679,11 @@ function ScreenResultsChoixClassiques({
           <span
             style={{
               display: "inline-block",
-              fontSize: "clamp(0.6rem, 1.15vw, 0.72rem)",
-              fontWeight: 800,
-              letterSpacing: "0.1em",
+              fontSize: "clamp(0.85rem, 2vw, 1.15rem)",
+              fontWeight: 900,
+              letterSpacing: "0.12em",
               textTransform: "uppercase",
-              padding: "0.28rem 0.62rem",
+              padding: "0.35rem 0.75rem",
               borderRadius: "9999px",
               background: pill.bg,
               color: pill.color,
@@ -686,7 +691,7 @@ function ScreenResultsChoixClassiques({
               opacity: 0.95,
             }}
           >
-            {getScreenResultsPillLabel(voteOuvertResultats)}
+            {progressLabel}
           </span>
 
           {voteOuvertResultats ? (
@@ -706,7 +711,7 @@ function ScreenResultsChoixClassiques({
                 color: "#64748b",
               }}
             >
-              {getUxState({ liveState: "CLOSED" }).label}
+              {getScreenResultsPillLabel(false)}
             </span>
           )}
         </div>
@@ -715,12 +720,12 @@ function ScreenResultsChoixClassiques({
           style={{
             margin: 0,
             fontSize: compact
-              ? "clamp(1.35rem, 3.6vw, 2.35rem)"
-              : "clamp(1.55rem, 4vw, 2.65rem)",
-            fontWeight: 700,
-            lineHeight: 1.14,
+              ? "clamp(1.45rem, 4vw, 2.55rem)"
+              : "clamp(1.75rem, 4.5vw, 3rem)",
+            fontWeight: 800,
+            lineHeight: 1.12,
             letterSpacing: "-0.025em",
-            color: "#e2e8f0",
+            color: "#f8fafc",
           }}
         >
           {questionAffichee}
@@ -1067,7 +1072,13 @@ export function ScreenResults(props) {
     return () => {
       cancelled = true;
     };
-  }, [isContestEntry, poll?.id, poll?.eventSlug, poll?.options]);
+  }, [
+    isContestEntry,
+    poll?.id,
+    poll?.eventSlug,
+    poll?.options,
+    poll?.contestWinnersCount,
+  ]);
   if (isContestEntry) {
     const questionAffichee =
       (typeof poll?.question === "string" && poll.question) ||
@@ -1077,6 +1088,136 @@ export function ScreenResults(props) {
       String(poll?.contestPrize || "").trim() || "Lot à gagner non précisé";
     const quota = Math.max(1, Number(poll?.contestWinnerCount || 1));
     const participants = contestEligibleCountFromPoll(poll);
+    const progressLabel =
+      formatScreenQuestionProgressLabel(props.questionProgress, "results") ||
+      "CONCOURS";
+
+    if (contestWinners.length > 0) {
+      const primary = contestWinners[0];
+      const others = contestWinners.slice(1);
+      return (
+        <main
+          style={{
+            ...props.shell,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            textAlign: "center",
+            gap: "clamp(0.85rem, 2.5vw, 1.5rem)",
+          }}
+        >
+          {isTestMode ? (
+            <div
+              style={{
+                position: "fixed",
+                top: 14,
+                left: "50%",
+                transform: "translateX(-50%)",
+                zIndex: 2147483647,
+                pointerEvents: "none",
+                background: "rgba(0,0,0,0.55)",
+                color: "#f8fafc",
+                border: "1px solid rgba(148,163,184,0.35)",
+                borderRadius: 9999,
+                padding: "0.35rem 0.8rem",
+                fontWeight: 900,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                fontSize: "0.78rem",
+              }}
+              aria-hidden
+            >
+              MODE TEST
+            </div>
+          ) : null}
+          <p
+            style={{
+              margin: 0,
+              fontSize: "clamp(1rem, 2.5vw, 1.45rem)",
+              fontWeight: 900,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: "#c4b5fd",
+            }}
+          >
+            {progressLabel}
+          </p>
+          <p
+            style={{
+              margin: 0,
+              fontSize: "clamp(1.25rem, 3.5vw, 2rem)",
+              fontWeight: 800,
+              color: "#e2e8f0",
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+            }}
+          >
+            Gagnant
+          </p>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: "clamp(2.4rem, 8vw, 5.5rem)",
+              fontWeight: 900,
+              lineHeight: 1.05,
+              letterSpacing: "-0.03em",
+              color: "#f8fafc",
+              maxWidth: "16ch",
+              textWrap: "balance",
+            }}
+          >
+            {String(primary.displayName || "Gagnant")}
+          </h1>
+          <p
+            style={{
+              margin: 0,
+              fontSize: "clamp(1.1rem, 2.8vw, 1.75rem)",
+              fontWeight: 700,
+              color: "#cbd5e1",
+            }}
+          >
+            {String(primary.displayContact || "")}
+          </p>
+          <p
+            style={{
+              margin: "0.35rem 0 0 0",
+              fontSize: "clamp(1rem, 2.4vw, 1.45rem)",
+              fontWeight: 700,
+              color: "#a78bfa",
+            }}
+          >
+            {contestPrize}
+          </p>
+          {others.length > 0 ? (
+            <ul
+              style={{
+                listStyle: "none",
+                margin: "0.75rem 0 0 0",
+                padding: 0,
+                display: "grid",
+                gap: "0.35rem",
+              }}
+            >
+              {others.map((w) => (
+                <li
+                  key={String(w.id)}
+                  style={{
+                    color: "#e2e8f0",
+                    fontSize: "clamp(0.95rem, 2vw, 1.25rem)",
+                    fontWeight: 700,
+                  }}
+                >
+                  {String(w.displayName || "Gagnant")}
+                  {w.displayContact ? ` — ${String(w.displayContact)}` : ""}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </main>
+      );
+    }
+
     return (
       <main style={{ ...props.shell, textAlign: "left" }}>
         {isTestMode ? (
@@ -1115,23 +1256,23 @@ export function ScreenResults(props) {
           <span
             style={{
               display: "inline-block",
-              fontSize: "clamp(0.6rem, 1.15vw, 0.72rem)",
-              fontWeight: 800,
-              letterSpacing: "0.1em",
+              fontSize: "clamp(0.85rem, 2vw, 1.15rem)",
+              fontWeight: 900,
+              letterSpacing: "0.12em",
               textTransform: "uppercase",
-              padding: "0.28rem 0.62rem",
+              padding: "0.35rem 0.75rem",
               borderRadius: "9999px",
               background: "rgba(124, 58, 237, 0.22)",
               color: "#c4b5fd",
               border: "1px solid rgba(167, 139, 250, 0.55)",
             }}
           >
-            Concours
+            {progressLabel}
           </span>
           <h1
             style={{
               margin: "0.6rem 0 0 0",
-              fontSize: "clamp(1.45rem, 4vw, 2.4rem)",
+              fontSize: "clamp(1.65rem, 4.5vw, 2.85rem)",
               fontWeight: 800,
               lineHeight: 1.12,
               letterSpacing: "-0.03em",
@@ -1145,47 +1286,48 @@ export function ScreenResults(props) {
           style={{
             borderRadius: "14px",
             border: "1px solid rgba(167, 139, 250, 0.35)",
-            background: "linear-gradient(165deg, rgba(124,58,237,0.14) 0%, rgba(15,23,42,0.75) 100%)",
-            padding: "clamp(1rem, 2.5vw, 1.35rem) clamp(1.1rem, 3vw, 1.55rem)",
+            background:
+              "linear-gradient(165deg, rgba(124,58,237,0.14) 0%, rgba(15,23,42,0.75) 100%)",
+            padding: "clamp(1.15rem, 2.8vw, 1.65rem) clamp(1.2rem, 3vw, 1.75rem)",
             display: "grid",
-            gap: "0.65rem",
+            gap: "0.75rem",
           }}
         >
-          <p style={{ margin: 0, color: "#a78bfa", fontSize: "0.82rem", fontWeight: 700 }}>
+          <p
+            style={{
+              margin: 0,
+              color: "#a78bfa",
+              fontSize: "clamp(0.9rem, 2vw, 1.1rem)",
+              fontWeight: 800,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}
+          >
             Lot à gagner
           </p>
-          <p style={{ margin: 0, color: "#ede9fe", fontSize: "1.1rem", fontWeight: 800 }}>
+          <p
+            style={{
+              margin: 0,
+              color: "#ede9fe",
+              fontSize: "clamp(1.35rem, 3.5vw, 2.25rem)",
+              fontWeight: 900,
+            }}
+          >
             {contestPrize}
           </p>
-          <p style={{ margin: "0.35rem 0 0 0", color: "#cbd5e1", fontSize: "0.96rem", fontWeight: 700 }}>
-            Participants inscrits : {participants}
+          <p
+            style={{
+              margin: "0.35rem 0 0 0",
+              color: "#e2e8f0",
+              fontSize: "clamp(1.1rem, 2.6vw, 1.65rem)",
+              fontWeight: 800,
+            }}
+          >
+            {participants} participant{participants !== 1 ? "s" : ""}
           </p>
-          <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.9rem" }}>
-            Gagnants à tirer : {quota}
+          <p style={{ margin: 0, color: "#94a3b8", fontSize: "1rem" }}>
+            Tirage : {quota} gagnant{quota !== 1 ? "s" : ""}
           </p>
-          <p style={{ margin: "0.2rem 0 0 0", color: "#94a3b8", fontSize: "0.82rem" }}>
-            Tirage en cours en régie.
-          </p>
-          {contestWinners.length > 0 ? (
-            <div
-              style={{
-                marginTop: "0.55rem",
-                paddingTop: "0.55rem",
-                borderTop: "1px solid rgba(148, 163, 184, 0.18)",
-              }}
-            >
-              <p style={{ margin: 0, color: "#cbd5e1", fontSize: "0.78rem", fontWeight: 700 }}>
-                Gagnants tirés
-              </p>
-              <ol style={{ margin: "0.4rem 0 0 1rem", padding: 0, color: "#e2e8f0", fontSize: "0.88rem" }}>
-                {contestWinners.map((w) => (
-                  <li key={String(w.id)} style={{ marginBottom: "0.18rem" }}>
-                    {String(w.displayName || "Gagnant")} - {String(w.displayContact || "")}
-                  </li>
-                ))}
-              </ol>
-            </div>
-          ) : null}
         </section>
       </main>
     );
