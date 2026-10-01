@@ -11,23 +11,25 @@ import {
 import { useSearchParams } from "next/navigation";
 import { io } from "socket.io-client";
 import { ScreenAutoRevealWait } from "./ScreenAutoRevealWait";
+import { ScreenFinished, ScreenWaiting } from "./ScreenLiveScenes";
 import { ScreenQuestion } from "./ScreenQuestion";
 import { ScreenResults } from "./ScreenResults";
 import { resolveApiAssetUrlNullable } from "@/lib/assetUrl";
 import { API_URL, SOCKET_URL } from "@/lib/config";
-import { shouldShowScreenCornerQr } from "@/lib/diffusionUx";
 import {
-  LIVE_UX_DETAIL_SCREEN_WAITING_SLUG,
+  getScreenDiffusionLabel,
+  resolveScreenQuestionProgress,
+  shouldShowScreenCornerQr,
+} from "@/lib/diffusionUx";
+import {
   LIVE_UX_LOCAL,
   getLiveStateLabel,
-  getUxState,
   getLiveStatePresentation,
   getLiveStateTone,
 } from "@/lib/liveStateUx";
 import {
   getLiveStateVisualTokens,
   screenShellTopBorderStyle,
-  screenStateSubtitleOpacity,
   screenStateTitleFontSizeClamp,
 } from "@/lib/liveStateVisual";
 
@@ -165,6 +167,10 @@ export function ScreenProjection({
   const [eventAutoRevealAt, setEventAutoRevealAt] = useState(
     /** @type {string | null} */ (null),
   );
+  /** Progression Question x/y (GET /events/slug → pollsProgress). */
+  const [pollsProgress, setPollsProgress] = useState(
+    /** @type {{ current: number; total: number } | null} */ (null),
+  );
 
   const evenementInvalideRef = useRef(false);
   const loadPollAbortRef = useRef(null);
@@ -236,6 +242,20 @@ export function ScreenProjection({
     } else {
       setEventActivePollId(null);
     }
+    const pp = meta.pollsProgress;
+    if (
+      pp &&
+      typeof pp === "object" &&
+      Number(pp.current) >= 1 &&
+      Number(pp.total) >= 1
+    ) {
+      setPollsProgress({
+        current: Math.floor(Number(pp.current)),
+        total: Math.floor(Number(pp.total)),
+      });
+    } else if (String(meta.liveState || "").toLowerCase() === "finished") {
+      setPollsProgress(null);
+    }
   }, []);
 
   const fetchEventSlugMeta = useCallback(
@@ -259,6 +279,7 @@ export function ScreenProjection({
           setEventAutoReveal(false);
           setEventAutoRevealAt(null);
           setEventActivePollId(null);
+          setPollsProgress(null);
           setLoading(false);
           return;
         }
@@ -487,32 +508,21 @@ export function ScreenProjection({
     () => getLiveStatePresentation(projectionUxCtx),
     [projectionUxCtx],
   );
-  const ux = useMemo(
+
+  const questionProgress = useMemo(
     () =>
-      getUxState({
-        liveState: liveScene,
-        voteState: voteStatePourAttente,
-        displayState: ds,
+      resolveScreenQuestionProgress({
+        pollsProgress,
+        pollOrder: typeof poll?.order === "number" ? poll.order : null,
+        pollsTotal: pollsProgress?.total ?? null,
       }),
-    [liveScene, voteStatePourAttente, ds],
+    [pollsProgress, poll?.order],
   );
 
   const screenTone = getLiveStateTone(projectionPres.ux);
   const screenTok = useMemo(
     () => getLiveStateVisualTokens(screenTone, "screen"),
     [screenTone],
-  );
-
-  const screenStateSubStyle = useMemo(
-    () => ({
-      margin: "clamp(0.75rem, 2vw, 1.25rem) auto 0",
-      fontSize: `clamp(${1 * screenTok.titleClampMul}rem, ${2.5 * screenTok.titleClampMul}vw, ${1.35 * screenTok.titleClampMul}rem)`,
-      fontWeight: screenTone === "highlight" ? 600 : 500,
-      lineHeight: 1.4,
-      maxWidth: "36ch",
-      color: `rgba(226, 232, 240, ${screenStateSubtitleOpacity(screenTone)})`,
-    }),
-    [screenTok, screenTone],
   );
 
   const screenTitleStyle = useMemo(
@@ -533,23 +543,6 @@ export function ScreenProjection({
           : screenTone === "soft"
             ? "#94a3b8"
             : "#e2e8f0",
-    }),
-    [screenTok, screenTone],
-  );
-
-  const screenTitleStyleLarge = useMemo(
-    () => ({
-      ...screenStateTitleFontSizeClamp(screenTok),
-      fontWeight:
-        screenTone === "soft"
-          ? 600
-          : screenTone === "dynamic" || screenTone === "highlight"
-            ? 800
-            : 700,
-      lineHeight: 1.25,
-      maxWidth: "28ch",
-      margin: "0 auto",
-      color: "#cbd5e1",
     }),
     [screenTok, screenTone],
   );
@@ -655,6 +648,7 @@ export function ScreenProjection({
     surface:
       ds === "results" ? "results" : ds === "question" ? "question" : "other",
     projectionMode,
+    uxState: projectionPres.ux,
   });
 
   useEffect(() => {
@@ -769,6 +763,8 @@ export function ScreenProjection({
           setDisplayState(deriveDisplayFromLive(payload.liveState));
         }
       }
+      // Progression Question x/y (pollsProgress) — refetch meta, pas un 2e socket.
+      void fetchEventSlugMeta({ silent: true });
 
       if (payload.poll) {
         setPoll(payload.poll);
@@ -1036,30 +1032,6 @@ export function ScreenProjection({
           Écran {screenIdLabel}
         </div>
       ) : null}
-      {!opts.hideStatePill &&
-      (!poll || (ds !== "question" && ds !== "results")) ? (
-        <div
-          className="text-center text-sm opacity-80 mb-2"
-          style={{
-            position: "fixed",
-            top: "clamp(0.6rem, 2vh, 1rem)",
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 90,
-            textAlign: "center",
-            fontSize: "clamp(0.76rem, 1.3vw, 0.88rem)",
-            opacity: 0.82,
-            color: "rgba(226, 232, 240, 0.9)",
-            padding: "0.3rem 0.65rem",
-            borderRadius: "999px",
-            background: "rgba(15, 23, 42, 0.38)",
-            border: "1px solid rgba(148, 163, 184, 0.28)",
-            pointerEvents: "none",
-          }}
-        >
-          {ux.label}
-        </div>
-      ) : null}
       {wrap(blackoutFlag, node)}
     </>
   );
@@ -1095,24 +1067,26 @@ export function ScreenProjection({
   }
 
   if (!poll && noPollFromHttp404) {
+    if (ds === "black") {
+      return wrapOut(
+        true,
+        <main style={{ ...shell, background: "#000" }} aria-hidden />,
+        { hideStatePill: true },
+      );
+    }
     return wrapOut(
-      ds === "black",
-      <main
-        style={{
-          ...shell,
-          justifyContent: "center",
-          textAlign: "center",
-        }}
-      >
-        <p style={screenTitleStyleLarge}>{projectionPres.title}</p>
-        {projectionPres.subtitle ? (
-          <p style={screenStateSubStyle}>{projectionPres.subtitle}</p>
-        ) : (
-          <p style={screenStateSubStyle}>
-            {LIVE_UX_DETAIL_SCREEN_WAITING_SLUG}
-          </p>
-        )}
-      </main>,
+      false,
+      <ScreenWaiting shell={shell} joinSlug={slugPublic} />,
+      { hideStatePill: true },
+    );
+  }
+
+  /** BLACK projection indépendante — prioritaire sur auto-reveal / scènes. */
+  if (ds === "black") {
+    return wrapOut(
+      true,
+      <main style={{ ...shell, background: "#000" }} aria-hidden />,
+      { hideStatePill: true },
     );
   }
 
@@ -1128,20 +1102,21 @@ export function ScreenProjection({
         shell={shellAuto}
         untilIso={autoRevealUntilIso}
         chronoTick={chronoTick}
+        questionProgress={questionProgress}
       />,
     );
   }
 
-  /** États plein écran sans poll actif */
-  if (
-    !poll &&
-    (ds === "waiting" ||
-      liveScene === "finished" ||
-      liveScene === "paused" ||
-      ds === "black")
-  ) {
+  /** FINISHED : scène finale, jamais d’ancienne question / résultats. */
+  if (liveScene === "finished" || projectionPres.ux === "FINISHED") {
+    return wrapOut(false, <ScreenFinished shell={shell} />, {
+      hideStatePill: true,
+    });
+  }
+
+  if (liveScene === "paused" || projectionPres.ux === "PAUSED") {
     return wrapOut(
-      ds === "black",
+      false,
       <main
         style={{
           ...shell,
@@ -1149,83 +1124,57 @@ export function ScreenProjection({
           textAlign: "center",
         }}
       >
-        <p style={screenTitleStyle}>{projectionPres.title}</p>
-        {projectionPres.subtitle ? (
-          <p style={screenStateSubStyle}>{projectionPres.subtitle}</p>
-        ) : null}
+        <p style={screenTitleStyle}>
+          {getScreenDiffusionLabel("PAUSED")}
+        </p>
       </main>,
+    );
+  }
+
+  /** WAITING — QR héros pour rejoindre la Salle. */
+  if (
+    projectionPres.ux === "WAITING" ||
+    (!poll && (ds === "waiting" || noPollFromHttp404))
+  ) {
+    return wrapOut(
+      false,
+      <ScreenWaiting shell={shell} joinSlug={slugPublic} />,
+      { hideStatePill: true },
+    );
+  }
+
+  /** CLOSED : question + options visibles, sans résultats. */
+  if (projectionPres.ux === "CLOSED" && poll) {
+    const shellVote = {
+      ...shell,
+      ...screenShellTopBorderStyle(
+        roomTopAccent,
+        getLiveStateVisualTokens("neutral", "screen"),
+      ),
+    };
+    return wrapOut(
+      false,
+      <ScreenQuestion
+        shell={shellVote}
+        poll={poll}
+        chronometreApi={chronometreApi}
+        chronoTick={chronoTick}
+        voteOuvert={false}
+        joinSlug={slugPublic}
+        questionProgress={questionProgress}
+        qrScale={isModeQrFullscreen ? 2 : isModeXlargeQr ? 1.35 : isModeResultsFocus ? 1.42 : 1}
+        compactQuestionText={isModeQrFullscreen || isModeXlargeQr}
+        fullScreenQr={isModeQrFullscreen}
+        compactChrono={isModeResultsFocus || isModeQrFullscreen}
+      />,
     );
   }
 
   if (!poll) {
     return wrapOut(
-      ds === "black",
-      <main
-        style={{
-          ...shell,
-          justifyContent: "center",
-          textAlign: "center",
-        }}
-      >
-        <p style={screenTitleStyle}>{projectionPres.title}</p>
-        {projectionPres.subtitle ? (
-          <p style={screenStateSubStyle}>{projectionPres.subtitle}</p>
-        ) : null}
-      </main>,
-    );
-  }
-
-  if (ds === "waiting" && liveScene !== "finished") {
-    return wrapOut(
-      ds === "black",
-      <main
-        style={{
-          ...shell,
-          justifyContent: "center",
-          textAlign: "center",
-        }}
-      >
-        <p style={screenTitleStyle}>{projectionPres.title}</p>
-        {projectionPres.subtitle ? (
-          <p style={screenStateSubStyle}>{projectionPres.subtitle}</p>
-        ) : null}
-      </main>,
-    );
-  }
-
-  if (liveScene === "finished" && (ds === "waiting" || !poll)) {
-    return wrapOut(
-      ds === "black",
-      <main
-        style={{
-          ...shell,
-          justifyContent: "center",
-          textAlign: "center",
-        }}
-      >
-        <p style={screenTitleStyle}>{projectionPres.title}</p>
-        {projectionPres.subtitle ? (
-          <p style={screenStateSubStyle}>{projectionPres.subtitle}</p>
-        ) : null}
-      </main>,
-    );
-  }
-
-  if (liveScene === "paused" && ds !== "black") {
-    return wrapOut(
-      ds === "black",
-      <main
-        style={{
-          ...shell,
-          justifyContent: "center",
-          textAlign: "center",
-        }}
-      >
-        <p style={screenTitleStyle}>{projectionPres.title}</p>
-        {projectionPres.subtitle ? (
-          <p style={screenStateSubStyle}>{projectionPres.subtitle}</p>
-        ) : null}
-      </main>,
+      false,
+      <ScreenWaiting shell={shell} joinSlug={slugPublic} />,
+      { hideStatePill: true },
     );
   }
 
@@ -1238,7 +1187,7 @@ export function ScreenProjection({
       ),
     };
     return wrapOut(
-      ds === "black",
+      false,
       <div
         style={{
           opacity: questionFadeOp,
@@ -1259,6 +1208,7 @@ export function ScreenProjection({
             (ds === "question" || qToRPhase === "fadeQ")
           }
           joinSlug={slugPublic}
+          questionProgress={questionProgress}
           qrScale={isModeQrFullscreen ? 2 : isModeXlargeQr ? 1.35 : isModeResultsFocus ? 1.42 : 1}
           compactQuestionText={isModeQrFullscreen || isModeXlargeQr}
           fullScreenQr={isModeQrFullscreen}
@@ -1270,7 +1220,7 @@ export function ScreenProjection({
 
   if (poll && qToRPhase === "inter") {
     return wrapOut(
-      ds === "black",
+      false,
       <main
         style={{
           ...shell,
@@ -1294,7 +1244,7 @@ export function ScreenProjection({
     );
   }
 
-  if (ds === "results") {
+  if (ds === "results" || projectionPres.ux === "RESULTS") {
     const fadeResults =
       qToRPhase === "fadeR"
         ? {
@@ -1303,7 +1253,7 @@ export function ScreenProjection({
           }
         : {};
     return wrapOut(
-      ds === "black",
+      false,
       <div
         style={{
           minHeight: "100vh",
@@ -1320,13 +1270,14 @@ export function ScreenProjection({
           chronoTick={chronoTick}
           voteOuvertResultats={voteOuvertResultats}
           barsAnimated={resultsBarsAnimated}
+          questionProgress={questionProgress}
         />
       </div>,
     );
   }
 
   return wrapOut(
-    ds === "black",
+    false,
     <ScreenQuestion
       shell={shell}
       poll={poll}
@@ -1334,6 +1285,7 @@ export function ScreenProjection({
       chronoTick={chronoTick}
       voteOuvert={voteOuvert}
       joinSlug={slugPublic}
+      questionProgress={questionProgress}
       qrScale={isModeQrFullscreen ? 2 : isModeXlargeQr ? 1.35 : isModeResultsFocus ? 1.42 : 1}
       compactQuestionText={isModeQrFullscreen || isModeXlargeQr}
       fullScreenQr={isModeQrFullscreen}

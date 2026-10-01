@@ -13,11 +13,10 @@ import { io } from "socket.io-client";
 import { QRCodeSVG } from "qrcode.react";
 import { formatCountdownVerbose } from "@/lib/chronoFormat";
 import { API_URL, SOCKET_URL } from "@/lib/config";
-import { overlayMustStayTransparent } from "@/lib/diffusionUx";
+import { getScreenDiffusionLabel, overlayMustStayTransparent } from "@/lib/diffusionUx";
 import {
   LIVE_UX_LOCAL,
   getLiveStateLabel,
-  getUxState,
 } from "@/lib/liveStateUx";
 
 const FADE_MS = 260;
@@ -685,7 +684,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
     return () => {
       cancelled = true;
     };
-  }, [poll?.id, poll?.eventSlug, poll?.options]);
+  }, [poll?.id, poll?.eventSlug, poll?.options, poll?.contestWinnersCount]);
 
   const fadeKey = `${effectivePanel}|${pollId}|${variant}|${theme}|${position}|only:${onlyQr ? "qr" : "0"}|brand:${eventPrimaryHex || ""}`;
 
@@ -959,7 +958,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
                 color: th.teal,
               }}
             >
-              {getUxState({ liveState: "CLOSED" }).label}
+              {getScreenDiffusionLabel("CLOSED")}
             </p>
             <p
               style={{
@@ -1042,7 +1041,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
             >
               {isContestEntry
                 ? "Concours en cours"
-                : getUxState({ liveState: "RESULTS", displayState: "RESULTS" }).label}
+                : getScreenDiffusionLabel("RESULTS")}
             </p>
             {isContestEntry ? (
               <div

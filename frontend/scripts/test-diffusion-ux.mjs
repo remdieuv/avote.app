@@ -1,19 +1,27 @@
 /**
- * LOT-2 — Diffusion Screen / Overlay (P8 + guide OBS micro-copy).
+ * LOT-2 — Diffusion Screen / Overlay (scènes grand écran + P8 + guide OBS).
  * Exécution : node frontend/scripts/test-diffusion-ux.mjs
  */
 import assert from "node:assert/strict";
 import {
   DIFFUSION_SCREEN_VS_OVERLAY_HINT,
   OBS_GUIDE_STEPS,
+  SCREEN_QR_CTA_JOIN,
+  SCREEN_QR_CTA_VOTE,
+  countScreenVotesReceived,
+  formatScreenQuestionProgressLabel,
+  getScreenDiffusionLabel,
   overlayMustStayTransparent,
+  resolveScreenQuestionProgress,
+  screenOptionLetter,
   shouldShowScreenCornerQr,
+  sortScreenOptions,
 } from "../lib/diffusionUx.js";
 
 /** @type {{ name: string; input: Parameters<typeof shouldShowScreenCornerQr>[0]; expect: boolean }[]} */
 const screenQrCases = [
   {
-    name: "A. attente valide → QR coin OK",
+    name: "A. WAITING → pas de QR coin (héros dans la scène)",
     input: {
       loading: false,
       error: null,
@@ -22,11 +30,12 @@ const screenQrCases = [
       displayState: "waiting",
       surface: "other",
       projectionMode: "standard",
+      uxState: "WAITING",
     },
-    expect: true,
+    expect: false,
   },
   {
-    name: "B. question ouverte → QR coin masqué (QR dans ScreenQuestion)",
+    name: "B. VOTING / question → pas de QR coin (QR secondaire dans scène)",
     input: {
       loading: false,
       error: null,
@@ -35,24 +44,26 @@ const screenQrCases = [
       displayState: "question",
       surface: "question",
       projectionMode: "standard",
+      uxState: "VOTING",
     },
     expect: false,
   },
   {
-    name: "C. CLOSED / attente révélation → QR coin OK",
+    name: "C. CLOSED → pas de QR coin",
     input: {
       loading: false,
       error: null,
       eventInvalid: false,
       liveScene: "waiting",
-      displayState: "waiting",
+      displayState: "question",
       surface: "other",
       projectionMode: "standard",
+      uxState: "CLOSED",
     },
-    expect: true,
+    expect: false,
   },
   {
-    name: "D. RESULTS → QR coin compact OK",
+    name: "D. RESULTS → pas de QR coin (focus barres)",
     input: {
       loading: false,
       error: null,
@@ -61,8 +72,9 @@ const screenQrCases = [
       displayState: "results",
       surface: "results",
       projectionMode: "standard",
+      uxState: "RESULTS",
     },
-    expect: true,
+    expect: false,
   },
   {
     name: "Dbis. RESULTS focus → pas de QR coin",
@@ -74,6 +86,7 @@ const screenQrCases = [
       displayState: "results",
       surface: "results",
       projectionMode: "results_focus",
+      uxState: "RESULTS",
     },
     expect: false,
   },
@@ -87,6 +100,7 @@ const screenQrCases = [
       displayState: "waiting",
       surface: "other",
       projectionMode: "standard",
+      uxState: "FINISHED",
     },
     expect: false,
   },
@@ -139,6 +153,7 @@ const screenQrCases = [
       displayState: "black",
       surface: "other",
       projectionMode: "standard",
+      uxState: "PAUSED",
     },
     expect: false,
   },
@@ -241,10 +256,104 @@ assert.ok(/OBS|Navigateur/i.test(OBS_GUIDE_STEPS[1]));
 assert.ok(/transparence|blanc/i.test(OBS_GUIDE_STEPS[2]));
 console.log("ok  guide OBS 3 gestes + hint Screen≠Overlay");
 
+// --- Labels Screen ≠ Participant ---
+assert.equal(getScreenDiffusionLabel("WAITING"), "ÇA VA BIENTÔT COMMENCER");
+assert.equal(getScreenDiffusionLabel("CLOSED"), "VOTE TERMINÉ");
+assert.equal(getScreenDiffusionLabel("FINISHED"), "MERCI D’AVOIR PARTICIPÉ !");
+assert.equal(getScreenDiffusionLabel("RESULTS"), "RÉSULTATS");
+assert.notEqual(
+  getScreenDiffusionLabel("CLOSED"),
+  "Merci ! Ton vote est pris en compte",
+  "Screen CLOSED ≠ label Participant",
+);
+assert.equal(SCREEN_QR_CTA_JOIN, "SCANNER POUR REJOINDRE");
+assert.match(SCREEN_QR_CTA_VOTE, /voter/i);
+console.log("ok  labels Screen diffusion + QR CTA");
+
+// --- Progression Question x/y ---
+assert.deepEqual(
+  resolveScreenQuestionProgress({
+    pollsProgress: { current: 2, total: 3 },
+  }),
+  { current: 2, total: 3 },
+);
+assert.deepEqual(
+  resolveScreenQuestionProgress({ pollOrder: 0, pollsTotal: 3 }),
+  { current: 1, total: 3 },
+);
+assert.equal(
+  formatScreenQuestionProgressLabel({ current: 1, total: 3 }, "voting"),
+  "QUESTION 1/3",
+);
+assert.equal(
+  formatScreenQuestionProgressLabel({ current: 2, total: 3 }, "results"),
+  "RÉSULTATS — QUESTION 2/3",
+);
+assert.equal(formatScreenQuestionProgressLabel(null, "voting"), null);
+console.log("ok  progression Question x/y");
+
+// --- Votes reçus (pas de répartition) ---
+const single = countScreenVotesReceived({
+  type: "SINGLE_CHOICE",
+  options: [
+    { id: "a", votes: 10 },
+    { id: "b", votes: 14 },
+  ],
+});
+assert.equal(single.count, 24);
+assert.equal(single.isMultipleChoice, false);
+assert.equal(single.label, "24 votes reçus");
+
+const multi = countScreenVotesReceived({
+  type: "MULTIPLE_CHOICE",
+  options: [
+    { id: "a", voteCount: 5 },
+    { id: "b", voteCount: 7 },
+  ],
+});
+assert.equal(multi.count, 12);
+assert.equal(multi.isMultipleChoice, true);
+assert.match(multi.label, /12 votes reçus/);
+console.log("ok  compteur votes (SINGLE + MULTIPLE, sans répartition)");
+
+// --- Options A/B/C/D ---
+const sorted = sortScreenOptions([
+  { id: "2", label: "B", order: 1 },
+  { id: "1", label: "A", order: 0 },
+  { id: "3", label: "C", order: 2 },
+]);
+assert.deepEqual(
+  sorted.map((o) => o.label),
+  ["A", "B", "C"],
+);
+assert.equal(screenOptionLetter(0), "A");
+assert.equal(screenOptionLetter(3), "D");
+console.log("ok  options triées + lettres A/B/C/D");
+
+// --- Salle ≠ Screen (indépendance axes) ---
+assert.ok(
+  typeof shouldShowScreenCornerQr === "function",
+  "helper Screen dédié (pas Participant)",
+);
+assert.notEqual(
+  getScreenDiffusionLabel("VOTING"),
+  "Choisis ta réponse",
+  "label Screen VOTING adapté diffusion",
+);
+console.log("ok  Salle ≠ Screen (labels diffusion dédiés)");
+
 if (failed > 0) {
   console.error(`\n${failed} cas en échec`);
   process.exit(1);
 }
-console.log(
-  `\n${screenQrCases.length + overlayCases.length + 1} assertions OK — LOT-2 diffusion`,
-);
+
+const total =
+  screenQrCases.length +
+  overlayCases.length +
+  1 + // guide
+  1 + // labels
+  1 + // progression
+  1 + // votes
+  1 + // options
+  1; // salle≠screen
+console.log(`\n${total} groupes d’assertions OK — LOT-2 diffusion Screen final`);
