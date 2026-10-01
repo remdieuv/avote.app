@@ -1884,15 +1884,21 @@ app.get("/events/slug/:slug", async (req, res) => {
     if (eventApres) await repairStaleVotingLiveState(eventApres);
 
     let activePollQuestion = null;
+    /** Statut du poll pointé (Join : distinguer attente jamais lancée vs vote fermé). */
+    let activePollStatus = null;
     if (eventApres.activePollId) {
       const p = await prisma.poll.findFirst({
         where: { id: eventApres.activePollId, eventId: eventApres.id },
-        select: { question: true, title: true },
+        select: { question: true, title: true, status: true },
       });
       if (p) {
         const q = (p.question && p.question.trim()) || "";
         const t = (p.title && p.title.trim()) || "";
         activePollQuestion = q || t || null;
+        activePollStatus =
+          typeof p.status === "string" && p.status.trim()
+            ? String(p.status).toUpperCase()
+            : null;
       }
     }
 
@@ -1950,6 +1956,7 @@ app.get("/events/slug/:slug", async (req, res) => {
       autoRevealShowResultsAt:
         eventApres.autoRevealShowResultsAt?.toISOString() ?? null,
       activePollQuestion,
+      activePollStatus,
       pollsProgress,
       pastPollLabels,
       pastPolls,

@@ -24,6 +24,7 @@ import {
 import {
   getParticipantFullLabel,
   getParticipantOfflineLabel,
+  resolveJoinHistoriqueQuestions,
   shouldEmbedPollSurfaceInRoom,
   shouldShowParticipantFullUi,
 } from "@/lib/participantLiveFlow";
@@ -139,8 +140,9 @@ export function JoinLiveHub({ slug }) {
   const [questionTimer, setQuestionTimer] = useState(null);
   /** @type {string | null} */
   const [activePollId, setActivePollId] = useState(null);
+  /** ACTIVE | CLOSED | DRAFT | … — pour resolveLiveUxState (copie jamais lancée ≠ CLOSED UX). */
   /** @type {string | null} */
-  const [activePollQuestion, setActivePollQuestion] = useState(null);
+  const [activePollStatus, setActivePollStatus] = useState(null);
   /** @type {{ current: number; total: number } | null} */
   const [pollsProgress, setPollsProgress] = useState(null);
   /** @type {{ id: string; label: string }[]} */
@@ -208,7 +210,7 @@ export function JoinLiveHub({ slug }) {
       setAutoRevealShowResultsAt(null);
       setQuestionTimer(null);
       setActivePollId(null);
-      setActivePollQuestion(null);
+      setActivePollStatus(null);
       setPollsProgress(null);
       setPastPolls([]);
       setRoomDescription(null);
@@ -273,9 +275,11 @@ export function JoinLiveHub({ slug }) {
         ? data.activePollId.trim()
         : null,
     );
-    const q = data.activePollQuestion;
-    setActivePollQuestion(
-      typeof q === "string" && q.trim() ? q.trim() : null,
+    const aps = data.activePollStatus;
+    setActivePollStatus(
+      typeof aps === "string" && aps.trim()
+        ? String(aps).trim().toUpperCase()
+        : null,
     );
     const pp = data.pollsProgress;
     if (
@@ -588,10 +592,11 @@ export function JoinLiveHub({ slug }) {
       liveScene: sceneRaw || null,
       displayState: ds,
       voteState: vs || null,
-      pollStatus: null,
+      // Statut réel du poll pointé (ACTIVE sur une copie jamais lancée → WAITING, pas CLOSED).
+      pollStatus: activePollStatus,
       hasActivePoll: Boolean(activePollId),
     }),
-    [sceneRaw, ds, vs, activePollId],
+    [sceneRaw, ds, vs, activePollStatus, activePollId],
   );
 
   const joinPresCore = useMemo(
@@ -666,15 +671,11 @@ export function JoinLiveHub({ slug }) {
     }
     return `Question ${current} sur ${total}`;
   }, [pollsProgress]);
-  const historiqueQuestions = useMemo(() => {
-    const base = Array.isArray(pastPolls) ? pastPolls : [];
-    const activeLabel =
-      typeof activePollQuestion === "string" ? activePollQuestion.trim() : "";
-    if (!activeLabel) return base;
-    const exists = base.some((p) => String(p?.label || "").trim() === activeLabel);
-    if (exists) return base;
-    return [{ id: "__active__", label: activeLabel }, ...base];
-  }, [pastPolls, activePollQuestion]);
+  /** pastPolls API uniquement — pas de préfixe de la question active (isolation copie). */
+  const historiqueQuestions = useMemo(
+    () => resolveJoinHistoriqueQuestions(pastPolls),
+    [pastPolls],
+  );
   const winningContestPolls = useMemo(
     () =>
       historiqueQuestions.filter(

@@ -202,3 +202,29 @@ export function getParticipantFormNotice(input = {}) {
   if (input.leadEnabled === true) return PARTICIPANT_LEAD_NOTICE;
   return null;
 }
+
+/**
+ * Historique « questions déjà passées » pour `/join`.
+ * Source exclusive : `pastPolls` API — ne jamais préfixer la question active
+ * (une copie jamais lancée a pastPolls=[] même si activePollId pointe Q1 ACTIVE).
+ *
+ * @param {unknown} pastPolls
+ * @returns {{ id: string; label: string }[]}
+ */
+export function resolveJoinHistoriqueQuestions(pastPolls) {
+  if (!Array.isArray(pastPolls)) return [];
+  return pastPolls
+    .filter(
+      (x) =>
+        x &&
+        typeof x === "object" &&
+        typeof /** @type {{ id?: unknown }} */ (x).id === "string" &&
+        String(/** @type {{ id: string }} */ (x).id).trim() &&
+        typeof /** @type {{ label?: unknown }} */ (x).label === "string" &&
+        String(/** @type {{ label: string }} */ (x).label).trim(),
+    )
+    .map((x) => {
+      const row = /** @type {{ id: string; label: string }} */ (x);
+      return { id: row.id.trim(), label: row.label.trim() };
+    });
+}

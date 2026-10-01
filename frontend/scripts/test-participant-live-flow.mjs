@@ -16,6 +16,7 @@ import {
   getParticipantOfflineLabel,
   isParticipantRoomFull,
   resolveEventLandingPhase,
+  resolveJoinHistoriqueQuestions,
   shouldAutoNavigateJoinToPollPath,
   shouldEmbedPollSurfaceInRoom,
   shouldPollFetchEventMetaBranding,
@@ -240,6 +241,49 @@ test("embedded : pas de 2ᵉ socket ni bandeau OFFLINE ni meta branding", () => 
   assert.equal(shouldPollOpenOwnSocket({ embedded: true }), false);
   assert.equal(shouldPollRenderOfflineBanner({ embedded: true }), false);
   assert.equal(shouldPollFetchEventMetaBranding({ embedded: true }), false);
+});
+
+/**
+ * QA : A participé/terminé → duplicate B → B jamais lancé → /join/B = WAITING.
+ * Cause : duplicate pose activePollId + poll ACTIVE + vote CLOSED + display WAITING ;
+ * Join doit passer activePollStatus (pas null) et n’afficher que pastPolls (vide).
+ */
+test("Copie jamais lancée (dup A→B) → WAITING, pas vote confirmé, pas questions passées héritées", () => {
+  // Payload Join après duplicate (jamais « Lancer ») — miroir backend /events/slug
+  const joinCtx = {
+    liveScene: "waiting",
+    displayState: "waiting",
+    voteState: "closed",
+    pollStatus: "ACTIVE",
+    hasActivePoll: true,
+  };
+  const ux = resolveLiveUxState(joinCtx);
+  assert.equal(ux, LIVE_UX_STATE.WAITING);
+  assert.notEqual(ux, LIVE_UX_STATE.CLOSED);
+  assert.equal(shouldEmbedPollSurfaceInRoom({ uxState: ux }), false);
+
+  // pastPolls API vide (activePollId = Q1, idx 0 → aucune question avant)
+  const historique = resolveJoinHistoriqueQuestions([]);
+  assert.equal(historique.length, 0);
+
+  // Régression explicite de l’ancien bug Join (pollStatus forcé null → faux CLOSED)
+  assert.equal(
+    resolveLiveUxState({
+      ...joinCtx,
+      pollStatus: null,
+    }),
+    LIVE_UX_STATE.CLOSED,
+  );
+
+  // Historique ne doit jamais inventer une entrée depuis la question active
+  assert.deepEqual(
+    resolveJoinHistoriqueQuestions([
+      { id: "past-1", label: "Question déjà jouée" },
+    ]),
+    [{ id: "past-1", label: "Question déjà jouée" }],
+  );
+  assert.deepEqual(resolveJoinHistoriqueQuestions(null), []);
+  assert.deepEqual(resolveJoinHistoriqueQuestions(undefined), []);
 });
 
 test("/p standalone : socket + OFFLINE + meta branding autonomes", () => {

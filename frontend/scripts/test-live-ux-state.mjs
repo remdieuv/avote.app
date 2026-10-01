@@ -34,6 +34,17 @@ const cases = [
     expect: LIVE_UX_STATE.CLOSED,
   },
   {
+    name: "CLOSED + WAITING + poll ACTIVE (copie jamais lancée) → WAITING",
+    ctx: {
+      liveScene: "waiting",
+      displayState: "waiting",
+      voteState: "closed",
+      pollStatus: "ACTIVE",
+      hasActivePoll: true,
+    },
+    expect: LIVE_UX_STATE.WAITING,
+  },
+  {
     name: "CLOSED + WAITING + poll CLOSED → CLOSED",
     ctx: {
       liveScene: "waiting",
