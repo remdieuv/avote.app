@@ -24,8 +24,8 @@ import {
 import {
   getParticipantFullLabel,
   getParticipantOfflineLabel,
-  isParticipantRoomFull,
   shouldEmbedPollSurfaceInRoom,
+  shouldShowParticipantFullUi,
 } from "@/lib/participantLiveFlow";
 import {
   buildJoinPollCardSurfaces,
@@ -635,7 +635,11 @@ export function JoinLiveHub({ slug }) {
     [sceneRaw, scene, vs, ds],
   );
 
-  const roomIsFull = isParticipantRoomFull({ isLocked });
+  /** isLocked peut être true après Terminer (réel) — ne pas confondre avec FULL. */
+  const roomIsFull = shouldShowParticipantFullUi({
+    isLocked,
+    uxState: scene,
+  });
   const isOffline = socketOnline === false;
 
   /** Vote / confirmation / CLOSED / RESULTS — dans la Salle, sans quitter `/join`. */

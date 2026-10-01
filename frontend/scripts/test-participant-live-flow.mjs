@@ -21,6 +21,7 @@ import {
   shouldPollFetchEventMetaBranding,
   shouldPollOpenOwnSocket,
   shouldPollRenderOfflineBanner,
+  shouldShowParticipantFullUi,
 } from "../lib/participantLiveFlow.js";
 
 /** @type {{ name: string; run: () => void }[]} */
@@ -121,6 +122,31 @@ test("I. FINISHED → reste Salle, pas embed vote", () => {
   assert.equal(ux, LIVE_UX_STATE.FINISHED);
   assert.equal(shouldEmbedPollSurfaceInRoom({ uxState: ux }), false);
   assert.equal(shouldAutoNavigateJoinToPollPath(), false);
+});
+
+test("FINISHED != FULL même si isLocked (Terminer événement réel)", () => {
+  assert.equal(isParticipantRoomFull({ isLocked: true }), true);
+  assert.equal(
+    shouldShowParticipantFullUi({
+      isLocked: true,
+      uxState: LIVE_UX_STATE.FINISHED,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldShowParticipantFullUi({
+      isLocked: true,
+      uxState: LIVE_UX_STATE.VOTING,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldShowParticipantFullUi({
+      isLocked: false,
+      uxState: LIVE_UX_STATE.FINISHED,
+    }),
+    false,
+  );
 });
 
 // J — aucune navigation automatique join→p

@@ -73,6 +73,24 @@ export function isParticipantRoomFull(input = {}) {
 }
 
 /**
+ * Afficher l’UI FULL côté participant.
+ * FINISHED n’est jamais FULL : le backend peut poser `isLocked` au « Terminer »
+ * (événement réel consommé) sans que ce soit une limite de capacité.
+ *
+ * @param {{
+ *   isLocked?: boolean | null;
+ *   limitReached?: boolean | null;
+ *   errorCode?: string | null;
+ *   uxState?: string | null;
+ * }} input
+ */
+export function shouldShowParticipantFullUi(input = {}) {
+  const ux = String(input.uxState ?? "").toUpperCase();
+  if (ux === LIVE_UX_STATE.FINISHED) return false;
+  return isParticipantRoomFull(input);
+}
+
+/**
  * @param {unknown} errBodyOrMessage
  * @returns {string | null} code normalisé ou null
  */

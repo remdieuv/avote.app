@@ -39,10 +39,10 @@ import {
   getParticipantFormNotice,
   getParticipantFullLabel,
   getParticipantOfflineLabel,
-  isParticipantRoomFull,
   shouldPollFetchEventMetaBranding,
   shouldPollOpenOwnSocket,
   shouldPollRenderOfflineBanner,
+  shouldShowParticipantFullUi,
 } from "@/lib/participantLiveFlow";
 import {
   buildJoinPollCardSurfaces,
@@ -975,9 +975,10 @@ export function PollExperience({
     pollType: poll?.type,
     leadEnabled: Boolean(poll?.leadEnabled),
   });
-  const roomIsFull = isParticipantRoomFull({
+  const roomIsFull = shouldShowParticipantFullUi({
     isLocked: eventModeUi.isLocked === true || eventMode.isLocked === true,
     errorCode: roomFullLocal ? "LIMIT_REACHED" : null,
+    uxState: liveScene,
   });
   const isOffline = embedded
     ? parentSocketOnline === false
