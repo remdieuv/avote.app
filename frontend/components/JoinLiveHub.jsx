@@ -21,6 +21,10 @@ import {
   getLiveStateTone,
 } from "@/lib/liveStateUx";
 import {
+  normalizeLiveAxes,
+  normalizePollJson,
+} from "@/lib/normalizeLivePayload";
+import {
   getParticipantFullLabel,
   getParticipantOfflineLabel,
   resolveJoinHistoriqueQuestions,
@@ -246,27 +250,20 @@ export function JoinLiveHub({ slug }) {
       return;
     }
     const data = await res.json();
+    const axes = normalizeLiveAxes(data);
     setError(null);
-    setIsLocked(Boolean(data.isLocked));
+    setIsLocked(
+      axes.isLocked != null ? Boolean(axes.isLocked) : Boolean(data.isLocked),
+    );
     setEventId(data.id ?? null);
     setEventTitle(
       typeof data.title === "string" && data.title.trim()
         ? data.title.trim()
         : null,
     );
-    setLiveState(
-      typeof data.liveState === "string" ? data.liveState.toLowerCase() : null,
-    );
-    setVoteState(
-      typeof data.voteState === "string"
-        ? data.voteState.toLowerCase()
-        : null,
-    );
-    setDisplayState(
-      typeof data.displayState === "string"
-        ? data.displayState.toLowerCase()
-        : null,
-    );
+    setLiveState(axes.liveState);
+    setVoteState(axes.voteState);
+    setDisplayState(axes.displayState);
     setAutoRevealShowResultsAt(
       typeof data.autoRevealShowResultsAt === "string"
         ? data.autoRevealShowResultsAt
@@ -581,21 +578,11 @@ export function JoinLiveHub({ slug }) {
       }
       // A8 — axes live immédiats, puis réconciliation fetchMeta (activePollStatus, pastPolls…).
       if (shouldJoinApplySocketLiveAxesImmediately()) {
-        if (typeof payload?.liveState === "string" && payload.liveState.trim()) {
-          setLiveState(String(payload.liveState).toLowerCase());
-        }
-        if (typeof payload?.voteState === "string" && payload.voteState.trim()) {
-          setVoteState(String(payload.voteState).toLowerCase());
-        }
-        if (
-          typeof payload?.displayState === "string" &&
-          payload.displayState.trim()
-        ) {
-          setDisplayState(String(payload.displayState).toLowerCase());
-        }
-        if (typeof payload?.isLocked === "boolean") {
-          setIsLocked(Boolean(payload.isLocked));
-        }
+        const axes = normalizeLiveAxes(payload);
+        if (axes.liveState) setLiveState(axes.liveState);
+        if (axes.voteState) setVoteState(axes.voteState);
+        if (axes.displayState) setDisplayState(axes.displayState);
+        if (axes.isLocked != null) setIsLocked(Boolean(axes.isLocked));
         if (payload?.activePollId != null) {
           const ap =
             typeof payload.activePollId === "string" &&
@@ -615,11 +602,12 @@ export function JoinLiveHub({ slug }) {
           setQuestionTimer(payload.questionTimer);
         }
         if (payload?.poll && typeof payload.poll === "object") {
-          const st = payload.poll.status;
+          const pollNorm = normalizePollJson(payload.poll);
+          const st = pollNorm?.status;
           if (typeof st === "string" && st.trim()) {
             setActivePollStatus(String(st).trim().toUpperCase());
           }
-          setEmbeddedPollSnapshot(payload.poll);
+          setEmbeddedPollSnapshot(pollNorm);
           setEmbeddedPollRevision((n) => n + 1);
         }
       }
@@ -633,20 +621,16 @@ export function JoinLiveHub({ slug }) {
       if (!payload || typeof payload !== "object" || !payload.id) return;
       const current = activePollIdRef.current;
       if (current && String(payload.id) !== String(current)) return;
-      setEmbeddedPollSnapshot(payload);
+      const pollNorm = normalizePollJson(payload);
+      const axes = normalizeLiveAxes(pollNorm);
+      setEmbeddedPollSnapshot(pollNorm);
       setEmbeddedPollRevision((n) => n + 1);
-      if (typeof payload.status === "string" && payload.status.trim()) {
-        setActivePollStatus(String(payload.status).trim().toUpperCase());
+      if (typeof pollNorm?.status === "string" && pollNorm.status.trim()) {
+        setActivePollStatus(String(pollNorm.status).trim().toUpperCase());
       }
-      if (typeof payload.eventLiveState === "string") {
-        setLiveState(String(payload.eventLiveState).toLowerCase());
-      }
-      if (typeof payload.eventVoteState === "string") {
-        setVoteState(String(payload.eventVoteState).toLowerCase());
-      }
-      if (typeof payload.eventDisplayState === "string") {
-        setDisplayState(String(payload.eventDisplayState).toLowerCase());
-      }
+      if (axes.liveState) setLiveState(axes.liveState);
+      if (axes.voteState) setVoteState(axes.voteState);
+      if (axes.displayState) setDisplayState(axes.displayState);
     }
 
     /** @param {any} payload */

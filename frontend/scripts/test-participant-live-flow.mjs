@@ -34,6 +34,11 @@ import {
 import {
   applyTestModeResultsVoteMask,
 } from "../lib/testModeResultsMask.js";
+import {
+  normalizeLiveAxes,
+  normalizePollJson,
+  optionVoteCount,
+} from "../lib/normalizeLivePayload.js";
 
 /** @type {{ name: string; run: () => void }[]} */
 const cases = [];
@@ -370,6 +375,36 @@ test("/p standalone : socket + OFFLINE + meta branding autonomes", () => {
   assert.equal(shouldPollOpenOwnSocket({}), true);
   assert.equal(shouldPollRenderOfflineBanner({ embedded: false }), true);
   assert.equal(shouldPollFetchEventMetaBranding({}), true);
+});
+
+test("Socle Live : normalize poll_updated event* → bare cohérent", () => {
+  const n = normalizePollJson({
+    id: "p",
+    eventLiveState: "CLOSED",
+    eventVoteState: "CLOSED",
+    eventDisplayState: "QUESTION",
+    options: [{ id: "o", label: "A", votes: 1 }],
+  });
+  const axes = normalizeLiveAxes(n);
+  assert.equal(axes.liveState, "closed");
+  assert.equal(axes.displayState, "question");
+  assert.equal(optionVoteCount(n.options[0]), 1);
+  const ux = resolveLiveUxState({
+    liveScene: axes.liveState,
+    displayState: axes.displayState,
+    voteState: axes.voteState,
+    pollStatus: "CLOSED",
+    hasActivePoll: true,
+  });
+  assert.equal(ux, LIVE_UX_STATE.CLOSED);
+});
+
+test("Socle Live : G9 contestWinnersCount + A3 pas de 2e socket", () => {
+  assert.equal(
+    normalizePollJson({ id: "x", contestWinnersCount: 3 }).contestWinnersCount,
+    3,
+  );
+  assert.equal(shouldPollOpenOwnSocket({ embedded: true }), false);
 });
 
 let failed = 0;

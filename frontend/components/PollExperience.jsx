@@ -32,10 +32,14 @@ import {
   LIVE_UX_LABEL_VOTE_CONFIRMED,
   LIVE_UX_STATE,
   getClosedParticipantTitle,
-  getUxState,
+  getLiveStateLabel,
   getLiveStatePresentation,
   getLiveStateTone,
 } from "@/lib/liveStateUx";
+import {
+  normalizeLiveAxes,
+  normalizePollJson,
+} from "@/lib/normalizeLivePayload";
 import {
   extractParticipantErrorCode,
   getParticipantFormNotice,
@@ -554,19 +558,20 @@ export function PollExperience({
         if (!res.ok) {
           throw new Error(`Erreur ${res.status}`);
         }
-        const data = await res.json();
+        const data = normalizePollJson(await res.json());
 
         if (signal?.aborted) return;
 
-        setLiveScene(normalizeLiveScene(data.eventLiveState));
+        const axes = normalizeLiveAxes(data);
+        setLiveScene(normalizeLiveScene(axes.liveState));
         if (data.eventId) {
           setEventId(data.eventId);
         }
-        if (typeof data.eventVoteState === "string") {
-          setEventVoteStateUi(data.eventVoteState.toLowerCase());
+        if (axes.voteState) {
+          setEventVoteStateUi(axes.voteState);
         }
-        if (typeof data.eventDisplayState === "string") {
-          setEventDisplayStateUi(data.eventDisplayState.toLowerCase());
+        if (axes.displayState) {
+          setEventDisplayStateUi(axes.displayState);
         }
         if (silent) {
           flushSync(() => {
@@ -621,37 +626,32 @@ export function PollExperience({
       return;
     }
     if (!parentPollSnapshot || typeof parentPollSnapshot !== "object") return;
-    const snap = /** @type {Record<string, unknown>} */ (parentPollSnapshot);
-    if (!snap.id) return;
+    const snap = normalizePollJson(
+      /** @type {Record<string, unknown>} */ (parentPollSnapshot),
+    );
+    if (!snap?.id) return;
+    const axes = normalizeLiveAxes(snap);
     setPoll(/** @type {any} */ (snap));
     setLoading(false);
     setError(null);
     setPollFetch404Slug(false);
-    if (typeof snap.eventLiveState === "string") {
-      setLiveScene(normalizeLiveScene(snap.eventLiveState));
+    if (axes.liveState) {
+      setLiveScene(normalizeLiveScene(axes.liveState));
     }
-    if (typeof snap.eventVoteState === "string") {
-      setEventVoteStateUi(String(snap.eventVoteState).toLowerCase());
+    if (axes.voteState) {
+      setEventVoteStateUi(axes.voteState);
     }
-    if (typeof snap.eventDisplayState === "string") {
-      setEventDisplayStateUi(String(snap.eventDisplayState).toLowerCase());
+    if (axes.displayState) {
+      setEventDisplayStateUi(axes.displayState);
     }
     if (typeof snap.eventId === "string" && snap.eventId.trim()) {
       setEventId(String(snap.eventId).trim());
     }
-    if (
-      typeof snap.eventIsLiveConsumed === "boolean" ||
-      typeof snap.eventIsLocked === "boolean"
-    ) {
+    if (axes.isLiveConsumed != null || axes.isLocked != null) {
       setEventModeUi((prev) => ({
         isLiveConsumed:
-          typeof snap.eventIsLiveConsumed === "boolean"
-            ? snap.eventIsLiveConsumed
-            : prev.isLiveConsumed,
-        isLocked:
-          typeof snap.eventIsLocked === "boolean"
-            ? snap.eventIsLocked
-            : prev.isLocked,
+          axes.isLiveConsumed != null ? axes.isLiveConsumed : prev.isLiveConsumed,
+        isLocked: axes.isLocked != null ? axes.isLocked : prev.isLocked,
       }));
     }
   }, [embedded, parentPollRevision, parentPollSnapshot]);
@@ -751,48 +751,44 @@ export function PollExperience({
       loadPollAbortRef.current?.abort();
       setLoading(false);
 
-      setLiveScene(normalizeLiveScene(payload.liveState));
+      const eventAxes = normalizeLiveAxes(payload);
+      setLiveScene(normalizeLiveScene(eventAxes.liveState));
 
-      if (
-        typeof payload.isLiveConsumed === "boolean" ||
-        typeof payload.isLocked === "boolean"
-      ) {
+      if (eventAxes.isLiveConsumed != null || eventAxes.isLocked != null) {
         setEventModeUi((prev) => ({
           isLiveConsumed:
-            typeof payload.isLiveConsumed === "boolean"
-              ? payload.isLiveConsumed
+            eventAxes.isLiveConsumed != null
+              ? eventAxes.isLiveConsumed
               : prev.isLiveConsumed,
           isLocked:
-            typeof payload.isLocked === "boolean" ? payload.isLocked : prev.isLocked,
+            eventAxes.isLocked != null ? eventAxes.isLocked : prev.isLocked,
         }));
       }
-      if (typeof payload.voteState === "string") {
-        setEventVoteStateUi(payload.voteState.toLowerCase());
+      if (eventAxes.voteState) {
+        setEventVoteStateUi(eventAxes.voteState);
       }
-      if (typeof payload.displayState === "string") {
-        setEventDisplayStateUi(payload.displayState.toLowerCase());
+      if (eventAxes.displayState) {
+        setEventDisplayStateUi(eventAxes.displayState);
       }
 
       if (payload.poll) {
-        setPoll(payload.poll);
+        const pollNorm = normalizePollJson(payload.poll);
+        const pollAxes = normalizeLiveAxes(pollNorm);
+        setPoll(pollNorm);
         setLiveScene(
-          normalizeLiveScene(
-            payload.poll?.eventLiveState ?? payload.liveState,
-          ),
+          normalizeLiveScene(pollAxes.liveState ?? eventAxes.liveState),
         );
-        const pv = payload.poll?.eventVoteState;
-        const pd = payload.poll?.eventDisplayState;
-        if (typeof pv === "string") setEventVoteStateUi(pv.toLowerCase());
-        if (typeof pd === "string") setEventDisplayStateUi(pd.toLowerCase());
+        if (pollAxes.voteState) setEventVoteStateUi(pollAxes.voteState);
+        if (pollAxes.displayState) setEventDisplayStateUi(pollAxes.displayState);
         setError(null);
         setPollFetch404Slug(false);
         if (payload.activePollId != null && String(payload.activePollId).trim()) {
           setActivePollIdFromSlug(String(payload.activePollId).trim());
-        } else if (payload.poll?.id) {
-          setActivePollIdFromSlug(String(payload.poll.id));
+        } else if (pollNorm?.id) {
+          setActivePollIdFromSlug(String(pollNorm.id));
         }
       } else {
-        const ls = String(payload.liveState ?? "").toLowerCase();
+        const ls = String(eventAxes.liveState ?? "").toLowerCase();
         if (ls === "waiting") {
           setPollFetch404Slug(false);
         }
@@ -826,33 +822,35 @@ export function PollExperience({
       ) {
         return;
       }
+      const norm = normalizePollJson(data);
+      const axes = normalizeLiveAxes(norm);
       setPoll((prev) => {
-        if (prev && String(prev.id) === String(data.id)) {
-          return data;
+        if (prev && String(prev.id) === String(norm.id)) {
+          return norm;
         }
-        if (pid && String(pid) === String(data.id)) {
-          return data;
+        if (pid && String(pid) === String(norm.id)) {
+          return norm;
         }
         if (
           !prev &&
-          (data.eventId == null || String(data.eventId) === String(eid))
+          (norm.eventId == null || String(norm.eventId) === String(eid))
         ) {
-          return data;
+          return norm;
         }
         return prev;
       });
-      setLiveScene(normalizeLiveScene(data.eventLiveState));
-      if (
-        typeof data.eventIsLiveConsumed === "boolean" ||
-        typeof data.eventIsLocked === "boolean"
-      ) {
+      if (axes.liveState) {
+        setLiveScene(normalizeLiveScene(axes.liveState));
+      }
+      if (axes.voteState) setEventVoteStateUi(axes.voteState);
+      if (axes.displayState) setEventDisplayStateUi(axes.displayState);
+      if (axes.isLiveConsumed != null || axes.isLocked != null) {
         setEventModeUi((prev) => ({
           isLiveConsumed:
-            typeof data.eventIsLiveConsumed === "boolean"
-              ? data.eventIsLiveConsumed
+            axes.isLiveConsumed != null
+              ? axes.isLiveConsumed
               : prev.isLiveConsumed,
-          isLocked:
-            typeof data.eventIsLocked === "boolean" ? data.eventIsLocked : prev.isLocked,
+          isLocked: axes.isLocked != null ? axes.isLocked : prev.isLocked,
         }));
       }
     }
@@ -1073,7 +1071,13 @@ export function PollExperience({
     return () => {
       cancelled = true;
     };
-  }, [poll?.id, poll?.eventSlug, isContestEntry, resultsVoteSignature]);
+  }, [
+    poll?.id,
+    poll?.eventSlug,
+    isContestEntry,
+    resultsVoteSignature,
+    poll?.contestWinnersCount,
+  ]);
 
   function toggleOptionMultiple(optionId) {
     if (
@@ -1411,33 +1415,9 @@ export function PollExperience({
   const sceneParticipant = String(
     pollUxPres.ux || LIVE_UX_STATE.WAITING,
   ).toLowerCase();
-  const ux = useMemo(
-    () =>
-      getUxState({
-        liveState: liveStateForUx,
-        voteState: voteStateForUx,
-        displayState: displayStateForUx,
-      }),
-    [liveStateForUx, voteStateForUx, displayStateForUx],
-  );
-  const votingLabel = useMemo(
-    () =>
-      getUxState({
-        liveState: "VOTING",
-        voteState: "OPEN",
-        displayState: "QUESTION",
-      }).label,
-    [],
-  );
-  const resultsLabel = useMemo(
-    () =>
-      getUxState({
-        liveState: "RESULTS",
-        voteState: "CLOSED",
-        displayState: "RESULTS",
-      }).label,
-    [],
-  );
+  /** Libellés canoniques resolveLiveUxState — pas getUxState (ignore pollStatus). */
+  const votingLabel = getLiveStateLabel(LIVE_UX_STATE.VOTING);
+  const resultsLabel = getLiveStateLabel(LIVE_UX_STATE.RESULTS);
   const voteTakenLabel = LIVE_UX_LABEL_VOTE_CONFIRMED;
   const hasVotedLocal = Boolean(merciPourVote || aDejaVoteEnStockage);
   /** Merci uniquement si la personne a voté — jamais en WAITING / non-votant (A1/A2). */
@@ -1447,7 +1427,7 @@ export function PollExperience({
       attenteProjectionResultats ||
       sansPollMaisVoteFermeSansResultatsSalle)
       ? voteTakenLabel
-      : ux.label;
+      : pollUxPres.title;
 
   const pollUxTone = getLiveStateTone(pollUxPres.ux);
   const pollVisualTokens = useMemo(

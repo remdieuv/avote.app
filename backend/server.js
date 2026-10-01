@@ -375,17 +375,22 @@ function pollToJson(poll) {
       ? questionTimerSnapshot(poll.event)
       : null,
     options: poll.options.map((option) => {
+      const n = voteCounts[option.id] || 0;
       const base = {
         id: option.id,
         label: option.label,
         order: option.order,
-        votes: voteCounts[option.id] || 0,
+        votes: n,
+        /** Alias régie / FE (voteCount ?? votes). */
+        voteCount: n,
       };
       if (poll.quizRevealed) {
         return { ...base, isCorrect: Boolean(option.isCorrect) };
       }
       return base;
     }),
+    /** Bump après tirage concours — refresh contest-status côté clients. */
+    contestWinnersCount: Number(poll._count?.contestWinners || 0),
   };
 }
 
@@ -425,6 +430,7 @@ async function loadPollFull(pollId) {
       event: true,
       options: { orderBy: { order: "asc" } },
       votes: true,
+      _count: { select: { contestWinners: true } },
     },
   });
 }
@@ -2095,7 +2101,8 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
         polls: {
           orderBy: { order: "asc" },
           include: {
-            _count: { select: { votes: true } },
+            options: { orderBy: { order: "asc" } },
+            _count: { select: { votes: true, contestWinners: true } },
           },
         },
         landingPhotos: {
@@ -2115,6 +2122,17 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
       distinct: ["voterSessionId"],
       select: { voterSessionId: true },
     });
+    /** Régie « Réponses en direct » : totaux bruts par option (pas de mask TEST). */
+    const optionVoteRows = await prisma.vote.findMany({
+      where: { poll: { eventId: event.id } },
+      select: { optionId: true },
+    });
+    const optionVoteCounts = {};
+    for (const row of optionVoteRows) {
+      const oid = row.optionId;
+      if (!oid) continue;
+      optionVoteCounts[oid] = (optionVoteCounts[oid] || 0) + 1;
+    }
     return res.json({
       id: event.id,
       title: event.title,
@@ -2144,6 +2162,7 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
         question: p.question,
         contestPrize: p.contestPrize ?? null,
         contestWinnerCount: Number(p.contestWinnerCount || 1),
+        contestWinnersCount: Number(p._count?.contestWinners || 0),
         quizRevealed: Boolean(p.quizRevealed),
         order: p.order,
         status: p.status,
@@ -2151,6 +2170,16 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
         leadEnabled: Boolean(p.leadEnabled),
         leadTriggerOptionId: p.leadTriggerOptionId ?? null,
         voteCount: p._count.votes,
+        options: (p.options || []).map((option) => {
+          const n = optionVoteCounts[option.id] || 0;
+          return {
+            id: option.id,
+            label: option.label,
+            order: option.order,
+            votes: n,
+            voteCount: n,
+          };
+        }),
       })),
       landingPhotos: (event.landingPhotos || []).map((ph) => ({
         id: ph.id,
@@ -4502,6 +4531,11 @@ app.post("/polls/:pollId/draw", requireAuth, async (req, res) => {
       });
       return createdDraw;
     });
+
+    // G9 — surfaces publiques (Salle / Screen / Overlay) via rooms existantes.
+    // poll_updated bump contestWinnersCount → refetch contest-status côté clients.
+    await emitPollUpdated(io, pollId);
+    await emitEventLiveUpdated(io, poll.eventId);
 
     return res.json({
       ok: true,
