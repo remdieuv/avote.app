@@ -6,7 +6,9 @@ import { formatCountdownVerbose } from "@/lib/chronoFormat";
 import {
   SCREEN_QR_CTA_VOTE,
   countScreenVotesReceived,
+  formatScreenOptionLine,
   formatScreenQuestionProgressLabel,
+  isScreenQuizAnswerRevealed,
   screenOptionLetter,
   sortScreenOptions,
 } from "@/lib/diffusionUx";
@@ -157,6 +159,8 @@ export function ScreenQuestion({
   );
 
   const votesInfo = useMemo(() => countScreenVotesReceived(poll), [poll]);
+  const quizRevealedClosed =
+    !voteOuvert && isScreenQuizAnswerRevealed(poll);
 
   const progressLabel = formatScreenQuestionProgressLabel(
     questionProgress,
@@ -346,6 +350,11 @@ export function ScreenQuestion({
           const letter = screenOptionLetter(idx);
           const label =
             (typeof opt?.label === "string" && opt.label) || `Option ${letter}`;
+          const isCorrectHighlight =
+            quizRevealedClosed && Boolean(opt?.isCorrect);
+          const displayLabel = quizRevealedClosed
+            ? formatScreenOptionLine(letter, label)
+            : label;
           return (
             <li
               key={String(opt.id ?? idx)}
@@ -357,9 +366,18 @@ export function ScreenQuestion({
                 padding:
                   "clamp(0.75rem, 2vw, 1.25rem) clamp(0.85rem, 2.2vw, 1.35rem)",
                 borderRadius: "16px",
-                background: "rgba(30, 41, 59, 0.72)",
-                border: "2px solid rgba(148, 163, 184, 0.28)",
+                background: isCorrectHighlight
+                  ? "rgba(22, 163, 74, 0.28)"
+                  : "rgba(30, 41, 59, 0.72)",
+                border: isCorrectHighlight
+                  ? "3px solid #4ade80"
+                  : "2px solid rgba(148, 163, 184, 0.28)",
                 minHeight: "clamp(4.2rem, 10vh, 6.5rem)",
+                opacity:
+                  quizRevealedClosed && !isCorrectHighlight ? 0.55 : 1,
+                boxShadow: isCorrectHighlight
+                  ? "0 0 0 1px rgba(74, 222, 128, 0.35), 0 12px 36px rgba(22, 163, 74, 0.25)"
+                  : undefined,
               }}
             >
               <span
@@ -373,21 +391,47 @@ export function ScreenQuestion({
                   fontWeight: 900,
                   fontSize: "clamp(1.25rem, 3vw, 1.85rem)",
                   color: "#0f172a",
-                  background: voteOuvert ? "#86efac" : "#cbd5e1",
+                  background: isCorrectHighlight
+                    ? "#4ade80"
+                    : voteOuvert
+                      ? "#86efac"
+                      : "#cbd5e1",
                 }}
               >
                 {letter}
               </span>
               <span
                 style={{
-                  fontSize: "clamp(1.15rem, 3.2vw, 2.15rem)",
-                  fontWeight: 800,
-                  lineHeight: 1.15,
-                  color: "#f8fafc",
-                  textWrap: "balance",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.2rem",
+                  minWidth: 0,
                 }}
               >
-                {label}
+                <span
+                  style={{
+                    fontSize: "clamp(1.15rem, 3.2vw, 2.15rem)",
+                    fontWeight: 800,
+                    lineHeight: 1.15,
+                    color: "#f8fafc",
+                    textWrap: "balance",
+                  }}
+                >
+                  {displayLabel}
+                </span>
+                {isCorrectHighlight ? (
+                  <span
+                    style={{
+                      fontSize: "clamp(0.85rem, 1.8vw, 1.15rem)",
+                      fontWeight: 900,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      color: "#bbf7d0",
+                    }}
+                  >
+                    Bonne réponse
+                  </span>
+                ) : null}
               </span>
             </li>
           );
@@ -407,7 +451,14 @@ export function ScreenQuestion({
           alignSelf: "center",
         }}
       >
-        {voteOuvert ? (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: voteOuvert ? "flex-start" : "center",
+            gap: "0.35rem",
+          }}
+        >
           <p
             style={{
               margin: 0,
@@ -419,18 +470,19 @@ export function ScreenQuestion({
           >
             {votesInfo.label}
           </p>
-        ) : (
-          <p
-            style={{
-              margin: 0,
-              fontSize: "clamp(1rem, 2.4vw, 1.45rem)",
-              fontWeight: 700,
-              color: "#94a3b8",
-            }}
-          >
-            Les résultats arrivent bientôt
-          </p>
-        )}
+          {!voteOuvert ? (
+            <p
+              style={{
+                margin: 0,
+                fontSize: "clamp(1rem, 2.4vw, 1.45rem)",
+                fontWeight: 700,
+                color: "#94a3b8",
+              }}
+            >
+              Les résultats arrivent bientôt
+            </p>
+          ) : null}
+        </div>
 
         {slugQr && voteOuvert ? <BlocQrSecondaire slug={slugQr} /> : null}
       </footer>

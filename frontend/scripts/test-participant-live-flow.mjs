@@ -15,6 +15,7 @@ import {
   PARTICIPANT_CONTEST_NOTICE,
   PARTICIPANT_LEAD_NOTICE,
   extractParticipantErrorCode,
+  formatQuizRevealParticipantFeedback,
   getParticipantFormNotice,
   getParticipantFullLabel,
   getParticipantOfflineLabel,
@@ -29,7 +30,9 @@ import {
   shouldPollFetchEventMetaBranding,
   shouldPollOpenOwnSocket,
   shouldPollRenderOfflineBanner,
+  shouldShowActiveVotingInstruction,
   shouldShowParticipantFullUi,
+  shouldShowParticipantResultStats,
 } from "../lib/participantLiveFlow.js";
 import {
   applyTestModeResultsVoteMask,
@@ -405,6 +408,51 @@ test("Socle Live : G9 contestWinnersCount + A3 pas de 2e socket", () => {
     3,
   );
   assert.equal(shouldPollOpenOwnSocket({ embedded: true }), false);
+});
+
+test("A. VOTING après vote : pas de stats tant que RESULTS non projetés", () => {
+  assert.equal(
+    shouldShowParticipantResultStats({ affichageResultatsPublic: false }),
+    false,
+  );
+  assert.equal(
+    shouldShowParticipantResultStats({ affichageResultatsPublic: true }),
+    true,
+  );
+  assert.equal(
+    shouldShowActiveVotingInstruction({ voteOuvert: true, hasVoted: false }),
+    true,
+  );
+  assert.equal(
+    shouldShowActiveVotingInstruction({ voteOuvert: true, hasVoted: true }),
+    false,
+  );
+});
+
+test("C. Quiz révélation CLOSED : feedback Salle nomme la bonne réponse", () => {
+  assert.equal(
+    formatQuizRevealParticipantFeedback({
+      correctLabel: "Paris",
+      answeredCorrectly: true,
+      hasVoted: true,
+    }),
+    "Bonne réponse : Paris ✅ — ton choix était correct",
+  );
+  assert.equal(
+    formatQuizRevealParticipantFeedback({
+      correctLabel: "Paris",
+      answeredCorrectly: false,
+      hasVoted: true,
+    }),
+    "Mauvaise réponse ❌ — la bonne était : Paris",
+  );
+  assert.equal(
+    formatQuizRevealParticipantFeedback({
+      correctLabel: "Paris",
+      hasVoted: false,
+    }),
+    "Bonne réponse : Paris",
+  );
 });
 
 let failed = 0;

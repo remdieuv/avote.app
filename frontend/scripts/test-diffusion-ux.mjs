@@ -9,11 +9,14 @@ import {
   SCREEN_QR_CTA_JOIN,
   SCREEN_QR_CTA_VOTE,
   countScreenVotesReceived,
+  formatScreenOptionLine,
   formatScreenQuestionProgressLabel,
   getScreenDiffusionLabel,
+  isScreenQuizAnswerRevealed,
   overlayMustStayTransparent,
   resolveScreenQuestionProgress,
   screenOptionLetter,
+  shouldShowScreenClosedVoteCount,
   shouldShowScreenCornerQr,
   sortScreenOptions,
 } from "../lib/diffusionUx.js";
@@ -349,6 +352,24 @@ assert.notEqual(
 );
 console.log("ok  Salle ≠ Screen (labels diffusion dédiés)");
 
+// --- B/C CLOSED compteur + quiz reveal sans RESULTS ---
+assert.equal(shouldShowScreenClosedVoteCount({ voteOuvert: false }), true);
+assert.equal(shouldShowScreenClosedVoteCount({ voteOuvert: true }), false);
+assert.equal(
+  isScreenQuizAnswerRevealed({ type: "QUIZ", quizRevealed: true }),
+  true,
+);
+assert.equal(
+  isScreenQuizAnswerRevealed({ type: "QUIZ", quizRevealed: false }),
+  false,
+);
+assert.equal(
+  isScreenQuizAnswerRevealed({ type: "SINGLE_CHOICE", quizRevealed: true }),
+  false,
+);
+assert.equal(formatScreenOptionLine("B", "Paris"), "B — Paris");
+console.log("ok  CLOSED compteur + quiz reveal Screen (sans RESULTS)");
+
 if (failed > 0) {
   console.error(`\n${failed} cas en échec`);
   process.exit(1);
@@ -362,5 +383,6 @@ const total =
   1 + // progression
   1 + // votes
   1 + // options
-  1; // salle≠screen
+  1 + // salle≠screen
+  1; // closed+quiz
 console.log(`\n${total} groupes d’assertions OK — LOT-2 diffusion Screen final`);

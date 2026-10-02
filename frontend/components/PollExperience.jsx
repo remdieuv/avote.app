@@ -42,6 +42,7 @@ import {
 } from "@/lib/normalizeLivePayload";
 import {
   extractParticipantErrorCode,
+  formatQuizRevealParticipantFeedback,
   getParticipantFormNotice,
   getParticipantFullLabel,
   getParticipantOfflineLabel,
@@ -49,7 +50,9 @@ import {
   shouldPollFetchEventMetaBranding,
   shouldPollOpenOwnSocket,
   shouldPollRenderOfflineBanner,
+  shouldShowActiveVotingInstruction,
   shouldShowParticipantFullUi,
+  shouldShowParticipantResultStats,
 } from "@/lib/participantLiveFlow";
 import {
   buildJoinPollCardSurfaces,
@@ -904,12 +907,9 @@ export function PollExperience({
     displayStateParticipant === "results" ||
     String(liveScene || "").toLowerCase() === "results";
 
-  /** Bloc résultats : révélation salle, ou totaux live après mon vote tant que le vote est ouvert */
+  /** Bloc résultats / stats : uniquement RESULTS projetés — jamais dès « j’ai voté ». */
   const showBlocResultatsEnDirect =
-    !!poll &&
-    (affichageResultatsPublic ||
-      (voteStateParticipant === "open" &&
-        (merciPourVote || aDejaVoteEnStockage)));
+    !!poll && shouldShowParticipantResultStats({ affichageResultatsPublic });
 
   const optionsPourVote = useMemo(() => {
     return [...(poll?.options ?? [])].sort(
@@ -1298,6 +1298,26 @@ export function PollExperience({
     quizRevealed &&
     quizCorrectOptionIds.length === 1 &&
     quizVotedOptionIds.includes(quizCorrectOptionIds[0]);
+  const quizCorrectLabel = useMemo(() => {
+    if (!isQuiz || !quizRevealed || quizCorrectOptionIds.length === 0) {
+      return null;
+    }
+    const opt = (Array.isArray(poll?.options) ? poll.options : []).find(
+      (o) => String(o?.id) === String(quizCorrectOptionIds[0]),
+    );
+    return typeof opt?.label === "string" && opt.label.trim()
+      ? opt.label.trim()
+      : null;
+  }, [isQuiz, quizRevealed, quizCorrectOptionIds, poll?.options]);
+  const quizRevealFeedback = useMemo(
+    () =>
+      formatQuizRevealParticipantFeedback({
+        correctLabel: quizCorrectLabel,
+        answeredCorrectly: quizAnsweredCorrectly,
+        hasVoted: quizVotedOptionIds.length > 0,
+      }),
+    [quizCorrectLabel, quizAnsweredCorrectly, quizVotedOptionIds.length],
+  );
 
   const pollOptions = poll?.options ?? [];
   const totalVotesResults = showBlocResultatsEnDirect
@@ -1807,25 +1827,30 @@ export function PollExperience({
         <>
           {voteOuvert && !roomIsFull && (
             <div style={{ marginBottom: "1rem" }}>
-              <p
-                style={{
-                  margin: 0,
-                  padding: "0.55rem 0.85rem",
-                  background: `color-mix(in srgb, ${accent} ${14 + pollVisualTokens.borderAccentMixPct * 0.28}%, transparent)`,
-                  borderRadius: "10px",
-                  border: mergeCardBorderWithAccent(
-                    palette.cardBorder,
-                    accent,
-                    Math.min(52, 26 + pollVisualTokens.borderAccentMixPct * 0.55),
-                  ),
-                  color: isDark ? palette.fg : palette.fg2,
-                  ...pollBadgeEtat,
-                  textTransform: "none",
-                  letterSpacing: "0.04em",
-                }}
-              >
-                {votingLabel}
-              </p>
+              {shouldShowActiveVotingInstruction({
+                voteOuvert,
+                hasVoted: hasVotedLocal,
+              }) ? (
+                <p
+                  style={{
+                    margin: 0,
+                    padding: "0.55rem 0.85rem",
+                    background: `color-mix(in srgb, ${accent} ${14 + pollVisualTokens.borderAccentMixPct * 0.28}%, transparent)`,
+                    borderRadius: "10px",
+                    border: mergeCardBorderWithAccent(
+                      palette.cardBorder,
+                      accent,
+                      Math.min(52, 26 + pollVisualTokens.borderAccentMixPct * 0.55),
+                    ),
+                    color: isDark ? palette.fg : palette.fg2,
+                    ...pollBadgeEtat,
+                    textTransform: "none",
+                    letterSpacing: "0.04em",
+                  }}
+                >
+                  {votingLabel}
+                </p>
+              ) : null}
               {chronoVoteActif ? (
                 <p
                   style={{
@@ -2077,27 +2102,34 @@ export function PollExperience({
                 Tu as déjà voté pour ce sondage.
               </p>
             )}
-          {isQuiz && quizRevealed && quizVotedOptionIds.length > 0 ? (
+          {isQuiz && quizRevealed && quizRevealFeedback ? (
             <p
               style={{
                 marginBottom: "1rem",
                 padding: "0.75rem 1rem",
-                background: quizAnsweredCorrectly
-                  ? (isDark ? "rgba(22, 163, 74, 0.24)" : "rgba(220, 252, 231, 0.9)")
-                  : (isDark ? "rgba(239, 68, 68, 0.22)" : "rgba(254, 226, 226, 0.92)"),
+                background:
+                  quizVotedOptionIds.length === 0
+                    ? (isDark ? "rgba(22, 163, 74, 0.2)" : "rgba(220, 252, 231, 0.9)")
+                    : quizAnsweredCorrectly
+                      ? (isDark ? "rgba(22, 163, 74, 0.24)" : "rgba(220, 252, 231, 0.9)")
+                      : (isDark ? "rgba(239, 68, 68, 0.22)" : "rgba(254, 226, 226, 0.92)"),
                 borderRadius: "12px",
-                border: quizAnsweredCorrectly
-                  ? (isDark
-                      ? "1px solid rgba(74, 222, 128, 0.45)"
-                      : "1px solid rgba(22, 163, 74, 0.35)")
-                  : (isDark
-                      ? "1px solid rgba(248, 113, 113, 0.4)"
-                      : "1px solid rgba(239, 68, 68, 0.35)"),
-                color: quizAnsweredCorrectly ? (isDark ? "#bbf7d0" : "#166534") : (isDark ? "#fecaca" : "#991b1b"),
+                border:
+                  quizVotedOptionIds.length === 0 || quizAnsweredCorrectly
+                    ? (isDark
+                        ? "1px solid rgba(74, 222, 128, 0.45)"
+                        : "1px solid rgba(22, 163, 74, 0.35)")
+                    : (isDark
+                        ? "1px solid rgba(248, 113, 113, 0.4)"
+                        : "1px solid rgba(239, 68, 68, 0.35)"),
+                color:
+                  quizVotedOptionIds.length === 0 || quizAnsweredCorrectly
+                    ? (isDark ? "#bbf7d0" : "#166534")
+                    : (isDark ? "#fecaca" : "#991b1b"),
                 fontWeight: 700,
               }}
             >
-              {quizAnsweredCorrectly ? "Bonne réponse ✅" : "Mauvaise réponse ❌"}
+              {quizRevealFeedback}
             </p>
           ) : null}
 

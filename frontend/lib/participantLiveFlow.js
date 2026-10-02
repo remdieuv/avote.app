@@ -254,3 +254,41 @@ export function resolveJoinHistoriqueQuestions(pastPolls) {
       return { id: row.id.trim(), label: row.label.trim() };
     });
 }
+
+/**
+ * Barres / stats Salle : uniquement quand la régie a projeté RESULTS.
+ * Jamais dès « j’ai voté » pendant VOTING (évite révélation prématurée).
+ * @param {{ affichageResultatsPublic?: boolean }} input
+ */
+export function shouldShowParticipantResultStats(input = {}) {
+  return input.affichageResultatsPublic === true;
+}
+
+/**
+ * Instruction active « Choisis ta réponse » : seulement si vote ouvert et pas encore voté.
+ * @param {{ voteOuvert?: boolean; hasVoted?: boolean }} input
+ */
+export function shouldShowActiveVotingInstruction(input = {}) {
+  return input.voteOuvert === true && input.hasVoted !== true;
+}
+
+/**
+ * Feedback Quiz après /reveal (CLOSED, pas RESULTS) — nomme la bonne réponse.
+ * @param {{
+ *   correctLabel?: string | null;
+ *   answeredCorrectly?: boolean | null;
+ *   hasVoted?: boolean;
+ * }} input
+ * @returns {string | null}
+ */
+export function formatQuizRevealParticipantFeedback(input = {}) {
+  const name = String(input.correctLabel ?? "").trim();
+  if (!name) return null;
+  if (input.hasVoted !== true) {
+    return `Bonne réponse : ${name}`;
+  }
+  if (input.answeredCorrectly === true) {
+    return `Bonne réponse : ${name} ✅ — ton choix était correct`;
+  }
+  return `Mauvaise réponse ❌ — la bonne était : ${name}`;
+}

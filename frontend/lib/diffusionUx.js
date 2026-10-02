@@ -133,6 +133,36 @@ export function screenOptionLetter(index) {
 }
 
 /**
+ * Ligne option grand écran : « B — Paris ».
+ * @param {string} letter
+ * @param {string} label
+ */
+export function formatScreenOptionLine(letter, label) {
+  const L = String(letter || "").trim() || "?";
+  const text = String(label || "").trim() || "Option";
+  return `${L} — ${text}`;
+}
+
+/**
+ * Quiz révélé sur Screen pendant CLOSED (pas RESULTS) : highlight bonne réponse.
+ * @param {{ type?: string | null; quizRevealed?: unknown } | null | undefined} poll
+ */
+export function isScreenQuizAnswerRevealed(poll) {
+  return (
+    String(poll?.type || "").toUpperCase() === "QUIZ" &&
+    Boolean(poll?.quizRevealed)
+  );
+}
+
+/**
+ * CLOSED Screen : afficher compteur + texte d’attente (les deux).
+ * @param {{ voteOuvert?: boolean }} input
+ */
+export function shouldShowScreenClosedVoteCount(input = {}) {
+  return input.voteOuvert !== true;
+}
+
+/**
  * Options triées pour affichage Screen (ordre métier).
  * @param {Array<Record<string, unknown>> | null | undefined} options
  * @returns {Array<Record<string, unknown>>}
