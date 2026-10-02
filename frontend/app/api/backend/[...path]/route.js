@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { fetchUpstreamWithEaddrRetry } from "@/lib/backendProxyUpstream";
 
 export const runtime = "nodejs";
 
@@ -29,6 +30,7 @@ function vercelBackendMisconfigured(base) {
 /**
  * Unique proxy navigateur → API Express (cookies httpOnly, CORS évité).
  * Méthodes : GET/POST/PATCH/PUT/DELETE/OPTIONS — query, body, cookie, set-cookie.
+ * Upstream : Connection: close + 1 retry max si EADDRINUSE (Windows loopback).
  */
 async function proxy(request, { params }) {
   const resolved = await params;
@@ -65,10 +67,11 @@ async function proxy(request, { params }) {
 
   let upstream;
   try {
-    upstream = await fetch(target, {
+    upstream = await fetchUpstreamWithEaddrRetry(target, {
       method: request.method,
       headers: forward,
       body: body && body.byteLength > 0 ? body : undefined,
+      cache: "no-store",
     });
   } catch (e) {
     console.error("[api/backend proxy]", target, e);
