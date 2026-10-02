@@ -46,6 +46,8 @@ import {
   getParticipantFormNotice,
   getParticipantFullLabel,
   getParticipantOfflineLabel,
+  getParticipantResultsOptionBadgeLabel,
+  resolveParticipantTopStripLabel,
   shouldPollApplyParentPollSnapshot,
   shouldPollFetchEventMetaBranding,
   shouldPollOpenOwnSocket,
@@ -61,6 +63,7 @@ import {
   stateBadgeTypography,
 } from "@/lib/liveStateVisual";
 import { ExperienceHeader } from "@/components/navigation/ExperienceHeader";
+import { formatTestModeVoteCountLabel } from "@/lib/testModeResultsMask";
 import { useEventMode } from "@/lib/useEventMode";
 
 const API_POLLS = `${API_URL}/polls`;
@@ -1440,14 +1443,16 @@ export function PollExperience({
   const resultsLabel = getLiveStateLabel(LIVE_UX_STATE.RESULTS);
   const voteTakenLabel = LIVE_UX_LABEL_VOTE_CONFIRMED;
   const hasVotedLocal = Boolean(merciPourVote || aDejaVoteEnStockage);
-  /** Merci uniquement si la personne a voté — jamais en WAITING / non-votant (A1/A2). */
-  const topUxLabel =
-    hasVotedLocal &&
-    (voteOuvert ||
-      attenteProjectionResultats ||
-      sansPollMaisVoteFermeSansResultatsSalle)
-      ? voteTakenLabel
-      : pollUxPres.title;
+  /**
+   * Strip : Merci seulement pendant vote ouvert.
+   * En CLOSED (carte attente), Merci reste uniquement sur la carte (pas de doublon).
+   */
+  const topUxLabel = resolveParticipantTopStripLabel({
+    hasVoted: hasVotedLocal,
+    voteOuvert,
+    voteConfirmedLabel: voteTakenLabel,
+    stateTitle: pollUxPres.title,
+  });
 
   const pollUxTone = getLiveStateTone(pollUxPres.ux);
   const pollVisualTokens = useMemo(
@@ -2563,7 +2568,6 @@ export function PollExperience({
               {!isContestEntry ? (
                 <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                 {optionsPourResultatsTriees.map((opt) => {
-                  const badgeLeaderLabel = voteOuvert ? "En tête" : "Gagnant";
                   const optVotes =
                     Number(opt.voteCount ?? opt.votes ?? 0) || 0;
                   const percentRaw =
@@ -2579,6 +2583,15 @@ export function PollExperience({
                         : percentRounded.toFixed(1);
                   const isWinner =
                     maxVotesResults > 0 && optVotes === maxVotesResults;
+                  const isQuizCorrect =
+                    isQuiz && quizRevealed && Boolean(opt?.isCorrect);
+                  const badgeLeaderLabel = getParticipantResultsOptionBadgeLabel({
+                    voteOuvert,
+                    isQuiz,
+                    quizRevealed,
+                    isCorrect: Boolean(opt?.isCorrect),
+                    isWinner,
+                  });
                   const barWidthPct = resultsBarsAnimated
                     ? Math.min(100, percentRaw)
                     : 0;
@@ -2589,7 +2602,7 @@ export function PollExperience({
                       style={{
                         marginBottom: "1rem",
                         display: "block",
-                        ...(isWinner
+                        ...(isWinner || isQuizCorrect
                           ? {
                               padding: "0.65rem 0.75rem",
                               marginLeft: "-0.25rem",
@@ -2622,7 +2635,7 @@ export function PollExperience({
                           }}
                         >
                           <strong>{opt.label}</strong>
-                          {isWinner ? (
+                          {badgeLeaderLabel ? (
                             <span
                               style={{
                                 fontSize: "0.7rem",
@@ -2647,10 +2660,7 @@ export function PollExperience({
                           }}
                         >
                           {isTestModeEffective ? (
-                            <>
-                              ≈ {optVotes} vote
-                              {optVotes !== 1 ? "s" : ""}
-                            </>
+                            formatTestModeVoteCountLabel(optVotes)
                           ) : (
                             <>
                               {percentLabel}% ({optVotes} vote

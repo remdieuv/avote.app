@@ -12,7 +12,9 @@ import {
 } from "../lib/liveStateUx.js";
 import {
   applyTestModeResultsVoteMask,
+  formatTestModeVoteCountLabel,
   maskTestModeOptionVoteCount,
+  shouldShowTestModeApproxPrefix,
 } from "../lib/testModeResultsMask.js";
 
 /** @type {{ name: string; ctx: Parameters<typeof resolveLiveUxState>[0]; expect: string }[]} */
@@ -216,7 +218,20 @@ console.log("ok  labels sans jargon orga");
     { isTestMode: false, displayState: "RESULTS" },
   );
   assert.equal(realResults.a, 1, "MODE RÉEL : exact");
-  console.log("ok  A0 MODE TEST mask 1 vote ≠ 0 + cohérence");
+
+  assert.equal(shouldShowTestModeApproxPrefix(0), false);
+  assert.equal(shouldShowTestModeApproxPrefix(1), false);
+  assert.equal(shouldShowTestModeApproxPrefix(2), false);
+  assert.equal(shouldShowTestModeApproxPrefix(9), false);
+  assert.equal(shouldShowTestModeApproxPrefix(10), true);
+  assert.equal(shouldShowTestModeApproxPrefix(12), true);
+  assert.equal(formatTestModeVoteCountLabel(1), "1 vote");
+  assert.equal(formatTestModeVoteCountLabel(2), "2 votes");
+  assert.equal(formatTestModeVoteCountLabel(0), "0 vote");
+  assert.equal(formatTestModeVoteCountLabel(10), "≈ 10 votes");
+  assert.equal(formatTestModeVoteCountLabel(12, { withUnit: false }), "≈ 12");
+  assert.equal(formatTestModeVoteCountLabel(2, { withUnit: false }), "2");
+  console.log("ok  A0 MODE TEST mask 1 vote ≠ 0 + ≈ UI seulement si ≥ bucket");
 }
 
 /** A1/A2 — CLOSED Merci seulement si voté ; label CLOSED vote-agnostique */

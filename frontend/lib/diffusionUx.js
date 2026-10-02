@@ -155,6 +155,17 @@ export function isScreenQuizAnswerRevealed(poll) {
 }
 
 /**
+ * Footer Screen CLOSED : après reveal Quiz → scores ; sinon résultats.
+ * @param {{ quizAnswerRevealed?: boolean }} [input]
+ */
+export function getScreenClosedAwaitingResultsLabel(input = {}) {
+  if (input.quizAnswerRevealed === true) {
+    return "Les scores arrivent bientôt";
+  }
+  return "Les résultats arrivent bientôt";
+}
+
+/**
  * CLOSED Screen : afficher compteur + texte d’attente (les deux).
  * @param {{ voteOuvert?: boolean }} input
  */

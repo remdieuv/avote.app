@@ -19,9 +19,11 @@ import {
   getParticipantFormNotice,
   getParticipantFullLabel,
   getParticipantOfflineLabel,
+  getParticipantResultsOptionBadgeLabel,
   isParticipantRoomFull,
   resolveEventLandingPhase,
   resolveJoinHistoriqueQuestions,
+  resolveParticipantTopStripLabel,
   shouldAutoNavigateJoinToPollPath,
   shouldEmbedPollSurfaceInRoom,
   shouldJoinApplySocketLiveAxesImmediately,
@@ -36,6 +38,7 @@ import {
 } from "../lib/participantLiveFlow.js";
 import {
   applyTestModeResultsVoteMask,
+  formatTestModeVoteCountLabel,
 } from "../lib/testModeResultsMask.js";
 import {
   normalizeLiveAxes,
@@ -453,6 +456,85 @@ test("C. Quiz révélation CLOSED : feedback Salle nomme la bonne réponse", () 
     }),
     "Bonne réponse : Paris",
   );
+});
+
+test("Finition. Strip Merci absent quand carte CLOSED (pas de doublon)", () => {
+  assert.equal(
+    resolveParticipantTopStripLabel({
+      hasVoted: true,
+      voteOuvert: false,
+      voteConfirmedLabel: LIVE_UX_LABEL_VOTE_CONFIRMED,
+      stateTitle: getLiveStateLabel(LIVE_UX_STATE.CLOSED),
+    }),
+    getLiveStateLabel(LIVE_UX_STATE.CLOSED),
+  );
+  assert.equal(
+    resolveParticipantTopStripLabel({
+      hasVoted: true,
+      voteOuvert: true,
+      voteConfirmedLabel: LIVE_UX_LABEL_VOTE_CONFIRMED,
+      stateTitle: getLiveStateLabel(LIVE_UX_STATE.VOTING),
+    }),
+    LIVE_UX_LABEL_VOTE_CONFIRMED,
+  );
+  assert.equal(
+    getClosedParticipantTitle(true),
+    LIVE_UX_LABEL_VOTE_CONFIRMED,
+    "Merci reste sur la carte CLOSED",
+  );
+});
+
+test("Finition. Badge RESULTS Quiz = Bonne réponse ; sondage = Gagnant", () => {
+  assert.equal(
+    getParticipantResultsOptionBadgeLabel({
+      isQuiz: true,
+      quizRevealed: true,
+      isCorrect: true,
+      isWinner: true,
+      voteOuvert: false,
+    }),
+    "Bonne réponse",
+  );
+  assert.equal(
+    getParticipantResultsOptionBadgeLabel({
+      isQuiz: true,
+      quizRevealed: true,
+      isCorrect: true,
+      isWinner: false,
+      voteOuvert: false,
+    }),
+    "Bonne réponse",
+  );
+  assert.equal(
+    getParticipantResultsOptionBadgeLabel({
+      isQuiz: false,
+      quizRevealed: false,
+      isCorrect: false,
+      isWinner: true,
+      voteOuvert: false,
+    }),
+    "Gagnant",
+  );
+  assert.equal(
+    getParticipantResultsOptionBadgeLabel({
+      isQuiz: false,
+      isWinner: true,
+      voteOuvert: true,
+    }),
+    "En tête",
+  );
+  assert.equal(
+    getParticipantResultsOptionBadgeLabel({
+      isQuiz: true,
+      quizRevealed: false,
+      isCorrect: true,
+      isWinner: true,
+      voteOuvert: false,
+    }),
+    "Gagnant",
+    "Quiz non révélé : badge sondage inchangé",
+  );
+  assert.equal(formatTestModeVoteCountLabel(2), "2 votes");
 });
 
 let failed = 0;

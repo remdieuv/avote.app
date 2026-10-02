@@ -11,6 +11,7 @@ import {
   countScreenVotesReceived,
   formatScreenOptionLine,
   formatScreenQuestionProgressLabel,
+  getScreenClosedAwaitingResultsLabel,
   getScreenDiffusionLabel,
   isScreenQuizAnswerRevealed,
   overlayMustStayTransparent,
@@ -20,6 +21,9 @@ import {
   shouldShowScreenCornerQr,
   sortScreenOptions,
 } from "../lib/diffusionUx.js";
+import {
+  formatTestModeVoteCountLabel,
+} from "../lib/testModeResultsMask.js";
 
 /** @type {{ name: string; input: Parameters<typeof shouldShowScreenCornerQr>[0]; expect: boolean }[]} */
 const screenQrCases = [
@@ -368,6 +372,21 @@ assert.equal(
   false,
 );
 assert.equal(formatScreenOptionLine("B", "Paris"), "B — Paris");
+assert.equal(
+  getScreenClosedAwaitingResultsLabel({ quizAnswerRevealed: true }),
+  "Les scores arrivent bientôt",
+);
+assert.equal(
+  getScreenClosedAwaitingResultsLabel({ quizAnswerRevealed: false }),
+  "Les résultats arrivent bientôt",
+);
+assert.equal(
+  getScreenClosedAwaitingResultsLabel({}),
+  "Les résultats arrivent bientôt",
+);
+assert.equal(formatTestModeVoteCountLabel(1), "1 vote");
+assert.equal(formatTestModeVoteCountLabel(2, { withUnit: false }), "2");
+assert.equal(formatTestModeVoteCountLabel(10, { withUnit: false }), "≈ 10");
 console.log("ok  CLOSED compteur + quiz reveal Screen (sans RESULTS)");
 
 if (failed > 0) {
@@ -384,5 +403,5 @@ const total =
   1 + // votes
   1 + // options
   1 + // salle≠screen
-  1; // closed+quiz
+  1; // closed+quiz (+ footer scores + ≈ TEST)
 console.log(`\n${total} groupes d’assertions OK — LOT-2 diffusion Screen final`);

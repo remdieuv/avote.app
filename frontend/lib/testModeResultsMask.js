@@ -20,6 +20,39 @@ export function maskTestModeOptionVoteCount(raw, bucket = TEST_MODE_VOTE_BUCKET)
 }
 
 /**
+ * Préfixe UI `≈` : seulement si la valeur affichée peut être bucketisée (≥ bucket).
+ * Sous le bucket le backend garde le brut → afficher le nombre exact sans ≈.
+ * Ne modifie aucune règle de masquage backend.
+ * @param {unknown} displayedCount
+ * @param {number} [bucket]
+ */
+export function shouldShowTestModeApproxPrefix(
+  displayedCount,
+  bucket = TEST_MODE_VOTE_BUCKET,
+) {
+  const n = Math.max(0, Number(displayedCount) || 0);
+  if (!Number.isFinite(n)) return false;
+  const b = Math.max(1, Number(bucket) || TEST_MODE_VOTE_BUCKET);
+  return n >= b;
+}
+
+/**
+ * Libellé compteur MODE TEST (Salle / Screen / Overlay).
+ * @param {unknown} displayedCount
+ * @param {{ bucket?: number; withUnit?: boolean }} [opts]
+ */
+export function formatTestModeVoteCountLabel(displayedCount, opts = {}) {
+  const n = Math.max(0, Math.floor(Number(displayedCount) || 0));
+  const bucket = opts.bucket;
+  const withUnit = opts.withUnit !== false;
+  const approx = shouldShowTestModeApproxPrefix(n, bucket);
+  const core = approx ? `≈ ${n}` : String(n);
+  if (!withUnit) return core;
+  // 0 vote / 1 vote / N votes (libellé UX TEST exact sous bucket)
+  return `${core} vote${n > 1 ? "s" : ""}`;
+}
+
+/**
  * @param {Record<string, number>} voteCounts
  * @param {{
  *   isTestMode?: boolean;

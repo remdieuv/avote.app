@@ -292,3 +292,44 @@ export function formatQuizRevealParticipantFeedback(input = {}) {
   }
   return `Mauvaise réponse ❌ — la bonne était : ${name}`;
 }
+
+/**
+ * Strip supérieur Salle : Merci seulement pendant vote ouvert.
+ * En CLOSED (carte attente résultats), Merci reste uniquement sur la carte.
+ * @param {{
+ *   hasVoted?: boolean;
+ *   voteOuvert?: boolean;
+ *   voteConfirmedLabel?: string;
+ *   stateTitle?: string;
+ * }} input
+ */
+export function resolveParticipantTopStripLabel(input = {}) {
+  if (input.hasVoted === true && input.voteOuvert === true) {
+    return input.voteConfirmedLabel ?? "";
+  }
+  return input.stateTitle ?? "";
+}
+
+/**
+ * Badge option résultats Salle : Quiz révélé → « Bonne réponse » ; sinon En tête / Gagnant.
+ * Sondages non-Quiz inchangés.
+ * @param {{
+ *   voteOuvert?: boolean;
+ *   isQuiz?: boolean;
+ *   quizRevealed?: boolean;
+ *   isCorrect?: boolean;
+ *   isWinner?: boolean;
+ * }} input
+ * @returns {string | null}
+ */
+export function getParticipantResultsOptionBadgeLabel(input = {}) {
+  if (
+    input.isQuiz === true &&
+    input.quizRevealed === true &&
+    input.isCorrect === true
+  ) {
+    return "Bonne réponse";
+  }
+  if (input.isWinner !== true) return null;
+  return input.voteOuvert === true ? "En tête" : "Gagnant";
+}

@@ -8,6 +8,7 @@ import {
   countScreenVotesReceived,
   formatScreenOptionLine,
   formatScreenQuestionProgressLabel,
+  getScreenClosedAwaitingResultsLabel,
   isScreenQuizAnswerRevealed,
   screenOptionLetter,
   sortScreenOptions,
@@ -479,7 +480,9 @@ export function ScreenQuestion({
                 color: "#94a3b8",
               }}
             >
-              Les résultats arrivent bientôt
+              {getScreenClosedAwaitingResultsLabel({
+                quizAnswerRevealed: quizRevealedClosed,
+              })}
             </p>
           ) : null}
         </div>

@@ -18,6 +18,7 @@ import {
   LIVE_UX_LOCAL,
   getLiveStateLabel,
 } from "@/lib/liveStateUx";
+import { formatTestModeVoteCountLabel } from "@/lib/testModeResultsMask";
 
 const FADE_MS = 260;
 
@@ -1162,7 +1163,11 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
                           fontSize: `calc(${v.rowRem} * 0.92)`,
                         }}
                       >
-                        {isTestMode ? `≈ ${optVotes}` : `${percentRounded}% · ${optVotes}`}
+                        {isTestMode
+                          ? formatTestModeVoteCountLabel(optVotes, {
+                              withUnit: false,
+                            })
+                          : `${percentRounded}% · ${optVotes}`}
                       </span>
                     </div>
                     <div

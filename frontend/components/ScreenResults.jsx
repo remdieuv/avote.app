@@ -14,6 +14,7 @@ import {
   formatScreenQuestionProgressLabel,
   getScreenDiffusionLabel,
 } from "@/lib/diffusionUx";
+import { formatTestModeVoteCountLabel } from "@/lib/testModeResultsMask";
 import { API_URL } from "@/lib/config";
 
 const RESULTATS_TOP_N = 8;
@@ -882,9 +883,7 @@ function ScreenResultsChoixClassiques({
                     }}
                   >
                     {isTestMode ? (
-                      <>
-                        ≈ {optVotes} vote{optVotes !== 1 ? "s" : ""}
-                      </>
+                      formatTestModeVoteCountLabel(optVotes)
                     ) : (
                       <>
                         {percentLabel}% · {optVotes} vote
@@ -1000,11 +999,9 @@ function ScreenResultsChoixClassiques({
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {isTestMode ? (
-                    <>
-                      ≈ {optVotes} vote{optVotes !== 1 ? "s" : ""}
-                    </>
-                  ) : (
+                  {isTestMode
+                    ? formatTestModeVoteCountLabel(optVotes)
+                    : (
                     <>
                       {percentLabel}% · {optVotes} vote
                       {optVotes !== 1 ? "s" : ""}
