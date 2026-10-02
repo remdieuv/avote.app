@@ -12,7 +12,8 @@
     "test:participant": "node scripts/test-participant-live-flow.mjs",
     "test:normalize-live": "node scripts/test-normalize-live-payload.mjs",
     "test:backend-proxy": "node scripts/test-backend-proxy-upstream.mjs",
-    "test:lot0-lot1": "npm run test:live-ux && npm run test:participant && npm run test:normalize-live && npm run test:backend-proxy",
+    "test:api-browser-base": "node scripts/test-api-browser-base.mjs",
+    "test:lot0-lot1": "npm run test:live-ux && npm run test:participant && npm run test:normalize-live && npm run test:backend-proxy && npm run test:api-browser-base",
     "test:lot0-lot2": "npm run test:live-ux && npm run test:diffusion",
     "test:lot0-lot1-lot2": "npm run test:lot0-lot1 && npm run test:diffusion"
   },
