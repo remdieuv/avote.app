@@ -1444,8 +1444,8 @@ export function PollExperience({
   const voteTakenLabel = LIVE_UX_LABEL_VOTE_CONFIRMED;
   const hasVotedLocal = Boolean(merciPourVote || aDejaVoteEnStockage);
   /**
-   * Strip : Merci seulement pendant vote ouvert.
-   * En CLOSED (carte attente), Merci reste uniquement sur la carte (pas de doublon).
+   * Strip : masqué en VOTING après vote (Merci dans le bloc principal).
+   * CLOSED : titre d’état ; Merci uniquement sur la carte.
    */
   const topUxLabel = resolveParticipantTopStripLabel({
     hasVoted: hasVotedLocal,
@@ -1722,7 +1722,7 @@ export function PollExperience({
         </div>
       ) : null}
 
-      {!loading && !error && !roomIsFull ? (
+      {!loading && !error && !roomIsFull && topUxLabel ? (
         <div
           className="text-center text-sm opacity-80 mb-2"
           style={{

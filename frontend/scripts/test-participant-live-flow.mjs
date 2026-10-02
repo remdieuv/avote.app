@@ -23,6 +23,7 @@ import {
   isParticipantRoomFull,
   resolveEventLandingPhase,
   resolveJoinHistoriqueQuestions,
+  countParticipantVoteConfirmedSurfaces,
   resolveParticipantTopStripLabel,
   shouldAutoNavigateJoinToPollPath,
   shouldEmbedPollSurfaceInRoom,
@@ -458,7 +459,31 @@ test("C. Quiz révélation CLOSED : feedback Salle nomme la bonne réponse", () 
   );
 });
 
-test("Finition. Strip Merci absent quand carte CLOSED (pas de doublon)", () => {
+test("Finition. Merci une seule fois — VOTING après vote et CLOSED après vote", () => {
+  // VOTING après vote : strip masqué (null), bandeau principal seul.
+  assert.equal(
+    resolveParticipantTopStripLabel({
+      hasVoted: true,
+      voteOuvert: true,
+      voteConfirmedLabel: LIVE_UX_LABEL_VOTE_CONFIRMED,
+      stateTitle: getLiveStateLabel(LIVE_UX_STATE.VOTING),
+    }),
+    null,
+  );
+  assert.equal(
+    countParticipantVoteConfirmedSurfaces({
+      hasVoted: true,
+      voteOuvert: true,
+      merciPourVote: true,
+      closedWaitCardVisible: false,
+      voteConfirmedLabel: LIVE_UX_LABEL_VOTE_CONFIRMED,
+      stateTitle: getLiveStateLabel(LIVE_UX_STATE.VOTING),
+    }),
+    1,
+    "VOTING après vote : Merci une seule fois (bloc principal)",
+  );
+
+  // CLOSED après vote : strip = label CLOSED (≠ Merci), carte = Merci.
   assert.equal(
     resolveParticipantTopStripLabel({
       hasVoted: true,
@@ -469,18 +494,42 @@ test("Finition. Strip Merci absent quand carte CLOSED (pas de doublon)", () => {
     getLiveStateLabel(LIVE_UX_STATE.CLOSED),
   );
   assert.equal(
-    resolveParticipantTopStripLabel({
+    getClosedParticipantTitle(true),
+    LIVE_UX_LABEL_VOTE_CONFIRMED,
+    "Merci reste sur la carte CLOSED",
+  );
+  assert.equal(
+    countParticipantVoteConfirmedSurfaces({
       hasVoted: true,
+      voteOuvert: false,
+      merciPourVote: false,
+      closedWaitCardVisible: true,
+      voteConfirmedLabel: LIVE_UX_LABEL_VOTE_CONFIRMED,
+      stateTitle: getLiveStateLabel(LIVE_UX_STATE.CLOSED),
+    }),
+    1,
+    "CLOSED après vote : Merci une seule fois (carte)",
+  );
+
+  // Non-votant VOTING : strip = instruction, pas de Merci.
+  assert.equal(
+    resolveParticipantTopStripLabel({
+      hasVoted: false,
       voteOuvert: true,
       voteConfirmedLabel: LIVE_UX_LABEL_VOTE_CONFIRMED,
       stateTitle: getLiveStateLabel(LIVE_UX_STATE.VOTING),
     }),
-    LIVE_UX_LABEL_VOTE_CONFIRMED,
+    getLiveStateLabel(LIVE_UX_STATE.VOTING),
   );
   assert.equal(
-    getClosedParticipantTitle(true),
-    LIVE_UX_LABEL_VOTE_CONFIRMED,
-    "Merci reste sur la carte CLOSED",
+    countParticipantVoteConfirmedSurfaces({
+      hasVoted: false,
+      voteOuvert: true,
+      merciPourVote: false,
+      voteConfirmedLabel: LIVE_UX_LABEL_VOTE_CONFIRMED,
+      stateTitle: getLiveStateLabel(LIVE_UX_STATE.VOTING),
+    }),
+    0,
   );
 });
 

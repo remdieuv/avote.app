@@ -294,20 +294,57 @@ export function formatQuizRevealParticipantFeedback(input = {}) {
 }
 
 /**
- * Strip supérieur Salle : Merci seulement pendant vote ouvert.
- * En CLOSED (carte attente résultats), Merci reste uniquement sur la carte.
+ * Strip supérieur Salle.
+ * - VOTING après vote : `null` (strip masqué) — Merci reste dans le bloc principal.
+ * - CLOSED : titre d’état (jamais Merci ; la carte CLOSED le porte).
  * @param {{
  *   hasVoted?: boolean;
  *   voteOuvert?: boolean;
  *   voteConfirmedLabel?: string;
  *   stateTitle?: string;
  * }} input
+ * @returns {string | null}
  */
 export function resolveParticipantTopStripLabel(input = {}) {
+  // Confirmation déjà dans le bandeau / carte principale — ne pas la répéter.
   if (input.hasVoted === true && input.voteOuvert === true) {
-    return input.voteConfirmedLabel ?? "";
+    return null;
   }
   return input.stateTitle ?? "";
+}
+
+/**
+ * Compte les surfaces Salle qui affichent la confirmation « Merci ! Ton vote… ».
+ * Strip + (bandeau VOTING | titre carte CLOSED). Cible : exactement 1 après vote.
+ * @param {{
+ *   hasVoted?: boolean;
+ *   voteOuvert?: boolean;
+ *   merciPourVote?: boolean;
+ *   closedWaitCardVisible?: boolean;
+ *   voteConfirmedLabel?: string;
+ *   stateTitle?: string;
+ * }} input
+ */
+export function countParticipantVoteConfirmedSurfaces(input = {}) {
+  const confirmed =
+    input.voteConfirmedLabel ?? "Merci ! Ton vote est pris en compte";
+  let n = 0;
+  const strip = resolveParticipantTopStripLabel({
+    hasVoted: input.hasVoted,
+    voteOuvert: input.voteOuvert,
+    voteConfirmedLabel: confirmed,
+    stateTitle: input.stateTitle,
+  });
+  if (strip === confirmed) n += 1;
+  if (input.merciPourVote === true && input.voteOuvert === true) n += 1;
+  if (
+    input.closedWaitCardVisible === true &&
+    input.hasVoted === true &&
+    input.voteOuvert !== true
+  ) {
+    n += 1;
+  }
+  return n;
 }
 
 /**
