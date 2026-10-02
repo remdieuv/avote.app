@@ -141,6 +141,7 @@ const authAttemptLimiter = rateLimit({
   message: { error: "Trop de tentatives. Réessayez plus tard." },
 });
 
+/** CORS navigateur → API (dev local : Next :3000 → Express :4000 direct). */
 const allowedOrigins = [
   "http://localhost:3000",
   "http://127.0.0.1:3000",
