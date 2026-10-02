@@ -27,8 +27,8 @@ function vercelBackendMisconfigured(base) {
 }
 
 /**
- * Proxy vers l’API Express (cookies httpOnly, CORS évité).
- * Plus fiable que seuls les rewrites (Turbopack / prod / mauvaise NEXT_PUBLIC_API_URL).
+ * Unique proxy navigateur → API Express (cookies httpOnly, CORS évité).
+ * Méthodes : GET/POST/PATCH/PUT/DELETE/OPTIONS — query, body, cookie, set-cookie.
  */
 async function proxy(request, { params }) {
   const resolved = await params;
