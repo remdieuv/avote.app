@@ -653,7 +653,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
     return () => {
       cancelled = true;
     };
-  }, [poll?.id, poll?.eventSlug, poll?.options]);
+  }, [poll?.id, poll?.eventSlug, poll?.options, poll?.contestWinnersCount]);
   const overlayVoteState = useMemo(() => {
     if (typeof poll?.eventVoteState === "string" && poll.eventVoteState.trim()) {
       return poll.eventVoteState;

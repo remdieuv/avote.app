@@ -7,7 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:live-ux": "node scripts/test-live-ux-state.mjs"
+    "test:live-ux": "node scripts/test-live-ux-state.mjs",
+    "test:participant": "node scripts/test-participant-live-flow.mjs",
+    "test:normalize-live": "node scripts/test-normalize-live-payload.mjs",
+    "test:backend-proxy": "node scripts/test-backend-proxy-upstream.mjs",
+    "test:api-browser-base": "node scripts/test-api-browser-base.mjs",
+    "test:lot0-lot1": "npm run test:live-ux && npm run test:participant && npm run test:normalize-live && npm run test:backend-proxy && npm run test:api-browser-base"
   },
   "dependencies": {
     "jspdf": "^4.2.1",

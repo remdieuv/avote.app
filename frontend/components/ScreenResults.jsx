@@ -1067,7 +1067,13 @@ export function ScreenResults(props) {
     return () => {
       cancelled = true;
     };
-  }, [isContestEntry, poll?.id, poll?.eventSlug, poll?.options]);
+  }, [
+    isContestEntry,
+    poll?.id,
+    poll?.eventSlug,
+    poll?.options,
+    poll?.contestWinnersCount,
+  ]);
   if (isContestEntry) {
     const questionAffichee =
       (typeof poll?.question === "string" && poll.question) ||
