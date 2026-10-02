@@ -8,8 +8,7 @@ const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || RAW_API_URL;
 
 /**
  * Base utilisée dans les `fetch()` du navigateur pour l’admin (cookie httpOnly).
- * En dev avec Next : définir `NEXT_PUBLIC_API_BROWSER_BASE=/api/backend` et un rewrite
- * vers le backend (voir `next.config.mjs`).
+ * Par défaut `/api/backend` → Route Handler `app/api/backend/[...path]/route.js`.
  */
 function apiBaseBrowser() {
   if (typeof window === "undefined") {
@@ -20,9 +19,8 @@ function apiBaseBrowser() {
     return b.replace(/\/$/, "");
   }
   /**
-   * Par défaut : proxy Next (`app/api/backend/...` ou rewrite) pour cookies same-origin.
-   * Évite le 404 si NEXT_PUBLIC_API_URL pointe par erreur vers le front ou en `next start`
-   * sans URL absolue vers Express.
+   * Par défaut : Route Handler proxy (cookies same-origin).
+   * Pas de rewrite next.config (évite Failed to proxy / EADDRINUSE sous Windows).
    */
   return "/api/backend";
 }
