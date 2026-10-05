@@ -10,6 +10,7 @@ import {
   prepareLandingPhotoForUpload,
 } from "@/lib/compressLandingPhoto";
 import { EventLandingDemoPage } from "@/components/event/EventLandingDemoPage";
+import { resolveEventLandingPhase } from "@/lib/participantLiveFlow";
 
 function mapApiError(body, status) {
   const code = String(body?.error || "").trim();
@@ -469,6 +470,17 @@ export default function EventLandingPage() {
     typeof payload.joinPath === "string" && payload.joinPath.startsWith("/")
       ? payload.joinPath
       : `/join/${encodeURIComponent(slug)}`;
+
+  const landingPhase = resolveEventLandingPhase({
+    liveState:
+      typeof payload.liveState === "string" ? payload.liveState : null,
+    voteState:
+      typeof payload.voteState === "string" ? payload.voteState : null,
+    displayState:
+      typeof payload.displayState === "string" ? payload.displayState : null,
+  });
+  const livePriority = landingPhase === "during";
+  const afterLive = landingPhase === "after";
 
   const infoTitle =
     typeof payload.infoSectionTitle === "string"
@@ -1020,6 +1032,44 @@ export default function EventLandingPage() {
         .ev-landing-footer-cta:active {
           transform: translateY(0);
         }
+
+        .ev-landing-sticky-join {
+          display: none;
+        }
+        @media (max-width: 720px) {
+          .ev-landing-live-cta-desktop {
+            display: none;
+          }
+          .ev-landing-sticky-join {
+            display: block;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 60;
+            padding: 0.65rem 1rem max(0.75rem, env(safe-area-inset-bottom, 0px));
+            background: linear-gradient(180deg, transparent, rgba(241, 245, 249, 0.92) 28%, #f1f5f9);
+            pointer-events: none;
+          }
+          .ev-landing-sticky-join-btn {
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            min-height: 52px;
+            border-radius: 14px;
+            font-weight: 800;
+            font-size: 1.05rem;
+            text-decoration: none;
+            color: #fff;
+            background: linear-gradient(180deg, var(--ev-accent, #2563eb), color-mix(in srgb, var(--ev-accent, #2563eb) 82%, #000));
+            box-shadow: 0 10px 28px color-mix(in srgb, var(--ev-accent, #2563eb) 35%, rgba(15,23,42,0.2));
+          }
+          .ev-landing-shell {
+            padding-bottom: 5.5rem;
+          }
+        }
       `}</style>
 
       <section
@@ -1041,10 +1091,23 @@ export default function EventLandingPage() {
             // eslint-disable-next-line @next/next/no-img-element
             <img className="ev-landing-hero-logo" src={logo} alt="" />
           ) : null}
-          <p className="ev-landing-hero-kicker">Événement en direct</p>
+          <p className="ev-landing-hero-kicker">
+            {afterLive
+              ? "Événement terminé"
+              : livePriority
+                ? "Live en cours"
+                : "Événement"}
+          </p>
           <h1 className="ev-landing-hero-title">{title}</h1>
           {description ? (
             <p className="ev-landing-hero-desc">{description}</p>
+          ) : null}
+          {livePriority ? (
+            <div style={{ marginTop: "1.25rem" }}>
+              <Link href={joinHref} className="ev-landing-hero-cta">
+                Participer au live
+              </Link>
+            </div>
           ) : null}
         </div>
       </section>
@@ -1057,7 +1120,7 @@ export default function EventLandingPage() {
           boxSizing: "border-box",
         }}
       >
-        {showShowcaseBlock ? (
+        {showShowcaseBlock && !livePriority ? (
           <section
             className="ev-landing-gallery-section"
             style={{
@@ -1171,6 +1234,7 @@ export default function EventLandingPage() {
           </section>
         ) : null}
 
+        {!livePriority && !afterLive ? (
         <section
           style={{
             textAlign: "center",
@@ -1195,6 +1259,93 @@ export default function EventLandingPage() {
             Accès à la salle interactive : votes et animations en direct.
           </p>
         </section>
+        ) : null}
+
+        {livePriority ? (
+        <section
+          style={{
+            textAlign: "center",
+            marginBottom: "clamp(1.25rem, 4vw, 2rem)",
+            padding: "0.15rem 0 0.35rem",
+          }}
+          className="ev-landing-live-cta-desktop"
+        >
+          <Link href={joinHref} className="ev-landing-hero-cta">
+            Participer au live
+          </Link>
+          <p
+            style={{
+              margin: "0.75rem 0 0",
+              fontSize: "0.9rem",
+              color: "#64748b",
+              maxWidth: "26rem",
+              marginLeft: "auto",
+              marginRight: "auto",
+              lineHeight: 1.45,
+            }}
+          >
+            Le live a commencé — entre dans la salle pour participer.
+          </p>
+        </section>
+        ) : null}
+
+        {showShowcaseBlock && livePriority ? (
+          <section
+            className="ev-landing-gallery-section"
+            style={{
+              marginBottom: "clamp(1.75rem, 5vw, 2.5rem)",
+              "--ev-accent": accent,
+            }}
+          >
+            <div style={{ marginBottom: "1.15rem" }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "0.68rem",
+                  fontWeight: 800,
+                  letterSpacing: "0.2em",
+                  textTransform: "uppercase",
+                  color: "#64748b",
+                }}
+              >
+                L&apos;événement
+              </p>
+              <h2
+                style={{
+                  margin: "0.35rem 0 0",
+                  fontSize: "clamp(1.45rem, 4vw, 1.85rem)",
+                  fontWeight: 800,
+                  letterSpacing: "-0.03em",
+                  color: "#0f172a",
+                  lineHeight: 1.15,
+                }}
+              >
+                Photos & infos
+              </h2>
+            </div>
+            <div className="ev-landing-gallery-grid">
+              {showcasePhotosList.map((p) => {
+                const u =
+                  typeof p?.url === "string"
+                    ? resolveApiAssetUrlNullable(p.url.trim())
+                    : null;
+                if (!u) return null;
+                const pid = String(p.id ?? "");
+                return (
+                  <LandingGalleryPhoto
+                    key={`sg-live-${p.id}`}
+                    url={u}
+                    photoId={pid}
+                    variant="card"
+                    canManage={false}
+                    isDeleting={false}
+                    isExiting={false}
+                  />
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
 
         {showLiveBlock ? (
           <section
@@ -1471,7 +1622,9 @@ export default function EventLandingPage() {
         <section
           style={{
             textAlign: "center",
-            padding: "clamp(1.5rem, 4vw, 2.5rem) 0 2.5rem",
+            padding: afterLive
+              ? "clamp(1rem, 3vw, 1.5rem) 0 2.5rem"
+              : "clamp(1.5rem, 4vw, 2.5rem) 0 2.5rem",
           }}
         >
           <Link
@@ -1479,11 +1632,20 @@ export default function EventLandingPage() {
             className="ev-landing-footer-cta"
             style={{
               ...footerCta,
-              background: `linear-gradient(180deg, ${accent}, color-mix(in srgb, ${accent} 82%, #000))`,
-              color: "#fff",
+              background: afterLive
+                ? "#e2e8f0"
+                : `linear-gradient(180deg, ${accent}, color-mix(in srgb, ${accent} 82%, #000))`,
+              color: afterLive ? "#0f172a" : "#fff",
+              boxShadow: afterLive
+                ? "0 4px 16px rgba(15,23,42,0.08)"
+                : footerCta.boxShadow,
             }}
           >
-            Rejoindre la salle live
+            {afterLive
+              ? "Revoir la salle"
+              : livePriority
+                ? "Participer au live"
+                : "Rejoindre la salle"}
           </Link>
           <p
             style={{
@@ -1494,10 +1656,23 @@ export default function EventLandingPage() {
               lineHeight: 1.5,
             }}
           >
-            Accès interactif : votes et animations en direct.
+            {afterLive
+              ? "Souvenirs et contenus restent accessibles ici."
+              : "Accès interactif : votes et animations en direct."}
           </p>
         </section>
       </div>
+
+      {livePriority ? (
+        <div
+          className="ev-landing-sticky-join"
+          style={{ "--ev-accent": accent }}
+        >
+          <Link href={joinHref} className="ev-landing-sticky-join-btn">
+            Participer au live
+          </Link>
+        </div>
+      ) : null}
 
       {canUploadLanding ? (
         <button

@@ -26,9 +26,8 @@ function PublicPollBody({ slug }) {
     };
   }, [slug, pollParam]);
 
-  const titrePage = pollParam
-    ? `Vote — ${slug} (question précédente)`
-    : `Vote — ${slug}`;
+  const archiveLookup = Boolean(pollParam);
+  const titrePage = archiveLookup ? "Question" : "Vote";
 
   return (
     <PollExperience
@@ -37,6 +36,7 @@ function PublicPollBody({ slug }) {
       retourHref={`/join/${encodeURIComponent(slug)}`}
       retourLabel="← Retour à la salle"
       slugPublic={slug}
+      archiveLookup={archiveLookup}
     />
   );
 }

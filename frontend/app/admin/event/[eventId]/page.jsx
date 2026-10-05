@@ -24,6 +24,10 @@ import {
   getEventUxSceneBadgeFromKey,
   getEventUxState,
 } from "@/lib/eventUxState";
+import {
+  normalizePollOptions,
+  optionVoteCount,
+} from "@/lib/normalizeLivePayload";
 
 const VOTE_STATE_LABELS = {
   open: "Vote ouvert",
@@ -5027,6 +5031,31 @@ export default function RegieEventPage() {
       if (!data?.id) return;
       if (!eventPollIdsRef.current.has(String(data.id))) return;
       loadPollAbortRef.current?.abort();
+      // Merge immédiat pour « Réponses en direct » ; refetch réconcilie (totaux bruts régie).
+      // En TEST+RESULTS, pollToJson peut masker : ne pas écraser les totaux régie.
+      setEventData((prev) => {
+        if (!prev?.polls) return prev;
+        const inTestResults =
+          prev.isLiveConsumed === false &&
+          String(prev.displayState || "").toLowerCase() === "results";
+        if (inTestResults) return prev;
+        return {
+          ...prev,
+          polls: prev.polls.map((p) => {
+            if (String(p.id) !== String(data.id)) return p;
+            const opts = normalizePollOptions(data.options);
+            return {
+              ...p,
+              options: opts,
+              voteCount: opts.reduce((a, o) => a + optionVoteCount(o), 0),
+              contestWinnersCount:
+                data.contestWinnersCount != null
+                  ? Math.max(0, Number(data.contestWinnersCount) || 0)
+                  : p.contestWinnersCount,
+            };
+          }),
+        };
+      });
       void fetchEvent({ silent: true });
     }
 
@@ -5393,14 +5422,17 @@ export default function RegieEventPage() {
     (p) => p.id === eventData.activePollId,
   );
   const liveResponsesOptions = useMemo(() => {
-    const opts = Array.isArray(activePoll?.options) ? activePoll.options : [];
+    const opts = normalizePollOptions(activePoll?.options);
     const totalVotesSafe = Math.max(
       0,
-      Number(activePoll?.voteCount || opts.reduce((acc, o) => acc + Number(o?.voteCount || 0), 0)),
+      Number(
+        activePoll?.voteCount ||
+          opts.reduce((acc, o) => acc + optionVoteCount(o), 0),
+      ),
     );
     return opts
       .map((o, i) => {
-        const voteCount = Math.max(0, Number(o?.voteCount || 0));
+        const voteCount = optionVoteCount(o);
         const pctRaw = Number(o?.votePct);
         const pct =
           Number.isFinite(pctRaw) && pctRaw >= 0

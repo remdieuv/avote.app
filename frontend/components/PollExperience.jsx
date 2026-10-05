@@ -29,11 +29,31 @@ import { API_URL, SOCKET_URL } from "@/lib/config";
 import {
   LIVE_UX_BODY_POLL_NO_POLL_SLUG,
   LIVE_UX_BODY_POLL_WAITING,
+  LIVE_UX_LABEL_VOTE_CONFIRMED,
   LIVE_UX_STATE,
-  getUxState,
+  getClosedParticipantTitle,
+  getLiveStateLabel,
   getLiveStatePresentation,
   getLiveStateTone,
 } from "@/lib/liveStateUx";
+import {
+  normalizeLiveAxes,
+  normalizePollJson,
+} from "@/lib/normalizeLivePayload";
+import {
+  shouldPollApplyParentPollSnapshot,
+  shouldPollFetchEventMetaBranding,
+  shouldPollOpenOwnSocket,
+  shouldPollRenderOfflineBanner,
+  shouldPollShowStandaloneArchiveResults,
+  shouldShowParticipantFullUi,
+  shouldShowParticipantLiveResultsBlock,
+  isParticipantVoteSessionOpen,
+  getParticipantFormNotice,
+  getParticipantFullLabel,
+  getParticipantOfflineLabel,
+  extractParticipantErrorCode,
+} from "@/lib/participantLiveFlow";
 import {
   buildJoinPollCardSurfaces,
   getLiveStateVisualTokens,
@@ -82,10 +102,12 @@ function normalizeLiveScene(liveState) {
 
 /**
  * Carte « vote clos, résultats pas encore à la salle » — teintée par l’accent événement.
- * @param {{ accent: string; isDark: boolean }} props
+ * Merci uniquement si le participant a voté (A2).
+ * @param {{ accent: string; isDark: boolean; hasVoted?: boolean }} props
  */
-function CarteVoteTermineAttenteResultats({ accent, isDark }) {
+function CarteVoteTermineAttenteResultats({ accent, isDark, hasVoted = false }) {
   const a = joinRoomAccent(accent);
+  const title = getClosedParticipantTitle(Boolean(hasVoted));
   return (
     <>
       <style>
@@ -123,7 +145,7 @@ function CarteVoteTermineAttenteResultats({ accent, isDark }) {
             letterSpacing: "-0.02em",
           }}
         >
-          {getUxState({ liveState: "CLOSED" }).label}
+          {title}
         </h3>
         <p
           style={{
@@ -194,6 +216,20 @@ function chronoRestantSecondes(tm) {
  *   retourHref?: string;
  *   retourLabel?: string;
  *   slugPublic?: string | null;
+ *   embedded?: boolean — Salle `/join` : panneau sans shell ni navigation
+ *   archiveLookup?: boolean — `/p?poll=` consultation historique / fiche résultat
+ *   parentSocketOnline?: boolean | null — connectivité Join (embedded)
+ *   parentLiveRevision?: number — bump Join à chaque event_live / reconnect
+ *   parentPollSnapshot?: object | null — poll_updated relayé par le socket Join
+ *   parentPollRevision?: number — bump quand un snapshot peer arrive
+ *   parentEventId?: string | null;
+ *   parentLiveState?: string | null;
+ *   parentVoteState?: string | null;
+ *   parentDisplayState?: string | null;
+ *   parentIsLocked?: boolean | null;
+ *   parentPrimaryColor?: string | null;
+ *   parentThemeMode?: string | null;
+ *   parentOverlayStrength?: string | null;
  * }} props
  */
 export function PollExperience({
@@ -202,6 +238,20 @@ export function PollExperience({
   retourHref = "/",
   retourLabel = "← Retour",
   slugPublic = null,
+  embedded = false,
+  archiveLookup = false,
+  parentSocketOnline = null,
+  parentLiveRevision = 0,
+  parentPollSnapshot = null,
+  parentPollRevision = 0,
+  parentEventId = null,
+  parentLiveState = null,
+  parentVoteState = null,
+  parentDisplayState = null,
+  parentIsLocked = null,
+  parentPrimaryColor = null,
+  parentThemeMode = null,
+  parentOverlayStrength = null,
 }) {
   const [poll, setPoll] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -257,6 +307,10 @@ export function PollExperience({
     isLiveConsumed: null,
     isLocked: null,
   });
+  /** null = pas encore branché ; false = drop socket */
+  const [socketOnline, setSocketOnline] = useState(/** @type {boolean | null} */ (null));
+  /** FULL local après LIMIT_REACHED / EVENT_LOCKED sur vote */
+  const [roomFullLocal, setRoomFullLocal] = useState(false);
 
   const eventMode = useEventMode(poll);
   const eventModeFromSocket = useEventMode(eventModeUi);
@@ -320,6 +374,13 @@ export function PollExperience({
           ? meta.displayState.toLowerCase()
           : null,
       );
+      if (typeof meta.isLocked === "boolean") {
+        setEventModeUi((prev) => ({
+          ...prev,
+          isLocked: meta.isLocked,
+        }));
+        setRoomFullLocal(Boolean(meta.isLocked));
+      }
 
       setEventTitleFromApi(
         typeof meta.title === "string" && meta.title.trim()
@@ -366,8 +427,58 @@ export function PollExperience({
   }, [slugPublic, poll?.eventSlug]);
 
   useEffect(() => {
+    if (!shouldPollFetchEventMetaBranding({ embedded })) return;
     void loadEventMetaForBranding();
-  }, [loadEventMetaForBranding]);
+  }, [embedded, loadEventMetaForBranding]);
+
+  /** Salle : branding + axes live fournis par Join — pas de 2ᵉ GET slug. */
+  useEffect(() => {
+    if (!embedded) return;
+    if (typeof parentEventId === "string" && parentEventId.trim()) {
+      setEventId(parentEventId.trim());
+    }
+    if (parentLiveState != null) {
+      setLiveScene(normalizeLiveScene(parentLiveState));
+    }
+    if (typeof parentVoteState === "string") {
+      setEventVoteStateUi(parentVoteState.toLowerCase());
+    } else if (parentVoteState == null) {
+      /* keep */
+    }
+    if (typeof parentDisplayState === "string") {
+      setEventDisplayStateUi(parentDisplayState.toLowerCase());
+    }
+    if (typeof parentIsLocked === "boolean") {
+      setEventModeUi((prev) => ({ ...prev, isLocked: parentIsLocked }));
+      setRoomFullLocal(parentIsLocked);
+    }
+    if (
+      typeof parentPrimaryColor === "string" &&
+      /^#[0-9A-Fa-f]{6}$/.test(parentPrimaryColor.trim())
+    ) {
+      setRoomPrimaryColor(parentPrimaryColor.trim());
+    }
+    if (typeof parentThemeMode === "string" && parentThemeMode.trim()) {
+      setRoomThemeMode(parentThemeMode.trim().toLowerCase());
+    }
+    if (
+      typeof parentOverlayStrength === "string" &&
+      parentOverlayStrength.trim()
+    ) {
+      setRoomOverlayStrength(parentOverlayStrength.trim().toLowerCase());
+    }
+  }, [
+    embedded,
+    parentEventId,
+    parentLiveState,
+    parentVoteState,
+    parentDisplayState,
+    parentIsLocked,
+    parentPrimaryColor,
+    parentThemeMode,
+    parentOverlayStrength,
+    parentLiveRevision,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -452,19 +563,20 @@ export function PollExperience({
         if (!res.ok) {
           throw new Error(`Erreur ${res.status}`);
         }
-        const data = await res.json();
+        const data = normalizePollJson(await res.json());
 
         if (signal?.aborted) return;
 
-        setLiveScene(normalizeLiveScene(data.eventLiveState));
+        const axes = normalizeLiveAxes(data);
+        setLiveScene(normalizeLiveScene(axes.liveState));
         if (data.eventId) {
           setEventId(data.eventId);
         }
-        if (typeof data.eventVoteState === "string") {
-          setEventVoteStateUi(data.eventVoteState.toLowerCase());
+        if (axes.voteState) {
+          setEventVoteStateUi(axes.voteState);
         }
-        if (typeof data.eventDisplayState === "string") {
-          setEventDisplayStateUi(data.eventDisplayState.toLowerCase());
+        if (axes.displayState) {
+          setEventDisplayStateUi(axes.displayState);
         }
         if (silent) {
           flushSync(() => {
@@ -497,6 +609,57 @@ export function PollExperience({
   useEffect(() => {
     void loadPoll();
   }, [loadPoll]);
+
+  /** Salle : sync question via GET /p quand Join bump la révision live (pas de 2ᵉ socket). */
+  useEffect(() => {
+    if (!embedded) return;
+    if (!parentLiveRevision) return;
+    void loadPoll({ silent: true });
+  }, [embedded, parentLiveRevision, loadPoll]);
+
+  /**
+   * Salle : applique `poll_updated` relayé par Join (même io, join_poll) —
+   * totaux peers en direct sans second socket ni attendre event_live.
+   */
+  useEffect(() => {
+    if (
+      !shouldPollApplyParentPollSnapshot({
+        embedded,
+        parentPollRevision,
+      })
+    ) {
+      return;
+    }
+    if (!parentPollSnapshot || typeof parentPollSnapshot !== "object") return;
+    const snap = normalizePollJson(
+      /** @type {Record<string, unknown>} */ (parentPollSnapshot),
+    );
+    if (!snap?.id) return;
+    const axes = normalizeLiveAxes(snap);
+    setPoll(/** @type {any} */ (snap));
+    setLoading(false);
+    setError(null);
+    setPollFetch404Slug(false);
+    if (axes.liveState) {
+      setLiveScene(normalizeLiveScene(axes.liveState));
+    }
+    if (axes.voteState) {
+      setEventVoteStateUi(axes.voteState);
+    }
+    if (axes.displayState) {
+      setEventDisplayStateUi(axes.displayState);
+    }
+    if (typeof snap.eventId === "string" && snap.eventId.trim()) {
+      setEventId(String(snap.eventId).trim());
+    }
+    if (axes.isLiveConsumed != null || axes.isLocked != null) {
+      setEventModeUi((prev) => ({
+        isLiveConsumed:
+          axes.isLiveConsumed != null ? axes.isLiveConsumed : prev.isLiveConsumed,
+        isLocked: axes.isLocked != null ? axes.isLocked : prev.isLocked,
+      }));
+    }
+  }, [embedded, parentPollRevision, parentPollSnapshot]);
 
   useEffect(() => {
     const iso = poll?.autoRevealShowResultsAt;
@@ -554,20 +717,35 @@ export function PollExperience({
     void loadPoll({ silent: true });
   }, [liveScene, poll?.eventVoteState, poll?.status, secondesChronoVote, loadPoll]);
 
-  /** Socket : room événement + room poll pour les mises à jour fines */
+  /**
+   * Socket autonome : uniquement `/p` standalone.
+   * En Salle (`embedded`), Join possède le seul `io()` ; Poll se sync via parentLiveRevision + GET /p.
+   */
   useEffect(() => {
+    if (!shouldPollOpenOwnSocket({ embedded })) {
+      setSocketOnline(
+        typeof parentSocketOnline === "boolean" ? parentSocketOnline : null,
+      );
+      return undefined;
+    }
+
     const eid = eventId;
     const pid = pollId;
 
-    if (!eid && !pid) return;
+    if (!eid && !pid) return undefined;
 
     const socket = io(SOCKET_URL, {
       transports: ["websocket", "polling"],
     });
 
     function rejoindreSalles() {
+      setSocketOnline(true);
       if (eid) socket.emit("join_event", eid);
       if (pid) socket.emit("join_poll", pid);
+    }
+
+    function onDisconnect() {
+      setSocketOnline(false);
     }
 
     function onEventLiveUpdated(payload) {
@@ -578,48 +756,44 @@ export function PollExperience({
       loadPollAbortRef.current?.abort();
       setLoading(false);
 
-      setLiveScene(normalizeLiveScene(payload.liveState));
+      const eventAxes = normalizeLiveAxes(payload);
+      setLiveScene(normalizeLiveScene(eventAxes.liveState));
 
-      if (
-        typeof payload.isLiveConsumed === "boolean" ||
-        typeof payload.isLocked === "boolean"
-      ) {
+      if (eventAxes.isLiveConsumed != null || eventAxes.isLocked != null) {
         setEventModeUi((prev) => ({
           isLiveConsumed:
-            typeof payload.isLiveConsumed === "boolean"
-              ? payload.isLiveConsumed
+            eventAxes.isLiveConsumed != null
+              ? eventAxes.isLiveConsumed
               : prev.isLiveConsumed,
           isLocked:
-            typeof payload.isLocked === "boolean" ? payload.isLocked : prev.isLocked,
+            eventAxes.isLocked != null ? eventAxes.isLocked : prev.isLocked,
         }));
       }
-      if (typeof payload.voteState === "string") {
-        setEventVoteStateUi(payload.voteState.toLowerCase());
+      if (eventAxes.voteState) {
+        setEventVoteStateUi(eventAxes.voteState);
       }
-      if (typeof payload.displayState === "string") {
-        setEventDisplayStateUi(payload.displayState.toLowerCase());
+      if (eventAxes.displayState) {
+        setEventDisplayStateUi(eventAxes.displayState);
       }
 
       if (payload.poll) {
-        setPoll(payload.poll);
+        const pollNorm = normalizePollJson(payload.poll);
+        const pollAxes = normalizeLiveAxes(pollNorm);
+        setPoll(pollNorm);
         setLiveScene(
-          normalizeLiveScene(
-            payload.poll?.eventLiveState ?? payload.liveState,
-          ),
+          normalizeLiveScene(pollAxes.liveState ?? eventAxes.liveState),
         );
-        const pv = payload.poll?.eventVoteState;
-        const pd = payload.poll?.eventDisplayState;
-        if (typeof pv === "string") setEventVoteStateUi(pv.toLowerCase());
-        if (typeof pd === "string") setEventDisplayStateUi(pd.toLowerCase());
+        if (pollAxes.voteState) setEventVoteStateUi(pollAxes.voteState);
+        if (pollAxes.displayState) setEventDisplayStateUi(pollAxes.displayState);
         setError(null);
         setPollFetch404Slug(false);
         if (payload.activePollId != null && String(payload.activePollId).trim()) {
           setActivePollIdFromSlug(String(payload.activePollId).trim());
-        } else if (payload.poll?.id) {
-          setActivePollIdFromSlug(String(payload.poll.id));
+        } else if (pollNorm?.id) {
+          setActivePollIdFromSlug(String(pollNorm.id));
         }
       } else {
-        const ls = String(payload.liveState ?? "").toLowerCase();
+        const ls = String(eventAxes.liveState ?? "").toLowerCase();
         if (ls === "waiting") {
           setPollFetch404Slug(false);
         }
@@ -653,40 +827,45 @@ export function PollExperience({
       ) {
         return;
       }
+      const norm = normalizePollJson(data);
+      const axes = normalizeLiveAxes(norm);
       setPoll((prev) => {
-        if (prev && String(prev.id) === String(data.id)) {
-          return data;
+        if (prev && String(prev.id) === String(norm.id)) {
+          return norm;
         }
-        if (pid && String(pid) === String(data.id)) {
-          return data;
+        if (pid && String(pid) === String(norm.id)) {
+          return norm;
         }
         if (
           !prev &&
-          (data.eventId == null || String(data.eventId) === String(eid))
+          (norm.eventId == null || String(norm.eventId) === String(eid))
         ) {
-          return data;
+          return norm;
         }
         return prev;
       });
-      setLiveScene(normalizeLiveScene(data.eventLiveState));
-      if (
-        typeof data.eventIsLiveConsumed === "boolean" ||
-        typeof data.eventIsLocked === "boolean"
-      ) {
+      if (axes.liveState) {
+        setLiveScene(normalizeLiveScene(axes.liveState));
+      }
+      if (axes.voteState) setEventVoteStateUi(axes.voteState);
+      if (axes.displayState) setEventDisplayStateUi(axes.displayState);
+      if (axes.isLiveConsumed != null || axes.isLocked != null) {
         setEventModeUi((prev) => ({
           isLiveConsumed:
-            typeof data.eventIsLiveConsumed === "boolean"
-              ? data.eventIsLiveConsumed
+            axes.isLiveConsumed != null
+              ? axes.isLiveConsumed
               : prev.isLiveConsumed,
-          isLocked:
-            typeof data.eventIsLocked === "boolean" ? data.eventIsLocked : prev.isLocked,
+          isLocked: axes.isLocked != null ? axes.isLocked : prev.isLocked,
         }));
       }
     }
 
     socket.on("connect", rejoindreSalles);
+    socket.on("disconnect", onDisconnect);
     if (socket.connected) {
       rejoindreSalles();
+    } else {
+      setSocketOnline(false);
     }
 
     socket.on("event_live_updated", onEventLiveUpdated);
@@ -701,15 +880,24 @@ export function PollExperience({
         socket.emit("leave_poll", pid);
       }
       socket.off("connect", rejoindreSalles);
+      socket.off("disconnect", onDisconnect);
       socket.off("event_live_updated", onEventLiveUpdated);
       socket.off("event:customization_updated", onCustomizationUpdated);
       socket.off("poll_updated", onPollUpdated);
       socket.disconnect();
     };
-  }, [eventId, pollId, slugPublic, loadPoll, loadEventMetaForBranding]);
+  }, [
+    embedded,
+    parentSocketOnline,
+    eventId,
+    pollId,
+    slugPublic,
+    loadPoll,
+    loadEventMetaForBranding,
+  ]);
 
   const voteStateParticipant = String(
-    poll?.eventVoteState ?? eventVoteStateUi ?? "",
+    poll?.eventVoteState ?? poll?.voteState ?? eventVoteStateUi ?? "",
   ).toLowerCase();
   const displayStateParticipant = String(
     (typeof poll?.eventDisplayState === "string" && poll.eventDisplayState.trim()
@@ -721,12 +909,44 @@ export function PollExperience({
     displayStateParticipant === "results" ||
     String(liveScene || "").toLowerCase() === "results";
 
-  /** Bloc résultats : révélation salle, ou totaux live après mon vote tant que le vote est ouvert */
-  const showBlocResultatsEnDirect =
+  /** Fiche `/p` archive : barres pour question CLOSE (historique / FINISHED). */
+  const archiveResultsStandalone = shouldPollShowStandaloneArchiveResults({
+    embedded,
+    pollStatus: poll?.status,
+    liveScene,
+    displayState: displayStateParticipant,
+    isPastPollLookup: archiveLookup,
+  });
+
+  /**
+   * Session vote ouverte — même règle que `/p` prod (eventVoteState open,
+   * fallback liveScene voting si axe vote absent).
+   */
+  const voteSessionOpen = isParticipantVoteSessionOpen({
+    voteState: voteStateParticipant,
+    pollStatus: poll?.status,
+    liveScene,
+  });
+
+  /**
+   * Bloc résultats live : révélation salle, OU après mon vote pendant VOTING
+   * (comportement /p production à conserver en Salle embed), OU archive `/p`.
+   */
+  const showBlocResultatsEnDirect = shouldShowParticipantLiveResultsBlock({
+    hasPoll: !!poll,
+    affichageResultatsPublic,
+    archiveResultsStandalone,
+    hasVoted: Boolean(merciPourVote || aDejaVoteEnStockage),
+    voteState: voteStateParticipant,
+    pollStatus: poll?.status,
+    liveScene,
+  });
+
+  /** Fiche résultat autonome : header / eyebrow / CTA adaptés (pas de 2ᵉ logique de totaux). */
+  const isStandaloneResultsSheet =
+    !embedded &&
     !!poll &&
-    (affichageResultatsPublic ||
-      (voteStateParticipant === "open" &&
-        (merciPourVote || aDejaVoteEnStockage)));
+    (archiveResultsStandalone || affichageResultatsPublic);
 
   const optionsPourVote = useMemo(() => {
     return [...(poll?.options ?? [])].sort(
@@ -844,6 +1064,20 @@ export function PollExperience({
 
   const isMultipleChoice = poll?.type === "MULTIPLE_CHOICE";
   const isContestEntry = String(poll?.type || "").toUpperCase() === "CONTEST_ENTRY";
+  const formNotice = getParticipantFormNotice({
+    pollType: poll?.type,
+    leadEnabled: Boolean(poll?.leadEnabled),
+  });
+  const roomIsFull = shouldShowParticipantFullUi({
+    isLocked: eventModeUi.isLocked === true || eventMode.isLocked === true,
+    errorCode: roomFullLocal ? "LIMIT_REACHED" : null,
+    uxState: liveScene,
+  });
+  const isOffline = embedded
+    ? parentSocketOnline === false
+    : socketOnline === false;
+  const showOfflineBanner =
+    shouldPollRenderOfflineBanner({ embedded }) && isOffline && !loading;
 
   useEffect(() => {
     if (!poll?.id || !isContestEntry || !poll?.eventSlug) {
@@ -874,7 +1108,13 @@ export function PollExperience({
     return () => {
       cancelled = true;
     };
-  }, [poll?.id, poll?.eventSlug, isContestEntry, resultsVoteSignature]);
+  }, [
+    poll?.id,
+    poll?.eventSlug,
+    isContestEntry,
+    resultsVoteSignature,
+    poll?.contestWinnersCount,
+  ]);
 
   function toggleOptionMultiple(optionId) {
     if (
@@ -894,10 +1134,11 @@ export function PollExperience({
   }
 
   async function submitVote() {
-    const sessionOuverte =
-      (typeof poll?.eventVoteState === "string"
-        ? poll.eventVoteState.toLowerCase() === "open"
-        : liveScene === "voting") && poll?.status === "ACTIVE";
+    const sessionOuverte = isParticipantVoteSessionOpen({
+      voteState: poll?.eventVoteState ?? poll?.voteState ?? eventVoteStateUi,
+      pollStatus: poll?.status,
+      liveScene,
+    });
     if (
       !pollId ||
       !sessionOuverte ||
@@ -944,6 +1185,11 @@ export function PollExperience({
       });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
+        const code = extractParticipantErrorCode(errBody);
+        if (code === "LIMIT_REACHED" || code === "EVENT_LOCKED") {
+          setRoomFullLocal(true);
+          throw new Error(code);
+        }
         throw new Error(errBody.error || `Erreur ${res.status}`);
       }
 
@@ -962,23 +1208,46 @@ export function PollExperience({
       }
       setVotedOptionIdsEnStockage(optionIds);
 
-      await loadPoll({ silent: true });
       const leadTriggered =
         Boolean(pollAfterVote?.leadEnabled) &&
         typeof pollAfterVote?.leadTriggerOptionId === "string" &&
         optionIds.includes(pollAfterVote.leadTriggerOptionId);
+
+      // Totaux + flags voté immédiatement (Salle embed = même rendu /p prod).
       flushSync(() => {
+        if (pollAfterVote && typeof pollAfterVote === "object") {
+          const pollNorm = normalizePollJson(
+            /** @type {Record<string, unknown>} */ (pollAfterVote),
+          );
+          setPoll(/** @type {any} */ (pollNorm));
+          const axes = normalizeLiveAxes(pollNorm);
+          if (axes.liveState) {
+            setLiveScene(normalizeLiveScene(axes.liveState));
+          }
+          if (axes.voteState) setEventVoteStateUi(axes.voteState);
+          if (axes.displayState) setEventDisplayStateUi(axes.displayState);
+        }
         setSelectedOptionId(null);
         setSelectedOptionIds([]);
         setMerciPourVote(true);
+        setADejaVoteEnStockage(true);
         setShowLeadForm(leadTriggered);
         setLeadSuccess(false);
         setLeadError(null);
       });
+
+      // Réconciliation peers / chrono sans effacer le flag voté.
+      await loadPoll({ silent: true });
     } catch (e) {
-      setVoteError(
-        e.message || "Impossible d’enregistrer ton vote. Réessaie plus tard.",
-      );
+      const code = extractParticipantErrorCode(e?.message);
+      if (code === "LIMIT_REACHED" || code === "EVENT_LOCKED") {
+        setRoomFullLocal(true);
+        setVoteError(getParticipantFullLabel());
+      } else {
+        setVoteError(
+          e.message || "Impossible d’enregistrer ton vote. Réessaie plus tard.",
+        );
+      }
     } finally {
       voteLockRef.current = false;
       setVoteSubmitting(false);
@@ -1028,14 +1297,12 @@ export function PollExperience({
     }
   }
 
-  const voteOuvert =
-    (typeof poll?.eventVoteState === "string"
-      ? poll.eventVoteState.toLowerCase() === "open"
-      : liveScene === "voting") && poll?.status === "ACTIVE";
+  const voteOuvert = voteSessionOpen;
   const hasSelectionValide = isMultipleChoice
     ? selectedOptionIds.length > 0
     : !!selectedOptionId;
   const votesBloques =
+    roomIsFull ||
     !voteOuvert ||
     aDejaVoteEnStockage ||
     merciPourVote ||
@@ -1200,46 +1467,19 @@ export function PollExperience({
   const sceneParticipant = String(
     pollUxPres.ux || LIVE_UX_STATE.WAITING,
   ).toLowerCase();
-  const ux = useMemo(
-    () =>
-      getUxState({
-        liveState: liveStateForUx,
-        voteState: voteStateForUx,
-        displayState: displayStateForUx,
-      }),
-    [liveStateForUx, voteStateForUx, displayStateForUx],
-  );
-  const votingLabel = useMemo(
-    () =>
-      getUxState({
-        liveState: "VOTING",
-        voteState: "OPEN",
-        displayState: "QUESTION",
-      }).label,
-    [],
-  );
-  const resultsLabel = useMemo(
-    () =>
-      getUxState({
-        liveState: "RESULTS",
-        voteState: "CLOSED",
-        displayState: "RESULTS",
-      }).label,
-    [],
-  );
-  const voteTakenLabel = useMemo(
-    () =>
-      getUxState({
-        liveState: "CLOSED",
-        voteState: "CLOSED",
-        displayState: "QUESTION",
-      }).label,
-    [],
-  );
+  /** Libellés canoniques resolveLiveUxState — pas getUxState (ignore pollStatus). */
+  const votingLabel = getLiveStateLabel(LIVE_UX_STATE.VOTING);
+  const resultsLabel = getLiveStateLabel(LIVE_UX_STATE.RESULTS);
+  const voteTakenLabel = LIVE_UX_LABEL_VOTE_CONFIRMED;
+  const hasVotedLocal = Boolean(merciPourVote || aDejaVoteEnStockage);
+  /** Merci uniquement si la personne a voté — jamais en WAITING / non-votant (A1/A2). */
   const topUxLabel =
-    voteOuvert && (merciPourVote || aDejaVoteEnStockage)
+    hasVotedLocal &&
+    (voteOuvert ||
+      attenteProjectionResultats ||
+      sansPollMaisVoteFermeSansResultatsSalle)
       ? voteTakenLabel
-      : ux.label;
+      : pollUxPres.title;
 
   const pollUxTone = getLiveStateTone(pollUxPres.ux);
   const pollVisualTokens = useMemo(
@@ -1324,9 +1564,11 @@ export function PollExperience({
     [palette, isDark, accent, resultsCardTokens],
   );
 
+  const ShellTag = embedded ? "div" : "main";
+
   return (
     <>
-      {roomBackgroundUrl ? (
+      {!embedded && roomBackgroundUrl ? (
         <>
           <div
             aria-hidden
@@ -1351,16 +1593,25 @@ export function PollExperience({
           />
         </>
       ) : null}
-      <main
-        style={{
-          ...shellStyle,
-          lineHeight: 1.5,
-        }}
+      <ShellTag
+        style={
+          embedded
+            ? {
+                width: "100%",
+                maxWidth: "min(36rem, 100%)",
+                lineHeight: 1.5,
+                boxSizing: "border-box",
+              }
+            : {
+                ...shellStyle,
+                lineHeight: 1.5,
+              }
+        }
       >
         <style>{`
           @media (max-width: 640px) {
             .poll-live-zone {
-              padding: 0.8rem 0.8rem 1.35rem !important;
+              padding: 0.8rem 0.8rem max(1.35rem, env(safe-area-inset-bottom, 0px)) !important;
             }
             .poll-live-panel {
               max-width: 100% !important;
@@ -1372,22 +1623,29 @@ export function PollExperience({
               min-height: 50px !important;
               font-size: 1rem !important;
             }
+            .poll-live-embedded .poll-live-zone {
+              padding: 0 !important;
+            }
           }
         `}</style>
-        <ExperienceHeader
-          backHref={retourHref}
-          backLabel={retourLabel}
-          title={eventTitleFromApi ?? titrePage}
-          logoUrl={roomLogoUrl}
-          palette={palette}
-          isDark={isDark}
-        />
+        {!embedded ? (
+          <ExperienceHeader
+            backHref={retourHref}
+            backLabel={retourLabel}
+            title={eventTitleFromApi ?? titrePage}
+            logoUrl={roomLogoUrl}
+            palette={palette}
+            isDark={isDark}
+            badgeText={isStandaloneResultsSheet ? "Résultats" : null}
+            badgeColor={accent}
+          />
+        ) : null}
 
         {eventMode.isTestMode || eventModeFromSocket.isTestMode ? (
           <div
             style={{
               position: "fixed",
-              top: 14,
+              top: "max(14px, env(safe-area-inset-top, 0px))",
               left: "50%",
               transform: "translateX(-50%)",
               zIndex: 2147483647,
@@ -1409,20 +1667,93 @@ export function PollExperience({
         ) : null}
 
         <div
-          className="poll-live-zone"
+          className={embedded ? "poll-live-zone poll-live-embedded" : "poll-live-zone"}
           style={{
             flex: 1,
             width: "100%",
             display: "flex",
             justifyContent: "center",
             alignItems: "flex-start",
-            padding:
-              "clamp(1rem, 4vw, 1.75rem) clamp(1rem, 5vw, 2rem) 2rem",
+            padding: embedded
+              ? 0
+              : isStandaloneResultsSheet
+                ? "clamp(0.75rem, 3vw, 1.15rem) clamp(0.9rem, 4vw, 1.5rem) max(1.25rem, env(safe-area-inset-bottom, 0px))"
+                : "clamp(1rem, 4vw, 1.75rem) clamp(1rem, 5vw, 2rem) max(2rem, env(safe-area-inset-bottom, 0px))",
             boxSizing: "border-box",
           }}
         >
           <div className="poll-live-panel" style={panelStyle}>
-      {!loading && !error ? (
+      {showOfflineBanner ? (
+        <div
+          role="status"
+          style={{
+            marginBottom: "1rem",
+            padding: "0.85rem 1rem",
+            borderRadius: "12px",
+            border: isDark
+              ? "1px solid rgba(251, 191, 36, 0.4)"
+              : "1px solid rgba(217, 119, 6, 0.35)",
+            background: isDark
+              ? "rgba(120, 53, 15, 0.35)"
+              : "rgba(254, 243, 199, 0.95)",
+            color: isDark ? "#fde68a" : "#92400e",
+            textAlign: "center",
+          }}
+        >
+          <p style={{ margin: 0, fontWeight: 700 }}>{getParticipantOfflineLabel()}</p>
+          <button
+            type="button"
+            onClick={() => {
+              void loadPoll({ silent: true });
+              void loadEventMetaForBranding();
+            }}
+            style={{
+              marginTop: "0.6rem",
+              minHeight: "44px",
+              padding: "0.5rem 1rem",
+              borderRadius: "10px",
+              border: "none",
+              fontWeight: 700,
+              cursor: "pointer",
+              background: accent,
+              color: "#fff",
+            }}
+          >
+            Réessayer
+          </button>
+        </div>
+      ) : null}
+
+      {roomIsFull && !loading ? (
+        <div
+          role="status"
+          style={{
+            marginBottom: "1rem",
+            padding: "1rem 1.15rem",
+            borderRadius: "14px",
+            border: `1px solid ${palette.cardBorder}`,
+            background: isDark ? "rgba(15, 23, 42, 0.45)" : "rgba(255,255,255,0.6)",
+            color: palette.fg2,
+            textAlign: "center",
+          }}
+        >
+          <h2
+            style={{
+              margin: "0 0 0.5rem 0",
+              fontSize: "clamp(1.15rem, 3.5vw, 1.35rem)",
+              fontWeight: 800,
+              color: palette.fg,
+            }}
+          >
+            {getParticipantFullLabel()}
+          </h2>
+          <p style={{ margin: 0, lineHeight: 1.5, color: palette.muted }}>
+            Impossible de voter pour le moment. Garde cet écran ou reviens plus tard.
+          </p>
+        </div>
+      ) : null}
+
+      {!loading && !error && !roomIsFull && !isStandaloneResultsSheet ? (
         <div
           className="text-center text-sm opacity-80 mb-2"
           style={{
@@ -1490,6 +1821,7 @@ export function PollExperience({
               <CarteVoteTermineAttenteResultats
                 accent={accent}
                 isDark={isDark}
+                hasVoted={Boolean(merciPourVote || aDejaVoteEnStockage)}
               />
             ) : sceneParticipant === "waiting" ||
               pollFetch404Slug ? (
@@ -1529,7 +1861,7 @@ export function PollExperience({
 
       {!loading && poll && (
         <>
-          {voteOuvert && (
+          {voteOuvert && !roomIsFull && (
             <div style={{ marginBottom: "1rem" }}>
               <p
                 style={{
@@ -1627,8 +1959,10 @@ export function PollExperience({
                   )
                 : `1px solid ${palette.cardBorder}`,
               borderRadius: "16px",
-              padding: "1.25rem 1.35rem",
-              marginBottom: "1rem",
+              padding: isStandaloneResultsSheet
+                ? "1rem 1.1rem"
+                : "1.25rem 1.35rem",
+              marginBottom: isStandaloneResultsSheet ? "0.75rem" : "1rem",
               background: voteOuvert
                 ? isDark
                   ? `color-mix(in srgb, ${accent} ${4 + pollVisualTokens.cardAccentTintPct * 0.9}%, rgba(15, 23, 42, 0.4))`
@@ -1643,9 +1977,23 @@ export function PollExperience({
                 : undefined,
             }}
           >
+            {isStandaloneResultsSheet ? (
+              <p
+                style={{
+                  margin: "0 0 0.45rem 0",
+                  fontSize: "0.7rem",
+                  fontWeight: 800,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  color: accent,
+                }}
+              >
+                Question
+              </p>
+            ) : null}
             <h2
               style={{
-                fontSize: `clamp(${1.2 * (voteOuvert ? pollVisualTokens.titleClampMul : 1)}rem, 4vw, ${1.55 * (voteOuvert ? pollVisualTokens.titleClampMul : 1)}rem)`,
+                fontSize: `clamp(${1.15 * (voteOuvert ? pollVisualTokens.titleClampMul : 1)}rem, 4vw, ${1.5 * (voteOuvert ? pollVisualTokens.titleClampMul : 1)}rem)`,
                 fontWeight: 800,
                 margin: "0 0 0.5rem 0",
                 color: palette.fg,
@@ -1673,6 +2021,7 @@ export function PollExperience({
             <CarteVoteTermineAttenteResultats
               accent={accent}
               isDark={isDark}
+              hasVoted={Boolean(merciPourVote || aDejaVoteEnStockage)}
             />
           ) : null}
 
@@ -1695,7 +2044,7 @@ export function PollExperience({
                   fontWeight: 600,
                 }}
               >
-                Merci pour votre vote !
+                {LIVE_UX_LABEL_VOTE_CONFIRMED}
               </p>
               {showLeadForm ? (
                 <div
@@ -1709,7 +2058,7 @@ export function PollExperience({
                   }}
                 >
                   <p style={{ margin: "0 0 0.65rem", fontWeight: 700, color: palette.fg }}>
-                    Restez en contact
+                    Laisse-nous tes coordonnées
                   </p>
                   <div style={{ display: "grid", gap: "0.5rem" }}>
                     <input
@@ -1797,14 +2146,14 @@ export function PollExperience({
                   fontWeight: 500,
                 }}
               >
-                Vous avez déjà voté pour ce sondage.
+                Tu as déjà voté pour ce sondage.
               </p>
             )}
           {isQuiz && quizRevealed && quizVotedOptionIds.length > 0 ? (
             <p
               style={{
-                marginBottom: "1rem",
-                padding: "0.75rem 1rem",
+                marginBottom: "0.85rem",
+                padding: "0.7rem 0.95rem",
                 background: quizAnsweredCorrectly
                   ? (isDark ? "rgba(22, 163, 74, 0.24)" : "rgba(220, 252, 231, 0.9)")
                   : (isDark ? "rgba(239, 68, 68, 0.22)" : "rgba(254, 226, 226, 0.92)"),
@@ -1818,9 +2167,12 @@ export function PollExperience({
                       : "1px solid rgba(239, 68, 68, 0.35)"),
                 color: quizAnsweredCorrectly ? (isDark ? "#bbf7d0" : "#166534") : (isDark ? "#fecaca" : "#991b1b"),
                 fontWeight: 700,
+                fontSize: "0.92rem",
               }}
             >
-              {quizAnsweredCorrectly ? "Bonne réponse ✅" : "Mauvaise réponse ❌"}
+              {quizAnsweredCorrectly
+                ? "Ta réponse était correcte"
+                : "Ta réponse était incorrecte"}
             </p>
           ) : null}
 
@@ -1844,7 +2196,7 @@ export function PollExperience({
             </p>
           )}
 
-          {voteOuvert ? (
+          {voteOuvert && !roomIsFull ? (
             <div
               style={{
                 opacity: merciPourVote ? 0.58 : 1,
@@ -1866,8 +2218,26 @@ export function PollExperience({
                   color: accent,
                 }}
               >
-                Votre choix
+                Ton choix
               </h3>
+              {!votesBloques && formNotice ? (
+                <p
+                  style={{
+                    fontSize: "0.88rem",
+                    color: palette.muted2,
+                    marginBottom: "0.75rem",
+                    lineHeight: 1.45,
+                    padding: "0.65rem 0.75rem",
+                    borderRadius: "10px",
+                    background: isDark
+                      ? "rgba(15, 23, 42, 0.4)"
+                      : "rgba(255,255,255,0.55)",
+                    border: `1px solid ${palette.cardBorder}`,
+                  }}
+                >
+                  {formNotice}
+                </p>
+              ) : null}
               {!votesBloques && (
                 <p
                   style={{
@@ -1915,7 +2285,7 @@ export function PollExperience({
                     color: palette.muted,
                   }}
                 >
-                  Votre vote est bien enregistré.
+                  Ton vote est bien enregistré.
                 </p>
               ) : (
                 <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -2034,8 +2404,10 @@ export function PollExperience({
             <section
               ref={resultsAnchorRef}
               style={{
-                marginTop: voteOuvert ? 0 : "0.5rem",
-                padding: "1.25rem 1.35rem",
+                marginTop: voteOuvert ? 0 : isStandaloneResultsSheet ? 0 : "0.5rem",
+                padding: isStandaloneResultsSheet
+                  ? "1rem 1.1rem"
+                  : "1.25rem 1.35rem",
                 borderRadius: "16px",
                 border: resultsBlockSurfaces.border,
                 background: resultsBlockSurfaces.background,
@@ -2052,7 +2424,11 @@ export function PollExperience({
                   letterSpacing: "-0.02em",
                 }}
               >
-                {isContestEntry ? "Concours en cours" : resultsLabel}
+                {isContestEntry
+                  ? "Concours en cours"
+                  : isStandaloneResultsSheet
+                    ? "Résultats"
+                    : resultsLabel}
               </h3>
               {isContestEntry ? (
                 <p
@@ -2077,12 +2453,14 @@ export function PollExperience({
               ) : (
                 <p
                   style={{
-                    margin: "0 0 1rem 0",
+                    margin: "0 0 0.85rem 0",
                     fontSize: "0.82rem",
                     color: palette.muted,
                   }}
                 >
-                  Classement par nombre de votes.
+                  {isStandaloneResultsSheet && totalVotesResults > 0
+                    ? `${totalVotesResults} vote${totalVotesResults !== 1 ? "s" : ""} au total`
+                    : "Classement par nombre de votes."}
                 </p>
               )}
               {isContestEntry ? (
@@ -2250,8 +2628,14 @@ export function PollExperience({
                       : Number.isInteger(percentRounded)
                         ? String(percentRounded)
                         : percentRounded.toFixed(1);
+                  const isQuizCorrect =
+                    isQuiz && quizRevealed && Boolean(opt?.isCorrect);
+                  // Quiz : on met en avant la bonne réponse, pas le « gagnant » votes.
                   const isWinner =
-                    maxVotesResults > 0 && optVotes === maxVotesResults;
+                    !isQuiz &&
+                    maxVotesResults > 0 &&
+                    optVotes === maxVotesResults;
+                  const highlightRow = isWinner || isQuizCorrect;
                   const barWidthPct = resultsBarsAnimated
                     ? Math.min(100, percentRaw)
                     : 0;
@@ -2260,16 +2644,24 @@ export function PollExperience({
                     <li
                       key={opt.id}
                       style={{
-                        marginBottom: "1rem",
+                        marginBottom: isStandaloneResultsSheet
+                          ? "0.75rem"
+                          : "1rem",
                         display: "block",
-                        ...(isWinner
+                        ...(highlightRow
                           ? {
                               padding: "0.65rem 0.75rem",
                               marginLeft: "-0.25rem",
                               marginRight: "-0.25rem",
-                              background: `color-mix(in srgb, ${accent} 14%, transparent)`,
+                              background: isQuizCorrect
+                                ? isDark
+                                  ? "rgba(22, 163, 74, 0.16)"
+                                  : "rgba(220, 252, 231, 0.85)"
+                                : `color-mix(in srgb, ${accent} 14%, transparent)`,
                               borderRadius: "10px",
-                              borderLeft: `4px solid ${accent}`,
+                              borderLeft: `4px solid ${
+                                isQuizCorrect ? "#16a34a" : accent
+                              }`,
                             }
                           : {}),
                       }}
@@ -2295,6 +2687,22 @@ export function PollExperience({
                           }}
                         >
                           <strong>{opt.label}</strong>
+                          {isQuizCorrect ? (
+                            <span
+                              style={{
+                                fontSize: "0.7rem",
+                                fontWeight: 700,
+                                textTransform: "uppercase",
+                                letterSpacing: "0.02em",
+                                color: "#fff",
+                                background: "#16a34a",
+                                padding: "0.15rem 0.45rem",
+                                borderRadius: "9999px",
+                              }}
+                            >
+                              Bonne réponse
+                            </span>
+                          ) : null}
                           {isWinner ? (
                             <span
                               style={{
@@ -2347,9 +2755,11 @@ export function PollExperience({
                           style={{
                             width: `${barWidthPct}%`,
                             height: "100%",
-                            background: isWinner
-                              ? accent
-                              : `color-mix(in srgb, ${accent} 75%, #6366f1)`,
+                            background: isQuizCorrect
+                              ? "#16a34a"
+                              : isWinner
+                                ? accent
+                                : `color-mix(in srgb, ${accent} 75%, #6366f1)`,
                             borderRadius: "9999px",
                             transition: "width 0.5s ease",
                           }}
@@ -2458,29 +2868,50 @@ export function PollExperience({
       )}
           </div>
         </div>
-        <footer
-          style={{
-            flexShrink: 0,
-            padding: "0.85rem clamp(1rem, 4vw, 1.5rem)",
-            borderTop: `1px solid ${palette.headerBorder}`,
-            background: palette.footerBg,
-            backdropFilter: "blur(8px)",
-            textAlign: "center",
-          }}
-        >
-          <Link
-            href={retourHref}
+        {!embedded ? (
+          <footer
             style={{
-              color: palette.muted,
-              fontSize: "0.82rem",
-              fontWeight: 600,
-              textDecoration: "none",
+              flexShrink: 0,
+              padding: "0.9rem clamp(1rem, 4vw, 1.5rem) max(1rem, env(safe-area-inset-bottom, 0px))",
+              borderTop: `1px solid ${palette.headerBorder}`,
+              background: palette.footerBg,
+              backdropFilter: "blur(8px)",
+              textAlign: "center",
             }}
           >
-            {retourLabel}
-          </Link>
-        </footer>
-      </main>
+            <Link
+              href={retourHref}
+              style={
+                isStandaloneResultsSheet
+                  ? {
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      minHeight: "48px",
+                      padding: "0.65rem 1.35rem",
+                      borderRadius: "12px",
+                      background: pollCtaGradient,
+                      color: "#fff",
+                      fontSize: "0.95rem",
+                      fontWeight: 800,
+                      textDecoration: "none",
+                      boxShadow: `0 8px 24px rgba(0, 0, 0, ${isDark ? 0.28 : 0.16})`,
+                    }
+                  : {
+                      color: palette.muted,
+                      fontSize: "0.82rem",
+                      fontWeight: 600,
+                      textDecoration: "none",
+                    }
+              }
+            >
+              {isStandaloneResultsSheet
+                ? "Retour à la salle"
+                : retourLabel}
+            </Link>
+          </footer>
+        ) : null}
+      </ShellTag>
     </>
   );
 }
