@@ -218,6 +218,38 @@ export function shouldPollFetchEventMetaBranding(input = {}) {
 }
 
 /**
+ * Fiche résultats standalone `/p` : afficher les barres pour une question CLOSE
+ * (historique salle, lien direct, événement terminé) — sans fuite avant RESULTS live.
+ *
+ * Ne change pas le modèle de comptage : pure condition d’affichage UI.
+ *
+ * @param {{
+ *   embedded?: boolean;
+ *   pollStatus?: string | null;
+ *   liveScene?: string | null;
+ *   displayState?: string | null;
+ *   isPastPollLookup?: boolean;
+ * }} input
+ * @returns {boolean}
+ */
+export function shouldPollShowStandaloneArchiveResults(input = {}) {
+  if (input.embedded === true) return false;
+  const status = String(input.pollStatus ?? "").toUpperCase();
+  if (status !== "CLOSED") return false;
+
+  // Consultation explicite d’une question (?poll=id) = fiche résultat historique.
+  if (input.isPastPollLookup === true) return true;
+
+  const live = String(input.liveScene ?? "").toLowerCase();
+  if (live === "finished") return true;
+
+  const display = String(input.displayState ?? "").toLowerCase();
+  if (display === "results") return true;
+
+  return false;
+}
+
+/**
  * Préavis lead / concours avant les choix.
  * @param {{ pollType?: string | null; leadEnabled?: boolean | null }} input
  * @returns {string | null}
