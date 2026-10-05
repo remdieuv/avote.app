@@ -13,7 +13,6 @@ import {
 import { resolveApiAssetUrlNullable } from "@/lib/assetUrl";
 import { API_URL, SOCKET_URL } from "@/lib/config";
 import {
-  LIVE_UX_BODY_FINISHED_MERCI,
   LIVE_UX_BODY_JOIN_PAUSED,
   LIVE_UX_BODY_JOIN_WAITING,
   LIVE_UX_STATE,
@@ -996,30 +995,20 @@ export function JoinLiveHub({ slug }) {
         </>
       );
     } else if (scene === "finished") {
+      // G15 — un seul « Merci d’avoir participé ! » (pas eyebrow + titre + corps).
       corps = (
-        <>
-          <p
-            style={{
-              margin: 0,
-              fontSize: `clamp(${1.12 * joinVisualTokens.titleClampMul}rem, ${3.8 * joinVisualTokens.titleClampMul}vw, ${1.48 * joinVisualTokens.titleClampMul}rem)`,
-              fontWeight: joinVisualTokens.stateBadgeWeight,
-              lineHeight: 1.45,
-              color: palette.fg2,
-            }}
-          >
-            {joinPres.title}
-          </p>
-          <p
-            style={{
-              margin: "0.85rem 0 0 0",
-              fontSize: "clamp(0.95rem, 3vw, 1.1rem)",
-              color: palette.muted,
-              lineHeight: 1.5,
-            }}
-          >
-            {LIVE_UX_BODY_FINISHED_MERCI}
-          </p>
-        </>
+        <p
+          style={{
+            margin: 0,
+            fontSize: `clamp(${1.2 * joinVisualTokens.titleClampMul}rem, ${4 * joinVisualTokens.titleClampMul}vw, ${1.65 * joinVisualTokens.titleClampMul}rem)`,
+            fontWeight: joinVisualTokens.stateBadgeWeight,
+            lineHeight: 1.4,
+            color: palette.fg2,
+            letterSpacing: "-0.02em",
+          }}
+        >
+          {joinPres.title}
+        </p>
       );
     } else if (scene === "paused") {
       corps = (
@@ -1392,18 +1381,21 @@ export function JoinLiveHub({ slug }) {
 
         {!loading && !error && !embedPollSurface && corps ? (
           <div className="join-live-card" style={carteCentral}>
-            <div
-              className="text-center text-sm opacity-80 mb-2"
-              style={{
-                textAlign: "center",
-                fontSize: "0.86rem",
-                opacity: 0.82,
-                marginBottom: "0.5rem",
-                color: palette.muted,
-              }}
-            >
-              {joinPres.title}
-            </div>
+            {/* G15 — pas d’eyebrow « Merci » au-dessus du corps FINISHED (évite le doublon). */}
+            {scene !== "finished" ? (
+              <div
+                className="text-center text-sm opacity-80 mb-2"
+                style={{
+                  textAlign: "center",
+                  fontSize: "0.86rem",
+                  opacity: 0.82,
+                  marginBottom: "0.5rem",
+                  color: palette.muted,
+                }}
+              >
+                {joinPres.title}
+              </div>
+            ) : null}
             {corps}
           </div>
         ) : null}

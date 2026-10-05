@@ -34,6 +34,7 @@ import {
   shouldPollOpenOwnSocket,
   shouldPollRenderOfflineBanner,
   shouldShowActiveVotingInstruction,
+  shouldPollShowStandaloneArchiveResults,
   shouldShowParticipantFullUi,
   shouldShowParticipantResultStats,
 } from "../lib/participantLiveFlow.js";
@@ -382,6 +383,70 @@ test("/p standalone : socket + OFFLINE + meta branding autonomes", () => {
   assert.equal(shouldPollOpenOwnSocket({}), true);
   assert.equal(shouldPollRenderOfflineBanner({ embedded: false }), true);
   assert.equal(shouldPollFetchEventMetaBranding({}), true);
+});
+
+test("G15+/p : archive résultats standalone — pas de fuite CLOSED live", () => {
+  // Historique (?poll=) → barres OK
+  assert.equal(
+    shouldPollShowStandaloneArchiveResults({
+      embedded: false,
+      pollStatus: "CLOSED",
+      isPastPollLookup: true,
+      liveScene: "voting",
+      displayState: "question",
+    }),
+    true,
+  );
+  // Événement terminé → barres OK
+  assert.equal(
+    shouldPollShowStandaloneArchiveResults({
+      embedded: false,
+      pollStatus: "CLOSED",
+      liveScene: "finished",
+      displayState: "waiting",
+    }),
+    true,
+  );
+  // RESULTS public → barres OK
+  assert.equal(
+    shouldPollShowStandaloneArchiveResults({
+      embedded: false,
+      pollStatus: "CLOSED",
+      liveScene: "results",
+      displayState: "results",
+    }),
+    true,
+  );
+  // CLOSED live avant RESULTS (pas d’archive) → pas de fuite
+  assert.equal(
+    shouldPollShowStandaloneArchiveResults({
+      embedded: false,
+      pollStatus: "CLOSED",
+      liveScene: "waiting",
+      displayState: "question",
+      isPastPollLookup: false,
+    }),
+    false,
+  );
+  // Embedded Salle → jamais via ce helper (Join a sa propre scène RESULTS)
+  assert.equal(
+    shouldPollShowStandaloneArchiveResults({
+      embedded: true,
+      pollStatus: "CLOSED",
+      isPastPollLookup: true,
+      liveScene: "finished",
+    }),
+    false,
+  );
+  // Poll encore ACTIVE → pas d’archive
+  assert.equal(
+    shouldPollShowStandaloneArchiveResults({
+      embedded: false,
+      pollStatus: "ACTIVE",
+      isPastPollLookup: true,
+    }),
+    false,
+  );
 });
 
 test("Socle Live : normalize poll_updated event* → bare cohérent", () => {

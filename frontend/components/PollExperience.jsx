@@ -53,6 +53,7 @@ import {
   shouldPollOpenOwnSocket,
   shouldPollRenderOfflineBanner,
   shouldShowActiveVotingInstruction,
+  shouldPollShowStandaloneArchiveResults,
   shouldShowParticipantFullUi,
   shouldShowParticipantResultStats,
 } from "@/lib/participantLiveFlow";
@@ -220,6 +221,7 @@ function chronoRestantSecondes(tm) {
  *   retourLabel?: string;
  *   slugPublic?: string | null;
  *   embedded?: boolean — Salle `/join` : panneau sans shell ni navigation
+ *   archiveLookup?: boolean — `/p?poll=` consultation historique / fiche résultat
  *   parentSocketOnline?: boolean | null — connectivité Join (embedded)
  *   parentLiveRevision?: number — bump Join à chaque event_live / reconnect
  *   parentPollSnapshot?: object | null — poll_updated relayé par le socket Join
@@ -241,6 +243,7 @@ export function PollExperience({
   retourLabel = "← Retour",
   slugPublic = null,
   embedded = false,
+  archiveLookup = false,
   parentSocketOnline = null,
   parentLiveRevision = 0,
   parentPollSnapshot = null,
@@ -910,10 +913,28 @@ export function PollExperience({
     displayStateParticipant === "results" ||
     String(liveScene || "").toLowerCase() === "results";
 
-  /** Bloc résultats / stats : uniquement RESULTS projetés — jamais dès « j’ai voté ». */
-  const showBlocResultatsEnDirect =
-    !!poll && shouldShowParticipantResultStats({ affichageResultatsPublic });
+  /** Fiche `/p` archive : barres pour question CLOSE (historique / FINISHED). */
+  const archiveResultsStandalone = shouldPollShowStandaloneArchiveResults({
+    embedded,
+    pollStatus: poll?.status,
+    liveScene,
+    displayState: displayStateParticipant,
+    isPastPollLookup: archiveLookup,
+  });
 
+  /** Bloc résultats : révélation salle, totaux live après mon vote, ou fiche archive `/p`. */
+  const showBlocResultatsEnDirect =
+    !!poll &&
+    (affichageResultatsPublic ||
+      (voteStateParticipant === "open" &&
+        (merciPourVote || aDejaVoteEnStockage)) ||
+      archiveResultsStandalone);
+
+  /** Fiche résultat autonome : header / eyebrow / CTA adaptés (pas de 2ᵉ logique de totaux). */
+  const isStandaloneResultsSheet =
+    !embedded &&
+    !!poll &&
+    (archiveResultsStandalone || affichageResultatsPublic);
   const optionsPourVote = useMemo(() => {
     return [...(poll?.options ?? [])].sort(
       (a, b) => (Number(a.order) || 0) - (Number(b.order) || 0),
@@ -1609,6 +1630,8 @@ export function PollExperience({
             logoUrl={roomLogoUrl}
             palette={palette}
             isDark={isDark}
+            badgeText={isStandaloneResultsSheet ? "Résultats" : null}
+            badgeColor={accent}
           />
         ) : null}
 
@@ -1647,7 +1670,9 @@ export function PollExperience({
             alignItems: "flex-start",
             padding: embedded
               ? 0
-              : "clamp(1rem, 4vw, 1.75rem) clamp(1rem, 5vw, 2rem) max(2rem, env(safe-area-inset-bottom, 0px))",
+              : isStandaloneResultsSheet
+                ? "clamp(0.75rem, 3vw, 1.15rem) clamp(0.9rem, 4vw, 1.5rem) max(1.25rem, env(safe-area-inset-bottom, 0px))"
+                : "clamp(1rem, 4vw, 1.75rem) clamp(1rem, 5vw, 2rem) max(2rem, env(safe-area-inset-bottom, 0px))",
             boxSizing: "border-box",
           }}
         >
@@ -1722,7 +1747,7 @@ export function PollExperience({
         </div>
       ) : null}
 
-      {!loading && !error && !roomIsFull && topUxLabel ? (
+      {!loading && !error && !roomIsFull && !isStandaloneResultsSheet && topUxLabel ? (
         <div
           className="text-center text-sm opacity-80 mb-2"
           style={{
@@ -1933,8 +1958,10 @@ export function PollExperience({
                   )
                 : `1px solid ${palette.cardBorder}`,
               borderRadius: "16px",
-              padding: "1.25rem 1.35rem",
-              marginBottom: "1rem",
+              padding: isStandaloneResultsSheet
+                ? "1rem 1.1rem"
+                : "1.25rem 1.35rem",
+              marginBottom: isStandaloneResultsSheet ? "0.75rem" : "1rem",
               background: voteOuvert
                 ? isDark
                   ? `color-mix(in srgb, ${accent} ${4 + pollVisualTokens.cardAccentTintPct * 0.9}%, rgba(15, 23, 42, 0.4))`
@@ -1949,9 +1976,23 @@ export function PollExperience({
                 : undefined,
             }}
           >
+            {isStandaloneResultsSheet ? (
+              <p
+                style={{
+                  margin: "0 0 0.45rem 0",
+                  fontSize: "0.7rem",
+                  fontWeight: 800,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  color: accent,
+                }}
+              >
+                Question
+              </p>
+            ) : null}
             <h2
               style={{
-                fontSize: `clamp(${1.2 * (voteOuvert ? pollVisualTokens.titleClampMul : 1)}rem, 4vw, ${1.55 * (voteOuvert ? pollVisualTokens.titleClampMul : 1)}rem)`,
+                fontSize: `clamp(${1.15 * (voteOuvert ? pollVisualTokens.titleClampMul : 1)}rem, 4vw, ${1.5 * (voteOuvert ? pollVisualTokens.titleClampMul : 1)}rem)`,
                 fontWeight: 800,
                 margin: "0 0 0.5rem 0",
                 color: palette.fg,
@@ -2117,8 +2158,7 @@ export function PollExperience({
                     ? (isDark ? "rgba(22, 163, 74, 0.2)" : "rgba(220, 252, 231, 0.9)")
                     : quizAnsweredCorrectly
                       ? (isDark ? "rgba(22, 163, 74, 0.24)" : "rgba(220, 252, 231, 0.9)")
-                      : (isDark ? "rgba(239, 68, 68, 0.22)" : "rgba(254, 226, 226, 0.92)"),
-                borderRadius: "12px",
+                      : (isDark ? "rgba(239, 68, 68, 0.22)" : "rgba(254, 226, 226, 0.92)"),                borderRadius: "12px",
                 border:
                   quizVotedOptionIds.length === 0 || quizAnsweredCorrectly
                     ? (isDark
@@ -2132,10 +2172,10 @@ export function PollExperience({
                     ? (isDark ? "#bbf7d0" : "#166534")
                     : (isDark ? "#fecaca" : "#991b1b"),
                 fontWeight: 700,
+                fontSize: "0.92rem",
               }}
             >
-              {quizRevealFeedback}
-            </p>
+              {quizRevealFeedback}            </p>
           ) : null}
 
           {voteError && (
@@ -2366,8 +2406,10 @@ export function PollExperience({
             <section
               ref={resultsAnchorRef}
               style={{
-                marginTop: voteOuvert ? 0 : "0.5rem",
-                padding: "1.25rem 1.35rem",
+                marginTop: voteOuvert ? 0 : isStandaloneResultsSheet ? 0 : "0.5rem",
+                padding: isStandaloneResultsSheet
+                  ? "1rem 1.1rem"
+                  : "1.25rem 1.35rem",
                 borderRadius: "16px",
                 border: resultsBlockSurfaces.border,
                 background: resultsBlockSurfaces.background,
@@ -2384,7 +2426,11 @@ export function PollExperience({
                   letterSpacing: "-0.02em",
                 }}
               >
-                {isContestEntry ? "Concours en cours" : resultsLabel}
+                {isContestEntry
+                  ? "Concours en cours"
+                  : isStandaloneResultsSheet
+                    ? "Résultats"
+                    : resultsLabel}
               </h3>
               {isContestEntry ? (
                 <p
@@ -2409,12 +2455,14 @@ export function PollExperience({
               ) : (
                 <p
                   style={{
-                    margin: "0 0 1rem 0",
+                    margin: "0 0 0.85rem 0",
                     fontSize: "0.82rem",
                     color: palette.muted,
                   }}
                 >
-                  Classement par nombre de votes.
+                  {isStandaloneResultsSheet && totalVotesResults > 0
+                    ? `${totalVotesResults} vote${totalVotesResults !== 1 ? "s" : ""} au total`
+                    : "Classement par nombre de votes."}
                 </p>
               )}
               {isContestEntry ? (
@@ -2581,10 +2629,13 @@ export function PollExperience({
                       : Number.isInteger(percentRounded)
                         ? String(percentRounded)
                         : percentRounded.toFixed(1);
-                  const isWinner =
-                    maxVotesResults > 0 && optVotes === maxVotesResults;
                   const isQuizCorrect =
                     isQuiz && quizRevealed && Boolean(opt?.isCorrect);
+                  // Quiz : on met en avant la bonne réponse, pas le « gagnant » votes.
+                  const isWinner =
+                    !isQuiz &&
+                    maxVotesResults > 0 &&
+                    optVotes === maxVotesResults;
                   const badgeLeaderLabel = getParticipantResultsOptionBadgeLabel({
                     voteOuvert,
                     isQuiz,
@@ -2592,6 +2643,7 @@ export function PollExperience({
                     isCorrect: Boolean(opt?.isCorrect),
                     isWinner,
                   });
+                  const highlightRow = isWinner || isQuizCorrect;
                   const barWidthPct = resultsBarsAnimated
                     ? Math.min(100, percentRaw)
                     : 0;
@@ -2600,16 +2652,24 @@ export function PollExperience({
                     <li
                       key={opt.id}
                       style={{
-                        marginBottom: "1rem",
+                        marginBottom: isStandaloneResultsSheet
+                          ? "0.75rem"
+                          : "1rem",
                         display: "block",
-                        ...(isWinner || isQuizCorrect
+                        ...(highlightRow
                           ? {
                               padding: "0.65rem 0.75rem",
                               marginLeft: "-0.25rem",
                               marginRight: "-0.25rem",
-                              background: `color-mix(in srgb, ${accent} 14%, transparent)`,
+                              background: isQuizCorrect
+                                ? isDark
+                                  ? "rgba(22, 163, 74, 0.16)"
+                                  : "rgba(220, 252, 231, 0.85)"
+                                : `color-mix(in srgb, ${accent} 14%, transparent)`,
                               borderRadius: "10px",
-                              borderLeft: `4px solid ${accent}`,
+                              borderLeft: `4px solid ${
+                                isQuizCorrect ? "#16a34a" : accent
+                              }`,
                             }
                           : {}),
                       }}
@@ -2643,7 +2703,7 @@ export function PollExperience({
                                 textTransform: "uppercase",
                                 letterSpacing: "0.02em",
                                 color: "#fff",
-                                background: accent,
+                                background: isQuizCorrect ? "#16a34a" : accent,
                                 padding: "0.15rem 0.45rem",
                                 borderRadius: "9999px",
                               }}
@@ -2684,9 +2744,11 @@ export function PollExperience({
                           style={{
                             width: `${barWidthPct}%`,
                             height: "100%",
-                            background: isWinner
-                              ? accent
-                              : `color-mix(in srgb, ${accent} 75%, #6366f1)`,
+                            background: isQuizCorrect
+                              ? "#16a34a"
+                              : isWinner
+                                ? accent
+                                : `color-mix(in srgb, ${accent} 75%, #6366f1)`,
                             borderRadius: "9999px",
                             transition: "width 0.5s ease",
                           }}
@@ -2799,7 +2861,7 @@ export function PollExperience({
           <footer
             style={{
               flexShrink: 0,
-              padding: "0.85rem clamp(1rem, 4vw, 1.5rem)",
+              padding: "0.9rem clamp(1rem, 4vw, 1.5rem) max(1rem, env(safe-area-inset-bottom, 0px))",
               borderTop: `1px solid ${palette.headerBorder}`,
               background: palette.footerBg,
               backdropFilter: "blur(8px)",
@@ -2808,14 +2870,33 @@ export function PollExperience({
           >
             <Link
               href={retourHref}
-              style={{
-                color: palette.muted,
-                fontSize: "0.82rem",
-                fontWeight: 600,
-                textDecoration: "none",
-              }}
+              style={
+                isStandaloneResultsSheet
+                  ? {
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      minHeight: "48px",
+                      padding: "0.65rem 1.35rem",
+                      borderRadius: "12px",
+                      background: pollCtaGradient,
+                      color: "#fff",
+                      fontSize: "0.95rem",
+                      fontWeight: 800,
+                      textDecoration: "none",
+                      boxShadow: `0 8px 24px rgba(0, 0, 0, ${isDark ? 0.28 : 0.16})`,
+                    }
+                  : {
+                      color: palette.muted,
+                      fontSize: "0.82rem",
+                      fontWeight: 600,
+                      textDecoration: "none",
+                    }
+              }
             >
-              {retourLabel}
+              {isStandaloneResultsSheet
+                ? "Retour à la salle"
+                : retourLabel}
             </Link>
           </footer>
         ) : null}
