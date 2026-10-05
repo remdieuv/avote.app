@@ -250,6 +250,54 @@ export function shouldPollShowStandaloneArchiveResults(input = {}) {
 }
 
 /**
+ * G15 — contenu de la carte FINISHED sur `/join`.
+ *
+ * Cause historique du triple affichage :
+ * 1. eyebrow = getLiveStateLabel(FINISHED) (« Merci… »)
+ * 2. titre corps = joinPres.title (même libellé)
+ * 3. sous-texte = LIVE_UX_BODY_FINISHED_MERCI (encore le même)
+ *
+ * Contrat : un seul message visible, pas d’eyebrow, pas de body redondant.
+ *
+ * @returns {{
+ *   showEyebrow: false;
+ *   title: string;
+ *   body: null;
+ * }}
+ */
+export function resolveJoinFinishedCardContent() {
+  return {
+    showEyebrow: false,
+    title: getLiveStateLabel(LIVE_UX_STATE.FINISHED),
+    body: null,
+  };
+}
+
+/**
+ * Compte combien de fois le libellé FINISHED apparaîtrait dans la carte Join.
+ * Utilisé pour verrouiller G15 (doit être exactement 1).
+ *
+ * @param {{
+ *   showEyebrow?: boolean;
+ *   eyebrowText?: string | null;
+ *   title?: string | null;
+ *   body?: string | null;
+ * }} content
+ * @returns {number}
+ */
+export function countJoinFinishedMerciMessages(content = {}) {
+  const merci = getLiveStateLabel(LIVE_UX_STATE.FINISHED);
+  let n = 0;
+  if (content.showEyebrow === true) {
+    const eyebrow = content.eyebrowText ?? null;
+    if (eyebrow === merci) n += 1;
+  }
+  if (content.title === merci) n += 1;
+  if (content.body === merci) n += 1;
+  return n;
+}
+
+/**
  * Préavis lead / concours avant les choix.
  * @param {{ pollType?: string | null; leadEnabled?: boolean | null }} input
  * @returns {string | null}
