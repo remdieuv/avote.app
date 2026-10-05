@@ -26,6 +26,7 @@ import {
 import {
   getParticipantFullLabel,
   getParticipantOfflineLabel,
+  resolveJoinFinishedCardContent,
   resolveJoinHistoriqueQuestions,
   shouldEmbedPollSurfaceInRoom,
   shouldJoinApplySocketLiveAxesImmediately,
@@ -714,6 +715,13 @@ export function JoinLiveHub({ slug }) {
 
   /** Scène UX canonique (6 états) via resolveLiveUxState — plus de finished|voting|waiting seul */
   const scene = String(joinPresCore.ux || LIVE_UX_STATE.WAITING).toLowerCase();
+  /** G15 — double ancrage (scene + ux) pour ne jamais rerendre le triple Merci. */
+  const isFinishedUx =
+    scene === "finished" ||
+    String(joinPresCore.ux || "").toUpperCase() === LIVE_UX_STATE.FINISHED;
+  const finishedCardContent = isFinishedUx
+    ? resolveJoinFinishedCardContent()
+    : null;
 
   const enAttenteRevealAuto = useMemo(() => {
     if (vs !== "closed") return false;
@@ -994,8 +1002,8 @@ export function JoinLiveHub({ slug }) {
           </p>
         </>
       );
-    } else if (scene === "finished") {
-      // G15 — un seul « Merci d’avoir participé ! » (pas eyebrow + titre + corps).
+    } else if (isFinishedUx) {
+      // G15 — contrat resolveJoinFinishedCardContent : 1 seul « Merci… », pas eyebrow/body.
       corps = (
         <p
           style={{
@@ -1007,11 +1015,10 @@ export function JoinLiveHub({ slug }) {
             letterSpacing: "-0.02em",
           }}
         >
-          {joinPres.title}
+          {finishedCardContent.title}
         </p>
       );
-    } else if (scene === "paused") {
-      corps = (
+    } else if (scene === "paused") {      corps = (
         <>
           <p
             style={{
@@ -1381,8 +1388,12 @@ export function JoinLiveHub({ slug }) {
 
         {!loading && !error && !embedPollSurface && corps ? (
           <div className="join-live-card" style={carteCentral}>
-            {/* G15 — pas d’eyebrow « Merci » au-dessus du corps FINISHED (évite le doublon). */}
-            {scene !== "finished" ? (
+            {/*
+              G15 — l’eyebrow reprenait le même libellé FINISHED au-dessus du corps
+              (titre + ancien sous-texte redondant identique).
+              En FINISHED : jamais d’eyebrow (contrat resolveJoinFinishedCardContent).
+            */}
+            {!isFinishedUx ? (
               <div
                 className="text-center text-sm opacity-80 mb-2"
                 style={{

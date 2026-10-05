@@ -3,6 +3,9 @@
  * Exécution : node frontend/scripts/test-participant-live-flow.mjs
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   LIVE_UX_LABEL_VOTE_CONFIRMED,
   LIVE_UX_STATE,
@@ -31,6 +34,8 @@ import {
   shouldPollRenderOfflineBanner,
   shouldPollShowStandaloneArchiveResults,
   shouldShowParticipantFullUi,
+  countJoinFinishedMerciMessages,
+  resolveJoinFinishedCardContent,
 } from "../lib/participantLiveFlow.js";
 import {
   applyTestModeResultsVoteMask,
@@ -163,6 +168,44 @@ test("FINISHED != FULL même si isLocked (Terminer événement réel)", () => {
       uxState: LIVE_UX_STATE.FINISHED,
     }),
     false,
+  );
+});
+
+test("G15. carte FINISHED /join → exactement 1 « Merci d’avoir participé ! »", () => {
+  const merci = getLiveStateLabel(LIVE_UX_STATE.FINISHED);
+  assert.equal(merci, "Merci d’avoir participé !");
+
+  const card = resolveJoinFinishedCardContent();
+  assert.equal(card.showEyebrow, false);
+  assert.equal(card.title, merci);
+  assert.equal(card.body, null);
+  assert.equal(countJoinFinishedMerciMessages(card), 1);
+
+  // Régression explicite du bug réel : eyebrow + titre + LIVE_UX_BODY_FINISHED_MERCI
+  const tripleBug = {
+    showEyebrow: true,
+    eyebrowText: merci,
+    title: merci,
+    body: merci,
+  };
+  assert.equal(countJoinFinishedMerciMessages(tripleBug), 3);
+
+  // Présentation UX FINISHED : titre = Merci, subtitle null (pas un 2ᵉ Merci)
+  const pres = getLiveStatePresentation({
+    liveScene: "finished",
+    displayState: "waiting",
+    voteState: "closed",
+  });
+  assert.equal(pres.ux, LIVE_UX_STATE.FINISHED);
+  assert.equal(pres.title, merci);
+  assert.equal(pres.subtitle, null);
+  assert.equal(
+    countJoinFinishedMerciMessages({
+      showEyebrow: false,
+      title: pres.title,
+      body: null,
+    }),
+    1,
   );
 });
 
@@ -470,6 +513,22 @@ test("Socle Live : G9 contestWinnersCount + A3 pas de 2e socket", () => {
     3,
   );
   assert.equal(shouldPollOpenOwnSocket({ embedded: true }), false);
+});
+
+test("G15. JoinLiveHub source : pas de triple Merci FINISHED", () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, "../components/JoinLiveHub.jsx"), "utf8");
+
+  // Ne plus importer / rendre le 3ᵉ Merci (sous-texte redondant).
+  assert.equal(src.includes("LIVE_UX_BODY_FINISHED_MERCI"), false);
+
+  // Le rendu FINISHED doit passer par le helper unique.
+  assert.match(src, /resolveJoinFinishedCardContent/);
+  assert.match(src, /isFinishedUx/);
+  assert.match(src, /finishedCardContent\.title/);
+
+  // Eyebrow conditionnellement masqué en FINISHED.
+  assert.match(src, /!isFinishedUx\s*\?/);
 });
 
 let failed = 0;
