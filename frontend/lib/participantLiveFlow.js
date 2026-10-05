@@ -250,6 +250,57 @@ export function shouldPollShowStandaloneArchiveResults(input = {}) {
 }
 
 /**
+ * Session de vote ouverte — même règle que le `voteOuvert` historique de `/p` (prod).
+ * Fallback `liveScene === voting` si eventVoteState absent (payload partiel / embed).
+ *
+ * @param {{
+ *   voteState?: string | null;
+ *   pollStatus?: string | null;
+ *   liveScene?: string | null;
+ * }} input
+ * @returns {boolean}
+ */
+export function isParticipantVoteSessionOpen(input = {}) {
+  const status = String(input.pollStatus ?? "").toUpperCase();
+  if (status !== "ACTIVE") return false;
+  const vs = String(input.voteState ?? "").toLowerCase().trim();
+  if (vs === "open") return true;
+  if (!vs && String(input.liveScene ?? "").toLowerCase() === "voting") {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Bloc barres live participant (comportement /p production conservé en Salle) :
+ * - révélation publique RESULTS, OU
+ * - après mon vote tant que la session est ouverte, OU
+ * - fiche archive standalone `/p`.
+ *
+ * @param {{
+ *   hasPoll?: boolean;
+ *   affichageResultatsPublic?: boolean;
+ *   archiveResultsStandalone?: boolean;
+ *   hasVoted?: boolean;
+ *   voteState?: string | null;
+ *   pollStatus?: string | null;
+ *   liveScene?: string | null;
+ * }} input
+ * @returns {boolean}
+ */
+export function shouldShowParticipantLiveResultsBlock(input = {}) {
+  if (input.hasPoll !== true) return false;
+  if (input.affichageResultatsPublic === true) return true;
+  if (input.archiveResultsStandalone === true) return true;
+  if (input.hasVoted !== true) return false;
+  return isParticipantVoteSessionOpen({
+    voteState: input.voteState,
+    pollStatus: input.pollStatus,
+    liveScene: input.liveScene,
+  });
+}
+
+/**
  * G15 — contenu de la carte FINISHED sur `/join`.
  *
  * Cause historique du triple affichage :

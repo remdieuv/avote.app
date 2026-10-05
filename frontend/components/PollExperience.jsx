@@ -41,16 +41,18 @@ import {
   normalizePollJson,
 } from "@/lib/normalizeLivePayload";
 import {
-  extractParticipantErrorCode,
-  getParticipantFormNotice,
-  getParticipantFullLabel,
-  getParticipantOfflineLabel,
   shouldPollApplyParentPollSnapshot,
   shouldPollFetchEventMetaBranding,
   shouldPollOpenOwnSocket,
   shouldPollRenderOfflineBanner,
   shouldPollShowStandaloneArchiveResults,
   shouldShowParticipantFullUi,
+  shouldShowParticipantLiveResultsBlock,
+  isParticipantVoteSessionOpen,
+  getParticipantFormNotice,
+  getParticipantFullLabel,
+  getParticipantOfflineLabel,
+  extractParticipantErrorCode,
 } from "@/lib/participantLiveFlow";
 import {
   buildJoinPollCardSurfaces,
@@ -895,7 +897,7 @@ export function PollExperience({
   ]);
 
   const voteStateParticipant = String(
-    poll?.eventVoteState ?? eventVoteStateUi ?? "",
+    poll?.eventVoteState ?? poll?.voteState ?? eventVoteStateUi ?? "",
   ).toLowerCase();
   const displayStateParticipant = String(
     (typeof poll?.eventDisplayState === "string" && poll.eventDisplayState.trim()
@@ -916,13 +918,29 @@ export function PollExperience({
     isPastPollLookup: archiveLookup,
   });
 
-  /** Bloc résultats : révélation salle, totaux live après mon vote, ou fiche archive `/p`. */
-  const showBlocResultatsEnDirect =
-    !!poll &&
-    (affichageResultatsPublic ||
-      (voteStateParticipant === "open" &&
-        (merciPourVote || aDejaVoteEnStockage)) ||
-      archiveResultsStandalone);
+  /**
+   * Session vote ouverte — même règle que `/p` prod (eventVoteState open,
+   * fallback liveScene voting si axe vote absent).
+   */
+  const voteSessionOpen = isParticipantVoteSessionOpen({
+    voteState: voteStateParticipant,
+    pollStatus: poll?.status,
+    liveScene,
+  });
+
+  /**
+   * Bloc résultats live : révélation salle, OU après mon vote pendant VOTING
+   * (comportement /p production à conserver en Salle embed), OU archive `/p`.
+   */
+  const showBlocResultatsEnDirect = shouldShowParticipantLiveResultsBlock({
+    hasPoll: !!poll,
+    affichageResultatsPublic,
+    archiveResultsStandalone,
+    hasVoted: Boolean(merciPourVote || aDejaVoteEnStockage),
+    voteState: voteStateParticipant,
+    pollStatus: poll?.status,
+    liveScene,
+  });
 
   /** Fiche résultat autonome : header / eyebrow / CTA adaptés (pas de 2ᵉ logique de totaux). */
   const isStandaloneResultsSheet =
@@ -1116,10 +1134,11 @@ export function PollExperience({
   }
 
   async function submitVote() {
-    const sessionOuverte =
-      (typeof poll?.eventVoteState === "string"
-        ? poll.eventVoteState.toLowerCase() === "open"
-        : liveScene === "voting") && poll?.status === "ACTIVE";
+    const sessionOuverte = isParticipantVoteSessionOpen({
+      voteState: poll?.eventVoteState ?? poll?.voteState ?? eventVoteStateUi,
+      pollStatus: poll?.status,
+      liveScene,
+    });
     if (
       !pollId ||
       !sessionOuverte ||
@@ -1189,19 +1208,36 @@ export function PollExperience({
       }
       setVotedOptionIdsEnStockage(optionIds);
 
-      await loadPoll({ silent: true });
       const leadTriggered =
         Boolean(pollAfterVote?.leadEnabled) &&
         typeof pollAfterVote?.leadTriggerOptionId === "string" &&
         optionIds.includes(pollAfterVote.leadTriggerOptionId);
+
+      // Totaux + flags voté immédiatement (Salle embed = même rendu /p prod).
       flushSync(() => {
+        if (pollAfterVote && typeof pollAfterVote === "object") {
+          const pollNorm = normalizePollJson(
+            /** @type {Record<string, unknown>} */ (pollAfterVote),
+          );
+          setPoll(/** @type {any} */ (pollNorm));
+          const axes = normalizeLiveAxes(pollNorm);
+          if (axes.liveState) {
+            setLiveScene(normalizeLiveScene(axes.liveState));
+          }
+          if (axes.voteState) setEventVoteStateUi(axes.voteState);
+          if (axes.displayState) setEventDisplayStateUi(axes.displayState);
+        }
         setSelectedOptionId(null);
         setSelectedOptionIds([]);
         setMerciPourVote(true);
+        setADejaVoteEnStockage(true);
         setShowLeadForm(leadTriggered);
         setLeadSuccess(false);
         setLeadError(null);
       });
+
+      // Réconciliation peers / chrono sans effacer le flag voté.
+      await loadPoll({ silent: true });
     } catch (e) {
       const code = extractParticipantErrorCode(e?.message);
       if (code === "LIMIT_REACHED" || code === "EVENT_LOCKED") {
@@ -1261,10 +1297,7 @@ export function PollExperience({
     }
   }
 
-  const voteOuvert =
-    (typeof poll?.eventVoteState === "string"
-      ? poll.eventVoteState.toLowerCase() === "open"
-      : liveScene === "voting") && poll?.status === "ACTIVE";
+  const voteOuvert = voteSessionOpen;
   const hasSelectionValide = isMultipleChoice
     ? selectedOptionIds.length > 0
     : !!selectedOptionId;

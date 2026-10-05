@@ -34,6 +34,8 @@ import {
   shouldPollRenderOfflineBanner,
   shouldPollShowStandaloneArchiveResults,
   shouldShowParticipantFullUi,
+  shouldShowParticipantLiveResultsBlock,
+  isParticipantVoteSessionOpen,
   countJoinFinishedMerciMessages,
   resolveJoinFinishedCardContent,
 } from "../lib/participantLiveFlow.js";
@@ -330,6 +332,86 @@ test("A3. peer votes : Join join_poll sur même io, Poll embed sans 2ᵉ socket"
       parentPollRevision: 3,
     }),
     false,
+  );
+});
+
+test("LOT-1. résultats live après vote (comportement /p prod) aussi en Salle", () => {
+  // VOTING + a voté → barres immédiates (pas besoin de RESULTS salle)
+  assert.equal(
+    shouldShowParticipantLiveResultsBlock({
+      hasPoll: true,
+      hasVoted: true,
+      voteState: "open",
+      pollStatus: "ACTIVE",
+      liveScene: "voting",
+      affichageResultatsPublic: false,
+    }),
+    true,
+  );
+  // Fallback liveScene voting si voteState absent (payload partiel embed)
+  assert.equal(
+    isParticipantVoteSessionOpen({
+      voteState: "",
+      pollStatus: "ACTIVE",
+      liveScene: "voting",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldShowParticipantLiveResultsBlock({
+      hasPoll: true,
+      hasVoted: true,
+      voteState: "",
+      pollStatus: "ACTIVE",
+      liveScene: "voting",
+      affichageResultatsPublic: false,
+    }),
+    true,
+  );
+  // Pas encore voté → pas de barres pendant VOTING
+  assert.equal(
+    shouldShowParticipantLiveResultsBlock({
+      hasPoll: true,
+      hasVoted: false,
+      voteState: "open",
+      pollStatus: "ACTIVE",
+      liveScene: "voting",
+      affichageResultatsPublic: false,
+    }),
+    false,
+  );
+  // CLOSED sans RESULTS → pas de fuite résultats
+  assert.equal(
+    shouldShowParticipantLiveResultsBlock({
+      hasPoll: true,
+      hasVoted: true,
+      voteState: "closed",
+      pollStatus: "CLOSED",
+      liveScene: "waiting",
+      affichageResultatsPublic: false,
+    }),
+    false,
+  );
+  // RESULTS public → barres même sans vote local
+  assert.equal(
+    shouldShowParticipantLiveResultsBlock({
+      hasPoll: true,
+      hasVoted: false,
+      voteState: "closed",
+      pollStatus: "CLOSED",
+      liveScene: "results",
+      affichageResultatsPublic: true,
+    }),
+    true,
+  );
+  // Embed : pas de 2ᵉ socket pour sync peers
+  assert.equal(shouldPollOpenOwnSocket({ embedded: true }), false);
+  assert.equal(
+    shouldPollApplyParentPollSnapshot({
+      embedded: true,
+      parentPollRevision: 1,
+    }),
+    true,
   );
 });
 
