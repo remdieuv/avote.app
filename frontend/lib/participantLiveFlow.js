@@ -274,11 +274,12 @@ export function isParticipantVoteSessionOpen(input = {}) {
 /**
  * Bloc barres live participant (comportement /p production conservé en Salle) :
  * - révélation publique RESULTS, OU
- * - après mon vote tant que la session est ouverte (sondages non-Quiz), OU
+ * - après mon vote tant que la session est ouverte (sondage **ou** Quiz), OU
  * - fiche archive standalone `/p`.
  *
- * Quiz : pas de stats précoces pendant VOTING (QA) — uniquement RESULTS,
- * archive, ou après révélation (`quizRevealed`).
+ * Quiz : mêmes barres/compteurs live qu’un sondage après validation.
+ * La bonne réponse / verdict juste-faux restent hors de ce helper
+ * (gated UI sur `quizRevealed` après fermeture).
  *
  * @param {{
  *   hasPoll?: boolean;
@@ -288,8 +289,6 @@ export function isParticipantVoteSessionOpen(input = {}) {
  *   voteState?: string | null;
  *   pollStatus?: string | null;
  *   liveScene?: string | null;
- *   isQuiz?: boolean;
- *   quizRevealed?: boolean;
  * }} input
  * @returns {boolean}
  */
@@ -298,8 +297,6 @@ export function shouldShowParticipantLiveResultsBlock(input = {}) {
   if (input.affichageResultatsPublic === true) return true;
   if (input.archiveResultsStandalone === true) return true;
   if (input.hasVoted !== true) return false;
-  // Quiz A/B/C : ne pas révéler la distribution avant /reveal ou RESULTS.
-  if (input.isQuiz === true && input.quizRevealed !== true) return false;
   return isParticipantVoteSessionOpen({
     voteState: input.voteState,
     pollStatus: input.pollStatus,

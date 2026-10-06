@@ -411,7 +411,7 @@ test("LOT-1. résultats live après vote (comportement /p prod) aussi en Salle",
     }),
     true,
   );
-  // Quiz : pas de stats précoces après vote tant que non révélé (QA)
+  // Quiz : barres live après vote comme un sondage (sans révéler la bonne réponse)
   assert.equal(
     shouldShowParticipantLiveResultsBlock({
       hasPoll: true,
@@ -420,25 +420,31 @@ test("LOT-1. résultats live après vote (comportement /p prod) aussi en Salle",
       pollStatus: "ACTIVE",
       liveScene: "voting",
       affichageResultatsPublic: false,
-      isQuiz: true,
-      quizRevealed: false,
-    }),
-    false,
-    "Quiz VOTING après vote : pas de barres avant reveal",
-  );
-  assert.equal(
-    shouldShowParticipantLiveResultsBlock({
-      hasPoll: true,
-      hasVoted: true,
-      voteState: "open",
-      pollStatus: "ACTIVE",
-      liveScene: "voting",
-      affichageResultatsPublic: false,
-      isQuiz: true,
-      quizRevealed: true,
     }),
     true,
-    "Quiz révélé : barres autorisées après vote",
+    "Quiz VOTING après vote : barres live immédiates",
+  );
+  assert.equal(
+    getParticipantResultsOptionBadgeLabel({
+      isQuiz: true,
+      quizRevealed: false,
+      isCorrect: true,
+      isWinner: true,
+      voteOuvert: true,
+    }),
+    "En tête",
+    "Quiz non révélé : badge sondage, jamais « Bonne réponse »",
+  );
+  assert.equal(
+    getParticipantResultsOptionBadgeLabel({
+      isQuiz: true,
+      quizRevealed: false,
+      isCorrect: true,
+      isWinner: false,
+      voteOuvert: true,
+    }),
+    null,
+    "Quiz non révélé sans leader : aucun badge révélateur",
   );
   // Embed : pas de 2ᵉ socket pour sync peers
   assert.equal(shouldPollOpenOwnSocket({ embedded: true }), false);

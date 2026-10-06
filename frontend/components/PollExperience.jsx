@@ -934,14 +934,10 @@ export function PollExperience({
     liveScene,
   });
 
-  const pollIsQuiz =
-    String(poll?.type || "").toUpperCase() === "QUIZ";
-  const pollQuizRevealed = Boolean(poll?.quizRevealed);
-
   /**
    * Bloc résultats live : révélation salle, OU après mon vote pendant VOTING
-   * (comportement /p production à conserver en Salle embed, hors Quiz),
-   * OU archive `/p`. Quiz : stats seulement après reveal / RESULTS (QA).
+   * (sondage **ou** Quiz — même comportement /p prod en Salle embed),
+   * OU archive `/p`. Bonne réponse / verdict : uniquement si `quizRevealed`.
    */
   const showBlocResultatsEnDirect = shouldShowParticipantLiveResultsBlock({
     hasPoll: !!poll,
@@ -951,8 +947,6 @@ export function PollExperience({
     voteState: voteStateParticipant,
     pollStatus: poll?.status,
     liveScene,
-    isQuiz: pollIsQuiz,
-    quizRevealed: pollQuizRevealed,
   });
 
   /** Fiche résultat autonome : header / eyebrow / CTA adaptés (pas de 2ᵉ logique de totaux). */
@@ -2672,9 +2666,9 @@ export function PollExperience({
                         : percentRounded.toFixed(1);
                   const isQuizCorrect =
                     isQuiz && quizRevealed && Boolean(opt?.isCorrect);
-                  // Quiz : on met en avant la bonne réponse, pas le « gagnant » votes.
+                  // Quiz non révélé : comme un sondage (En tête). Après reveal : pas de « gagnant » votes.
                   const isWinner =
-                    !isQuiz &&
+                    (!isQuiz || !quizRevealed) &&
                     maxVotesResults > 0 &&
                     optVotes === maxVotesResults;
                   const badgeLeaderLabel = getParticipantResultsOptionBadgeLabel({
