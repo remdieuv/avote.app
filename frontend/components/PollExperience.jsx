@@ -46,6 +46,7 @@ import {
   getParticipantFormNotice,
   getParticipantFullLabel,
   getParticipantOfflineLabel,
+  getParticipantResultsBlockTitle,
   getParticipantResultsOptionBadgeLabel,
   isParticipantVoteSessionOpen,
   resolveParticipantTopStripLabel,
@@ -54,6 +55,7 @@ import {
   shouldPollOpenOwnSocket,
   shouldPollRenderOfflineBanner,
   shouldPollShowStandaloneArchiveResults,
+  shouldRevealQuizAnswerToParticipant,
   shouldShowActiveVotingInstruction,
   shouldShowParticipantFullUi,
   shouldShowParticipantLiveResultsBlock,
@@ -295,8 +297,6 @@ export function PollExperience({
   /** Barres résultats : anim 0% → % après paint */
   const [resultsBarsAnimated, setResultsBarsAnimated] = useState(false);
   const [chronoTick, setChronoTick] = useState(0);
-  /** Recalcul affichage auto-reveal (sans attendre le socket) */
-  const [autoRevealUiTick, setAutoRevealUiTick] = useState(0);
 
   /** Identité salle /join (continuité visuelle sur /p) */
   const [eventTitleFromApi, setEventTitleFromApi] = useState(null);
@@ -668,22 +668,6 @@ export function PollExperience({
   }, [embedded, parentPollRevision, parentPollSnapshot]);
 
   useEffect(() => {
-    const iso = poll?.autoRevealShowResultsAt;
-    if (
-      !poll?.autoReveal ||
-      typeof iso !== "string" ||
-      new Date(iso).getTime() <= Date.now() + 800
-    ) {
-      return;
-    }
-    const id = window.setInterval(
-      () => setAutoRevealUiTick((n) => n + 1),
-      1000,
-    );
-    return () => window.clearInterval(id);
-  }, [poll?.autoReveal, poll?.autoRevealShowResultsAt]);
-
-  useEffect(() => {
     return () => {
       loadPollAbortRef.current?.abort();
       loadPollAbortRef.current = null;
@@ -935,9 +919,9 @@ export function PollExperience({
   });
 
   /**
-   * Bloc résultats live : révélation salle, OU après mon vote pendant VOTING
-   * (sondage **ou** Quiz — même comportement /p prod en Salle embed),
-   * OU archive `/p`. Bonne réponse / verdict : uniquement si `quizRevealed`.
+   * Bloc résultats : RESULTS, archive `/p`, ou après mon vote en VOTING **et** CLOSED
+   * (continuité — ne pas masquer à la fermeture). Libellés via
+   * getParticipantResultsBlockTitle ; Quiz reveal via shouldRevealQuizAnswerToParticipant.
    */
   const showBlocResultatsEnDirect = shouldShowParticipantLiveResultsBlock({
     hasPoll: !!poll,
@@ -947,6 +931,10 @@ export function PollExperience({
     voteState: voteStateParticipant,
     pollStatus: poll?.status,
     liveScene,
+  });
+
+  const resultsBlockTitle = getParticipantResultsBlockTitle({
+    voteSessionOpen,
   });
 
   /** Fiche résultat autonome : header / eyebrow / CTA adaptés (pas de 2ᵉ logique de totaux). */
@@ -1340,12 +1328,18 @@ export function PollExperience({
   ]);
   const isQuiz = String(poll?.type || "").toUpperCase() === "QUIZ";
   const quizRevealed = Boolean(poll?.quizRevealed);
+  /** Participant : révélation + verdict uniquement en RESULTS (pas VOTING/CLOSED). */
+  const showQuizAnswerReveal = shouldRevealQuizAnswerToParticipant({
+    isQuiz,
+    quizRevealed,
+    affichageResultatsPublic,
+  });
   const quizCorrectOptionIds = useMemo(() => {
-    if (!isQuiz || !quizRevealed) return [];
+    if (!showQuizAnswerReveal) return [];
     return (Array.isArray(poll?.options) ? poll.options : [])
       .filter((opt) => Boolean(opt?.isCorrect))
       .map((opt) => String(opt.id));
-  }, [isQuiz, quizRevealed, poll?.options]);
+  }, [showQuizAnswerReveal, poll?.options]);
   const quizVotedOptionIds = useMemo(() => {
     const ids = (votedOptionIdsEnStockage || []).map((id) => String(id));
     if (ids.length > 0) return ids;
@@ -1353,12 +1347,11 @@ export function PollExperience({
     return (selectedOptionIds || []).map((id) => String(id));
   }, [votedOptionIdsEnStockage, selectedOptionId, selectedOptionIds]);
   const quizAnsweredCorrectly =
-    isQuiz &&
-    quizRevealed &&
+    showQuizAnswerReveal &&
     quizCorrectOptionIds.length === 1 &&
     quizVotedOptionIds.includes(quizCorrectOptionIds[0]);
   const quizCorrectLabel = useMemo(() => {
-    if (!isQuiz || !quizRevealed || quizCorrectOptionIds.length === 0) {
+    if (!showQuizAnswerReveal || quizCorrectOptionIds.length === 0) {
       return null;
     }
     const opt = (Array.isArray(poll?.options) ? poll.options : []).find(
@@ -1367,15 +1360,22 @@ export function PollExperience({
     return typeof opt?.label === "string" && opt.label.trim()
       ? opt.label.trim()
       : null;
-  }, [isQuiz, quizRevealed, quizCorrectOptionIds, poll?.options]);
+  }, [showQuizAnswerReveal, quizCorrectOptionIds, poll?.options]);
   const quizRevealFeedback = useMemo(
     () =>
-      formatQuizRevealParticipantFeedback({
-        correctLabel: quizCorrectLabel,
-        answeredCorrectly: quizAnsweredCorrectly,
-        hasVoted: quizVotedOptionIds.length > 0,
-      }),
-    [quizCorrectLabel, quizAnsweredCorrectly, quizVotedOptionIds.length],
+      showQuizAnswerReveal
+        ? formatQuizRevealParticipantFeedback({
+            correctLabel: quizCorrectLabel,
+            answeredCorrectly: quizAnsweredCorrectly,
+            hasVoted: quizVotedOptionIds.length > 0,
+          })
+        : null,
+    [
+      showQuizAnswerReveal,
+      quizCorrectLabel,
+      quizAnsweredCorrectly,
+      quizVotedOptionIds.length,
+    ],
   );
 
   const pollOptions = poll?.options ?? [];
@@ -1408,25 +1408,16 @@ export function PollExperience({
   const evtVoteState = String(poll?.eventVoteState ?? "").toLowerCase();
   const voteFerme = evtVoteState === "closed";
   const liveSceneNorm = String(liveScene || "").toLowerCase();
-  /** voteState CLOSED et pas de projection résultats (displayState !== results) — hors FINISHED/PAUSED */
+  /**
+   * Carte « résultats bientôt » : uniquement si le vote est fermé, pas encore RESULTS,
+   * et qu’on n’affiche pas déjà le bloc barres (continuité votant VOTING→CLOSED).
+   */
   const attenteProjectionResultats =
     voteFerme &&
     !affichageResultatsPublic &&
+    !showBlocResultatsEnDirect &&
     liveSceneNorm !== "finished" &&
     liveSceneNorm !== "paused";
-
-  /** Auto-reveal actif : délai avant passage écran résultats (aligné ~800 ms avec la projection). */
-  const enAttenteAutoRevealResultats = useMemo(() => {
-    if (
-      !poll?.autoReveal ||
-      typeof poll?.autoRevealShowResultsAt !== "string"
-    ) {
-      return false;
-    }
-    return (
-      new Date(poll.autoRevealShowResultsAt).getTime() > Date.now() - 800
-    );
-  }, [poll?.autoReveal, poll?.autoRevealShowResultsAt, autoRevealUiTick]);
 
   /** Même intent que attenteProjectionResultats, mais quand le socket a vidé le poll avant refetch */
   const sansPollMaisVoteFermeSansResultatsSalle =
@@ -1496,7 +1487,6 @@ export function PollExperience({
   ).toLowerCase();
   /** Libellés canoniques resolveLiveUxState — pas getUxState (ignore pollStatus). */
   const votingLabel = getLiveStateLabel(LIVE_UX_STATE.VOTING);
-  const resultsLabel = getLiveStateLabel(LIVE_UX_STATE.RESULTS);
   const voteTakenLabel = LIVE_UX_LABEL_VOTE_CONFIRMED;
   const hasVotedLocal = Boolean(merciPourVote || aDejaVoteEnStockage);
   /**
@@ -2183,7 +2173,7 @@ export function PollExperience({
                 Tu as déjà voté pour ce sondage.
               </p>
             )}
-          {isQuiz && quizRevealed && quizRevealFeedback ? (
+          {showQuizAnswerReveal && quizRevealFeedback ? (
             <p
               style={{
                 marginBottom: "1rem",
@@ -2437,7 +2427,7 @@ export function PollExperience({
             </div>
           ) : null}
 
-          {showBlocResultatsEnDirect && !enAttenteAutoRevealResultats ? (
+          {showBlocResultatsEnDirect ? (
             <section
               ref={resultsAnchorRef}
               style={{
@@ -2465,7 +2455,7 @@ export function PollExperience({
                   ? "Concours en cours"
                   : isStandaloneResultsSheet
                     ? "Résultats"
-                    : resultsLabel}
+                    : resultsBlockTitle}
               </h3>
               {isContestEntry ? (
                 <p
@@ -2477,7 +2467,7 @@ export function PollExperience({
                 >
                   Le tirage est piloté par l’organisateur.
                 </p>
-              ) : voteOuvert && affichageResultatsPublic ? (
+              ) : voteOuvert ? (
                 <p
                   style={{
                     margin: "0 0 1rem 0",
@@ -2665,16 +2655,16 @@ export function PollExperience({
                         ? String(percentRounded)
                         : percentRounded.toFixed(1);
                   const isQuizCorrect =
-                    isQuiz && quizRevealed && Boolean(opt?.isCorrect);
-                  // Quiz non révélé : comme un sondage (En tête). Après reveal : pas de « gagnant » votes.
+                    showQuizAnswerReveal && Boolean(opt?.isCorrect);
+                  // Avant RESULTS Quiz : comme un sondage (En tête / Gagnant). Après reveal : Bonne réponse.
                   const isWinner =
-                    (!isQuiz || !quizRevealed) &&
+                    (!isQuiz || !showQuizAnswerReveal) &&
                     maxVotesResults > 0 &&
                     optVotes === maxVotesResults;
                   const badgeLeaderLabel = getParticipantResultsOptionBadgeLabel({
                     voteOuvert,
                     isQuiz,
-                    quizRevealed,
+                    quizRevealed: showQuizAnswerReveal,
                     isCorrect: Boolean(opt?.isCorrect),
                     isWinner,
                   });

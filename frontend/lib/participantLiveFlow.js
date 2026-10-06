@@ -272,14 +272,27 @@ export function isParticipantVoteSessionOpen(input = {}) {
 }
 
 /**
- * Bloc barres live participant (comportement /p production conservé en Salle) :
+ * Vote fermé côté participant (axes vote / statut poll) — indépendant de RESULTS.
+ * @param {{
+ *   voteState?: string | null;
+ *   pollStatus?: string | null;
+ * }} input
+ * @returns {boolean}
+ */
+export function isParticipantVoteClosed(input = {}) {
+  const vs = String(input.voteState ?? "").toLowerCase().trim();
+  if (vs === "closed") return true;
+  return String(input.pollStatus ?? "").toUpperCase() === "CLOSED";
+}
+
+/**
+ * Bloc barres participant (continuité VOTING → CLOSED → RESULTS) :
  * - révélation publique RESULTS, OU
- * - après mon vote tant que la session est ouverte (sondage **ou** Quiz), OU
- * - fiche archive standalone `/p`.
+ * - fiche archive standalone `/p`, OU
+ * - après mon vote : session ouverte (live) **ou** vote fermé (finaux, ne pas masquer).
  *
- * Quiz : mêmes barres/compteurs live qu’un sondage après validation.
- * La bonne réponse / verdict juste-faux restent hors de ce helper
- * (gated UI sur `quizRevealed` après fermeture).
+ * Quiz : mêmes barres qu’un sondage ; révélation bonne réponse / verdict
+ * via `shouldRevealQuizAnswerToParticipant` (RESULTS uniquement).
  *
  * @param {{
  *   hasPoll?: boolean;
@@ -297,11 +310,53 @@ export function shouldShowParticipantLiveResultsBlock(input = {}) {
   if (input.affichageResultatsPublic === true) return true;
   if (input.archiveResultsStandalone === true) return true;
   if (input.hasVoted !== true) return false;
-  return isParticipantVoteSessionOpen({
+  if (
+    isParticipantVoteSessionOpen({
+      voteState: input.voteState,
+      pollStatus: input.pollStatus,
+      liveScene: input.liveScene,
+    })
+  ) {
+    return true;
+  }
+  // Continuité : ne jamais masquer les barres déjà visibles quand le vote ferme.
+  return isParticipantVoteClosed({
     voteState: input.voteState,
     pollStatus: input.pollStatus,
-    liveScene: input.liveScene,
   });
+}
+
+/**
+ * Titre du bloc résultats Salle / embed.
+ * VOTING (session ouverte) → « Résultats en direct » ;
+ * CLOSED / RESULTS / archive → « Résultats finaux ».
+ *
+ * @param {{ voteSessionOpen?: boolean }} input
+ * @returns {"Résultats en direct" | "Résultats finaux"}
+ */
+export function getParticipantResultsBlockTitle(input = {}) {
+  return input.voteSessionOpen === true
+    ? "Résultats en direct"
+    : "Résultats finaux";
+}
+
+/**
+ * Révélation Quiz participant : bonne réponse + verdict juste/faux.
+ * Uniquement en RESULTS (pas pendant VOTING ni CLOSED).
+ *
+ * @param {{
+ *   isQuiz?: boolean;
+ *   quizRevealed?: boolean;
+ *   affichageResultatsPublic?: boolean;
+ * }} input
+ * @returns {boolean}
+ */
+export function shouldRevealQuizAnswerToParticipant(input = {}) {
+  return (
+    input.isQuiz === true &&
+    input.quizRevealed === true &&
+    input.affichageResultatsPublic === true
+  );
 }
 
 /**

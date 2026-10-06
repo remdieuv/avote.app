@@ -42,6 +42,9 @@ import {
   shouldShowParticipantResultStats,
   shouldShowParticipantLiveResultsBlock,
   isParticipantVoteSessionOpen,
+  isParticipantVoteClosed,
+  getParticipantResultsBlockTitle,
+  shouldRevealQuizAnswerToParticipant,
   countJoinFinishedMerciMessages,
   resolveJoinFinishedCardContent,
 } from "../lib/participantLiveFlow.js";
@@ -387,7 +390,19 @@ test("LOT-1. résultats live après vote (comportement /p prod) aussi en Salle",
     }),
     false,
   );
-  // CLOSED sans RESULTS → pas de fuite résultats
+  // CLOSED après vote → garder résultats finaux (continuité, ne pas masquer)
+  assert.equal(
+    shouldShowParticipantLiveResultsBlock({
+      hasPoll: true,
+      hasVoted: true,
+      voteState: "closed",
+      pollStatus: "ACTIVE",
+      liveScene: "waiting",
+      affichageResultatsPublic: false,
+    }),
+    true,
+    "CLOSED après vote : barres finaux visibles",
+  );
   assert.equal(
     shouldShowParticipantLiveResultsBlock({
       hasPoll: true,
@@ -397,7 +412,20 @@ test("LOT-1. résultats live après vote (comportement /p prod) aussi en Salle",
       liveScene: "waiting",
       affichageResultatsPublic: false,
     }),
+    true,
+  );
+  // CLOSED sans avoir voté → pas de fuite résultats (carte attente)
+  assert.equal(
+    shouldShowParticipantLiveResultsBlock({
+      hasPoll: true,
+      hasVoted: false,
+      voteState: "closed",
+      pollStatus: "ACTIVE",
+      liveScene: "waiting",
+      affichageResultatsPublic: false,
+    }),
     false,
+    "CLOSED non-votant : pas de barres (attente projection)",
   );
   // RESULTS public → barres même sans vote local
   assert.equal(
@@ -411,6 +439,20 @@ test("LOT-1. résultats live après vote (comportement /p prod) aussi en Salle",
     }),
     true,
   );
+  // Libellés bloc résultats
+  assert.equal(
+    getParticipantResultsBlockTitle({ voteSessionOpen: true }),
+    "Résultats en direct",
+  );
+  assert.equal(
+    getParticipantResultsBlockTitle({ voteSessionOpen: false }),
+    "Résultats finaux",
+  );
+  assert.equal(isParticipantVoteClosed({ voteState: "closed" }), true);
+  assert.equal(
+    isParticipantVoteClosed({ voteState: "open", pollStatus: "ACTIVE" }),
+    false,
+  );
   // Quiz : barres live après vote comme un sondage (sans révéler la bonne réponse)
   assert.equal(
     shouldShowParticipantLiveResultsBlock({
@@ -423,6 +465,32 @@ test("LOT-1. résultats live après vote (comportement /p prod) aussi en Salle",
     }),
     true,
     "Quiz VOTING après vote : barres live immédiates",
+  );
+  assert.equal(
+    shouldRevealQuizAnswerToParticipant({
+      isQuiz: true,
+      quizRevealed: true,
+      affichageResultatsPublic: false,
+    }),
+    false,
+    "Quiz CLOSED : pas de révélation bonne réponse",
+  );
+  assert.equal(
+    shouldRevealQuizAnswerToParticipant({
+      isQuiz: true,
+      quizRevealed: true,
+      affichageResultatsPublic: true,
+    }),
+    true,
+    "Quiz RESULTS : révélation bonne réponse + verdict",
+  );
+  assert.equal(
+    shouldRevealQuizAnswerToParticipant({
+      isQuiz: true,
+      quizRevealed: false,
+      affichageResultatsPublic: true,
+    }),
+    false,
   );
   assert.equal(
     getParticipantResultsOptionBadgeLabel({
