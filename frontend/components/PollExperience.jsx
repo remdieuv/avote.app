@@ -49,6 +49,7 @@ import {
   getParticipantResultsBlockTitle,
   getParticipantResultsOptionBadgeLabel,
   isParticipantVoteSessionOpen,
+  mergePollJsonPreservingQuizReveal,
   resolveParticipantTopStripLabel,
   shouldPollApplyParentPollSnapshot,
   shouldPollFetchEventMetaBranding,
@@ -326,7 +327,9 @@ export function PollExperience({
   /** True si GET /events/slug a renvoyé 404 — évite d’écraser l’erreur avec un message « en attente » */
   const evenementInvalideRef = useRef(false);
   /** Annule le fetch GET /p/:slug si la régie (socket) a déjà poussé un état plus récent → évite flicker 404→poll */
-  const loadPollAbortRef = useRef(null);
+  const loadPollAbortRef = useRef(/** @type {AbortController | null} */ (null));
+  /** Invalide les réponses GET périmées (y compris silent) face à poll_updated / snapshot Join. */
+  const loadPollGenerationRef = useRef(0);
   const finChronoRefetchEffectueRef = useRef(false);
   const pollId = poll?.id ?? null;
 
@@ -532,14 +535,16 @@ export function PollExperience({
   const loadPoll = useCallback(
     async (opts = {}) => {
       const silent = opts.silent === true;
-      let signal = undefined;
+      const generation = ++loadPollGenerationRef.current;
+
+      // Toujours abort + generation : un GET silent périmé ne doit pas écraser
+      // quizRevealed / RESULTS déjà appliqués depuis poll_updated (bug Salle vs Screen).
+      loadPollAbortRef.current?.abort();
+      const ac = new AbortController();
+      loadPollAbortRef.current = ac;
+      const signal = ac.signal;
 
       if (!silent) {
-        loadPollAbortRef.current?.abort();
-        const ac = new AbortController();
-        loadPollAbortRef.current = ac;
-        signal = ac.signal;
-
         setError(null);
         setPollFetch404Slug(false);
         setLoading(true);
@@ -551,7 +556,9 @@ export function PollExperience({
           signal,
         });
 
-        if (signal?.aborted) return;
+        if (signal.aborted || generation !== loadPollGenerationRef.current) {
+          return;
+        }
 
         if (res.status === 404) {
           setPoll(null);
@@ -571,7 +578,9 @@ export function PollExperience({
         }
         const data = normalizePollJson(await res.json());
 
-        if (signal?.aborted) return;
+        if (signal.aborted || generation !== loadPollGenerationRef.current) {
+          return;
+        }
 
         const axes = normalizeLiveAxes(data);
         setLiveScene(normalizeLiveScene(axes.liveState));
@@ -584,18 +593,30 @@ export function PollExperience({
         if (axes.displayState) {
           setEventDisplayStateUi(axes.displayState);
         }
-        if (silent) {
-          flushSync(() => {
-            setPoll(data);
-            setVoteError(null);
-          });
-        } else {
-          setPoll(data);
+        const applyPoll = () => {
+          setPoll((prev) =>
+            /** @type {any} */ (
+              mergePollJsonPreservingQuizReveal(
+                prev && typeof prev === "object"
+                  ? /** @type {Record<string, unknown>} */ (prev)
+                  : null,
+                /** @type {Record<string, unknown>} */ (data),
+              )
+            ),
+          );
           setVoteError(null);
+        };
+        if (silent) {
+          flushSync(applyPoll);
+        } else {
+          applyPoll();
         }
         setPollFetch404Slug(false);
       } catch (e) {
         if (e?.name === "AbortError") {
+          return;
+        }
+        if (generation !== loadPollGenerationRef.current) {
           return;
         }
         setPoll(null);
@@ -604,7 +625,7 @@ export function PollExperience({
             "Impossible de charger le sondage (API sur le port 4000 ?)",
         );
       } finally {
-        if (!silent) {
+        if (!silent && generation === loadPollGenerationRef.current) {
           setLoading(false);
         }
       }
@@ -641,8 +662,20 @@ export function PollExperience({
       /** @type {Record<string, unknown>} */ (parentPollSnapshot),
     );
     if (!snap?.id) return;
+    // Snapshot socket = source plus fraîche que les GET silent en vol.
+    loadPollGenerationRef.current += 1;
+    loadPollAbortRef.current?.abort();
     const axes = normalizeLiveAxes(snap);
-    setPoll(/** @type {any} */ (snap));
+    setPoll((prev) =>
+      /** @type {any} */ (
+        mergePollJsonPreservingQuizReveal(
+          prev && typeof prev === "object"
+            ? /** @type {Record<string, unknown>} */ (prev)
+            : null,
+          /** @type {Record<string, unknown>} */ (snap),
+        )
+      ),
+    );
     setLoading(false);
     setError(null);
     setPollFetch404Slug(false);
@@ -769,7 +802,18 @@ export function PollExperience({
       if (payload.poll) {
         const pollNorm = normalizePollJson(payload.poll);
         const pollAxes = normalizeLiveAxes(pollNorm);
-        setPoll(pollNorm);
+        loadPollGenerationRef.current += 1;
+        loadPollAbortRef.current?.abort();
+        setPoll((prev) =>
+          /** @type {any} */ (
+            mergePollJsonPreservingQuizReveal(
+              prev && typeof prev === "object"
+                ? /** @type {Record<string, unknown>} */ (prev)
+                : null,
+              /** @type {Record<string, unknown>} */ (pollNorm),
+            )
+          ),
+        );
         setLiveScene(
           normalizeLiveScene(pollAxes.liveState ?? eventAxes.liveState),
         );
@@ -819,20 +863,23 @@ export function PollExperience({
       }
       const norm = normalizePollJson(data);
       const axes = normalizeLiveAxes(norm);
+      loadPollGenerationRef.current += 1;
+      loadPollAbortRef.current?.abort();
       setPoll((prev) => {
-        if (prev && String(prev.id) === String(norm.id)) {
-          return norm;
-        }
-        if (pid && String(pid) === String(norm.id)) {
-          return norm;
-        }
-        if (
-          !prev &&
-          (norm.eventId == null || String(norm.eventId) === String(eid))
-        ) {
-          return norm;
-        }
-        return prev;
+        const accept =
+          (prev && String(prev.id) === String(norm.id)) ||
+          (pid && String(pid) === String(norm.id)) ||
+          (!prev &&
+            (norm.eventId == null || String(norm.eventId) === String(eid)));
+        if (!accept) return prev;
+        return /** @type {any} */ (
+          mergePollJsonPreservingQuizReveal(
+            prev && typeof prev === "object"
+              ? /** @type {Record<string, unknown>} */ (prev)
+              : null,
+            /** @type {Record<string, unknown>} */ (norm),
+          )
+        );
       });
       if (axes.liveState) {
         setLiveScene(normalizeLiveScene(axes.liveState));
@@ -894,10 +941,17 @@ export function PollExperience({
       ? poll.eventDisplayState
       : eventDisplayStateUi) ?? "",
   ).toLowerCase();
-  /** Résultats publics = scène salle RESULTS (P2) — plus dès vote fermé */
+  /**
+   * Résultats publics salle = RESULTS (display / live).
+   * Union poll + axes parent Join : un poll stale (eventDisplayState waiting)
+   * ne doit pas masquer un parentDisplayState / liveScene déjà RESULTS.
+   */
   const affichageResultatsPublic =
     displayStateParticipant === "results" ||
-    String(liveScene || "").toLowerCase() === "results";
+    String(eventDisplayStateUi || "").toLowerCase() === "results" ||
+    String(parentDisplayState || "").toLowerCase() === "results" ||
+    String(liveScene || "").toLowerCase() === "results" ||
+    String(parentLiveState || "").toLowerCase() === "results";
 
   /** Fiche `/p` archive : barres pour question CLOSE (historique / FINISHED). */
   const archiveResultsStandalone = shouldPollShowStandaloneArchiveResults({

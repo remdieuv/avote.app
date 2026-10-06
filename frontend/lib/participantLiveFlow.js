@@ -360,6 +360,51 @@ export function shouldRevealQuizAnswerToParticipant(input = {}) {
 }
 
 /**
+ * Empêche un GET `/p` silencieux périmé d’effacer `quizRevealed` / `isCorrect`
+ * déjà reçus via `poll_updated` (Screen applique le socket directement ; la Salle
+ * peut perdre la révélation si un fetch antérieur se termine après).
+ *
+ * @param {Record<string, unknown> | null | undefined} prevPoll
+ * @param {Record<string, unknown> | null | undefined} nextPoll
+ * @returns {Record<string, unknown> | null | undefined}
+ */
+export function mergePollJsonPreservingQuizReveal(prevPoll, nextPoll) {
+  if (!nextPoll || typeof nextPoll !== "object") return nextPoll;
+  if (!prevPoll || typeof prevPoll !== "object") return nextPoll;
+  if (String(prevPoll.id || "") !== String(nextPoll.id || "")) return nextPoll;
+  if (prevPoll.quizRevealed !== true || nextPoll.quizRevealed === true) {
+    return nextPoll;
+  }
+
+  const prevOpts = Array.isArray(prevPoll.options) ? prevPoll.options : [];
+  const correctById = new Map();
+  for (const opt of prevOpts) {
+    if (!opt || typeof opt !== "object") continue;
+    const id = String(/** @type {{ id?: unknown }} */ (opt).id || "");
+    if (!id) continue;
+    if (/** @type {{ isCorrect?: unknown }} */ (opt).isCorrect === true) {
+      correctById.set(id, true);
+    }
+  }
+
+  const nextOpts = Array.isArray(nextPoll.options) ? nextPoll.options : [];
+  const options = nextOpts.map((opt) => {
+    if (!opt || typeof opt !== "object") return opt;
+    const id = String(/** @type {{ id?: unknown }} */ (opt).id || "");
+    if (correctById.has(id)) {
+      return { ...opt, isCorrect: true };
+    }
+    return opt;
+  });
+
+  return {
+    ...nextPoll,
+    quizRevealed: true,
+    options,
+  };
+}
+
+/**
  * G15 — contenu de la carte FINISHED sur `/join`.
  *
  * Cause historique du triple affichage :

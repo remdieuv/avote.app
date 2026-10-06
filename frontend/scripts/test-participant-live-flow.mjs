@@ -45,6 +45,7 @@ import {
   isParticipantVoteClosed,
   getParticipantResultsBlockTitle,
   shouldRevealQuizAnswerToParticipant,
+  mergePollJsonPreservingQuizReveal,
   countJoinFinishedMerciMessages,
   resolveJoinFinishedCardContent,
 } from "../lib/participantLiveFlow.js";
@@ -491,6 +492,51 @@ test("LOT-1. résultats live après vote (comportement /p prod) aussi en Salle",
       affichageResultatsPublic: true,
     }),
     false,
+  );
+  // GET /p périmé ne doit pas effacer une révélation déjà reçue (poll_updated)
+  const mergedReveal = mergePollJsonPreservingQuizReveal(
+    {
+      id: "q1",
+      quizRevealed: true,
+      options: [
+        { id: "a", label: "Paris", isCorrect: true, votes: 2 },
+        { id: "b", label: "Lyon", votes: 1 },
+      ],
+    },
+    {
+      id: "q1",
+      quizRevealed: false,
+      options: [
+        { id: "a", label: "Paris", votes: 3 },
+        { id: "b", label: "Lyon", votes: 1 },
+      ],
+    },
+  );
+  assert.equal(mergedReveal?.quizRevealed, true);
+  assert.equal(
+    /** @type {{ isCorrect?: boolean }} */ (mergedReveal?.options?.[0]).isCorrect,
+    true,
+    "isCorrect conservé malgré GET stale",
+  );
+  assert.equal(
+    shouldRevealQuizAnswerToParticipant({
+      isQuiz: true,
+      quizRevealed: mergedReveal?.quizRevealed === true,
+      affichageResultatsPublic: true,
+    }),
+    true,
+    "RESULTS + quizRevealed préservé → révélation Salle",
+  );
+  assert.equal(
+    getParticipantResultsOptionBadgeLabel({
+      isQuiz: true,
+      quizRevealed: true,
+      isCorrect: true,
+      isWinner: true,
+      voteOuvert: false,
+    }),
+    "Bonne réponse",
+    "RESULTS Quiz : badge Bonne réponse (pas Gagnant)",
   );
   assert.equal(
     getParticipantResultsOptionBadgeLabel({
