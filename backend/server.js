@@ -270,6 +270,41 @@ const QUESTION_TIMER_RESET = {
   questionTimerIsPaused: true,
 };
 
+/**
+ * G13 — Transition d’événement après fermeture de vote (chrono OU régie).
+ * Les deux chemins doivent produire les mêmes axes pour le Screen CLOSED :
+ * vote CLOSED × display WAITING × live WAITING + reset chrono.
+ * Ne touche pas `screenDisplayState` (indépendance Screen / Salle).
+ *
+ * @param {{
+ *   autoReveal?: boolean | null;
+ *   autoRevealDelaySec?: number | null;
+ *   displayState?: string | null;
+ * }} event
+ * @returns {Record<string, unknown>}
+ */
+function buildEventDataAfterVoteClose(event) {
+  const delaySec = [3, 5, 10].includes(event?.autoRevealDelaySec)
+    ? event.autoRevealDelaySec
+    : 5;
+  /** @type {Record<string, unknown>} */
+  const data = {
+    voteState: "CLOSED",
+    displayState: "WAITING",
+    liveState: "WAITING",
+    ...QUESTION_TIMER_RESET,
+  };
+  if (
+    event?.autoReveal &&
+    String(event?.displayState || "").toUpperCase() !== "RESULTS"
+  ) {
+    data.autoRevealShowResultsAt = new Date(Date.now() + delaySec * 1000);
+  } else {
+    data.autoRevealShowResultsAt = null;
+  }
+  return data;
+}
+
 /** Chrono scène : max 90 jours (Int Prisma suffit largement). */
 const QUESTION_TIMER_SEC_MAX = 90 * 24 * 60 * 60;
 
@@ -829,20 +864,10 @@ async function fermerVoteSiChronoEpuise(io, eventId) {
   });
   if (closed.count === 0) return false;
 
+  const dataReveil = buildEventDataAfterVoteClose(event);
   const delaySec = [3, 5, 10].includes(event.autoRevealDelaySec)
     ? event.autoRevealDelaySec
     : 5;
-  const dataReveil = {
-    voteState: "CLOSED",
-    displayState: "WAITING",
-    liveState: "WAITING",
-    ...QUESTION_TIMER_RESET,
-  };
-  if (event.autoReveal) {
-    dataReveil.autoRevealShowResultsAt = new Date(Date.now() + delaySec * 1000);
-  } else {
-    dataReveil.autoRevealShowResultsAt = null;
-  }
 
   clearAutoRevealTimer(eventId);
   await prisma.event.update({
@@ -3490,35 +3515,18 @@ app.post("/polls/:pollId/close", requireAuth, async (req, res) => {
       data: { status: "CLOSED" },
     });
 
-    /** Stop vote : fermer la session de vote sans imposer l’affichage écran */
+    /**
+     * G13 — même transition que fin de chrono (`fermerVoteSiChronoEpuise`) :
+     * vote CLOSED + display WAITING + live WAITING + reset chrono.
+     * Ne force pas RESULTS ; ne touche pas `screenDisplayState`.
+     */
     let majEvent =
       poll.event.activePollId === poll.id
-        ? {
-            voteState: "CLOSED",
-            liveState: computeLiveState(
-              "CLOSED",
-              poll.event.displayState ?? "WAITING",
-            ),
-          }
+        ? buildEventDataAfterVoteClose(poll.event)
         : {};
 
     if (poll.event.activePollId === poll.id) {
-      const evSnap = poll.event;
       clearAutoRevealTimer(poll.eventId);
-      if (
-        evSnap.autoReveal &&
-        String(evSnap.displayState).toUpperCase() !== "RESULTS"
-      ) {
-        const delaySec = [3, 5, 10].includes(evSnap.autoRevealDelaySec)
-          ? evSnap.autoRevealDelaySec
-          : 5;
-        majEvent = {
-          ...majEvent,
-          autoRevealShowResultsAt: new Date(Date.now() + delaySec * 1000),
-        };
-      } else {
-        majEvent = { ...majEvent, autoRevealShowResultsAt: null };
-      }
     }
 
     const event =

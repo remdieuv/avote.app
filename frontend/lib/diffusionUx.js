@@ -3,6 +3,8 @@
  * États logiques : `resolveLiveUxState` (socle). Présentation Screen ≠ labels Participant.
  */
 
+import { resolveLiveUxState } from "./liveStateUx.js";
+
 /**
  * Libellés grand écran (salle / TV / vidéoprojecteur) — très courts, lisibles à distance.
  * Ne pas réutiliser aveuglément les textes Participant (`getLiveStateLabel`).
@@ -152,6 +154,58 @@ export function isScreenQuizAnswerRevealed(poll) {
     String(poll?.type || "").toUpperCase() === "QUIZ" &&
     Boolean(poll?.quizRevealed)
   );
+}
+
+/**
+ * G13 — axes projection après fermeture de vote (fin chrono OU « Fermer le vote »).
+ * Les deux chemins backend doivent produire exactement cet état Screen CLOSED.
+ * `screenDisplayState` n’est pas modifié (indépendance Screen / Salle).
+ * @param {Partial<{
+ *   liveScene: string;
+ *   displayState: string;
+ *   voteState: string;
+ *   pollStatus: string;
+ *   hasActivePoll: boolean;
+ * }>} [overrides]
+ */
+export function projectionAxesAfterVoteClose(overrides = {}) {
+  return {
+    liveScene: "waiting",
+    displayState: "waiting",
+    voteState: "closed",
+    pollStatus: "CLOSED",
+    hasActivePoll: true,
+    ...overrides,
+  };
+}
+
+/**
+ * Règle `voteOuvert` Screen (alignée ScreenProjection) — QR « Scannez pour voter » si true.
+ * @param {{ displayState?: string | null; eventVoteState?: string | null }} input
+ */
+export function isScreenProjectionVoteOpen(input = {}) {
+  return (
+    String(input.displayState ?? "").toLowerCase() === "question" &&
+    String(input.eventVoteState ?? "").toLowerCase() === "open"
+  );
+}
+
+/**
+ * Surface Screen attendue après fermeture : `closed` (pas WAITING / VOTING).
+ * @param {Parameters<typeof projectionAxesAfterVoteClose>[0]} [axes]
+ * @returns {"closed" | "waiting" | "voting" | string}
+ */
+export function resolveScreenSurfaceAfterVoteClose(axes) {
+  const a = projectionAxesAfterVoteClose(axes);
+  const ux = resolveLiveUxState(a);
+  const voteOpen = isScreenProjectionVoteOpen({
+    displayState: a.displayState,
+    eventVoteState: a.voteState,
+  });
+  if (ux === "CLOSED" && !voteOpen && a.hasActivePoll) return "closed";
+  if (ux === "WAITING") return "waiting";
+  if (ux === "VOTING" || voteOpen) return "voting";
+  return String(ux).toLowerCase();
 }
 
 /**

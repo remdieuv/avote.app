@@ -13,14 +13,18 @@ import {
   formatScreenQuestionProgressLabel,
   getScreenClosedAwaitingResultsLabel,
   getScreenDiffusionLabel,
+  isScreenProjectionVoteOpen,
   isScreenQuizAnswerRevealed,
   overlayMustStayTransparent,
+  projectionAxesAfterVoteClose,
   resolveScreenQuestionProgress,
+  resolveScreenSurfaceAfterVoteClose,
   screenOptionLetter,
   shouldShowScreenClosedVoteCount,
   shouldShowScreenCornerQr,
   sortScreenOptions,
 } from "../lib/diffusionUx.js";
+import { LIVE_UX_STATE, resolveLiveUxState } from "../lib/liveStateUx.js";
 import {
   formatTestModeVoteCountLabel,
 } from "../lib/testModeResultsMask.js";
@@ -389,6 +393,47 @@ assert.equal(formatTestModeVoteCountLabel(2, { withUnit: false }), "2");
 assert.equal(formatTestModeVoteCountLabel(10, { withUnit: false }), "≈ 10");
 console.log("ok  CLOSED compteur + quiz reveal Screen (sans RESULTS)");
 
+// --- G13 : fermeture manuelle = fin chrono → même état Screen CLOSED ---
+{
+  const timerClose = projectionAxesAfterVoteClose();
+  const manualClose = projectionAxesAfterVoteClose();
+  assert.deepEqual(
+    timerClose,
+    manualClose,
+    "G13: axes projection chrono ≡ manuel",
+  );
+  assert.equal(timerClose.displayState, "waiting");
+  assert.equal(timerClose.voteState, "closed");
+  assert.equal(timerClose.liveScene, "waiting");
+  assert.equal(resolveLiveUxState(timerClose), LIVE_UX_STATE.CLOSED);
+  assert.equal(resolveLiveUxState(manualClose), LIVE_UX_STATE.CLOSED);
+  assert.equal(resolveScreenSurfaceAfterVoteClose(timerClose), "closed");
+  assert.equal(resolveScreenSurfaceAfterVoteClose(manualClose), "closed");
+  assert.equal(
+    isScreenProjectionVoteOpen({
+      displayState: timerClose.displayState,
+      eventVoteState: timerClose.voteState,
+    }),
+    false,
+    "G13: pas de QR « Scannez pour voter » après close",
+  );
+  // Ancien manuel (display QUESTION conservé) : UX CLOSED possible, mais ≠ contrat chrono
+  // (voteOuvert Screen reste couplé à ds===question — d’où l’incohérence G13).
+  const legacyManualKeptQuestion = projectionAxesAfterVoteClose({
+    displayState: "question",
+  });
+  assert.equal(
+    resolveLiveUxState(legacyManualKeptQuestion),
+    LIVE_UX_STATE.CLOSED,
+  );
+  assert.notEqual(
+    legacyManualKeptQuestion.displayState,
+    timerClose.displayState,
+    "G13: l’ancien close manuel (display question) diverge du chrono",
+  );
+  console.log("ok  G13 manual close = timer close (projection CLOSED)");
+}
+
 if (failed > 0) {
   console.error(`\n${failed} cas en échec`);
   process.exit(1);
@@ -403,5 +448,6 @@ const total =
   1 + // votes
   1 + // options
   1 + // salle≠screen
-  1; // closed+quiz (+ footer scores + ≈ TEST)
+  1 + // closed+quiz (+ footer scores + ≈ TEST)
+  1; // G13
 console.log(`\n${total} groupes d’assertions OK — LOT-2 diffusion Screen final`);
