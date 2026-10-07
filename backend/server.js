@@ -810,7 +810,10 @@ async function annulationAutoRevealProgrammee(eventId) {
   });
 }
 
-/** Applique display RESULTS après délai auto-reveal (timer ou file d’attente serveur). */
+/**
+ * Affichage automatique après délai : même logique métier que le bouton
+ * « Afficher les résultats » (`appliquerAffichageResultats`) — pas un 2ᵉ chemin.
+ */
 async function appliquerAutoRevealResultats(io, eventId) {
   clearAutoRevealTimer(eventId);
   const fresh = await prisma.event.findUnique({ where: { id: eventId } });
@@ -824,15 +827,7 @@ async function appliquerAutoRevealResultats(io, eventId) {
     await emitEventLiveUpdated(io, eventId);
     return;
   }
-  await prisma.event.update({
-    where: { id: eventId },
-    data: {
-      displayState: "RESULTS",
-      liveState: computeLiveState(fresh.voteState, "RESULTS"),
-      autoRevealShowResultsAt: null,
-    },
-  });
-  await emitEventLiveUpdated(io, eventId);
+  await appliquerAffichageResultats(io, fresh.activePollId);
 }
 
 function planifierTimeoutAutoReveal(io, eventId, delayMs) {
@@ -3561,7 +3556,63 @@ app.post("/polls/:pollId/close", requireAuth, async (req, res) => {
 });
 
 /**
- * Régie « Afficher les résultats » : display RESULTS (+ révélation Quiz si vote fermé).
+ * Logique métier unique « Afficher les résultats » (bouton régie + affichage auto).
+ * - Salle / displayState → RESULTS
+ * - Screen / screenDisplayState → RESULTS (le Screen privilégie cet axe s’il est déjà
+ *   posé, ex. QUESTION via console ; sans sync, /join passait RESULTS et pas le Screen)
+ * - Quiz + vote CLOSED → quizRevealed (+ emit poll_updated)
+ *
+ * @param {import("socket.io").Server} io
+ * @param {string} pollId
+ * @returns {Promise<
+ *   | { ok: true; event: import("@prisma/client").Event; pollId: string }
+ *   | { ok: false; status: number; error: string }
+ * >}
+ */
+async function appliquerAffichageResultats(io, pollId) {
+  let poll = await prisma.poll.findUnique({
+    where: { id: pollId },
+    include: { event: true },
+  });
+  if (!poll) {
+    return { ok: false, status: 404, error: "Sondage introuvable." };
+  }
+
+  await annulationAutoRevealProgrammee(poll.eventId);
+
+  const voteClosed =
+    String(poll.event.voteState || "").toUpperCase() === "CLOSED";
+  const isQuiz = String(poll.type || "").toUpperCase() === "QUIZ";
+  const revealQuizNow = isQuiz && voteClosed && !poll.quizRevealed;
+  if (revealQuizNow) {
+    poll = await prisma.poll.update({
+      where: { id: poll.id },
+      data: { quizRevealed: true },
+      include: { event: true },
+    });
+  }
+
+  const event = await prisma.event.update({
+    where: { id: poll.eventId },
+    data: {
+      activePollId: poll.id,
+      displayState: "RESULTS",
+      screenDisplayState: "RESULTS",
+      liveState: computeLiveState(poll.event.voteState, "RESULTS"),
+      autoRevealShowResultsAt: null,
+    },
+  });
+
+  if (revealQuizNow) {
+    await emitPollUpdated(io, poll.id);
+  }
+  await emitEventLiveUpdated(io, poll.eventId);
+
+  return { ok: true, event, pollId: poll.id };
+}
+
+/**
+ * Régie « Afficher les résultats » — délègue à `appliquerAffichageResultats`.
  * @param {import("express").Request} req
  * @param {import("express").Response} res
  */
@@ -3572,45 +3623,13 @@ async function handlePollShowResults(req, res) {
     if (!pOwn.ok) {
       return res.status(pOwn.status).json({ error: "Sondage introuvable." });
     }
-    let poll = await prisma.poll.findUnique({
-      where: { id: pollId },
-      include: { event: true },
-    });
-    if (!poll) {
-      return res.status(404).json({ error: "Sondage introuvable." });
+    const result = await appliquerAffichageResultats(io, pollId);
+    if (!result.ok) {
+      return res.status(result.status).json({ error: result.error });
     }
-
-    await annulationAutoRevealProgrammee(poll.eventId);
-
-    const voteClosed =
-      String(poll.event.voteState || "").toUpperCase() === "CLOSED";
-    const isQuiz = String(poll.type || "").toUpperCase() === "QUIZ";
-    const revealQuizNow = isQuiz && voteClosed && !poll.quizRevealed;
-    if (revealQuizNow) {
-      poll = await prisma.poll.update({
-        where: { id: poll.id },
-        data: { quizRevealed: true },
-        include: { event: true },
-      });
-    }
-
-    const event = await prisma.event.update({
-      where: { id: poll.eventId },
-      data: {
-        activePollId: poll.id,
-        displayState: "RESULTS",
-        liveState: computeLiveState(poll.event.voteState, "RESULTS"),
-      },
-    });
-
-    if (revealQuizNow) {
-      await emitPollUpdated(io, poll.id);
-    }
-    await emitEventLiveUpdated(io, poll.eventId);
-
-    const full = await loadPollFull(poll.id);
+    const full = await loadPollFull(pollId);
     return res.json({
-      event,
+      event: result.event,
       poll: full ? pollToJson(full) : null,
     });
   } catch (e) {

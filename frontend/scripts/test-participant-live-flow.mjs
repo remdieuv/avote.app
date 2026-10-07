@@ -46,6 +46,7 @@ import {
   getParticipantResultsBlockTitle,
   shouldRevealQuizAnswerToParticipant,
   shouldRevealQuizWhenShowingResults,
+  resolveShowResultsEventPatch,
   mergePollJsonPreservingQuizReveal,
   countJoinFinishedMerciMessages,
   resolveJoinFinishedCardContent,
@@ -607,6 +608,43 @@ test("Régie. Afficher les résultats — Quiz révélé seulement si vote ferm�
     }),
     false,
   );
+});
+
+test("Régie. Affichage auto = même contrat que Afficher les résultats (Screen inclus)", () => {
+  const quizClosed = resolveShowResultsEventPatch({
+    pollType: "QUIZ",
+    quizRevealed: false,
+    voteState: "closed",
+  });
+  assert.deepEqual(
+    quizClosed,
+    {
+      displayState: "RESULTS",
+      screenDisplayState: "RESULTS",
+      clearAutoRevealSchedule: true,
+      revealQuiz: true,
+    },
+    "Auto et manuel : RESULTS Salle+Screen + révélation Quiz",
+  );
+  const sondage = resolveShowResultsEventPatch({
+    pollType: "SINGLE_CHOICE",
+    quizRevealed: false,
+    voteState: "closed",
+  });
+  assert.equal(sondage.displayState, "RESULTS");
+  assert.equal(
+    sondage.screenDisplayState,
+    "RESULTS",
+    "Screen doit suivre RESULTS (sinon reste sur screenDisplayState QUESTION)",
+  );
+  assert.equal(sondage.revealQuiz, false);
+  const quizOpen = resolveShowResultsEventPatch({
+    pollType: "QUIZ",
+    quizRevealed: false,
+    voteState: "open",
+  });
+  assert.equal(quizOpen.revealQuiz, false);
+  assert.equal(quizOpen.screenDisplayState, "RESULTS");
 });
 
 test("A8. Join applique axes socket immédiatement puis fetchMeta", () => {

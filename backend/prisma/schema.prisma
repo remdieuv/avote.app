@@ -124,7 +124,7 @@ model Event {
   screenDisplayState DisplayState?
   /** Participants peuvent voter (indépendant de displayState) */
   voteState    VoteState    @default(CLOSED)
-  /** Révélation automatique des résultats après fermeture du vote (délai en secondes) */
+  /** Affichage automatique des résultats après fermeture du vote (délai en secondes) */
   autoReveal             Boolean   @default(false)
   autoRevealDelaySec     Int       @default(5)
   /** Quand défini, projection / public : compte à rebours jusqu’à passage display RESULTS */

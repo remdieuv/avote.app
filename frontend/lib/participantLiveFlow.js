@@ -380,6 +380,32 @@ export function shouldRevealQuizWhenShowingResults(input = {}) {
 }
 
 /**
+ * Contrat unique bouton manuel « Afficher les résultats » et affichage automatique
+ * après délai. Auto et manuel doivent produire les mêmes effets (pas deux chemins).
+ * `screenDisplayState: RESULTS` est requis : le Screen lit cet axe en priorité.
+ *
+ * @param {{
+ *   pollType?: string | null;
+ *   quizRevealed?: boolean;
+ *   voteState?: string | null;
+ * }} input
+ * @returns {{
+ *   displayState: "RESULTS";
+ *   screenDisplayState: "RESULTS";
+ *   clearAutoRevealSchedule: true;
+ *   revealQuiz: boolean;
+ * }}
+ */
+export function resolveShowResultsEventPatch(input = {}) {
+  return {
+    displayState: "RESULTS",
+    screenDisplayState: "RESULTS",
+    clearAutoRevealSchedule: true,
+    revealQuiz: shouldRevealQuizWhenShowingResults(input),
+  };
+}
+
+/**
  * Empêche un GET `/p` silencieux périmé d’effacer `quizRevealed` / `isCorrect`
  * déjà reçus via `poll_updated` (Screen applique le socket directement ; la Salle
  * peut perdre la révélation si un fetch antérieur se termine après).

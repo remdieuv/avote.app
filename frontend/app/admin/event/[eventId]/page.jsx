@@ -3568,7 +3568,8 @@ function RegiePublicPreviewPanel({
 }
 
 /**
- * Option auto-reveal : délai après fermeture du vote avant passage écran résultats.
+ * Option affichage auto des résultats : délai après fermeture du vote
+ * (même logique métier que « Afficher les résultats »).
  * @param {{ embedded?: boolean; embeddedDividerAbove?: boolean }} props
  */
 function RegieAutoRevealCard({
@@ -3661,7 +3662,7 @@ function RegieAutoRevealCard({
             <span aria-hidden style={{ marginRight: "0.28rem" }}>
               ⏱
             </span>
-            Révélation automatique des résultats
+            Affichage automatique des résultats
           </p>
           <p
             style={{
@@ -3672,7 +3673,8 @@ function RegieAutoRevealCard({
               lineHeight: 1.45,
             }}
           >
-            Affiche automatiquement les résultats après la fermeture du vote.
+            Affiche automatiquement les résultats après la fermeture du vote
+            (même action que « Afficher les résultats »).
           </p>
         </div>
         <label
@@ -3683,7 +3685,11 @@ function RegieAutoRevealCard({
             cursor: busy ? "wait" : "pointer",
             marginTop: "0.1rem",
           }}
-          title={enabled ? "Désactiver la révélation automatique" : "Activer la révélation automatique"}
+          title={
+            enabled
+              ? "Désactiver l’affichage automatique"
+              : "Activer l’affichage automatique"
+          }
         >
           <input
             type="checkbox"
@@ -3705,7 +3711,7 @@ function RegieAutoRevealCard({
               whiteSpace: "nowrap",
               border: 0,
             }}
-            aria-label="Révélation automatique des résultats"
+            aria-label="Affichage automatique des résultats"
           />
           <span
             aria-hidden
