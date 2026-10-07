@@ -159,13 +159,14 @@ export function isScreenQuizAnswerRevealed(poll) {
 /**
  * G13 — axes projection après fermeture de vote (fin chrono OU « Fermer le vote »).
  * Les deux chemins backend doivent produire exactement cet état Screen CLOSED.
- * `screenDisplayState` n’est pas modifié (indépendance Screen / Salle).
+ * Un `screenDisplayState=RESULTS` collant est effacé (BLACK préservé côté serveur).
  * @param {Partial<{
  *   liveScene: string;
  *   displayState: string;
  *   voteState: string;
  *   pollStatus: string;
  *   hasActivePoll: boolean;
+ *   screenDisplayState: string | null;
  * }>} [overrides]
  */
 export function projectionAxesAfterVoteClose(overrides = {}) {
@@ -175,6 +176,7 @@ export function projectionAxesAfterVoteClose(overrides = {}) {
     voteState: "closed",
     pollStatus: "CLOSED",
     hasActivePoll: true,
+    screenDisplayState: null,
     ...overrides,
   };
 }

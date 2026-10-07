@@ -47,6 +47,9 @@ import {
   shouldRevealQuizAnswerToParticipant,
   shouldRevealQuizWhenShowingResults,
   resolveShowResultsEventPatch,
+  resolveScreenDisplayAfterLiveTransition,
+  resolveNextPollPrepareEventPatch,
+  resolveEventPatchAfterVoteClose,
   mergePollJsonPreservingQuizReveal,
   countJoinFinishedMerciMessages,
   resolveJoinFinishedCardContent,
@@ -610,7 +613,7 @@ test("Régie. Afficher les résultats — Quiz révélé seulement si vote ferm�
   );
 });
 
-test("Régie. Affichage auto = même contrat que Afficher les résultats (Screen inclus)", () => {
+test("LOT-1. Afficher manuel = auto — RESULTS momentané, pas sticky", () => {
   const quizClosed = resolveShowResultsEventPatch({
     pollType: "QUIZ",
     quizRevealed: false,
@@ -624,27 +627,131 @@ test("Régie. Affichage auto = même contrat que Afficher les résultats (Screen
       clearAutoRevealSchedule: true,
       revealQuiz: true,
     },
-    "Auto et manuel : RESULTS Salle+Screen + révélation Quiz",
+    "Auto et manuel : même patch RESULTS + révélation Quiz",
   );
-  const sondage = resolveShowResultsEventPatch({
+  assert.equal(
+    resolveShowResultsEventPatch({
+      pollType: "SINGLE_CHOICE",
+      quizRevealed: false,
+      voteState: "closed",
+    }).revealQuiz,
+    false,
+  );
+  assert.equal(
+    resolveShowResultsEventPatch({
+      pollType: "QUIZ",
+      quizRevealed: false,
+      voteState: "open",
+    }).revealQuiz,
+    false,
+    "Vote ouvert : RESULTS sans révélation Quiz",
+  );
+});
+
+test("LOT-1. Suivante → PRÉPARÉ, jamais OPEN/VOTING", () => {
+  const prepare = resolveNextPollPrepareEventPatch();
+  assert.equal(prepare.openVote, false);
+  assert.equal(prepare.voteState, "CLOSED");
+  assert.equal(prepare.displayState, "WAITING");
+  assert.equal(prepare.liveState, "WAITING");
+  assert.equal(prepare.clearAutoRevealSchedule, true);
+  const uxPrepare = resolveLiveUxState({
+    liveScene: prepare.liveState,
+    displayState: prepare.displayState,
+    voteState: prepare.voteState,
+    pollStatus: "ACTIVE",
+    hasActivePoll: true,
+  });
+  assert.equal(uxPrepare, LIVE_UX_STATE.WAITING, "PRÉPARÉ → hub attente /join");
+  assert.notEqual(uxPrepare, LIVE_UX_STATE.VOTING);
+});
+
+test("LOT-1. Ouvrir → VOTING ; Fermer = axes CLOSED sans sticky RESULTS", () => {
+  const openUx = resolveLiveUxState({
+    liveScene: "voting",
+    displayState: "question",
+    voteState: "open",
+    pollStatus: "ACTIVE",
+    hasActivePoll: true,
+  });
+  assert.equal(openUx, LIVE_UX_STATE.VOTING);
+
+  const closeSticky = resolveEventPatchAfterVoteClose({
+    autoReveal: true,
+    screenDisplayState: "RESULTS",
+  });
+  assert.equal(closeSticky.voteState, "CLOSED");
+  assert.equal(closeSticky.displayState, "WAITING");
+  assert.equal(closeSticky.liveState, "WAITING");
+  assert.equal(closeSticky.schedulesAutoReveal, true);
+  assert.equal(
+    closeSticky.screenDisplayState,
+    null,
+    "Fermer efface RESULTS collant → Screen peut rester Vote terminé pendant le délai",
+  );
+
+  const closeNoSticky = resolveEventPatchAfterVoteClose({
+    screenDisplayState: "QUESTION",
+  });
+  assert.equal(
+    closeNoSticky.screenDisplayState,
+    undefined,
+    "QUESTION Screen préservé à la fermeture (indépendance contrôlée)",
+  );
+
+  const closeBlack = resolveScreenDisplayAfterLiveTransition("BLACK", "close");
+  assert.equal(closeBlack, undefined, "BLACK projection avancée préservé");
+});
+
+test("LOT-1. Transitions Screen — Afficher pose RESULTS ; Suivante/Ouvrir nettoient", () => {
+  assert.equal(
+    resolveScreenDisplayAfterLiveTransition("QUESTION", "show-results"),
+    "RESULTS",
+  );
+  assert.equal(
+    resolveScreenDisplayAfterLiveTransition("RESULTS", "prepare"),
+    null,
+    "Suivante : plus de RESULTS collant",
+  );
+  assert.equal(
+    resolveScreenDisplayAfterLiveTransition("RESULTS", "open"),
+    null,
+    "Ouvrir : Screen suit QUESTION salle",
+  );
+  assert.equal(
+    resolveScreenDisplayAfterLiveTransition("BLACK", "prepare"),
+    undefined,
+  );
+  assert.equal(
+    resolveScreenDisplayAfterLiveTransition("BLACK", "show-results"),
+    "RESULTS",
+    "Afficher peut sortir du noir pour projeter les résultats",
+  );
+});
+
+test("LOT-1. Auto OFF : CLOSED reste CLOSED jusqu’à Afficher (pas RESULTS anticipé)", () => {
+  const closedUx = resolveLiveUxState({
+    liveScene: "waiting",
+    displayState: "waiting",
+    voteState: "closed",
+    pollStatus: "CLOSED",
+    hasActivePoll: true,
+  });
+  assert.equal(closedUx, LIVE_UX_STATE.CLOSED);
+  assert.notEqual(closedUx, LIVE_UX_STATE.RESULTS);
+
+  const afterShow = resolveShowResultsEventPatch({
     pollType: "SINGLE_CHOICE",
-    quizRevealed: false,
     voteState: "closed",
   });
-  assert.equal(sondage.displayState, "RESULTS");
-  assert.equal(
-    sondage.screenDisplayState,
-    "RESULTS",
-    "Screen doit suivre RESULTS (sinon reste sur screenDisplayState QUESTION)",
-  );
-  assert.equal(sondage.revealQuiz, false);
-  const quizOpen = resolveShowResultsEventPatch({
-    pollType: "QUIZ",
-    quizRevealed: false,
-    voteState: "open",
+  const resultsUx = resolveLiveUxState({
+    liveScene: "results",
+    displayState: afterShow.displayState,
+    voteState: "closed",
+    pollStatus: "CLOSED",
+    hasActivePoll: true,
   });
-  assert.equal(quizOpen.revealQuiz, false);
-  assert.equal(quizOpen.screenDisplayState, "RESULTS");
+  assert.equal(resultsUx, LIVE_UX_STATE.RESULTS);
 });
 
 test("A8. Join applique axes socket immédiatement puis fetchMeta", () => {

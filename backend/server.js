@@ -271,15 +271,35 @@ const QUESTION_TIMER_RESET = {
 };
 
 /**
+ * Transitions Live normales : nettoie un `screenDisplayState=RESULTS` collant
+ * sans fusionner Screen et Salle. Préserve BLACK (projection avancée).
+ *
+ * @param {string | null | undefined} currentScreenDisplayState
+ * @param {"close" | "prepare" | "open" | "show-results"} intent
+ * @returns {"RESULTS" | "BLACK" | null | undefined}
+ *   - valeur → écrire dans le patch
+ *   - `undefined` → ne pas toucher le champ
+ */
+function screenDisplayStateForLiveTransition(currentScreenDisplayState, intent) {
+  const sds = String(currentScreenDisplayState ?? "").toUpperCase();
+  if (intent === "show-results") return "RESULTS";
+  if (sds === "BLACK") return undefined;
+  if (intent === "prepare" || intent === "open") return null;
+  if (intent === "close" && sds === "RESULTS") return null;
+  return undefined;
+}
+
+/**
  * G13 — Transition d’événement après fermeture de vote (chrono OU régie).
  * Les deux chemins doivent produire les mêmes axes pour le Screen CLOSED :
  * vote CLOSED × display WAITING × live WAITING + reset chrono.
- * Ne touche pas `screenDisplayState` (indépendance Screen / Salle).
+ * Efface uniquement un `screenDisplayState=RESULTS` collant (préserve BLACK).
  *
  * @param {{
  *   autoReveal?: boolean | null;
  *   autoRevealDelaySec?: number | null;
  *   displayState?: string | null;
+ *   screenDisplayState?: string | null;
  * }} event
  * @returns {Record<string, unknown>}
  */
@@ -294,6 +314,13 @@ function buildEventDataAfterVoteClose(event) {
     liveState: "WAITING",
     ...QUESTION_TIMER_RESET,
   };
+  const screenPatch = screenDisplayStateForLiveTransition(
+    event?.screenDisplayState,
+    "close",
+  );
+  if (screenPatch !== undefined) {
+    data.screenDisplayState = screenPatch;
+  }
   if (
     event?.autoReveal &&
     String(event?.displayState || "").toUpperCase() !== "RESULTS"
@@ -881,6 +908,10 @@ async function fermerVoteSiChronoEpuise(io, eventId) {
   return true;
 }
 
+/**
+ * Suivante → PRÉPARÉ (V1.1) : antenne = question suivante, vote fermé, pas d’ouverture.
+ * Ouvrir reste l’unique déclencheur de VOTING.
+ */
 async function passerAuSondageSuivant(eventId) {
   const event = await prisma.event.findUnique({
     where: { id: eventId },
@@ -893,14 +924,6 @@ async function passerAuSondageSuivant(eventId) {
     return { ok: false, code: 404, message: "Événement introuvable." };
   }
 
-  const isTestMode = event.isLiveConsumed === false;
-  const forcedTestTimer = {
-    questionTimerTotalSec: 30,
-    questionTimerAccumulatedSec: 0,
-    questionTimerStartedAt: new Date(),
-    questionTimerIsPaused: false,
-  };
-
   await annulationAutoRevealProgrammee(eventId);
 
   const liste = event.polls.filter((p) => p.status !== "ARCHIVED");
@@ -912,6 +935,16 @@ async function passerAuSondageSuivant(eventId) {
     data: { status: "CLOSED" },
   });
 
+  const screenAfterPrepare = screenDisplayStateForLiveTransition(
+    event.screenDisplayState,
+    "prepare",
+  );
+  /** @type {Record<string, unknown>} */
+  const clearStickyScreen =
+    screenAfterPrepare !== undefined
+      ? { screenDisplayState: screenAfterPrepare }
+      : {};
+
   if (!suivant) {
     const misAJour = await prisma.event.update({
       where: { id: eventId },
@@ -921,6 +954,7 @@ async function passerAuSondageSuivant(eventId) {
         voteState: "CLOSED",
         displayState: "WAITING",
         autoRevealShowResultsAt: null,
+        ...clearStickyScreen,
         ...QUESTION_TIMER_RESET,
       },
     });
@@ -933,24 +967,30 @@ async function passerAuSondageSuivant(eventId) {
 
   await prisma.poll.update({
     where: { id: suivant.id },
-    data: { status: "ACTIVE" },
+    data: {
+      status: "ACTIVE",
+      quizRevealed:
+        String(suivant.type || "").toUpperCase() === "QUIZ" ? false : undefined,
+    },
   });
 
   const misAJour = await prisma.event.update({
     where: { id: eventId },
     data: {
       activePollId: suivant.id,
-      voteState: "OPEN",
-      displayState: "QUESTION",
-      liveState: "VOTING",
+      voteState: "CLOSED",
+      displayState: "WAITING",
+      liveState: "WAITING",
       autoRevealShowResultsAt: null,
-      ...(isTestMode ? forcedTestTimer : QUESTION_TIMER_RESET),
+      ...clearStickyScreen,
+      ...QUESTION_TIMER_RESET,
     },
   });
 
   return {
     ok: true,
     finished: false,
+    prepared: true,
     activePollId: suivant.id,
     event: misAJour,
   };
@@ -3458,6 +3498,10 @@ app.post("/polls/:pollId/open", requireAuth, async (req, res) => {
       },
     });
 
+    const screenAfterOpen = screenDisplayStateForLiveTransition(
+      poll.event?.screenDisplayState,
+      "open",
+    );
     const event = await prisma.event.update({
       where: { id: poll.eventId },
       data: {
@@ -3466,6 +3510,9 @@ app.post("/polls/:pollId/open", requireAuth, async (req, res) => {
         displayState: "QUESTION",
         liveState: "VOTING",
         autoRevealShowResultsAt: null,
+        ...(screenAfterOpen !== undefined
+          ? { screenDisplayState: screenAfterOpen }
+          : {}),
         ...(poll.event?.isLiveConsumed === false
           ? {
               questionTimerTotalSec: 30,
@@ -3513,7 +3560,7 @@ app.post("/polls/:pollId/close", requireAuth, async (req, res) => {
     /**
      * G13 — même transition que fin de chrono (`fermerVoteSiChronoEpuise`) :
      * vote CLOSED + display WAITING + live WAITING + reset chrono.
-     * Ne force pas RESULTS ; ne touche pas `screenDisplayState`.
+     * Ne force pas RESULTS ; efface un screenDisplayState RESULTS collant.
      */
     let majEvent =
       poll.event.activePollId === poll.id
@@ -3558,8 +3605,8 @@ app.post("/polls/:pollId/close", requireAuth, async (req, res) => {
 /**
  * Logique métier unique « Afficher les résultats » (bouton régie + affichage auto).
  * - Salle / displayState → RESULTS
- * - Screen / screenDisplayState → RESULTS (le Screen privilégie cet axe s’il est déjà
- *   posé, ex. QUESTION via console ; sans sync, /join passait RESULTS et pas le Screen)
+ * - Screen / screenDisplayState → RESULTS au moment Afficher/auto seulement
+ *   (close / open / Suivante nettoient un RESULTS collant ; BLACK préservé)
  * - Quiz + vote CLOSED → quizRevealed (+ emit poll_updated)
  *
  * @param {import("socket.io").Server} io
@@ -3597,7 +3644,10 @@ async function appliquerAffichageResultats(io, pollId) {
     data: {
       activePollId: poll.id,
       displayState: "RESULTS",
-      screenDisplayState: "RESULTS",
+      screenDisplayState: screenDisplayStateForLiveTransition(
+        poll.event.screenDisplayState,
+        "show-results",
+      ),
       liveState: computeLiveState(poll.event.voteState, "RESULTS"),
       autoRevealShowResultsAt: null,
     },

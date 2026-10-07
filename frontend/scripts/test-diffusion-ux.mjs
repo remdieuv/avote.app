@@ -405,6 +405,11 @@ console.log("ok  CLOSED compteur + quiz reveal Screen (sans RESULTS)");
   assert.equal(timerClose.displayState, "waiting");
   assert.equal(timerClose.voteState, "closed");
   assert.equal(timerClose.liveScene, "waiting");
+  assert.equal(
+    timerClose.screenDisplayState,
+    null,
+    "LOT-1: Fermer efface sticky RESULTS Screen (G13)",
+  );
   assert.equal(resolveLiveUxState(timerClose), LIVE_UX_STATE.CLOSED);
   assert.equal(resolveLiveUxState(manualClose), LIVE_UX_STATE.CLOSED);
   assert.equal(resolveScreenSurfaceAfterVoteClose(timerClose), "closed");

@@ -382,7 +382,8 @@ export function shouldRevealQuizWhenShowingResults(input = {}) {
 /**
  * Contrat unique bouton manuel « Afficher les résultats » et affichage automatique
  * après délai. Auto et manuel doivent produire les mêmes effets (pas deux chemins).
- * `screenDisplayState: RESULTS` est requis : le Screen lit cet axe en priorité.
+ * `screenDisplayState: RESULTS` uniquement au moment Afficher/auto — les transitions
+ * close / open / Suivante doivent le nettoyer (voir `resolveScreenDisplayAfterLiveTransition`).
  *
  * @param {{
  *   pollType?: string | null;
@@ -403,6 +404,74 @@ export function resolveShowResultsEventPatch(input = {}) {
     clearAutoRevealSchedule: true,
     revealQuiz: shouldRevealQuizWhenShowingResults(input),
   };
+}
+
+/**
+ * LOT-1 — nettoyage contrôlé de `screenDisplayState` (Screen ≠ Salle).
+ * BLACK (projection avancée) est préservé. RESULTS collant est effacé hors Afficher.
+ *
+ * @param {string | null | undefined} currentScreenDisplayState
+ * @param {"close" | "prepare" | "open" | "show-results"} intent
+ * @returns {"RESULTS" | "BLACK" | null | undefined}
+ *   `undefined` = ne pas modifier le champ
+ */
+export function resolveScreenDisplayAfterLiveTransition(
+  currentScreenDisplayState,
+  intent,
+) {
+  const sds = String(currentScreenDisplayState ?? "").toUpperCase();
+  if (intent === "show-results") return "RESULTS";
+  if (sds === "BLACK") return undefined;
+  if (intent === "prepare" || intent === "open") return null;
+  if (intent === "close" && sds === "RESULTS") return null;
+  return undefined;
+}
+
+/**
+ * LOT-1 — Suivante → PRÉPARÉ (jamais ouverture automatique du vote).
+ *
+ * @returns {{
+ *   voteState: "CLOSED";
+ *   displayState: "WAITING";
+ *   liveState: "WAITING";
+ *   clearAutoRevealSchedule: true;
+ *   openVote: false;
+ * }}
+ */
+export function resolveNextPollPrepareEventPatch() {
+  return {
+    voteState: "CLOSED",
+    displayState: "WAITING",
+    liveState: "WAITING",
+    clearAutoRevealSchedule: true,
+    openVote: false,
+  };
+}
+
+/**
+ * LOT-1 — Fermer (manuel ou chrono) : axes Salle + clear sticky Screen RESULTS.
+ *
+ * @param {{
+ *   autoReveal?: boolean;
+ *   screenDisplayState?: string | null;
+ * }} [input]
+ */
+export function resolveEventPatchAfterVoteClose(input = {}) {
+  const screenDisplayState = resolveScreenDisplayAfterLiveTransition(
+    input.screenDisplayState,
+    "close",
+  );
+  /** @type {Record<string, unknown>} */
+  const patch = {
+    voteState: "CLOSED",
+    displayState: "WAITING",
+    liveState: "WAITING",
+    schedulesAutoReveal: input.autoReveal === true,
+  };
+  if (screenDisplayState !== undefined) {
+    patch.screenDisplayState = screenDisplayState;
+  }
+  return patch;
 }
 
 /**
