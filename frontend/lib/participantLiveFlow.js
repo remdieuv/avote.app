@@ -360,6 +360,26 @@ export function shouldRevealQuizAnswerToParticipant(input = {}) {
 }
 
 /**
+ * Régie — action unique « Afficher les résultats » : pour un Quiz dont le vote
+ * est fermé, show-results doit aussi passer `quizRevealed` (pas de 2ᵉ bouton).
+ * Vote encore ouvert → projection RESULTS sans révélation (résultats en direct).
+ *
+ * @param {{
+ *   pollType?: string | null;
+ *   quizRevealed?: boolean;
+ *   voteState?: string | null;
+ * }} input
+ * @returns {boolean}
+ */
+export function shouldRevealQuizWhenShowingResults(input = {}) {
+  return (
+    String(input.pollType ?? "").toUpperCase() === "QUIZ" &&
+    input.quizRevealed !== true &&
+    String(input.voteState ?? "").toLowerCase().trim() === "closed"
+  );
+}
+
+/**
  * Empêche un GET `/p` silencieux périmé d’effacer `quizRevealed` / `isCorrect`
  * déjà reçus via `poll_updated` (Screen applique le socket directement ; la Salle
  * peut perdre la révélation si un fetch antérieur se termine après).

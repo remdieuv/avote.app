@@ -45,6 +45,7 @@ import {
   isParticipantVoteClosed,
   getParticipantResultsBlockTitle,
   shouldRevealQuizAnswerToParticipant,
+  shouldRevealQuizWhenShowingResults,
   mergePollJsonPreservingQuizReveal,
   countJoinFinishedMerciMessages,
   resolveJoinFinishedCardContent,
@@ -568,6 +569,43 @@ test("LOT-1. résultats live après vote (comportement /p prod) aussi en Salle",
       parentPollRevision: 1,
     }),
     true,
+  );
+});
+
+test("Régie. Afficher les résultats — Quiz révélé seulement si vote fermé", () => {
+  assert.equal(
+    shouldRevealQuizWhenShowingResults({
+      pollType: "QUIZ",
+      quizRevealed: false,
+      voteState: "closed",
+    }),
+    true,
+    "show-results + vote fermé → quizRevealed (action unique régie)",
+  );
+  assert.equal(
+    shouldRevealQuizWhenShowingResults({
+      pollType: "QUIZ",
+      quizRevealed: false,
+      voteState: "open",
+    }),
+    false,
+    "Vote ouvert : RESULTS sans révéler (résultats en direct)",
+  );
+  assert.equal(
+    shouldRevealQuizWhenShowingResults({
+      pollType: "QUIZ",
+      quizRevealed: true,
+      voteState: "closed",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldRevealQuizWhenShowingResults({
+      pollType: "SINGLE_CHOICE",
+      quizRevealed: false,
+      voteState: "closed",
+    }),
+    false,
   );
 });
 

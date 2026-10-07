@@ -3560,14 +3560,19 @@ app.post("/polls/:pollId/close", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/polls/:pollId/show-results", requireAuth, async (req, res) => {
+/**
+ * Régie « Afficher les résultats » : display RESULTS (+ révélation Quiz si vote fermé).
+ * @param {import("express").Request} req
+ * @param {import("express").Response} res
+ */
+async function handlePollShowResults(req, res) {
   const { pollId } = req.params;
   try {
     const pOwn = await assertPollOwnedBy(pollId, req.userId);
     if (!pOwn.ok) {
       return res.status(pOwn.status).json({ error: "Sondage introuvable." });
     }
-    const poll = await prisma.poll.findUnique({
+    let poll = await prisma.poll.findUnique({
       where: { id: pollId },
       include: { event: true },
     });
@@ -3576,6 +3581,18 @@ app.post("/polls/:pollId/show-results", requireAuth, async (req, res) => {
     }
 
     await annulationAutoRevealProgrammee(poll.eventId);
+
+    const voteClosed =
+      String(poll.event.voteState || "").toUpperCase() === "CLOSED";
+    const isQuiz = String(poll.type || "").toUpperCase() === "QUIZ";
+    const revealQuizNow = isQuiz && voteClosed && !poll.quizRevealed;
+    if (revealQuizNow) {
+      poll = await prisma.poll.update({
+        where: { id: poll.id },
+        data: { quizRevealed: true },
+        include: { event: true },
+      });
+    }
 
     const event = await prisma.event.update({
       where: { id: poll.eventId },
@@ -3586,6 +3603,9 @@ app.post("/polls/:pollId/show-results", requireAuth, async (req, res) => {
       },
     });
 
+    if (revealQuizNow) {
+      await emitPollUpdated(io, poll.id);
+    }
     await emitEventLiveUpdated(io, poll.eventId);
 
     const full = await loadPollFull(poll.id);
@@ -3597,7 +3617,9 @@ app.post("/polls/:pollId/show-results", requireAuth, async (req, res) => {
     console.error(e);
     return res.status(500).json({ error: "Erreur serveur." });
   }
-});
+}
+
+app.post("/polls/:pollId/show-results", requireAuth, handlePollShowResults);
 
 /** Affichage écran : revenir à la question (ne rouvre pas le vote) */
 app.post("/polls/:pollId/display-question", requireAuth, async (req, res) => {
@@ -3640,47 +3662,8 @@ app.post("/polls/:pollId/display-question", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/polls/:pollId/reveal", requireAuth, async (req, res) => {
-  const { pollId } = req.params;
-  try {
-    const pOwn = await assertPollOwnedBy(pollId, req.userId);
-    if (!pOwn.ok) {
-      return res.status(pOwn.status).json({ error: "Sondage introuvable." });
-    }
-    const poll = await prisma.poll.findUnique({
-      where: { id: pollId },
-      include: { event: true },
-    });
-    if (!poll) {
-      return res.status(404).json({ error: "Sondage introuvable." });
-    }
-    if (String(poll.type || "").toUpperCase() !== "QUIZ") {
-      return res.status(400).json({ error: "Cette action est réservée aux QUIZ." });
-    }
-    if (String(poll.event.voteState || "").toUpperCase() !== "CLOSED") {
-      return res
-        .status(400)
-        .json({ error: "Fermez d'abord le vote avant de révéler la réponse." });
-    }
-
-    await prisma.poll.update({
-      where: { id: poll.id },
-      data: { quizRevealed: true },
-    });
-
-    const full = await loadPollFull(poll.id);
-    if (!full) {
-      return res.status(404).json({ error: "Sondage introuvable." });
-    }
-    await emitPollUpdated(io, poll.id);
-    await emitEventLiveUpdated(io, poll.eventId);
-
-    return res.json({ ok: true, poll: pollToJson(full) });
-  } catch (e) {
-    console.error("polls/:pollId/reveal", e);
-    return res.status(500).json({ error: "Erreur serveur." });
-  }
-});
+/** @deprecated Régie : chemins unifiés via show-results (Afficher les résultats). */
+app.post("/polls/:pollId/reveal", requireAuth, handlePollShowResults);
 
 app.get("/polls", requireAuth, async (req, res) => {
   try {

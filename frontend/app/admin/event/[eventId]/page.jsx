@@ -351,7 +351,6 @@ function PollCard({
   onOpen,
   onCloseRegie,
   onResults,
-  onReveal,
   onContestShortcut,
   onLeadShortcut,
   onEdit,
@@ -371,11 +370,9 @@ function PollCard({
     voteOuvertSurCeSondage;
   const disableStop = busy || poll.status !== "ACTIVE";
   const disableResultats = busy;
-  const disableRevealQuiz =
-    busy ||
-    !isQuizPoll(poll) ||
-    String(voteState || "").toLowerCase().trim() !== "closed" ||
-    Boolean(poll?.quizRevealed);
+  const resultsButtonTitle = isQuizPoll(poll)
+    ? "Affiche les résultats finaux à la salle et à l’écran. Si le vote est fermé, révèle aussi la bonne réponse et le verdict participant."
+    : "Affiche les résultats finaux à la salle et à l’écran (le vote peut rester ouvert).";
 
   const boutons = (
     <>
@@ -410,18 +407,9 @@ function PollCard({
         disabled={disableResultats}
         onClick={() => onResults(poll.id)}
         style={btnAfficherResultats(disableResultats)}
-        title="Affiche les barres à la salle. Même commande que « Afficher les résultats en direct » (le vote peut rester ouvert)."
+        title={resultsButtonTitle}
       >
-        Projeter les résultats finaux
-      </button>
-      <button
-        type="button"
-        disabled={disableRevealQuiz}
-        onClick={() => onReveal?.(poll.id)}
-        style={btnAfficherResultats(disableRevealQuiz)}
-        title="Révèle la bonne réponse du quiz (uniquement vote fermé)."
-      >
-        Révéler la réponse
+        Afficher les résultats
       </button>
     </>
   );
@@ -688,7 +676,7 @@ function PollCard({
             type="button"
             disabled={disableResultats}
             onClick={() => onResults(poll.id)}
-            title="Affiche les barres à la salle. Même commande que « Afficher les résultats en direct »."
+            title={resultsButtonTitle}
             style={{
               ...btnAfficherResultats(disableResultats),
               width: "100%",
@@ -696,21 +684,7 @@ function PollCard({
               fontSize: "0.72rem",
             }}
           >
-            Projeter les résultats finaux
-          </button>
-          <button
-            type="button"
-            disabled={disableRevealQuiz}
-            onClick={() => onReveal?.(poll.id)}
-            title="Révèle la bonne réponse du quiz (uniquement vote fermé)."
-            style={{
-              ...btnAfficherResultats(disableRevealQuiz),
-              width: "100%",
-              padding: "0.38rem 0.5rem",
-              fontSize: "0.72rem",
-            }}
-          >
-            Révéler la réponse
+            Afficher les résultats
           </button>
           {quickAction ? (
             <button
@@ -5979,7 +5953,6 @@ export default function RegieEventPage() {
             onOpen={(id) => postAction(`/polls/${id}/open`)}
             onCloseRegie={(id) => postAction(`/polls/${id}/close`)}
             onResults={(id) => postAction(`/polls/${id}/show-results`)}
-            onReveal={(id) => postAction(`/polls/${id}/reveal`)}
             onContestShortcut={handleContestShortcut}
             onLeadShortcut={handleLeadShortcut}
             onEdit={openEditPollModal}
