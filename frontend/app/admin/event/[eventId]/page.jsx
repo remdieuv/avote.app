@@ -28,7 +28,13 @@ import {
   getRegieDisplayStateLabel,
   getRegieIdleProjectionHint,
 } from "@/lib/regieProjectionLabels";
-import { shouldScheduleAutoRevealForPoll } from "@/lib/leadContestLiveFlow";
+import {
+  CONTEST_WINNER_STATUS_REPLACED,
+  canOfferContestWinnerReplace,
+  filterActiveContestWinners,
+  normalizeContestWinnerStatus,
+  shouldScheduleAutoRevealForPoll,
+} from "@/lib/leadContestLiveFlow";
 import {
   normalizePollOptions,
   optionVoteCount,
@@ -4493,6 +4499,8 @@ export default function RegieEventPage() {
     /** @type {string | null} */ (null),
   );
   const [contestDrawModalOpen, setContestDrawModalOpen] = useState(false);
+  const [contestReplaceModalOpen, setContestReplaceModalOpen] = useState(false);
+  const [contestReplaceWinnerId, setContestReplaceWinnerId] = useState("");
   const [contestDrawResult, setContestDrawResult] = useState(
     /** @type {{
      *   pollId: string;
@@ -4505,7 +4513,7 @@ export default function RegieEventPage() {
     /** @type {Record<string, { totalDraws: number; totalWinners: number; contestWinnerCount: number }>} */ ({}),
   );
   const [contestWinners, setContestWinners] = useState(
-    /** @type {{ id: string; drawId: string; position: number; firstName: string; phone: string; email: string | null; createdAt: string }[]} */ ([]),
+    /** @type {{ id: string; drawId: string; position: number; firstName: string; lastName: string | null; phone: string; email: string | null; status: string; createdAt: string }[]} */ ([]),
   );
   const [contestWinnersLoading, setContestWinnersLoading] = useState(false);
   const [contestWinnersError, setContestWinnersError] = useState(
@@ -4685,8 +4693,10 @@ export default function RegieEventPage() {
         drawId: String(w?.drawId || ""),
         position: Number(w?.position || 1),
         firstName: String(w?.firstName || ""),
+        lastName: w?.lastName ? String(w.lastName) : null,
         phone: String(w?.phone || ""),
         email: w?.email ? String(w.email) : null,
+        status: normalizeContestWinnerStatus(w?.status),
         createdAt: String(w?.createdAt || ""),
       }));
     } catch {
@@ -5463,6 +5473,66 @@ export default function RegieEventPage() {
     }
   }
 
+  async function postContestReplaceWinner(pollId, winnerId) {
+    const pid = String(pollId || "").trim();
+    const wid = String(winnerId || "").trim();
+    if (!pid || !wid) return false;
+    setBusy(true);
+    setActionError(null);
+    try {
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/polls/${encodeURIComponent(pid)}/winners/${encodeURIComponent(wid)}/replace`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(mapApiError(body, res.status));
+      }
+      setContestReplaceModalOpen(false);
+      setContestReplaceWinnerId("");
+      const newWinner = body?.winner || null;
+      setContestDrawResult({
+        pollId: pid,
+        drawId: String(body?.drawId || ""),
+        winner: newWinner
+          ? {
+              firstName: String(newWinner.firstName || ""),
+              phone: String(newWinner.phone || ""),
+              email: newWinner.email ? String(newWinner.email) : null,
+            }
+          : null,
+        contestPrize: body?.contestPrize ? String(body.contestPrize) : null,
+      });
+      setToastNotif("Gagnant remplacé");
+      window.setTimeout(() => setToastNotif(null), 3200);
+      if (typeof body?.eligibleRemainingCount === "number") {
+        setContestEligibleCount(Math.max(0, body.eligibleRemainingCount));
+      }
+      const updatedSummary = await fetchPollDrawSummary(pid);
+      if (updatedSummary) {
+        setPollDrawSummary((prev) => ({
+          ...prev,
+          [pid]: updatedSummary,
+        }));
+      }
+      const updatedWinners = await fetchContestWinners(pid);
+      if (updatedWinners) {
+        setContestWinners(updatedWinners);
+        setContestWinnersError(null);
+      }
+      return true;
+    } catch (e) {
+      setActionError(e.message || "Remplacement impossible.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const liveState = eventData?.liveState ?? "—";
   const activePoll = eventData?.polls?.find(
     (p) => p.id === eventData.activePollId,
@@ -5508,6 +5578,10 @@ export default function RegieEventPage() {
     Number(activeContestSummary?.totalWinners || 0),
   );
   const contestQuotaReached = activeContestTotalWinners >= activeContestWinnerQuota;
+  const activeContestWinnersOnly = filterActiveContestWinners(contestWinners);
+  const canReplaceContestWinner = canOfferContestWinnerReplace({
+    winners: contestWinners,
+  });
   const pollsOrdered = Array.isArray(eventData?.polls) ? eventData.polls : [];
   const totalQuestions = pollsOrdered.length;
   const activeQuestionIndex = pollsOrdered.findIndex(
@@ -6910,6 +6984,172 @@ export default function RegieEventPage() {
         </div>
       ) : null}
 
+      {contestReplaceModalOpen &&
+      String(activePoll?.type || "").toUpperCase() === "CONTEST_ENTRY" ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="contest-replace-title"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 80,
+            background: "rgba(15, 23, 42, 0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+          }}
+          onClick={() => {
+            if (!busy) setContestReplaceModalOpen(false);
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "28rem",
+              borderRadius: "14px",
+              background: "#fff",
+              border: "1px solid #e5e7eb",
+              boxShadow: "0 24px 60px rgba(0, 0, 0, 0.25)",
+              padding: "1rem 1.1rem",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                color: "#6b7280",
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+              }}
+            >
+              Concours
+            </p>
+            <h3
+              id="contest-replace-title"
+              style={{
+                margin: "0.35rem 0 0 0",
+                fontSize: "1.05rem",
+                fontWeight: 800,
+                color: "#111827",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              Remplacer un gagnant ?
+            </h3>
+            <p style={{ margin: "0.55rem 0 0 0", fontSize: "0.88rem", color: "#4b5563" }}>
+              Un nouveau gagnant sera tiré au sort parmi les participants éligibles
+              n’ayant jamais gagné. L’ancien gagnant restera visible comme{" "}
+              <strong>Remplacé</strong> dans l’historique. Le nombre de gagnants
+              actifs ne dépassera pas le quota ({activeContestWinnerQuota}).
+            </p>
+            {activeContestWinnersOnly.length > 1 ? (
+              <label
+                style={{
+                  display: "grid",
+                  gap: "0.35rem",
+                  marginTop: "0.75rem",
+                  fontSize: "0.82rem",
+                  fontWeight: 700,
+                  color: "#374151",
+                }}
+              >
+                Gagnant à remplacer
+                <select
+                  value={contestReplaceWinnerId}
+                  disabled={busy}
+                  onChange={(e) => setContestReplaceWinnerId(e.target.value)}
+                  style={{
+                    padding: "0.45rem 0.55rem",
+                    borderRadius: "8px",
+                    border: "1px solid #d1d5db",
+                    fontWeight: 600,
+                    color: "#111827",
+                  }}
+                >
+                  {activeContestWinnersOnly.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {formatWinnerName(w)}
+                      {w.phone ? ` — ${maskPhone(w.phone)}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : activeContestWinnersOnly[0] ? (
+              <p style={{ margin: "0.65rem 0 0 0", fontSize: "0.88rem", color: "#111827", fontWeight: 700 }}>
+                {formatWinnerName(activeContestWinnersOnly[0])}
+                {activeContestWinnersOnly[0].phone
+                  ? ` — ${maskPhone(activeContestWinnersOnly[0].phone)}`
+                  : ""}
+              </p>
+            ) : (
+              <p style={{ margin: "0.65rem 0 0 0", fontSize: "0.86rem", color: "#b91c1c" }}>
+                Aucun gagnant actif à remplacer.
+              </p>
+            )}
+            <div
+              style={{
+                marginTop: "0.9rem",
+                display: "flex",
+                gap: "0.55rem",
+                justifyContent: "flex-end",
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setContestReplaceModalOpen(false)}
+                style={{
+                  padding: "0.45rem 0.75rem",
+                  borderRadius: "9px",
+                  border: "1px solid #d1d5db",
+                  background: "#fff",
+                  color: "#475569",
+                  fontWeight: 700,
+                  cursor: busy ? "not-allowed" : "pointer",
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={
+                  busy ||
+                  !activePoll?.id ||
+                  !contestReplaceWinnerId ||
+                  activeContestWinnersOnly.length < 1
+                }
+                onClick={() =>
+                  void postContestReplaceWinner(
+                    activePoll?.id || "",
+                    contestReplaceWinnerId,
+                  )
+                }
+                style={{
+                  padding: "0.45rem 0.8rem",
+                  borderRadius: "9px",
+                  border: "1px solid #7c3aed",
+                  background:
+                    busy || !contestReplaceWinnerId
+                      ? "#f1f5f9"
+                      : "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)",
+                  color: busy || !contestReplaceWinnerId ? "#94a3b8" : "#fff",
+                  fontWeight: 800,
+                  cursor:
+                    busy || !contestReplaceWinnerId ? "not-allowed" : "pointer",
+                }}
+              >
+                {busy ? "Remplacement..." : "Confirmer le remplacement"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {!loading && eventData && (
         <div
           style={
@@ -8047,6 +8287,31 @@ export default function RegieEventPage() {
               >
                 Tirer un gagnant
               </button>
+              <button
+                type="button"
+                disabled={busy || !canReplaceContestWinner}
+                onClick={() => {
+                  const firstActive = activeContestWinnersOnly[0];
+                  setContestReplaceWinnerId(
+                    firstActive ? String(firstActive.id || "") : "",
+                  );
+                  setContestReplaceModalOpen(true);
+                }}
+                style={{
+                  marginTop: "0.45rem",
+                  marginLeft: "0.45rem",
+                  padding: "0.45rem 0.8rem",
+                  borderRadius: "9px",
+                  border: "1px solid #c4b5fd",
+                  background: busy || !canReplaceContestWinner ? "#f8fafc" : "#fff",
+                  color: busy || !canReplaceContestWinner ? "#94a3b8" : "#5b21b6",
+                  fontSize: "0.8rem",
+                  fontWeight: 700,
+                  cursor: busy || !canReplaceContestWinner ? "not-allowed" : "pointer",
+                }}
+              >
+                Remplacer un gagnant
+              </button>
               {contestQuotaReached ? (
                 <p
                   style={{
@@ -8141,19 +8406,35 @@ export default function RegieEventPage() {
                       gap: "0.25rem",
                     }}
                   >
-                    {contestWinners.map((winner, idx) => (
+                    {contestWinners.map((winner, idx) => {
+                      const status = normalizeContestWinnerStatus(winner.status);
+                      const isReplaced = status === CONTEST_WINNER_STATUS_REPLACED;
+                      return (
                       <li
                         key={`${winner.id || winner.drawId}-${idx}`}
                         style={{
                           fontSize: "0.8rem",
-                          color: "#374151",
+                          color: isReplaced ? "#6b7280" : "#374151",
                           lineHeight: 1.35,
                         }}
                       >
                         {formatWinnerName(winner)} — {maskPhone(winner.phone)}
                         {maskEmail(winner.email) ? ` · ${maskEmail(winner.email)}` : ""}
+                        <span
+                          style={{
+                            marginLeft: "0.4rem",
+                            fontSize: "0.68rem",
+                            fontWeight: 800,
+                            letterSpacing: "0.04em",
+                            textTransform: "uppercase",
+                            color: isReplaced ? "#92400e" : "#166534",
+                          }}
+                        >
+                          {isReplaced ? "Remplacé" : "Actif"}
+                        </span>
                       </li>
-                    ))}
+                      );
+                    })}
                   </ol>
                 )}
                 {contestWinnersError ? (

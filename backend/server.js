@@ -29,6 +29,15 @@ const {
   assertEventOwnedByOrPlatformAdmin,
   assertPollOwnedBy,
 } = require("./lib/eventAccess");
+const {
+  STATUS_ACTIVE,
+  STATUS_REPLACED,
+  createPollExclusiveQueue,
+  resolveReplaceContestWinnerPlan,
+} = require("./lib/contestWinnerReplace");
+
+/** Anti double-clic tirage / remplacement (sérialise par pollId). */
+const runContestDrawExclusive = createPollExclusiveQueue();
 
 /** Origine publique de l’API (URLs absolues assets /join). */
 const PUBLIC_API_ORIGIN = (
@@ -460,7 +469,11 @@ function pollToJson(poll) {
       }
       return base;
     }),
-    /** Bump après tirage concours — refresh contest-status côté clients. */
+    /**
+     * Bump après tirage / remplacement concours — refresh contest-status.
+     * Compte toutes les lignes (ACTIVE + REPLACED) pour qu’un remplacement
+     * incrémente aussi le signal (le quota métier utilise les ACTIVE seuls).
+     */
     contestWinnersCount: Number(poll._count?.contestWinners || 0),
     /**
      * Nombre de participants ayant voté (distinct voterSessionId).
@@ -3053,8 +3066,8 @@ app.get("/p/:slug/contest-status", async (req, res) => {
     if (!poll) return res.status(404).json({ error: "Question concours introuvable." });
 
     const winners = await prisma.contestDrawWinner.findMany({
-      where: { pollId: poll.id },
-      orderBy: [{ draw: { createdAt: "asc" } }, { position: "asc" }],
+      where: { pollId: poll.id, status: STATUS_ACTIVE },
+      orderBy: [{ position: "asc" }, { createdAt: "asc" }],
       select: {
         id: true,
         voterSessionId: true,
@@ -3074,6 +3087,7 @@ app.get("/p/:slug/contest-status", async (req, res) => {
       winners.some((w) => String(w.voterSessionId) === String(voterSessionId));
 
     // LOT-2 — public : Prénom + initiale du nom ; aucune coordonnée.
+    // Remplacés exclus : l’ancien gagnant ne voit plus « Félicitations ».
     return res.json({
       pollId: poll.id,
       contestPrize: poll.contestPrize ?? null,
@@ -3082,11 +3096,11 @@ app.get("/p/:slug/contest-status", async (req, res) => {
       isCurrentVoterWinner,
       winners: winners.map((w, idx) => ({
         id: w.id,
-        position: idx + 1,
+        position: Number(w.position) > 0 ? Number(w.position) : idx + 1,
         displayName: winnerDisplayNameForPublic(
           w.firstName,
           w.lastName,
-          idx + 1,
+          Number(w.position) > 0 ? Number(w.position) : idx + 1,
         ),
         createdAt: w.createdAt.toISOString(),
       })),
@@ -4552,163 +4566,164 @@ app.post("/polls/:pollId/draw", requireAuth, async (req, res) => {
     ? Math.max(1, Math.floor(winnerCountRaw))
     : 1;
   try {
-    const pOwn = await assertPollOwnedBy(pollId, req.userId);
-    if (!pOwn.ok) {
-      return res.status(pOwn.status).json({ error: "Sondage introuvable." });
-    }
-    const poll = await prisma.poll.findUnique({
-      where: { id: pollId },
-      select: {
-        id: true,
-        eventId: true,
-        type: true,
-        contestPrize: true,
-        contestWinnerCount: true,
-        event: {
-          select: {
-            voteState: true,
-            screenDisplayState: true,
-            activePollId: true,
+    return await runContestDrawExclusive(pollId, async () => {
+      const pOwn = await assertPollOwnedBy(pollId, req.userId);
+      if (!pOwn.ok) {
+        return res.status(pOwn.status).json({ error: "Sondage introuvable." });
+      }
+      const poll = await prisma.poll.findUnique({
+        where: { id: pollId },
+        select: {
+          id: true,
+          eventId: true,
+          type: true,
+          contestPrize: true,
+          contestWinnerCount: true,
+          event: {
+            select: {
+              voteState: true,
+              screenDisplayState: true,
+              activePollId: true,
+            },
           },
         },
-      },
-    });
-    if (!poll || poll.type !== "CONTEST_ENTRY") {
-      return res
-        .status(400)
-        .json({ error: "Le tirage est réservé aux questions concours." });
-    }
-
-    // LOT-2 — séquence Ouvrir → Fermer → Tirer (pas de tirage en VOTING).
-    if (String(poll.event?.voteState || "").toUpperCase() !== "CLOSED") {
-      return res.status(409).json({
-        error: "Fermez d’abord les participations avant de tirer au sort.",
-        voteOpen: true,
       });
-    }
+      if (!poll || poll.type !== "CONTEST_ENTRY") {
+        return res
+          .status(400)
+          .json({ error: "Le tirage est réservé aux questions concours." });
+      }
 
-    const contestWinnerCount = normalizeContestWinnerCount(
-      poll.contestWinnerCount,
-    );
-    const totalWinnersAlready = await prisma.contestDrawWinner.count({
-      where: { pollId },
-    });
-    if (totalWinnersAlready >= contestWinnerCount) {
-      return res.status(409).json({
-        error: "Tous les gagnants ont déjà été tirés.",
-        pollId,
-        quotaReached: true,
-        totalWinners: totalWinnersAlready,
-        contestWinnerCount,
-      });
-    }
-    const remainingSlots = contestWinnerCount - totalWinnersAlready;
-    if (winnerCount > remainingSlots) {
-      return res.status(400).json({
-        error: `Nombre de gagnants demandé (${winnerCount}) supérieur au quota restant (${remainingSlots}).`,
-        pollId,
-        totalWinners: totalWinnersAlready,
-        contestWinnerCount,
-      });
-    }
+      // LOT-2 — séquence Ouvrir → Fermer → Tirer (pas de tirage en VOTING).
+      if (String(poll.event?.voteState || "").toUpperCase() !== "CLOSED") {
+        return res.status(409).json({
+          error: "Fermez d’abord les participations avant de tirer au sort.",
+          voteOpen: true,
+        });
+      }
 
-    const participants = await listContestEligibleParticipants(pollId, {
-      excludeAlreadyDrawn: true,
-    });
-    if (participants.length < 1) {
-      return res.status(409).json({
-        error: "Aucun participant éligible disponible pour le tirage.",
-        pollId,
-        eligibleRemainingCount: 0,
-        totalWinners: totalWinnersAlready,
-        contestWinnerCount,
+      const contestWinnerCount = normalizeContestWinnerCount(
+        poll.contestWinnerCount,
+      );
+      // Quota = gagnants ACTIVE uniquement (les REPLACED restent en historique).
+      const totalWinnersAlready = await prisma.contestDrawWinner.count({
+        where: { pollId, status: STATUS_ACTIVE },
       });
-    }
-    if (winnerCount > participants.length) {
-      return res.status(400).json({
-        error: `Nombre de gagnants demandé (${winnerCount}) supérieur aux participants éligibles restants (${participants.length}).`,
-      });
-    }
-
-    const pool = [...participants];
-    const winners = [];
-    for (let i = 0; i < winnerCount; i++) {
-      const idx = crypto.randomInt(0, pool.length);
-      const picked = pool[idx];
-      winners.push(picked);
-      pool.splice(idx, 1);
-    }
-
-    const draw = await prisma.$transaction(async (tx) => {
-      const createdDraw = await tx.contestDraw.create({
-        data: {
+      if (totalWinnersAlready >= contestWinnerCount) {
+        return res.status(409).json({
+          error: "Tous les gagnants ont déjà été tirés.",
           pollId,
-          eventId: poll.eventId,
-          createdByUserId: req.userId,
-          winnerCount,
-          eligibleCountAtDraw: participants.length,
+          quotaReached: true,
+          totalWinners: totalWinnersAlready,
+          contestWinnerCount,
+        });
+      }
+      const remainingSlots = contestWinnerCount - totalWinnersAlready;
+      if (winnerCount > remainingSlots) {
+        return res.status(400).json({
+          error: `Nombre de gagnants demandé (${winnerCount}) supérieur au quota restant (${remainingSlots}).`,
+          pollId,
+          totalWinners: totalWinnersAlready,
+          contestWinnerCount,
+        });
+      }
+
+      const participants = await listContestEligibleParticipants(pollId, {
+        excludeAlreadyDrawn: true,
+      });
+      if (participants.length < 1) {
+        return res.status(409).json({
+          error: "Aucun participant éligible disponible pour le tirage.",
+          pollId,
+          eligibleRemainingCount: 0,
+          totalWinners: totalWinnersAlready,
+          contestWinnerCount,
+        });
+      }
+      if (winnerCount > participants.length) {
+        return res.status(400).json({
+          error: `Nombre de gagnants demandé (${winnerCount}) supérieur aux participants éligibles restants (${participants.length}).`,
+        });
+      }
+
+      const pool = [...participants];
+      const winners = [];
+      for (let i = 0; i < winnerCount; i++) {
+        const idx = crypto.randomInt(0, pool.length);
+        const picked = pool[idx];
+        winners.push(picked);
+        pool.splice(idx, 1);
+      }
+
+      const draw = await prisma.$transaction(async (tx) => {
+        const createdDraw = await tx.contestDraw.create({
+          data: {
+            pollId,
+            eventId: poll.eventId,
+            createdByUserId: req.userId,
+            winnerCount,
+            eligibleCountAtDraw: participants.length,
+          },
+        });
+        await tx.contestDrawWinner.createMany({
+          data: winners.map((w, index) => ({
+            drawId: createdDraw.id,
+            pollId,
+            voterSessionId: w.voterSessionId,
+            position: index + 1 + totalWinnersAlready,
+            firstName: w.firstName,
+            lastName: w.lastName ?? null,
+            phone: w.phone,
+            email: w.email ?? null,
+            status: STATUS_ACTIVE,
+          })),
+        });
+        return createdDraw;
+      });
+
+      // LOT-2 — le tirage déclenche l’affichage public (TIRAGE ≡ RESULTS métier).
+      await annulationAutoRevealProgrammee(poll.eventId);
+      await prisma.event.update({
+        where: { id: poll.eventId },
+        data: {
+          activePollId: poll.id,
+          displayState: "RESULTS",
+          screenDisplayState: screenDisplayStateForLiveTransition(
+            poll.event?.screenDisplayState,
+            "show-results",
+          ),
+          liveState: computeLiveState("CLOSED", "RESULTS"),
+          autoRevealShowResultsAt: null,
         },
       });
-      await tx.contestDrawWinner.createMany({
-        data: winners.map((w, index) => ({
-          drawId: createdDraw.id,
-          pollId,
+
+      await emitPollUpdated(io, pollId);
+      await emitEventLiveUpdated(io, poll.eventId);
+
+      return res.json({
+        ok: true,
+        pollId,
+        drawId: draw.id,
+        winnerCount,
+        eligibleCountAtDraw: participants.length,
+        eligibleRemainingCount: participants.length - winners.length,
+        contestPrize: poll.contestPrize ?? null,
+        totalWinners: totalWinnersAlready + winners.length,
+        contestWinnerCount,
+        winners: winners.map((w, index) => ({
+          position: index + 1 + totalWinnersAlready,
           voterSessionId: w.voterSessionId,
-          position: index + 1,
           firstName: w.firstName,
           lastName: w.lastName ?? null,
           phone: w.phone,
           email: w.email ?? null,
+          displayName: winnerDisplayNameForPublic(
+            w.firstName,
+            w.lastName,
+            index + 1 + totalWinnersAlready,
+          ),
         })),
       });
-      return createdDraw;
-    });
-
-    // LOT-2 — le tirage déclenche l’affichage public (TIRAGE ≡ RESULTS métier).
-    // Pas de passage obligatoire par « Afficher les résultats ».
-    await annulationAutoRevealProgrammee(poll.eventId);
-    await prisma.event.update({
-      where: { id: poll.eventId },
-      data: {
-        activePollId: poll.id,
-        displayState: "RESULTS",
-        screenDisplayState: screenDisplayStateForLiveTransition(
-          poll.event?.screenDisplayState,
-          "show-results",
-        ),
-        liveState: computeLiveState("CLOSED", "RESULTS"),
-        autoRevealShowResultsAt: null,
-      },
-    });
-
-    // G9 — surfaces publiques (Salle / Screen / Overlay) via rooms existantes.
-    // poll_updated bump contestWinnersCount → refetch contest-status côté clients.
-    await emitPollUpdated(io, pollId);
-    await emitEventLiveUpdated(io, poll.eventId);
-
-    return res.json({
-      ok: true,
-      pollId,
-      drawId: draw.id,
-      winnerCount,
-      eligibleCountAtDraw: participants.length,
-      eligibleRemainingCount: participants.length - winners.length,
-      contestPrize: poll.contestPrize ?? null,
-      totalWinners: totalWinnersAlready + winners.length,
-      contestWinnerCount,
-      winners: winners.map((w, index) => ({
-        position: index + 1,
-        voterSessionId: w.voterSessionId,
-        firstName: w.firstName,
-        lastName: w.lastName ?? null,
-        phone: w.phone,
-        email: w.email ?? null,
-        displayName: winnerDisplayNameForPublic(
-          w.firstName,
-          w.lastName,
-          index + 1,
-        ),
-      })),
     });
   } catch (e) {
     console.error("polls/:pollId/draw", e);
@@ -4727,14 +4742,20 @@ app.get("/polls/:pollId/draws/summary", requireAuth, async (req, res) => {
       where: { id: pollId },
       select: { contestWinnerCount: true },
     });
-    const [totalDraws, totalWinners] = await prisma.$transaction([
+    const [totalDraws, totalWinners, totalReplaced] = await prisma.$transaction([
       prisma.contestDraw.count({ where: { pollId } }),
-      prisma.contestDrawWinner.count({ where: { pollId } }),
+      prisma.contestDrawWinner.count({
+        where: { pollId, status: STATUS_ACTIVE },
+      }),
+      prisma.contestDrawWinner.count({
+        where: { pollId, status: STATUS_REPLACED },
+      }),
     ]);
     return res.json({
       pollId,
       totalDraws,
       totalWinners,
+      totalReplaced,
       contestWinnerCount: normalizeContestWinnerCount(poll?.contestWinnerCount),
     });
   } catch (e) {
@@ -4752,7 +4773,7 @@ app.get("/polls/:pollId/draws/winners", requireAuth, async (req, res) => {
     }
     const winners = await prisma.contestDrawWinner.findMany({
       where: { pollId },
-      orderBy: [{ draw: { createdAt: "asc" } }, { position: "asc" }],
+      orderBy: [{ position: "asc" }, { createdAt: "asc" }],
       select: {
         id: true,
         drawId: true,
@@ -4761,12 +4782,17 @@ app.get("/polls/:pollId/draws/winners", requireAuth, async (req, res) => {
         lastName: true,
         phone: true,
         email: true,
+        status: true,
+        replacedAt: true,
+        replacedByWinnerId: true,
         createdAt: true,
       },
     });
+    const active = winners.filter((w) => w.status === STATUS_ACTIVE);
     return res.json({
       pollId,
-      totalWinners: winners.length,
+      totalWinners: active.length,
+      totalReplaced: winners.length - active.length,
       winners: winners.map((w) => ({
         id: w.id,
         drawId: w.drawId,
@@ -4775,6 +4801,9 @@ app.get("/polls/:pollId/draws/winners", requireAuth, async (req, res) => {
         lastName: w.lastName ?? null,
         phone: w.phone,
         email: w.email ?? null,
+        status: w.status,
+        replacedAt: w.replacedAt ? w.replacedAt.toISOString() : null,
+        replacedByWinnerId: w.replacedByWinnerId ?? null,
         createdAt: w.createdAt.toISOString(),
       })),
     });
@@ -4783,6 +4812,226 @@ app.get("/polls/:pollId/draws/winners", requireAuth, async (req, res) => {
     return res.status(500).json({ error: "Erreur serveur." });
   }
 });
+
+/**
+ * LOT-2 — Remplacer un gagnant ACTIVE par un éligible n’ayant jamais gagné.
+ * Historique : l’ancien passe en REPLACED (non détruit). Quota ACTIVE inchangé.
+ */
+app.post(
+  "/polls/:pollId/winners/:winnerId/replace",
+  requireAuth,
+  async (req, res) => {
+    const { pollId, winnerId } = req.params;
+    try {
+      return await runContestDrawExclusive(pollId, async () => {
+        const pOwn = await assertPollOwnedBy(pollId, req.userId);
+        if (!pOwn.ok) {
+          return res.status(pOwn.status).json({ error: "Sondage introuvable." });
+        }
+        const poll = await prisma.poll.findUnique({
+          where: { id: pollId },
+          select: {
+            id: true,
+            eventId: true,
+            type: true,
+            contestPrize: true,
+            contestWinnerCount: true,
+            event: {
+              select: {
+                voteState: true,
+                screenDisplayState: true,
+              },
+            },
+          },
+        });
+        if (!poll || poll.type !== "CONTEST_ENTRY") {
+          return res
+            .status(400)
+            .json({ error: "Le remplacement est réservé aux questions concours." });
+        }
+
+        const target = await prisma.contestDrawWinner.findFirst({
+          where: { id: winnerId, pollId },
+          select: {
+            id: true,
+            status: true,
+            position: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            email: true,
+            voterSessionId: true,
+          },
+        });
+
+        const eligiblePool = await listContestEligibleParticipants(pollId, {
+          excludeAlreadyDrawn: true,
+        });
+        const plan = resolveReplaceContestWinnerPlan({
+          target,
+          eligiblePool,
+          randomInt: (min, maxExclusive) => crypto.randomInt(min, maxExclusive),
+        });
+        if (!plan.ok) {
+          const status =
+            plan.code === "MISSING_TARGET"
+              ? 404
+              : plan.code === "NOT_ACTIVE"
+                ? 409
+                : 409;
+          return res.status(status).json({
+            error: plan.error,
+            code: plan.code,
+            pollId,
+            winnerId,
+            eligibleRemainingCount: eligiblePool.length,
+          });
+        }
+
+        const picked = plan.picked;
+        const result = await prisma.$transaction(async (tx) => {
+          // Re-check sous transaction (course simultanée).
+          const locked = await tx.contestDrawWinner.findFirst({
+            where: { id: winnerId, pollId, status: STATUS_ACTIVE },
+          });
+          if (!locked) {
+            const err = new Error("NOT_ACTIVE");
+            err.code = "NOT_ACTIVE";
+            throw err;
+          }
+          const stillEligible = await listContestEligibleParticipants(pollId, {
+            excludeAlreadyDrawn: true,
+          });
+          const plan2 = resolveReplaceContestWinnerPlan({
+            target: locked,
+            eligiblePool: stillEligible,
+            randomInt: (min, maxExclusive) =>
+              crypto.randomInt(min, maxExclusive),
+          });
+          if (!plan2.ok) {
+            const err = new Error(plan2.code);
+            err.code = plan2.code;
+            err.publicMessage = plan2.error;
+            throw err;
+          }
+          const chosen = plan2.picked;
+          const createdDraw = await tx.contestDraw.create({
+            data: {
+              pollId,
+              eventId: poll.eventId,
+              createdByUserId: req.userId,
+              winnerCount: 1,
+              eligibleCountAtDraw: stillEligible.length,
+            },
+          });
+          const newWinner = await tx.contestDrawWinner.create({
+            data: {
+              drawId: createdDraw.id,
+              pollId,
+              voterSessionId: chosen.voterSessionId,
+              position: plan2.position,
+              firstName: chosen.firstName,
+              lastName: chosen.lastName ?? null,
+              phone: chosen.phone,
+              email: chosen.email ?? null,
+              status: STATUS_ACTIVE,
+            },
+          });
+          const replaced = await tx.contestDrawWinner.update({
+            where: { id: locked.id },
+            data: {
+              status: STATUS_REPLACED,
+              replacedAt: new Date(),
+              replacedByWinnerId: newWinner.id,
+            },
+          });
+          return {
+            draw: createdDraw,
+            newWinner,
+            replaced,
+            eligibleRemainingCount: Math.max(0, stillEligible.length - 1),
+          };
+        });
+
+        // Garder l’affichage public RESULTS synchronisé (Screen /join).
+        await annulationAutoRevealProgrammee(poll.eventId);
+        await prisma.event.update({
+          where: { id: poll.eventId },
+          data: {
+            activePollId: poll.id,
+            displayState: "RESULTS",
+            screenDisplayState: screenDisplayStateForLiveTransition(
+              poll.event?.screenDisplayState,
+              "show-results",
+            ),
+            liveState: computeLiveState("CLOSED", "RESULTS"),
+            autoRevealShowResultsAt: null,
+          },
+        });
+
+        await emitPollUpdated(io, pollId);
+        await emitEventLiveUpdated(io, poll.eventId);
+
+        const activeCount = await prisma.contestDrawWinner.count({
+          where: { pollId, status: STATUS_ACTIVE },
+        });
+
+        return res.json({
+          ok: true,
+          pollId,
+          drawId: result.draw.id,
+          contestPrize: poll.contestPrize ?? null,
+          totalWinners: activeCount,
+          contestWinnerCount: normalizeContestWinnerCount(
+            poll.contestWinnerCount,
+          ),
+          eligibleRemainingCount: result.eligibleRemainingCount,
+          replaced: {
+            id: result.replaced.id,
+            status: STATUS_REPLACED,
+            position: result.replaced.position,
+            firstName: result.replaced.firstName,
+            lastName: result.replaced.lastName ?? null,
+            phone: result.replaced.phone,
+            email: result.replaced.email ?? null,
+          },
+          winner: {
+            id: result.newWinner.id,
+            status: STATUS_ACTIVE,
+            position: result.newWinner.position,
+            voterSessionId: result.newWinner.voterSessionId,
+            firstName: result.newWinner.firstName,
+            lastName: result.newWinner.lastName ?? null,
+            phone: result.newWinner.phone,
+            email: result.newWinner.email ?? null,
+            displayName: winnerDisplayNameForPublic(
+              result.newWinner.firstName,
+              result.newWinner.lastName,
+              result.newWinner.position,
+            ),
+          },
+        });
+      });
+    } catch (e) {
+      if (e && (e.code === "NOT_ACTIVE" || e.code === "NO_REPLACEMENT" || e.code === "MISSING_TARGET")) {
+        return res.status(409).json({
+          error:
+            e.publicMessage ||
+            (e.code === "NOT_ACTIVE"
+              ? "Ce gagnant a déjà été remplacé."
+              : e.code === "NO_REPLACEMENT"
+                ? "Aucun remplaçant disponible : tous les participants éligibles ont déjà gagné lors de ce concours."
+                : "Gagnant à remplacer introuvable."),
+          code: e.code,
+          pollId,
+          winnerId,
+        });
+      }
+      console.error("polls/:pollId/winners/:winnerId/replace", e);
+      return res.status(500).json({ error: "Erreur serveur." });
+    }
+  },
+);
 
 /**
  * Leads agrégés : tous les événements du compte connecté (filtres query).

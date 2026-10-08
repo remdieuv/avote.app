@@ -270,3 +270,91 @@ export function getRegieResultsProjectionLabel(context = {}) {
   if (isLeadCrmPoll(context)) return "Collecte";
   return null;
 }
+
+/** Statuts gagnant concours (alignés Prisma ContestWinnerStatus). */
+export const CONTEST_WINNER_STATUS_ACTIVE = "ACTIVE";
+export const CONTEST_WINNER_STATUS_REPLACED = "REPLACED";
+
+/**
+ * @param {unknown} raw
+ * @returns {"ACTIVE" | "REPLACED"}
+ */
+export function normalizeContestWinnerStatus(raw) {
+  const s = String(raw ?? CONTEST_WINNER_STATUS_ACTIVE).toUpperCase();
+  return s === CONTEST_WINNER_STATUS_REPLACED
+    ? CONTEST_WINNER_STATUS_REPLACED
+    : CONTEST_WINNER_STATUS_ACTIVE;
+}
+
+/**
+ * Gagnants actifs uniquement (affichage public / félicitations).
+ * @param {Array<{ status?: string | null }> | null | undefined} winners
+ */
+export function filterActiveContestWinners(winners) {
+  const list = Array.isArray(winners) ? winners : [];
+  return list.filter(
+    (w) =>
+      normalizeContestWinnerStatus(w?.status) === CONTEST_WINNER_STATUS_ACTIVE,
+  );
+}
+
+/**
+ * Régie : proposer « Remplacer un gagnant » s’il existe au moins un actif.
+ * @param {{ winners?: Array<{ status?: string | null }> | null }} [input]
+ */
+export function canOfferContestWinnerReplace(input = {}) {
+  return filterActiveContestWinners(input.winners).length > 0;
+}
+
+/**
+ * Après remplacement : actifs ne dépassent jamais le quota.
+ * @param {{ activeCount?: number; quota?: number }} input
+ */
+export function activeContestWinnersWithinQuota(input = {}) {
+  const active = Math.max(0, Number(input.activeCount) || 0);
+  const quota = Math.max(1, Number(input.quota) || 1);
+  return active <= quota;
+}
+
+/**
+ * Payload public post-filtre : jamais de coordonnées ; statut REPLACED exclu.
+ * @param {{
+ *   winners?: Array<{
+ *     id?: string;
+ *     status?: string | null;
+ *     firstName?: string | null;
+ *     lastName?: string | null;
+ *     position?: number | null;
+ *     phone?: string | null;
+ *     email?: string | null;
+ *     createdAt?: string | null;
+ *   }>;
+ *   voterSessionId?: string | null;
+ * }} input
+ */
+export function buildPublicContestStatusFromWinners(input = {}) {
+  const active = filterActiveContestWinners(input.winners).map((w, idx) => {
+    const position = Math.max(1, Number(w.position) || idx + 1);
+    return {
+      id: w.id ?? null,
+      position,
+      displayName: formatPublicContestWinnerDisplayName({
+        firstName: w.firstName,
+        lastName: w.lastName,
+        position,
+      }),
+      createdAt: w.createdAt ?? null,
+    };
+  });
+  const voter = String(input.voterSessionId ?? "").trim();
+  const isCurrentVoterWinner =
+    !!voter &&
+    filterActiveContestWinners(input.winners).some(
+      (w) => String(/** @type {{ voterSessionId?: string }} */ (w).voterSessionId || "") === voter,
+    );
+  return {
+    totalWinners: active.length,
+    isCurrentVoterWinner,
+    winners: active,
+  };
+}

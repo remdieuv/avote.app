@@ -7,10 +7,16 @@ import {
   CONTEST_AWAITING_DRAW_LABEL,
   CONTEST_DRAW_DONE_LABEL,
   CONTEST_WINNER_SELF_CONGRATS,
+  CONTEST_WINNER_STATUS_ACTIVE,
+  CONTEST_WINNER_STATUS_REPLACED,
   LEAD_SUBMIT_SUCCESS_MESSAGE,
+  activeContestWinnersWithinQuota,
+  buildPublicContestStatusFromWinners,
   canDrawContestWinners,
+  canOfferContestWinnerReplace,
   canStartLeadCapture,
   canSubmitLeadCapture,
+  filterActiveContestWinners,
   formatPublicContestWinnerDisplayName,
   getContestParticipantPhaseLabel,
   getLeadContestClosedAwaitingLabel,
@@ -275,6 +281,72 @@ test("Correctifs QA : messages Lead / Concours + régie", () => {
   assert.equal(
     getRegieDisplayStateLabel("results"),
     "Résultats (barres)",
+  );
+});
+
+test("Remplacement gagnant : actifs, historique, sync publique, confidentialité", () => {
+  const mixed = [
+    {
+      id: "w-old",
+      status: CONTEST_WINNER_STATUS_REPLACED,
+      voterSessionId: "s-old",
+      firstName: "Marie",
+      lastName: "Dupont",
+      phone: "0601020304",
+      email: "m@x.fr",
+      position: 1,
+    },
+    {
+      id: "w-new",
+      status: CONTEST_WINNER_STATUS_ACTIVE,
+      voterSessionId: "s-new",
+      firstName: "Paul",
+      lastName: "Martin",
+      phone: "0600000000",
+      email: "p@x.fr",
+      position: 1,
+    },
+    {
+      id: "w2",
+      status: CONTEST_WINNER_STATUS_ACTIVE,
+      voterSessionId: "s2",
+      firstName: "Léa",
+      lastName: "Bernard",
+      position: 2,
+    },
+  ];
+  assert.equal(filterActiveContestWinners(mixed).length, 2);
+  assert.equal(canOfferContestWinnerReplace({ winners: mixed }), true);
+  assert.equal(canOfferContestWinnerReplace({ winners: [] }), false);
+  assert.equal(
+    activeContestWinnersWithinQuota({ activeCount: 2, quota: 2 }),
+    true,
+  );
+  assert.equal(
+    activeContestWinnersWithinQuota({ activeCount: 3, quota: 2 }),
+    false,
+  );
+
+  const forOld = buildPublicContestStatusFromWinners({
+    winners: mixed,
+    voterSessionId: "s-old",
+  });
+  assert.equal(forOld.isCurrentVoterWinner, false, "remplacé : plus de félicitations");
+  assert.equal(forOld.totalWinners, 2);
+
+  const forNew = buildPublicContestStatusFromWinners({
+    winners: mixed,
+    voterSessionId: "s-new",
+  });
+  assert.equal(forNew.isCurrentVoterWinner, true, "nouveau : félicitations");
+  assert.equal(forNew.winners[0].displayName, "Paul M.");
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(forNew.winners[0], "phone"),
+    false,
+  );
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(forNew.winners[0], "email"),
+    false,
   );
 });
 

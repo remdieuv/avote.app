@@ -15,9 +15,10 @@
     "test:api-browser-base": "node scripts/test-api-browser-base.mjs",
     "test:regie-projection": "node scripts/test-regie-projection-labels.mjs",
     "test:lead-contest": "node scripts/test-lead-contest-live-flow.mjs",
+    "test:contest-replace": "node ../backend/scripts/test-contest-winner-replace.mjs",
     "test:lot0-lot1": "npm run test:live-ux && npm run test:participant && npm run test:normalize-live && npm run test:backend-proxy && npm run test:api-browser-base && npm run test:regie-projection",
-    "test:lot0-lot2": "npm run test:live-ux && npm run test:diffusion && npm run test:lead-contest",
-    "test:lot0-lot1-lot2": "npm run test:lot0-lot1 && npm run test:diffusion && npm run test:lead-contest"
+    "test:lot0-lot2": "npm run test:live-ux && npm run test:diffusion && npm run test:lead-contest && npm run test:contest-replace",
+    "test:lot0-lot1-lot2": "npm run test:lot0-lot1 && npm run test:diffusion && npm run test:lead-contest && npm run test:contest-replace"
   },
   "dependencies": {
     "jspdf": "^4.2.1",
