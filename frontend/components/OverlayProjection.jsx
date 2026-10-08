@@ -14,6 +14,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { formatCountdownVerbose } from "@/lib/chronoFormat";
 import { API_URL, SOCKET_URL } from "@/lib/config";
 import { getScreenDiffusionLabel, overlayMustStayTransparent } from "@/lib/diffusionUx";
+import { getContestParticipantPhaseLabel } from "@/lib/leadContestLiveFlow";
 import {
   LIVE_UX_LOCAL,
   getLiveStateLabel,
@@ -1043,7 +1044,9 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
               }}
             >
               {isContestEntry
-                ? "Concours en cours"
+                ? getContestParticipantPhaseLabel({
+                    hasWinners: contestWinners.length > 0,
+                  })
                 : isLeadCrm
                   ? "Collecte"
                   : getScreenDiffusionLabel("RESULTS")}

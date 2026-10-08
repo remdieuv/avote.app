@@ -4,11 +4,17 @@
  */
 import assert from "node:assert/strict";
 import {
+  CONTEST_AWAITING_DRAW_LABEL,
+  CONTEST_DRAW_DONE_LABEL,
   CONTEST_WINNER_SELF_CONGRATS,
+  LEAD_SUBMIT_SUCCESS_MESSAGE,
   canDrawContestWinners,
   canStartLeadCapture,
   canSubmitLeadCapture,
   formatPublicContestWinnerDisplayName,
+  getContestParticipantPhaseLabel,
+  getLeadContestClosedAwaitingLabel,
+  getRegieResultsProjectionLabel,
   isContestEntryPoll,
   isLeadCrmPoll,
   leadDraftStorageKey,
@@ -17,6 +23,7 @@ import {
   serializeLeadDraft,
   shouldOfferShowResultsInPrimaryPath,
   shouldScheduleAutoRevealForPoll,
+  shouldShowClosedAwaitingResultsCard,
   shouldShowLeadCaptureForm,
   shouldShowPublicResponseDistribution,
   toPublicContestWinnerPayload,
@@ -25,6 +32,8 @@ import {
   resolveEventPatchAfterVoteClose,
   shouldShowParticipantLiveResultsBlock,
 } from "../lib/participantLiveFlow.js";
+import { getRegieDisplayStateLabel } from "../lib/regieProjectionLabels.js";
+import { getScreenClosedAwaitingResultsLabel } from "../lib/diffusionUx.js";
 
 let failed = 0;
 /** @param {string} name @param {() => void} fn */
@@ -200,6 +209,73 @@ test("Draft Lead serialisation (refresh)", () => {
   assert.equal(parsed?.firstName, "Ada");
   assert.equal(parsed?.lastName, "Lovelace");
   assert.ok(leadDraftStorageKey("p1", "v1").includes("p1"));
+});
+
+test("Correctifs QA : messages Lead / Concours + régie", () => {
+  assert.equal(
+    LEAD_SUBMIT_SUCCESS_MESSAGE,
+    "Merci, tes coordonnées ont bien été enregistrées.",
+  );
+  assert.equal(
+    shouldShowClosedAwaitingResultsCard({
+      leadEnabled: true,
+      pollType: "SINGLE_CHOICE",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldShowClosedAwaitingResultsCard({ pollType: "CONTEST_ENTRY" }),
+    true,
+  );
+  assert.equal(
+    getLeadContestClosedAwaitingLabel({ pollType: "CONTEST_ENTRY" }),
+    CONTEST_AWAITING_DRAW_LABEL,
+  );
+  assert.equal(
+    getLeadContestClosedAwaitingLabel({
+      leadEnabled: true,
+      pollType: "SINGLE_CHOICE",
+    }),
+    null,
+  );
+  assert.equal(
+    getContestParticipantPhaseLabel({ hasWinners: false }),
+    CONTEST_AWAITING_DRAW_LABEL,
+  );
+  assert.equal(
+    getContestParticipantPhaseLabel({ hasWinners: true }),
+    CONTEST_DRAW_DONE_LABEL,
+  );
+  assert.equal(
+    getScreenClosedAwaitingResultsLabel({ pollType: "CONTEST_ENTRY" }),
+    "Tirage au sort à venir",
+  );
+  assert.equal(
+    getScreenClosedAwaitingResultsLabel({
+      leadEnabled: true,
+      pollType: "SINGLE_CHOICE",
+    }),
+    null,
+  );
+  assert.equal(
+    getRegieResultsProjectionLabel({ pollType: "CONTEST_ENTRY" }),
+    "Tirage terminé (gagnants)",
+  );
+  assert.equal(
+    getRegieDisplayStateLabel("results", { pollType: "CONTEST_ENTRY" }),
+    "Tirage terminé (gagnants)",
+  );
+  assert.equal(
+    getRegieDisplayStateLabel("results", {
+      leadEnabled: true,
+      pollType: "SINGLE_CHOICE",
+    }),
+    "Collecte",
+  );
+  assert.equal(
+    getRegieDisplayStateLabel("results"),
+    "Résultats (barres)",
+  );
 });
 
 if (failed > 0) {

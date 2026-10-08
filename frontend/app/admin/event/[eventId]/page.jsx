@@ -28,6 +28,7 @@ import {
   getRegieDisplayStateLabel,
   getRegieIdleProjectionHint,
 } from "@/lib/regieProjectionLabels";
+import { shouldScheduleAutoRevealForPoll } from "@/lib/leadContestLiveFlow";
 import {
   normalizePollOptions,
   optionVoteCount,
@@ -1218,6 +1219,8 @@ function RegieAutoRotatePanel({
  *   autoRotateResultsSec: number;
  *   onAutoRotateQuestionSecChange: (n: number) => void;
  *   onAutoRotateResultsSecChange: (n: number) => void;
+ *   activePollType?: string | null;
+ *   activePollLeadEnabled?: boolean | null;
  * }} props
  */
 function BlocProjectionEcran({
@@ -1240,6 +1243,8 @@ function BlocProjectionEcran({
   autoRotateResultsSec,
   onAutoRotateQuestionSecChange,
   onAutoRotateResultsSecChange,
+  activePollType = null,
+  activePollLeadEnabled = null,
 }) {
   const [clientPret, setClientPret] = useState(false);
   const [projectionMode, setProjectionMode] = useState("standard");
@@ -1338,10 +1343,14 @@ function BlocProjectionEcran({
         : screenMainConnected
           ? statutEcranPrincipal
           : statutEcranB;
-  const affichageStandardLabel = getRegieDisplayStateLabel(d);
+  const regiePollContext = {
+    pollType: activePollType,
+    leadEnabled: activePollLeadEnabled,
+  };
+  const affichageStandardLabel = getRegieDisplayStateLabel(d, regiePollContext);
   const ecranBDisplayLower = String(screenBDisplayState || "").toLowerCase();
   const affichageBLabel = screenBConnected
-    ? getRegieDisplayStateLabel(ecranBDisplayLower)
+    ? getRegieDisplayStateLabel(ecranBDisplayLower, regiePollContext)
     : "Non connecté";
   const styleBadgeAffichage = (state) => {
     const s = String(state || "").toLowerCase();
@@ -5576,10 +5585,20 @@ export default function RegieEventPage() {
 
   const voteLabel =
     VOTE_STATE_LABELS[voteStateUi] ?? String(voteStateUi).toUpperCase();
+  const regieActivePollContext = {
+    pollType: activePoll?.type,
+    leadEnabled: activePoll?.leadEnabled,
+  };
   /** « À l’écran » = état projection réel (screenDisplayState prioritaire). */
-  const displayLabelGlobal = getRegieDisplayStateLabel(projectionDisplayStateUi);
+  const displayLabelGlobal = getRegieDisplayStateLabel(
+    projectionDisplayStateUi,
+    regieActivePollContext,
+  );
   const displayStateBUi = String(screenBDisplayState || "waiting").toLowerCase();
-  const displayLabelScreenB = getRegieDisplayStateLabel(displayStateBUi);
+  const displayLabelScreenB = getRegieDisplayStateLabel(
+    displayStateBUi,
+    regieActivePollContext,
+  );
   const hasDisplayGap =
     Boolean(screenBConnected) &&
     ["question", "results", "waiting", "black"].includes(displayStateBUi) &&
@@ -7584,6 +7603,10 @@ export default function RegieEventPage() {
                           <p style={{ margin: 0, fontSize: "0.74rem", color: "#64748b", lineHeight: 1.35 }}>
                             État actuel : <strong style={{ color: "#111827" }}>{voteLabel}</strong>
                           </p>
+                    {shouldScheduleAutoRevealForPoll({
+                      pollType: activePoll?.type,
+                      leadEnabled: activePoll?.leadEnabled,
+                    }) ? (
                     <RegieAutoRevealCard
                       embedded
                       embeddedDividerAbove={false}
@@ -7592,6 +7615,7 @@ export default function RegieEventPage() {
                       autoRevealDelaySec={eventData?.autoRevealDelaySec ?? 5}
                       onSaved={() => fetchEvent({ silent: true })}
                     />
+                    ) : null}
                   </div>
 
                   <div style={liveFunctionCardStyle}>
@@ -8162,6 +8186,8 @@ export default function RegieEventPage() {
               autoRotateResultsSec={autoRotateResultsSec}
               onAutoRotateQuestionSecChange={setAutoRotateQuestionSec}
               onAutoRotateResultsSecChange={setAutoRotateResultsSec}
+              activePollType={activePoll?.type ?? null}
+              activePollLeadEnabled={activePoll?.leadEnabled ?? null}
             />
           ) : null}
 

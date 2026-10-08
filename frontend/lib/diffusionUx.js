@@ -4,6 +4,11 @@
  */
 
 import {
+  CONTEST_AWAITING_DRAW_LABEL,
+  isContestEntryPoll,
+  isLeadCrmPoll,
+} from "./leadContestLiveFlow.js";
+import {
   isWaitingBetweenQuestions,
   resolveLiveUxState,
 } from "./liveStateUx.js";
@@ -232,9 +237,30 @@ export function resolveScreenSurfaceAfterVoteClose(axes) {
 
 /**
  * Footer Screen CLOSED : après reveal Quiz → scores ; sinon résultats.
- * @param {{ quizAnswerRevealed?: boolean }} [input]
+ * Lead / Concours : libellés dédiés (pas « résultats arrivent »).
+ * @param {{
+ *   quizAnswerRevealed?: boolean;
+ *   pollType?: string | null;
+ *   leadEnabled?: boolean | null;
+ * }} [input]
+ * @returns {string | null}
  */
 export function getScreenClosedAwaitingResultsLabel(input = {}) {
+  if (
+    isContestEntryPoll({
+      pollType: input.pollType,
+    })
+  ) {
+    return CONTEST_AWAITING_DRAW_LABEL;
+  }
+  if (
+    isLeadCrmPoll({
+      pollType: input.pollType,
+      leadEnabled: input.leadEnabled,
+    })
+  ) {
+    return null;
+  }
   if (input.quizAnswerRevealed === true) {
     return "Les scores arrivent bientôt";
   }

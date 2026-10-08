@@ -405,6 +405,17 @@ assert.equal(
   getScreenClosedAwaitingResultsLabel({}),
   "Les résultats arrivent bientôt",
 );
+assert.equal(
+  getScreenClosedAwaitingResultsLabel({ pollType: "CONTEST_ENTRY" }),
+  "Tirage au sort à venir",
+);
+assert.equal(
+  getScreenClosedAwaitingResultsLabel({
+    leadEnabled: true,
+    pollType: "SINGLE_CHOICE",
+  }),
+  null,
+);
 assert.equal(formatTestModeVoteCountLabel(1), "1 vote");
 assert.equal(formatTestModeVoteCountLabel(2, { withUnit: false }), "2");
 assert.equal(formatTestModeVoteCountLabel(10, { withUnit: false }), "≈ 10");

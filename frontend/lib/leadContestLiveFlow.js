@@ -216,3 +216,57 @@ export const CONTEST_PUBLIC_WINNERS_ANNOUNCE_TITLE = "Gagnant(s) du tirage";
  */
 export const CONTEST_WINNER_SELF_CONGRATS =
   "Félicitations, tu as gagné !";
+
+/** Confirmation unique après envoi du formulaire Lead / Concours. */
+export const LEAD_SUBMIT_SUCCESS_MESSAGE =
+  "Merci, tes coordonnées ont bien été enregistrées.";
+
+/** Concours — avant tirage (participant / Screen CLOSED). */
+export const CONTEST_AWAITING_DRAW_LABEL = "Tirage au sort à venir";
+
+/** Concours — après tirage (participant / Overlay / régie). */
+export const CONTEST_DRAW_DONE_LABEL = "Tirage terminé";
+
+/**
+ * Carte CLOSED « résultats bientôt » : jamais pour Lead CRM.
+ * Concours : oui, avec libellé tirage (pas « résultats »).
+ * @param {{ pollType?: string | null; leadEnabled?: boolean | null }} input
+ */
+export function shouldShowClosedAwaitingResultsCard(input = {}) {
+  if (isLeadCrmPoll(input)) return false;
+  return true;
+}
+
+/**
+ * Libellé d’attente CLOSED (remplace « Les résultats arrivent bientôt »).
+ * Lead : `null` (pas de mention de résultats).
+ * Concours : « Tirage au sort à venir ».
+ * Autres : `null` → garder le libellé générique appelant.
+ * @param {{ pollType?: string | null; leadEnabled?: boolean | null }} input
+ * @returns {string | null}
+ */
+export function getLeadContestClosedAwaitingLabel(input = {}) {
+  if (isContestEntryPoll(input)) return CONTEST_AWAITING_DRAW_LABEL;
+  if (isLeadCrmPoll(input)) return null;
+  return null;
+}
+
+/**
+ * Titre phase Concours (participant / Overlay RESULTS).
+ * @param {{ hasWinners?: boolean }} [input]
+ */
+export function getContestParticipantPhaseLabel(input = {}) {
+  if (input.hasWinners === true) return CONTEST_DRAW_DONE_LABEL;
+  return CONTEST_AWAITING_DRAW_LABEL;
+}
+
+/**
+ * Libellé régie « À l’écran » quand display = RESULTS.
+ * Concours → tirage/gagnants ; Lead → collecte ; sinon barres.
+ * @param {{ pollType?: string | null; leadEnabled?: boolean | null }} [context]
+ */
+export function getRegieResultsProjectionLabel(context = {}) {
+  if (isContestEntryPoll(context)) return `${CONTEST_DRAW_DONE_LABEL} (gagnants)`;
+  if (isLeadCrmPoll(context)) return "Collecte";
+  return null;
+}

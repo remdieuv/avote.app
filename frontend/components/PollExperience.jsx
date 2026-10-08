@@ -63,13 +63,17 @@ import {
   shouldShowParticipantResultStats,
 } from "@/lib/participantLiveFlow";
 import {
+  CONTEST_AWAITING_DRAW_LABEL,
   CONTEST_PUBLIC_WINNERS_ANNOUNCE_TITLE,
   CONTEST_WINNER_SELF_CONGRATS,
+  LEAD_SUBMIT_SUCCESS_MESSAGE,
   canSubmitLeadCapture,
+  getContestParticipantPhaseLabel,
   leadDraftStorageKey,
   leadSubmittedStorageKey,
   parseLeadDraft,
   serializeLeadDraft,
+  shouldShowClosedAwaitingResultsCard,
   shouldShowLeadCaptureForm,
 } from "@/lib/leadContestLiveFlow";
 import {
@@ -122,11 +126,32 @@ function normalizeLiveScene(liveState) {
 /**
  * Carte « vote clos, résultats pas encore à la salle » — teintée par l’accent événement.
  * Merci uniquement si le participant a voté (A2).
- * @param {{ accent: string; isDark: boolean; hasVoted?: boolean }} props
+ * Concours : « Tirage au sort à venir » (pas « résultats »).
+ * @param {{
+ *   accent: string;
+ *   isDark: boolean;
+ *   hasVoted?: boolean;
+ *   awaitingLabel?: string | null;
+ * }} props
  */
-function CarteVoteTermineAttenteResultats({ accent, isDark, hasVoted = false }) {
+function CarteVoteTermineAttenteResultats({
+  accent,
+  isDark,
+  hasVoted = false,
+  awaitingLabel = null,
+}) {
   const a = joinRoomAccent(accent);
-  const title = getClosedParticipantTitle(Boolean(hasVoted));
+  const isContestAwait = Boolean(awaitingLabel);
+  const title = isContestAwait
+    ? hasVoted
+      ? LIVE_UX_LABEL_VOTE_CONFIRMED
+      : awaitingLabel
+    : getClosedParticipantTitle(Boolean(hasVoted));
+  const body = isContestAwait
+    ? hasVoted
+      ? awaitingLabel
+      : null
+    : "Les résultats s’afficheront ici quand ce sera le moment";
   return (
     <>
       <style>
@@ -166,6 +191,7 @@ function CarteVoteTermineAttenteResultats({ accent, isDark, hasVoted = false }) 
         >
           {title}
         </h3>
+        {body ? (
         <p
           style={{
             margin: 0,
@@ -175,7 +201,8 @@ function CarteVoteTermineAttenteResultats({ accent, isDark, hasVoted = false }) 
             lineHeight: 1.45,
           }}
         >
-          Les résultats s’afficheront ici quand ce sera le moment
+          {body}
+          {!isContestAwait ? (
           <span
             aria-hidden
             style={{
@@ -208,7 +235,9 @@ function CarteVoteTermineAttenteResultats({ accent, isDark, hasVoted = false }) 
               .
             </span>
           </span>
+          ) : null}
         </p>
+        ) : null}
       </div>
     </>
   );
@@ -1584,13 +1613,22 @@ export function PollExperience({
   /**
    * Carte « résultats bientôt » : uniquement si le vote est fermé, pas encore RESULTS,
    * et qu’on n’affiche pas déjà le bloc barres (continuité votant VOTING→CLOSED).
+   * Lead CRM : jamais (pas de mention de résultats à venir).
    */
   const attenteProjectionResultats =
     voteFerme &&
     !affichageResultatsPublic &&
     !showBlocResultatsEnDirect &&
     liveSceneNorm !== "finished" &&
-    liveSceneNorm !== "paused";
+    liveSceneNorm !== "paused" &&
+    shouldShowClosedAwaitingResultsCard({
+      pollType: poll?.type,
+      leadEnabled: Boolean(poll?.leadEnabled),
+    });
+
+  const closedAwaitingLabel = isContestEntry
+    ? CONTEST_AWAITING_DRAW_LABEL
+    : null;
 
   /** Même intent que attenteProjectionResultats, mais quand le socket a vidé le poll avant refetch */
   const sansPollMaisVoteFermeSansResultatsSalle =
@@ -2014,6 +2052,7 @@ export function PollExperience({
                 accent={accent}
                 isDark={isDark}
                 hasVoted={Boolean(merciPourVote || aDejaVoteEnStockage)}
+                awaitingLabel={null}
               />
             ) : sceneParticipant === "waiting" ||
               pollFetch404Slug ? (
@@ -2218,7 +2257,13 @@ export function PollExperience({
             <CarteVoteTermineAttenteResultats
               accent={accent}
               isDark={isDark}
-              hasVoted={Boolean(merciPourVote || aDejaVoteEnStockage)}
+              hasVoted={
+                // Après envoi Lead/Concours : une seule confirmation (pas Merci vote + Merci form).
+                leadSuccess
+                  ? false
+                  : Boolean(merciPourVote || aDejaVoteEnStockage)
+              }
+              awaitingLabel={closedAwaitingLabel}
             />
           ) : null}
 
@@ -2230,7 +2275,9 @@ export function PollExperience({
 
           {(merciPourVote || showLeadForm || leadSuccess) && (
             <>
-              {(merciPourVote || aDejaVoteEnStockage) && !showLeadForm ? (
+              {(merciPourVote || aDejaVoteEnStockage) &&
+              !showLeadForm &&
+              !leadSuccess ? (
               <p
                 style={{
                   marginBottom: "1rem",
@@ -2259,7 +2306,7 @@ export function PollExperience({
                     fontWeight: 600,
                   }}
                 >
-                  Merci, c’est bien enregistré.
+                  {LEAD_SUBMIT_SUCCESS_MESSAGE}
                 </p>
               ) : null}
               {showLeadForm &&
@@ -2663,7 +2710,11 @@ export function PollExperience({
                 }}
               >
                 {isContestEntry
-                  ? "Concours en cours"
+                  ? getContestParticipantPhaseLabel({
+                      hasWinners:
+                        contestPublicWinners.length > 0 ||
+                        affichageResultatsPublic,
+                    })
                   : isStandaloneResultsSheet
                     ? "Résultats"
                     : resultsBlockTitle}
@@ -2676,7 +2727,9 @@ export function PollExperience({
                     color: palette.muted,
                   }}
                 >
-                  Le tirage est piloté par l’organisateur.
+                  {contestPublicWinners.length > 0 || affichageResultatsPublic
+                    ? "Les gagnants sont affichés ci-dessous."
+                    : "Le tirage est piloté par l’organisateur."}
                 </p>
               ) : voteOuvert ? (
                 <p
@@ -3020,7 +3073,13 @@ export function PollExperience({
                   fontWeight: 800,
                 }}
               >
-                {isContestEntry ? "Concours" : "Résultats"}
+                {isContestEntry
+                  ? getContestParticipantPhaseLabel({
+                      hasWinners:
+                        contestPublicWinners.length > 0 ||
+                        affichageResultatsPublic,
+                    })
+                  : "Résultats"}
               </h3>
               {isContestEntry ? (
                 <div

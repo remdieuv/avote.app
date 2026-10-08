@@ -163,6 +163,14 @@ export function ScreenQuestion({
   const quizRevealedClosed =
     !voteOuvert && isScreenQuizAnswerRevealed(poll);
 
+  const closedAwaitLabel = !voteOuvert
+    ? getScreenClosedAwaitingResultsLabel({
+        quizAnswerRevealed: quizRevealedClosed,
+        pollType: poll?.type,
+        leadEnabled: poll?.leadEnabled,
+      })
+    : null;
+
   const progressLabel = formatScreenQuestionProgressLabel(
     questionProgress,
     voteOuvert ? "voting" : "closed",
@@ -471,7 +479,7 @@ export function ScreenQuestion({
           >
             {votesInfo.label}
           </p>
-          {!voteOuvert ? (
+          {closedAwaitLabel ? (
             <p
               style={{
                 margin: 0,
@@ -480,9 +488,7 @@ export function ScreenQuestion({
                 color: "#94a3b8",
               }}
             >
-              {getScreenClosedAwaitingResultsLabel({
-                quizAnswerRevealed: quizRevealedClosed,
-              })}
+              {closedAwaitLabel}
             </p>
           ) : null}
         </div>

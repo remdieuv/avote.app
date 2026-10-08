@@ -3,6 +3,8 @@
  * Couche présentation uniquement — ne change pas le moteur Live.
  */
 
+import { getRegieResultsProjectionLabel } from "./leadContestLiveFlow.js";
+
 /** @type {Record<"question" | "results" | "black" | "waiting", string>} */
 export const REGIE_DISPLAY_STATE_LABELS = {
   question: "Question (réponses à l’écran)",
@@ -19,10 +21,18 @@ export const REGIE_DISPLAY_STATE_LABELS = {
 
 /**
  * @param {string | null | undefined} displayState
+ * @param {{
+ *   pollType?: string | null;
+ *   leadEnabled?: boolean | null;
+ * }} [context] — type de question active (Lead / Concours ≠ barres).
  * @returns {string}
  */
-export function getRegieDisplayStateLabel(displayState) {
+export function getRegieDisplayStateLabel(displayState, context = {}) {
   const k = String(displayState ?? "").toLowerCase().trim();
+  if (k === "results") {
+    const contextual = getRegieResultsProjectionLabel(context);
+    if (contextual) return contextual;
+  }
   if (k && Object.prototype.hasOwnProperty.call(REGIE_DISPLAY_STATE_LABELS, k)) {
     return REGIE_DISPLAY_STATE_LABELS[
       /** @type {keyof typeof REGIE_DISPLAY_STATE_LABELS} */ (k)

@@ -48,5 +48,21 @@ assert.equal(
   getRegieDisplayStateLabel("results"),
   REGIE_DISPLAY_STATE_LABELS.results,
 );
+assert.equal(
+  getRegieDisplayStateLabel("results", { pollType: "CONTEST_ENTRY" }),
+  "Tirage terminé (gagnants)",
+);
+assert.equal(
+  getRegieDisplayStateLabel("results", {
+    leadEnabled: true,
+    pollType: "SINGLE_CHOICE",
+  }),
+  "Collecte",
+);
+assert.equal(
+  getRegieDisplayStateLabel("results", { pollType: "QUIZ" }),
+  REGIE_DISPLAY_STATE_LABELS.results,
+  "Quiz : libellé barres inchangé",
+);
 
 console.log("ok  régie WAITING = QR réel · BLACK = écran noir");
