@@ -704,8 +704,11 @@ export function JoinLiveHub({ slug }) {
       // Statut réel du poll pointé (ACTIVE sur une copie jamais lancée → WAITING, pas CLOSED).
       pollStatus: activePollStatus,
       hasActivePoll: Boolean(activePollId),
+      // WAITING : « Ça va bientôt commencer » vs « Prochaine question bientôt ».
+      pastPolls,
+      pollsProgress,
     }),
-    [sceneRaw, ds, vs, activePollStatus, activePollId],
+    [sceneRaw, ds, vs, activePollStatus, activePollId, pastPolls, pollsProgress],
   );
 
   const joinPresCore = useMemo(

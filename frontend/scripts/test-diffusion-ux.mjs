@@ -13,6 +13,9 @@ import {
   formatScreenQuestionProgressLabel,
   getScreenClosedAwaitingResultsLabel,
   getScreenDiffusionLabel,
+  getScreenWaitingDiffusionLabel,
+  SCREEN_WAITING_LABEL_BETWEEN,
+  SCREEN_WAITING_LABEL_START,
   isScreenProjectionVoteOpen,
   isScreenQuizAnswerRevealed,
   overlayMustStayTransparent,
@@ -268,7 +271,21 @@ assert.ok(/transparence|blanc/i.test(OBS_GUIDE_STEPS[2]));
 console.log("ok  guide OBS 3 gestes + hint Screen≠Overlay");
 
 // --- Labels Screen ≠ Participant ---
-assert.equal(getScreenDiffusionLabel("WAITING"), "ÇA VA BIENTÔT COMMENCER");
+assert.equal(getScreenDiffusionLabel("WAITING"), SCREEN_WAITING_LABEL_START);
+assert.equal(
+  getScreenWaitingDiffusionLabel({ pollsProgress: { current: 1, total: 3 } }),
+  SCREEN_WAITING_LABEL_START,
+);
+assert.equal(
+  getScreenWaitingDiffusionLabel({ pollsProgress: { current: 2, total: 3 } }),
+  SCREEN_WAITING_LABEL_BETWEEN,
+);
+assert.equal(
+  getScreenDiffusionLabel("WAITING", {
+    pastPolls: [{ id: "p1", label: "Q1" }],
+  }),
+  SCREEN_WAITING_LABEL_BETWEEN,
+);
 assert.equal(getScreenDiffusionLabel("CLOSED"), "VOTE TERMINÉ");
 assert.equal(getScreenDiffusionLabel("FINISHED"), "MERCI D’AVOIR PARTICIPÉ !");
 assert.equal(getScreenDiffusionLabel("RESULTS"), "RÉSULTATS");

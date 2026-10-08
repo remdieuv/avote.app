@@ -3,20 +3,40 @@
  * États logiques : `resolveLiveUxState` (socle). Présentation Screen ≠ labels Participant.
  */
 
-import { resolveLiveUxState } from "./liveStateUx.js";
+import {
+  isWaitingBetweenQuestions,
+  resolveLiveUxState,
+} from "./liveStateUx.js";
+
+/** WAITING Screen — avant la première question. */
+export const SCREEN_WAITING_LABEL_START = "ÇA VA BIENTÔT COMMENCER";
+
+/** WAITING Screen — entre deux questions (PRÉPARÉ après Suivante). */
+export const SCREEN_WAITING_LABEL_BETWEEN = "PROCHAINE QUESTION BIENTÔT";
+
+/**
+ * Libellé WAITING grand écran selon le contexte (1ʳᵉ question vs entre questions).
+ * @param {Parameters<typeof isWaitingBetweenQuestions>[0]} [input]
+ */
+export function getScreenWaitingDiffusionLabel(input = {}) {
+  return isWaitingBetweenQuestions(input)
+    ? SCREEN_WAITING_LABEL_BETWEEN
+    : SCREEN_WAITING_LABEL_START;
+}
 
 /**
  * Libellés grand écran (salle / TV / vidéoprojecteur) — très courts, lisibles à distance.
  * Ne pas réutiliser aveuglément les textes Participant (`getLiveStateLabel`).
  *
  * @param {string | null | undefined} uxState — sortie resolveLiveUxState
+ * @param {Parameters<typeof isWaitingBetweenQuestions>[0]} [waitingCtx]
  * @returns {string}
  */
-export function getScreenDiffusionLabel(uxState) {
+export function getScreenDiffusionLabel(uxState, waitingCtx = {}) {
   const k = String(uxState ?? "").toUpperCase();
   switch (k) {
     case "WAITING":
-      return "ÇA VA BIENTÔT COMMENCER";
+      return getScreenWaitingDiffusionLabel(waitingCtx);
     case "VOTING":
       return "VOTE OUVERT";
     case "CLOSED":
@@ -28,7 +48,7 @@ export function getScreenDiffusionLabel(uxState) {
     case "FINISHED":
       return "MERCI D’AVOIR PARTICIPÉ !";
     default:
-      return "ÇA VA BIENTÔT COMMENCER";
+      return SCREEN_WAITING_LABEL_START;
   }
 }
 

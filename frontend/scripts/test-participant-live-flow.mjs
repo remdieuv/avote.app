@@ -8,6 +8,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   LIVE_UX_LABEL_VOTE_CONFIRMED,
+  LIVE_UX_LABEL_WAITING_BETWEEN,
+  LIVE_UX_LABEL_WAITING_START,
   LIVE_UX_STATE,
   getClosedParticipantTitle,
   getLiveStateLabel,
@@ -664,6 +666,32 @@ test("LOT-1. Suivante → PRÉPARÉ, jamais OPEN/VOTING", () => {
   });
   assert.equal(uxPrepare, LIVE_UX_STATE.WAITING, "PRÉPARÉ → hub attente /join");
   assert.notEqual(uxPrepare, LIVE_UX_STATE.VOTING);
+});
+
+test("LOT-1 QA. WAITING avant 1ʳᵉ vs entre questions (libellés)", () => {
+  const avant = getLiveStatePresentation({
+    liveScene: "waiting",
+    displayState: "waiting",
+    voteState: "closed",
+    pollStatus: "ACTIVE",
+    hasActivePoll: true,
+    pastPolls: [],
+    pollsProgress: { current: 1, total: 3 },
+  });
+  assert.equal(avant.ux, LIVE_UX_STATE.WAITING);
+  assert.equal(avant.title, LIVE_UX_LABEL_WAITING_START);
+
+  const entre = getLiveStatePresentation({
+    liveScene: "waiting",
+    displayState: "waiting",
+    voteState: "closed",
+    pollStatus: "ACTIVE",
+    hasActivePoll: true,
+    pastPolls: [{ id: "p1", label: "Q1" }],
+    pollsProgress: { current: 2, total: 3 },
+  });
+  assert.equal(entre.ux, LIVE_UX_STATE.WAITING);
+  assert.equal(entre.title, LIVE_UX_LABEL_WAITING_BETWEEN);
 });
 
 test("LOT-1. Ouvrir → VOTING ; Fermer = axes CLOSED sans sticky RESULTS", () => {

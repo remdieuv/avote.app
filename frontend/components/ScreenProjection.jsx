@@ -1076,7 +1076,11 @@ export function ScreenProjection({
     }
     return wrapOut(
       false,
-      <ScreenWaiting shell={shell} joinSlug={slugPublic} />,
+      <ScreenWaiting
+        shell={shell}
+        joinSlug={slugPublic}
+        pollsProgress={pollsProgress}
+      />,
       { hideStatePill: true },
     );
   }
@@ -1138,7 +1142,11 @@ export function ScreenProjection({
   ) {
     return wrapOut(
       false,
-      <ScreenWaiting shell={shell} joinSlug={slugPublic} />,
+      <ScreenWaiting
+        shell={shell}
+        joinSlug={slugPublic}
+        pollsProgress={pollsProgress}
+      />,
       { hideStatePill: true },
     );
   }
@@ -1173,7 +1181,11 @@ export function ScreenProjection({
   if (!poll) {
     return wrapOut(
       false,
-      <ScreenWaiting shell={shell} joinSlug={slugPublic} />,
+      <ScreenWaiting
+        shell={shell}
+        joinSlug={slugPublic}
+        pollsProgress={pollsProgress}
+      />,
       { hideStatePill: true },
     );
   }

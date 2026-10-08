@@ -25,6 +25,10 @@ import {
   getEventUxState,
 } from "@/lib/eventUxState";
 import {
+  getRegieDisplayStateLabel,
+  getRegieIdleProjectionHint,
+} from "@/lib/regieProjectionLabels";
+import {
   normalizePollOptions,
   optionVoteCount,
 } from "@/lib/normalizeLivePayload";
@@ -32,14 +36,6 @@ import {
 const VOTE_STATE_LABELS = {
   open: "Vote ouvert",
   closed: "Vote fermé",
-};
-
-const DISPLAY_STATE_LABELS = {
-  question: "Question (réponses à l’écran)",
-  results: "Résultats (barres)",
-  black: "Pause",
-  waiting:
-    "Attente — la salle ne voit rien. Relancez la projection : « Afficher la question » ou « Afficher les résultats en direct ».",
 };
 
 const AUTO_ROTATE_SEC_MIN = 3;
@@ -1319,12 +1315,10 @@ function BlocProjectionEcran({
         : screenMainConnected
           ? statutEcranPrincipal
           : statutEcranB;
-  const affichageStandardLabel =
-    DISPLAY_STATE_LABELS[d] ?? String(d || "waiting").toUpperCase();
+  const affichageStandardLabel = getRegieDisplayStateLabel(d);
   const ecranBDisplayLower = String(screenBDisplayState || "").toLowerCase();
   const affichageBLabel = screenBConnected
-    ? (DISPLAY_STATE_LABELS[ecranBDisplayLower] ??
-      String(ecranBDisplayLower || "waiting").toUpperCase())
+    ? getRegieDisplayStateLabel(ecranBDisplayLower)
     : "Non connecté";
   const styleBadgeAffichage = (state) => {
     const s = String(state || "").toLowerCase();
@@ -5559,18 +5553,14 @@ export default function RegieEventPage() {
 
   const voteLabel =
     VOTE_STATE_LABELS[voteStateUi] ?? String(voteStateUi).toUpperCase();
-  const displayLabelGlobal =
-    DISPLAY_STATE_LABELS[displayStateUi] ??
-    String(displayStateUi).toUpperCase();
+  /** « À l’écran » = état projection réel (screenDisplayState prioritaire). */
+  const displayLabelGlobal = getRegieDisplayStateLabel(projectionDisplayStateUi);
   const displayStateBUi = String(screenBDisplayState || "waiting").toLowerCase();
-  const displayLabelScreenB =
-    DISPLAY_STATE_LABELS[displayStateBUi] ?? String(displayStateBUi).toUpperCase();
+  const displayLabelScreenB = getRegieDisplayStateLabel(displayStateBUi);
   const hasDisplayGap =
     Boolean(screenBConnected) &&
     ["question", "results", "waiting", "black"].includes(displayStateBUi) &&
     displayStateBUi !== String(projectionDisplayStateUi || "").toLowerCase();
-  const affichageEnAttente =
-    String(projectionDisplayStateUi || "").toLowerCase() === "waiting";
   const compactTopPanel = !desktop;
   const socketStatusLabel = socketConnected
     ? "Sync live connectee"
@@ -5663,13 +5653,11 @@ export default function RegieEventPage() {
         : "#2563eb";
   const ecranLabel = activePoll
     ? activePoll.question || activePoll.title
-    : eventLocked
-      ? "Cet événement est terminé. Créez un nouvel événement pour une nouvelle session."
-      : eventFinished
-        ? "Événement terminé — aucune question active."
-      : affichageEnAttente
-        ? "Projection en attente — choisissez « Afficher la question » ou « Afficher les résultats »."
-        : "Aucun contenu synchronisé pour l’instant.";
+    : getRegieIdleProjectionHint({
+        projectionDisplayState: projectionDisplayStateUi,
+        eventFinished,
+        eventLocked,
+      });
   const questionProgressSummary =
     totalQuestions > 0
       ? eventFinished

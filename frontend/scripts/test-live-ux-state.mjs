@@ -5,9 +5,14 @@
 import assert from "node:assert/strict";
 import {
   LIVE_UX_LABEL_VOTE_CONFIRMED,
+  LIVE_UX_LABEL_WAITING_BETWEEN,
+  LIVE_UX_LABEL_WAITING_START,
   LIVE_UX_STATE,
   getClosedParticipantTitle,
   getLiveStateLabel,
+  getLiveStatePresentation,
+  getWaitingLiveLabel,
+  isWaitingBetweenQuestions,
   resolveLiveUxState,
 } from "../lib/liveStateUx.js";
 import {
@@ -248,7 +253,7 @@ console.log("ok  labels sans jargon orga");
   assert.equal(getClosedParticipantTitle(true), LIVE_UX_LABEL_VOTE_CONFIRMED);
   assert.equal(
     getLiveStateLabel(LIVE_UX_STATE.WAITING),
-    "Ça va bientôt commencer",
+    LIVE_UX_LABEL_WAITING_START,
   );
   assert.ok(
     !/Merci ! Ton vote/i.test(getLiveStateLabel(LIVE_UX_STATE.WAITING)),
@@ -256,8 +261,59 @@ console.log("ok  labels sans jargon orga");
   console.log("ok  A1/A2 WAITING/CLOSED sans Merci non-votant");
 }
 
+{
+  assert.equal(isWaitingBetweenQuestions({}), false);
+  assert.equal(isWaitingBetweenQuestions({ pastPolls: [] }), false);
+  assert.equal(
+    isWaitingBetweenQuestions({ pollsProgress: { current: 1, total: 3 } }),
+    false,
+  );
+  assert.equal(
+    getWaitingLiveLabel({ pollsProgress: { current: 1, total: 3 } }),
+    LIVE_UX_LABEL_WAITING_START,
+  );
+  assert.equal(
+    isWaitingBetweenQuestions({
+      pastPolls: [{ id: "p1", label: "Q1" }],
+    }),
+    true,
+  );
+  assert.equal(
+    isWaitingBetweenQuestions({ pollsProgress: { current: 2, total: 3 } }),
+    true,
+  );
+  assert.equal(
+    getWaitingLiveLabel({ pollsProgress: { current: 2, total: 3 } }),
+    LIVE_UX_LABEL_WAITING_BETWEEN,
+  );
+  assert.equal(
+    getLiveStatePresentation({
+      liveScene: "waiting",
+      displayState: "waiting",
+      voteState: "closed",
+      pollStatus: "ACTIVE",
+      hasActivePoll: true,
+      pollsProgress: { current: 1, total: 2 },
+    }).title,
+    LIVE_UX_LABEL_WAITING_START,
+  );
+  assert.equal(
+    getLiveStatePresentation({
+      liveScene: "waiting",
+      displayState: "waiting",
+      voteState: "closed",
+      pollStatus: "ACTIVE",
+      hasActivePoll: true,
+      pastPolls: [{ id: "p1", label: "Q1" }],
+      pollsProgress: { current: 2, total: 2 },
+    }).title,
+    LIVE_UX_LABEL_WAITING_BETWEEN,
+  );
+  console.log("ok  WAITING start vs entre questions");
+}
+
 if (failed > 0) {
   console.error(`\n${failed} cas en échec`);
   process.exit(1);
 }
-console.log(`\n${cases.length + 3} assertions OK — LOT-0 live UX`);
+console.log(`\n${cases.length + 4} assertions OK — LOT-0 live UX`);

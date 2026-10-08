@@ -5,6 +5,7 @@ import { QRCodeSVG } from "qrcode.react";
 import {
   SCREEN_QR_CTA_JOIN,
   getScreenDiffusionLabel,
+  getScreenWaitingDiffusionLabel,
 } from "@/lib/diffusionUx";
 
 /**
@@ -12,9 +13,16 @@ import {
  * @param {{
  *   shell: Record<string, unknown>;
  *   joinSlug: string | null | undefined;
+ *   pollsProgress?: { current?: number; total?: number } | null;
+ *   pastPollsCount?: number | null;
  * }} props
  */
-export function ScreenWaiting({ shell, joinSlug }) {
+export function ScreenWaiting({
+  shell,
+  joinSlug,
+  pollsProgress = null,
+  pastPollsCount = null,
+}) {
   const [joinUrl, setJoinUrl] = useState("");
   const [cotePx, setCotePx] = useState(320);
 
@@ -68,7 +76,7 @@ export function ScreenWaiting({ shell, joinSlug }) {
           textWrap: "balance",
         }}
       >
-        {getScreenDiffusionLabel("WAITING")}
+        {getScreenWaitingDiffusionLabel({ pollsProgress, pastPollsCount })}
       </h1>
 
       <p
