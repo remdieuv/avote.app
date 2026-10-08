@@ -307,6 +307,10 @@ export function isParticipantVoteClosed(input = {}) {
  */
 export function shouldShowParticipantLiveResultsBlock(input = {}) {
   if (input.hasPoll !== true) return false;
+  // LOT-2 — Lead CRM : jamais de barres / répartition publiques (collecte uniquement).
+  // Concours : le bloc reste (lot / gagnants), sans barres classiques.
+  const pollType = String(input.pollType ?? "").toUpperCase();
+  if (input.leadEnabled === true && pollType !== "CONTEST_ENTRY") return false;
   if (input.affichageResultatsPublic === true) return true;
   if (input.archiveResultsStandalone === true) return true;
   if (input.hasVoted !== true) return false;
@@ -449,11 +453,14 @@ export function resolveNextPollPrepareEventPatch() {
 }
 
 /**
- * LOT-1 — Fermer (manuel ou chrono) : axes Salle + clear sticky Screen RESULTS.
+ * LOT-1 / LOT-2 — Fermer (manuel ou chrono) : axes Salle + clear sticky Screen RESULTS.
+ * Auto-reveal skip Lead CRM / Concours.
  *
  * @param {{
  *   autoReveal?: boolean;
  *   screenDisplayState?: string | null;
+ *   pollType?: string | null;
+ *   leadEnabled?: boolean | null;
  * }} [input]
  */
 export function resolveEventPatchAfterVoteClose(input = {}) {
@@ -461,12 +468,17 @@ export function resolveEventPatchAfterVoteClose(input = {}) {
     input.screenDisplayState,
     "close",
   );
+  const type = String(input.pollType ?? "").toUpperCase();
+  const leadCrm =
+    input.leadEnabled === true && type !== "CONTEST_ENTRY";
+  const skipAuto =
+    type === "CONTEST_ENTRY" || leadCrm === true;
   /** @type {Record<string, unknown>} */
   const patch = {
     voteState: "CLOSED",
     displayState: "WAITING",
     liveState: "WAITING",
-    schedulesAutoReveal: input.autoReveal === true,
+    schedulesAutoReveal: input.autoReveal === true && !skipAuto,
   };
   if (screenDisplayState !== undefined) {
     patch.screenDisplayState = screenDisplayState;

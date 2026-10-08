@@ -15,6 +15,7 @@ import {
   getScreenDiffusionLabel,
 } from "@/lib/diffusionUx";
 import { getParticipantResultsOptionBadgeLabel } from "@/lib/participantLiveFlow";
+import { isLeadCrmPoll } from "@/lib/leadContestLiveFlow";
 import { formatTestModeVoteCountLabel } from "@/lib/testModeResultsMask";
 import { API_URL } from "@/lib/config";
 
@@ -1033,10 +1034,112 @@ function ScreenResultsChoixClassiques({
   );
 }
 
+/** LOT-2 — Lead CRM : question + compteur, jamais barres / PII. */
+function ScreenResultsLeadCrm({ shell, poll, questionProgress = null }) {
+  const isTestMode = poll?.eventIsLiveConsumed === false;
+  const questionAffichee =
+    (typeof poll?.question === "string" && poll.question) ||
+    (typeof poll?.title === "string" && poll.title) ||
+    "Collecte";
+  const progressLabel =
+    formatScreenQuestionProgressLabel(questionProgress, "results") || "COLLECTE";
+  const participations = Math.max(
+    0,
+    Number(poll?.leadsCount ?? 0) || Number(poll?.votersCount ?? 0) || 0,
+  );
+  return (
+    <main
+      style={{
+        ...shell,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        textAlign: "center",
+        gap: "clamp(0.85rem, 2.5vw, 1.5rem)",
+      }}
+    >
+      {isTestMode ? (
+        <div
+          style={{
+            position: "fixed",
+            top: 14,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 2147483647,
+            pointerEvents: "none",
+            background: "rgba(0,0,0,0.55)",
+            color: "#f8fafc",
+            border: "1px solid rgba(148,163,184,0.35)",
+            borderRadius: 9999,
+            padding: "0.35rem 0.8rem",
+            fontWeight: 900,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            fontSize: "0.78rem",
+          }}
+          aria-hidden
+        >
+          MODE TEST
+        </div>
+      ) : null}
+      <p
+        style={{
+          margin: 0,
+          fontSize: "clamp(1rem, 2.5vw, 1.45rem)",
+          fontWeight: 900,
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          color: "#94a3b8",
+        }}
+      >
+        {progressLabel}
+      </p>
+      <h1
+        style={{
+          margin: 0,
+          fontSize: "clamp(2rem, 6vw, 4rem)",
+          fontWeight: 900,
+          lineHeight: 1.1,
+          color: "#f8fafc",
+          maxWidth: "18ch",
+          textWrap: "balance",
+        }}
+      >
+        {questionAffichee}
+      </h1>
+      <p
+        style={{
+          margin: 0,
+          fontSize: "clamp(1.15rem, 3vw, 1.85rem)",
+          fontWeight: 800,
+          color: "#cbd5e1",
+        }}
+      >
+        {participations} participation{participations !== 1 ? "s" : ""}
+      </p>
+      <p
+        style={{
+          margin: 0,
+          fontSize: "clamp(0.95rem, 2vw, 1.25rem)",
+          fontWeight: 600,
+          color: "#94a3b8",
+        }}
+      >
+        Collecte en cours — pas de résultats publics
+      </p>
+    </main>
+  );
+}
+
 export function ScreenResults(props) {
   const poll = props?.poll;
   const isTestMode = poll?.eventIsLiveConsumed === false;
   const isContestEntry = String(poll?.type || "").toUpperCase() === "CONTEST_ENTRY";
+  const isLeadCrm = isLeadCrmPoll({
+    pollType: poll?.type,
+    leadEnabled: poll?.leadEnabled,
+  });
   const [contestWinners, setContestWinners] = useState([]);
   useEffect(() => {
     if (!isContestEntry || !poll?.id || !poll?.eventSlug) {
@@ -1069,6 +1172,15 @@ export function ScreenResults(props) {
     poll?.options,
     poll?.contestWinnersCount,
   ]);
+  if (isLeadCrm) {
+    return (
+      <ScreenResultsLeadCrm
+        shell={props.shell}
+        poll={poll}
+        questionProgress={props.questionProgress}
+      />
+    );
+  }
   if (isContestEntry) {
     const questionAffichee =
       (typeof poll?.question === "string" && poll.question) ||
@@ -1161,16 +1273,6 @@ export function ScreenResults(props) {
           </h1>
           <p
             style={{
-              margin: 0,
-              fontSize: "clamp(1.1rem, 2.8vw, 1.75rem)",
-              fontWeight: 700,
-              color: "#cbd5e1",
-            }}
-          >
-            {String(primary.displayContact || "")}
-          </p>
-          <p
-            style={{
               margin: "0.35rem 0 0 0",
               fontSize: "clamp(1rem, 2.4vw, 1.45rem)",
               fontWeight: 700,
@@ -1199,7 +1301,6 @@ export function ScreenResults(props) {
                   }}
                 >
                   {String(w.displayName || "Gagnant")}
-                  {w.displayContact ? ` — ${String(w.displayContact)}` : ""}
                 </li>
               ))}
             </ul>

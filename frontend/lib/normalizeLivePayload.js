@@ -132,5 +132,12 @@ export function normalizePollJson(poll) {
         /** @type {Record<string, unknown>} */ (poll).votersCount ?? 0,
       ) || 0,
     ),
+    /** Captures Lead / inscriptions Concours (compteur Screen sans PII). */
+    leadsCount: Math.max(
+      0,
+      Number(
+        /** @type {Record<string, unknown>} */ (poll).leadsCount ?? 0,
+      ) || 0,
+    ),
   };
 }

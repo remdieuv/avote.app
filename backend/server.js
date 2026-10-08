@@ -294,6 +294,7 @@ function screenDisplayStateForLiveTransition(currentScreenDisplayState, intent) 
  * Les deux chemins doivent produire les mêmes axes pour le Screen CLOSED :
  * vote CLOSED × display WAITING × live WAITING + reset chrono.
  * Efface uniquement un `screenDisplayState=RESULTS` collant (préserve BLACK).
+ * LOT-2 : pas d’auto-reveal pour Lead CRM / Concours.
  *
  * @param {{
  *   autoReveal?: boolean | null;
@@ -301,9 +302,10 @@ function screenDisplayStateForLiveTransition(currentScreenDisplayState, intent) 
  *   displayState?: string | null;
  *   screenDisplayState?: string | null;
  * }} event
+ * @param {{ type?: string | null; leadEnabled?: boolean | null } | null} [activePoll]
  * @returns {Record<string, unknown>}
  */
-function buildEventDataAfterVoteClose(event) {
+function buildEventDataAfterVoteClose(event, activePoll = null) {
   const delaySec = [3, 5, 10].includes(event?.autoRevealDelaySec)
     ? event.autoRevealDelaySec
     : 5;
@@ -321,10 +323,11 @@ function buildEventDataAfterVoteClose(event) {
   if (screenPatch !== undefined) {
     data.screenDisplayState = screenPatch;
   }
-  if (
+  const allowAuto =
+    shouldScheduleAutoRevealForPoll(activePoll) &&
     event?.autoReveal &&
-    String(event?.displayState || "").toUpperCase() !== "RESULTS"
-  ) {
+    String(event?.displayState || "").toUpperCase() !== "RESULTS";
+  if (allowAuto) {
     data.autoRevealShowResultsAt = new Date(Date.now() + delaySec * 1000);
   } else {
     data.autoRevealShowResultsAt = null;
@@ -464,36 +467,45 @@ function pollToJson(poll) {
      * Screen VOTING : à préférer à la somme des options (MULTIPLE_CHOICE).
      */
     votersCount: uniqueVoterSessions.size,
+    /**
+     * Compteur CRM Lead / inscriptions Concours (LeadCapture).
+     * Screen Lead : compteur global sans répartition ni PII.
+     */
+    leadsCount: Number(poll._count?.leads || 0),
   };
 }
 
-function maskPhoneForPublic(phone) {
-  const digits = String(phone || "").replace(/\D/g, "");
-  if (!digits) return null;
-  if (digits.length <= 4) return "XX XX";
-  const head = digits.slice(0, 2);
-  const tail = digits.slice(-2);
-  return `${head} XX XX XX ${tail}`;
+/**
+ * Affichage public Concours : Prénom + initiale du nom.
+ * Sans nom de famille collecté → libellé non identifiant (pas d’initiale inventée).
+ * @param {string | null | undefined} firstName
+ * @param {string | null | undefined} lastName
+ * @param {number} position
+ */
+function winnerDisplayNameForPublic(firstName, lastName, position) {
+  const first = String(firstName || "").trim();
+  const last = String(lastName || "").trim();
+  const pos = Math.max(1, Number(position) || 1);
+  if (first && last) {
+    const f =
+      first.length === 1
+        ? first.toUpperCase()
+        : `${first[0].toUpperCase()}${first.slice(1)}`;
+    return `${f} ${last[0].toUpperCase()}.`;
+  }
+  return `Gagnant ${pos}`;
 }
 
-function maskEmailForPublic(email) {
-  const raw = String(email || "").trim();
-  if (!raw || !raw.includes("@")) return null;
-  const [local, domain] = raw.split("@");
-  if (!domain) return null;
-  const safeLocal =
-    local.length <= 2 ? `${local[0] || "*"}*` : `${local.slice(0, 2)}***`;
-  return `${safeLocal}@${domain}`;
-}
-
-function winnerDisplayNameForPublic(firstName, position) {
-  const n = String(firstName || "").trim();
-  if (!n) return `Gagnant ${position}`;
-  return `${n[0].toUpperCase()}${n.slice(1)}.`;
-}
-
-function winnerDisplayContactForPublic(phone, email) {
-  return maskPhoneForPublic(phone) || maskEmailForPublic(email) || "Contact privé";
+/**
+ * Auto-reveal RESULTS : Sondage / Multiple / Quiz uniquement (pas Lead CRM / Concours).
+ * @param {{ type?: string | null; leadEnabled?: boolean | null } | null | undefined} poll
+ */
+function shouldScheduleAutoRevealForPoll(poll) {
+  if (!poll) return true;
+  const type = String(poll.type || "").toUpperCase();
+  if (type === "CONTEST_ENTRY") return false;
+  if (poll.leadEnabled === true && type !== "CONTEST_ENTRY") return false;
+  return true;
 }
 
 async function loadPollFull(pollId) {
@@ -503,7 +515,7 @@ async function loadPollFull(pollId) {
       event: true,
       options: { orderBy: { order: "asc" } },
       votes: true,
-      _count: { select: { contestWinners: true } },
+      _count: { select: { contestWinners: true, leads: true } },
     },
   });
 }
@@ -525,7 +537,7 @@ async function loadPublicPollPourSlug(slug) {
       event: true,
       options: { orderBy: { order: "asc" } },
       votes: true,
-      _count: { select: { contestWinners: true } },
+      _count: { select: { contestWinners: true, leads: true } },
     },
   });
   if (!poll) return null;
@@ -854,6 +866,19 @@ async function appliquerAutoRevealResultats(io, eventId) {
     await emitEventLiveUpdated(io, eventId);
     return;
   }
+  const activePoll = await prisma.poll.findUnique({
+    where: { id: fresh.activePollId },
+    select: { type: true, leadEnabled: true },
+  });
+  // LOT-2 — Lead / Concours : pas d’auto-affichage RESULTS.
+  if (!shouldScheduleAutoRevealForPoll(activePoll)) {
+    await prisma.event.update({
+      where: { id: eventId },
+      data: { autoRevealShowResultsAt: null },
+    });
+    await emitEventLiveUpdated(io, eventId);
+    return;
+  }
   await appliquerAffichageResultats(io, fresh.activePollId);
 }
 
@@ -886,7 +911,11 @@ async function fermerVoteSiChronoEpuise(io, eventId) {
   });
   if (closed.count === 0) return false;
 
-  const dataReveil = buildEventDataAfterVoteClose(event);
+  const activePollMeta = await prisma.poll.findUnique({
+    where: { id: activeId },
+    select: { type: true, leadEnabled: true },
+  });
+  const dataReveil = buildEventDataAfterVoteClose(event, activePollMeta);
   const delaySec = [3, 5, 10].includes(event.autoRevealDelaySec)
     ? event.autoRevealDelaySec
     : 5;
@@ -902,7 +931,7 @@ async function fermerVoteSiChronoEpuise(io, eventId) {
   if (pollFerme) {
     io.to(roomPourPoll(activeId)).emit("poll_updated", pollToJson(pollFerme));
   }
-  if (event.autoReveal) {
+  if (dataReveil.autoRevealShowResultsAt) {
     planifierTimeoutAutoReveal(io, eventId, delaySec * 1000);
   }
   return true;
@@ -3030,8 +3059,7 @@ app.get("/p/:slug/contest-status", async (req, res) => {
         id: true,
         voterSessionId: true,
         firstName: true,
-        phone: true,
-        email: true,
+        lastName: true,
         position: true,
         createdAt: true,
       },
@@ -3045,6 +3073,7 @@ app.get("/p/:slug/contest-status", async (req, res) => {
       !!voterSessionId &&
       winners.some((w) => String(w.voterSessionId) === String(voterSessionId));
 
+    // LOT-2 — public : Prénom + initiale du nom ; aucune coordonnée.
     return res.json({
       pollId: poll.id,
       contestPrize: poll.contestPrize ?? null,
@@ -3054,8 +3083,11 @@ app.get("/p/:slug/contest-status", async (req, res) => {
       winners: winners.map((w, idx) => ({
         id: w.id,
         position: idx + 1,
-        displayName: winnerDisplayNameForPublic(w.firstName, idx + 1),
-        displayContact: winnerDisplayContactForPublic(w.phone, w.email),
+        displayName: winnerDisplayNameForPublic(
+          w.firstName,
+          w.lastName,
+          idx + 1,
+        ),
         createdAt: w.createdAt.toISOString(),
       })),
     });
@@ -3561,10 +3593,14 @@ app.post("/polls/:pollId/close", requireAuth, async (req, res) => {
      * G13 — même transition que fin de chrono (`fermerVoteSiChronoEpuise`) :
      * vote CLOSED + display WAITING + live WAITING + reset chrono.
      * Ne force pas RESULTS ; efface un screenDisplayState RESULTS collant.
+     * LOT-2 : skip auto-reveal Lead / Concours.
      */
     let majEvent =
       poll.event.activePollId === poll.id
-        ? buildEventDataAfterVoteClose(poll.event)
+        ? buildEventDataAfterVoteClose(poll.event, {
+            type: poll.type,
+            leadEnabled: poll.leadEnabled,
+          })
         : {};
 
     if (poll.event.activePollId === poll.id) {
@@ -4346,6 +4382,9 @@ app.post("/polls/:pollId/leads", async (req, res) => {
     typeof body.voterSessionId === "string" ? body.voterSessionId.trim() : "";
   const firstName =
     typeof body.firstName === "string" ? body.firstName.trim() : "";
+  const lastNameRaw =
+    typeof body.lastName === "string" ? body.lastName.trim() : "";
+  const lastName = lastNameRaw === "" ? null : lastNameRaw.slice(0, 120);
   const phone = typeof body.phone === "string" ? body.phone.trim() : "";
   const emailRaw = typeof body.email === "string" ? body.email.trim() : "";
   const email = emailRaw === "" ? null : emailRaw.slice(0, 320);
@@ -4372,6 +4411,8 @@ app.post("/polls/:pollId/leads", async (req, res) => {
       return res.status(400).json({ error: "Collecte lead non activée." });
     }
 
+    // Grace post-Fermer : autorisé si vote déclencheur déjà enregistré
+    // (pas de contrôle voteState — un nouveau vote reste refusé côté submitVote).
     const aDeclenche = await prisma.vote.findFirst({
       where: {
         pollId,
@@ -4391,12 +4432,13 @@ app.post("/polls/:pollId/leads", async (req, res) => {
           voterSessionId,
         },
       },
-      update: { firstName, phone, email },
+      update: { firstName, lastName, phone, email },
       create: {
         pollId,
         eventId: poll.eventId,
         voterSessionId,
         firstName,
+        lastName,
         phone,
         email,
       },
@@ -4442,6 +4484,7 @@ async function listContestEligibleParticipants(pollId, opts = {}) {
       select: {
         voterSessionId: true,
         firstName: true,
+        lastName: true,
         phone: true,
         email: true,
         createdAt: true,
@@ -4453,6 +4496,7 @@ async function listContestEligibleParticipants(pollId, opts = {}) {
       l.voterSessionId,
       {
         firstName: l.firstName,
+        lastName: l.lastName ?? null,
         phone: l.phone,
         email: l.email,
         leadCapturedAt: l.createdAt,
@@ -4520,12 +4564,27 @@ app.post("/polls/:pollId/draw", requireAuth, async (req, res) => {
         type: true,
         contestPrize: true,
         contestWinnerCount: true,
+        event: {
+          select: {
+            voteState: true,
+            screenDisplayState: true,
+            activePollId: true,
+          },
+        },
       },
     });
     if (!poll || poll.type !== "CONTEST_ENTRY") {
       return res
         .status(400)
         .json({ error: "Le tirage est réservé aux questions concours." });
+    }
+
+    // LOT-2 — séquence Ouvrir → Fermer → Tirer (pas de tirage en VOTING).
+    if (String(poll.event?.voteState || "").toUpperCase() !== "CLOSED") {
+      return res.status(409).json({
+        error: "Fermez d’abord les participations avant de tirer au sort.",
+        voteOpen: true,
+      });
     }
 
     const contestWinnerCount = normalizeContestWinnerCount(
@@ -4597,11 +4656,29 @@ app.post("/polls/:pollId/draw", requireAuth, async (req, res) => {
           voterSessionId: w.voterSessionId,
           position: index + 1,
           firstName: w.firstName,
+          lastName: w.lastName ?? null,
           phone: w.phone,
           email: w.email ?? null,
         })),
       });
       return createdDraw;
+    });
+
+    // LOT-2 — le tirage déclenche l’affichage public (TIRAGE ≡ RESULTS métier).
+    // Pas de passage obligatoire par « Afficher les résultats ».
+    await annulationAutoRevealProgrammee(poll.eventId);
+    await prisma.event.update({
+      where: { id: poll.eventId },
+      data: {
+        activePollId: poll.id,
+        displayState: "RESULTS",
+        screenDisplayState: screenDisplayStateForLiveTransition(
+          poll.event?.screenDisplayState,
+          "show-results",
+        ),
+        liveState: computeLiveState("CLOSED", "RESULTS"),
+        autoRevealShowResultsAt: null,
+      },
     });
 
     // G9 — surfaces publiques (Salle / Screen / Overlay) via rooms existantes.
@@ -4623,8 +4700,14 @@ app.post("/polls/:pollId/draw", requireAuth, async (req, res) => {
         position: index + 1,
         voterSessionId: w.voterSessionId,
         firstName: w.firstName,
+        lastName: w.lastName ?? null,
         phone: w.phone,
         email: w.email ?? null,
+        displayName: winnerDisplayNameForPublic(
+          w.firstName,
+          w.lastName,
+          index + 1,
+        ),
       })),
     });
   } catch (e) {
@@ -4675,6 +4758,7 @@ app.get("/polls/:pollId/draws/winners", requireAuth, async (req, res) => {
         drawId: true,
         position: true,
         firstName: true,
+        lastName: true,
         phone: true,
         email: true,
         createdAt: true,
@@ -4688,6 +4772,7 @@ app.get("/polls/:pollId/draws/winners", requireAuth, async (req, res) => {
         drawId: w.drawId,
         position: w.position,
         firstName: w.firstName,
+        lastName: w.lastName ?? null,
         phone: w.phone,
         email: w.email ?? null,
         createdAt: w.createdAt.toISOString(),

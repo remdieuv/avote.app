@@ -63,6 +63,16 @@ import {
   shouldShowParticipantResultStats,
 } from "@/lib/participantLiveFlow";
 import {
+  CONTEST_PUBLIC_WINNERS_ANNOUNCE_TITLE,
+  CONTEST_WINNER_SELF_CONGRATS,
+  canSubmitLeadCapture,
+  leadDraftStorageKey,
+  leadSubmittedStorageKey,
+  parseLeadDraft,
+  serializeLeadDraft,
+  shouldShowLeadCaptureForm,
+} from "@/lib/leadContestLiveFlow";
+import {
   buildJoinPollCardSurfaces,
   getLiveStateVisualTokens,
   mergeCardBorderWithAccent,
@@ -287,6 +297,7 @@ export function PollExperience({
   const [merciPourVote, setMerciPourVote] = useState(false);
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [leadFirstName, setLeadFirstName] = useState("");
+  const [leadLastName, setLeadLastName] = useState("");
   const [leadPhone, setLeadPhone] = useState("");
   const [leadEmail, setLeadEmail] = useState("");
   const [leadSubmitting, setLeadSubmitting] = useState(false);
@@ -501,6 +512,13 @@ export function PollExperience({
   useEffect(() => {
     setMerciPourVote(false);
     setVotedOptionIdsEnStockage([]);
+    setShowLeadForm(false);
+    setLeadSuccess(false);
+    setLeadError(null);
+    setLeadFirstName("");
+    setLeadLastName("");
+    setLeadPhone("");
+    setLeadEmail("");
     if (!pollId) {
       setStorageVerifie(true);
       return;
@@ -508,16 +526,39 @@ export function PollExperience({
     try {
       if (typeof window !== "undefined") {
         const marqueur = window.localStorage.getItem(cleVotePourPoll(pollId));
-        setADejaVoteEnStockage(marqueur === "true" || marqueur === "1");
+        const aVote = marqueur === "true" || marqueur === "1";
+        setADejaVoteEnStockage(aVote);
         const rawOpts = window.localStorage.getItem(cleOptionsVotePourPoll(pollId));
         const parsed = rawOpts ? JSON.parse(rawOpts) : [];
+        /** @type {string[]} */
+        let ids = [];
         if (Array.isArray(parsed)) {
-          const ids = parsed
+          ids = parsed
             .map((x) => String(x || "").trim())
             .filter(Boolean);
           setVotedOptionIdsEnStockage(ids);
           setSelectedOptionIds(ids);
           setSelectedOptionId(ids[0] || null);
+        }
+        const voterSessionId = getOrCreateVoterSessionId();
+        const submittedKey = leadSubmittedStorageKey(pollId, voterSessionId || "");
+        const alreadySubmitted =
+          window.sessionStorage.getItem(submittedKey) === "1";
+        if (alreadySubmitted) {
+          setLeadSuccess(true);
+          setShowLeadForm(false);
+        } else {
+          const draft = parseLeadDraft(
+            window.sessionStorage.getItem(
+              leadDraftStorageKey(pollId, voterSessionId || ""),
+            ),
+          );
+          if (draft) {
+            setLeadFirstName(draft.firstName);
+            setLeadLastName(draft.lastName);
+            setLeadPhone(draft.phone);
+            setLeadEmail(draft.email);
+          }
         }
       }
     } catch {
@@ -526,6 +567,61 @@ export function PollExperience({
       setStorageVerifie(true);
     }
   }, [pollId]);
+
+  // LOT-2 — rouvre le form Lead après refresh si vote déclencheur + pas encore soumis.
+  useEffect(() => {
+    if (!poll || !storageVerifie) return;
+    if (!poll.leadEnabled || !poll.leadTriggerOptionId) return;
+    if (leadSuccess) return;
+    const triggerId = String(poll.leadTriggerOptionId);
+    const hasTrigger = votedOptionIdsEnStockage.includes(triggerId);
+    if (
+      shouldShowLeadCaptureForm({
+        leadEnabled: true,
+        hasVotedTrigger: hasTrigger,
+        leadSubmitted: leadSuccess,
+      })
+    ) {
+      setShowLeadForm(true);
+      setMerciPourVote(true);
+    }
+  }, [
+    poll?.id,
+    poll?.leadEnabled,
+    poll?.leadTriggerOptionId,
+    votedOptionIdsEnStockage,
+    leadSuccess,
+    storageVerifie,
+  ]);
+
+  // Draft Lead en sessionStorage (refresh même onglet) — pas de localStorage durable.
+  useEffect(() => {
+    if (!pollId || !showLeadForm || leadSuccess) return;
+    if (typeof window === "undefined") return;
+    try {
+      const voterSessionId = getOrCreateVoterSessionId();
+      if (!voterSessionId) return;
+      window.sessionStorage.setItem(
+        leadDraftStorageKey(pollId, voterSessionId),
+        serializeLeadDraft({
+          firstName: leadFirstName,
+          lastName: leadLastName,
+          phone: leadPhone,
+          email: leadEmail,
+        }),
+      );
+    } catch {
+      // ignore
+    }
+  }, [
+    pollId,
+    showLeadForm,
+    leadSuccess,
+    leadFirstName,
+    leadLastName,
+    leadPhone,
+    leadEmail,
+  ]);
 
   useEffect(() => {
     setSelectedOptionId(null);
@@ -985,6 +1081,8 @@ export function PollExperience({
     voteState: voteStateParticipant,
     pollStatus: poll?.status,
     liveScene,
+    pollType: poll?.type,
+    leadEnabled: poll?.leadEnabled,
   });
 
   const resultsBlockTitle = getParticipantResultsBlockTitle({
@@ -1307,7 +1405,16 @@ export function PollExperience({
     if (!pollId) return;
     const voterSessionId = getOrCreateVoterSessionId();
     if (!voterSessionId) return;
+    if (
+      !canSubmitLeadCapture({
+        hasVotedTrigger: true,
+        leadSubmitted: leadSuccess,
+      })
+    ) {
+      return;
+    }
     const firstName = leadFirstName.trim();
+    const lastName = leadLastName.trim();
     const phone = leadPhone.trim();
     const email = leadEmail.trim();
     if (!firstName || !phone) {
@@ -1323,12 +1430,24 @@ export function PollExperience({
         body: JSON.stringify({
           voterSessionId,
           firstName,
+          lastName: lastName || null,
           phone,
           email: email || null,
         }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || `Erreur ${res.status}`);
+      try {
+        window.sessionStorage.setItem(
+          leadSubmittedStorageKey(pollId, voterSessionId),
+          "1",
+        );
+        window.sessionStorage.removeItem(
+          leadDraftStorageKey(pollId, voterSessionId),
+        );
+      } catch {
+        // ignore
+      }
       setLeadSuccess(true);
       setShowLeadForm(false);
       requestAnimationFrame(() => {
@@ -2109,8 +2228,9 @@ export function PollExperience({
             </p>
           )}
 
-          {merciPourVote && voteOuvert && (
+          {(merciPourVote || showLeadForm || leadSuccess) && (
             <>
+              {(merciPourVote || aDejaVoteEnStockage) && !showLeadForm ? (
               <p
                 style={{
                   marginBottom: "1rem",
@@ -2124,7 +2244,29 @@ export function PollExperience({
               >
                 {LIVE_UX_LABEL_VOTE_CONFIRMED}
               </p>
-              {showLeadForm ? (
+              ) : null}
+              {leadSuccess ? (
+                <p
+                  style={{
+                    marginBottom: "1rem",
+                    padding: "0.75rem 1rem",
+                    background: isDark
+                      ? "rgba(22, 163, 74, 0.18)"
+                      : "rgba(220, 252, 231, 0.9)",
+                    borderRadius: "12px",
+                    border: "1px solid rgba(34, 197, 94, 0.35)",
+                    color: isDark ? "#bbf7d0" : "#166534",
+                    fontWeight: 600,
+                  }}
+                >
+                  Merci, c’est bien enregistré.
+                </p>
+              ) : null}
+              {showLeadForm &&
+              canSubmitLeadCapture({
+                hasVotedTrigger: true,
+                leadSubmitted: leadSuccess,
+              }) ? (
                 <div
                   ref={leadFormAnchorRef}
                   style={{
@@ -2138,6 +2280,17 @@ export function PollExperience({
                   <p style={{ margin: "0 0 0.65rem", fontWeight: 700, color: palette.fg }}>
                     Laisse-nous tes coordonnées
                   </p>
+                  {!voteOuvert ? (
+                    <p
+                      style={{
+                        margin: "0 0 0.65rem",
+                        fontSize: "0.82rem",
+                        color: palette.muted,
+                      }}
+                    >
+                      Le vote est fermé — tu peux encore envoyer ce formulaire.
+                    </p>
+                  ) : null}
                   <div style={{ display: "grid", gap: "0.5rem" }}>
                     <input
                       type="text"
@@ -2145,6 +2298,15 @@ export function PollExperience({
                       value={leadFirstName}
                       onChange={(e) => setLeadFirstName(e.target.value)}
                       disabled={leadSubmitting}
+                      style={{ padding: "0.55rem 0.65rem", borderRadius: "10px", border: "1px solid #cbd5e1" }}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Nom (optionnel)"
+                      value={leadLastName}
+                      onChange={(e) => setLeadLastName(e.target.value)}
+                      disabled={leadSubmitting}
+                      autoComplete="family-name"
                       style={{ padding: "0.55rem 0.65rem", borderRadius: "10px", border: "1px solid #cbd5e1" }}
                     />
                     <input
@@ -2198,11 +2360,6 @@ export function PollExperience({
                     ) : null}
                   </div>
                 </div>
-              ) : null}
-              {leadSuccess ? (
-                <p style={{ margin: "0 0 1rem", color: palette.fg2, fontSize: "0.88rem" }}>
-                  Merci, vos coordonnées ont bien été enregistrées.
-                </p>
               ) : null}
             </>
           )}
@@ -2591,7 +2748,18 @@ export function PollExperience({
                         color: "#16a34a",
                       }}
                     >
-                      Félicitations, vous avez été tiré au sort !
+                      {CONTEST_WINNER_SELF_CONGRATS}
+                    </p>
+                  ) : contestPublicWinners.length > 0 ? (
+                    <p
+                      style={{
+                        margin: "0.65rem 0 0 0",
+                        fontSize: "0.86rem",
+                        fontWeight: 700,
+                        color: palette.fg2,
+                      }}
+                    >
+                      {CONTEST_PUBLIC_WINNERS_ANNOUNCE_TITLE}
                     </p>
                   ) : null}
                   {contestPublicWinners.length > 0 ? (
@@ -2612,12 +2780,12 @@ export function PollExperience({
                           color: palette.muted,
                         }}
                       >
-                        Gagnants tirés
+                        {CONTEST_PUBLIC_WINNERS_ANNOUNCE_TITLE}
                       </p>
                       <ul style={{ margin: "0.45rem 0 0 1rem", padding: 0, color: palette.fg2 }}>
                         {contestPublicWinners.map((w) => (
                           <li key={String(w.id)} style={{ marginBottom: "0.28rem" }}>
-                            {String(w.displayName || "Gagnant")} - {String(w.displayContact || "")}
+                            {String(w.displayName || "Gagnant")}
                           </li>
                         ))}
                       </ul>
@@ -2898,7 +3066,7 @@ export function PollExperience({
                         color: "#16a34a",
                       }}
                     >
-                      Félicitations, vous avez été tiré au sort !
+                      {CONTEST_WINNER_SELF_CONGRATS}
                     </p>
                   ) : null}
                 </div>

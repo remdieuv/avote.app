@@ -313,9 +313,10 @@ function formatContestDrawSummary(summary, poll) {
 
 function formatWinnerName(winner) {
   const first = String(winner?.firstName || "").trim();
-  if (!first) return "Participant";
-  const initial = first.charAt(0).toUpperCase();
-  return `${first} ${initial}.`;
+  const last = String(winner?.lastName || "").trim();
+  if (first && last) return `${first} ${last[0].toUpperCase()}.`;
+  if (first) return first;
+  return "Participant";
 }
 
 function maskPhone(phoneRaw) {
@@ -365,10 +366,17 @@ function PollCard({
     poll.status === "ARCHIVED" ||
     voteOuvertSurCeSondage;
   const disableStop = busy || poll.status !== "ACTIVE";
-  const disableResultats = busy;
-  const resultsButtonTitle = isQuizPoll(poll)
-    ? "Affiche les résultats finaux à la salle et à l’écran. Si le vote est fermé, révèle aussi la bonne réponse et le verdict participant."
-    : "Affiche les résultats finaux à la salle et à l’écran (le vote peut rester ouvert).";
+  const isLeadOrContest = isLeadPoll(poll) || isContestPoll(poll);
+  /** LOT-2 — Afficher hors parcours principal Lead / Concours. */
+  const disableResultats = busy || isLeadOrContest;
+  const resultsButtonTitle = isLeadOrContest
+    ? isContestPoll(poll)
+      ? "Concours : utilisez « Tirer un gagnant » après fermeture (pas d’Afficher)."
+      : "Lead : collecte CRM sans résultats publics. Consultez « Voir les leads »."
+    : isQuizPoll(poll)
+      ? "Affiche les résultats finaux à la salle et à l’écran. Si le vote est fermé, révèle aussi la bonne réponse et le verdict participant."
+      : "Affiche les résultats finaux à la salle et à l’écran (le vote peut rester ouvert).";
+  const contestDrawDisabled = busy || voteOuvertSurCeSondage;
 
   const boutons = (
     <>
@@ -398,25 +406,31 @@ function PollCard({
       >
         Stop vote
       </button>
-      <button
-        type="button"
-        disabled={disableResultats}
-        onClick={() => onResults(poll.id)}
-        style={btnAfficherResultats(disableResultats)}
-        title={resultsButtonTitle}
-      >
-        Afficher les résultats
-      </button>
+      {!isLeadOrContest ? (
+        <button
+          type="button"
+          disabled={disableResultats}
+          onClick={() => onResults(poll.id)}
+          style={btnAfficherResultats(disableResultats)}
+          title={resultsButtonTitle}
+        >
+          Afficher les résultats
+        </button>
+      ) : null}
     </>
   );
 
   const quickAction = isContestPoll(poll) ? (
     <button
       type="button"
-      disabled={busy}
+      disabled={contestDrawDisabled}
       onClick={() => onContestShortcut?.(poll)}
-      style={btnSecondaryAction(busy)}
-      title="Raccourci vers le tirage concours"
+      style={btnSecondaryAction(contestDrawDisabled)}
+      title={
+        voteOuvertSurCeSondage
+          ? "Fermez d’abord les participations avant de tirer au sort."
+          : "Raccourci vers le tirage concours"
+      }
     >
       Tirer un gagnant
     </button>
@@ -668,35 +682,44 @@ function PollCard({
           >
             Stop vote
           </button>
-          <button
-            type="button"
-            disabled={disableResultats}
-            onClick={() => onResults(poll.id)}
-            title={resultsButtonTitle}
-            style={{
-              ...btnAfficherResultats(disableResultats),
-              width: "100%",
-              padding: "0.38rem 0.5rem",
-              fontSize: "0.72rem",
-            }}
-          >
-            Afficher les résultats
-          </button>
+          {!isLeadOrContest ? (
+            <button
+              type="button"
+              disabled={disableResultats}
+              onClick={() => onResults(poll.id)}
+              title={resultsButtonTitle}
+              style={{
+                ...btnAfficherResultats(disableResultats),
+                width: "100%",
+                padding: "0.38rem 0.5rem",
+                fontSize: "0.72rem",
+              }}
+            >
+              Afficher les résultats
+            </button>
+          ) : null}
           {quickAction ? (
             <button
               type="button"
-              disabled={busy}
+              disabled={isContestPoll(poll) ? contestDrawDisabled : busy}
               onClick={() =>
                 isContestPoll(poll)
                   ? onContestShortcut?.(poll)
                   : onLeadShortcut?.(poll)
               }
               style={{
-                ...btnSecondaryAction(busy),
+                ...btnSecondaryAction(
+                  isContestPoll(poll) ? contestDrawDisabled : busy,
+                ),
                 width: "100%",
                 padding: "0.38rem 0.5rem",
                 fontSize: "0.72rem",
               }}
+              title={
+                isContestPoll(poll) && voteOuvertSurCeSondage
+                  ? "Fermez d’abord les participations avant de tirer au sort."
+                  : undefined
+              }
             >
               {isContestPoll(poll) ? "Tirer un gagnant" : "Voir les leads"}
             </button>
@@ -5854,6 +5877,14 @@ export default function RegieEventPage() {
       const isContest = isContestPoll(poll);
       if (!isContest) return;
       const isActive = String(eventData?.activePollId || "") === String(poll?.id || "");
+      const voteOpen =
+        isActive &&
+        String(eventData?.voteState || "").toLowerCase().trim() === "open";
+      if (voteOpen) {
+        setToastNotif("Fermez d’abord les participations avant de tirer au sort.");
+        window.setTimeout(() => setToastNotif(null), 2800);
+        return;
+      }
       if (isActive) {
         setContestDrawModalOpen(true);
         return;
@@ -5865,7 +5896,7 @@ export default function RegieEventPage() {
       setToastNotif("Astuce : activez d’abord cette question pour le tirage.");
       window.setTimeout(() => setToastNotif(null), 2600);
     },
-    [eventData?.activePollId],
+    [eventData?.activePollId, eventData?.voteState],
   );
 
   const handleLeadShortcut = useCallback(
@@ -6816,18 +6847,30 @@ export default function RegieEventPage() {
               </button>
               <button
                 type="button"
-                disabled={busy || !activePoll?.id || contestQuotaReached}
+                disabled={
+                  busy ||
+                  !activePoll?.id ||
+                  contestQuotaReached ||
+                  voteStateUi === "open"
+                }
                 onClick={() => void postContestDraw(activePoll?.id || "")}
                 style={{
                   padding: "0.45rem 0.8rem",
                   borderRadius: "9px",
                   border: "1px solid #7c3aed",
-                  background: busy || contestQuotaReached
-                    ? "#f1f5f9"
-                    : "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)",
-                  color: busy || contestQuotaReached ? "#94a3b8" : "#fff",
+                  background:
+                    busy || contestQuotaReached || voteStateUi === "open"
+                      ? "#f1f5f9"
+                      : "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)",
+                  color:
+                    busy || contestQuotaReached || voteStateUi === "open"
+                      ? "#94a3b8"
+                      : "#fff",
                   fontWeight: 800,
-                  cursor: busy || contestQuotaReached ? "not-allowed" : "pointer",
+                  cursor:
+                    busy || contestQuotaReached || voteStateUi === "open"
+                      ? "not-allowed"
+                      : "pointer",
                 }}
               >
                 {busy ? "Tirage..." : "Confirmer le tirage"}
@@ -7933,9 +7976,15 @@ export default function RegieEventPage() {
                   contestEligibleLoading ||
                   contestEligibleCount <= 0 ||
                   !!contestEligibleError ||
-                  contestQuotaReached
+                  contestQuotaReached ||
+                  voteStateUi === "open"
                 }
                 onClick={() => setContestDrawModalOpen(true)}
+                title={
+                  voteStateUi === "open"
+                    ? "Fermez d’abord les participations avant de tirer au sort."
+                    : undefined
+                }
                 style={{
                   marginTop: "0.6rem",
                   padding: "0.45rem 0.8rem",
@@ -7946,7 +7995,8 @@ export default function RegieEventPage() {
                     contestEligibleLoading ||
                     contestEligibleCount <= 0 ||
                     !!contestEligibleError ||
-                    contestQuotaReached
+                    contestQuotaReached ||
+                    voteStateUi === "open"
                       ? "#f8fafc"
                       : "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)",
                   color:
@@ -7954,7 +8004,8 @@ export default function RegieEventPage() {
                     contestEligibleLoading ||
                     contestEligibleCount <= 0 ||
                     !!contestEligibleError ||
-                    contestQuotaReached
+                    contestQuotaReached ||
+                    voteStateUi === "open"
                       ? "#94a3b8"
                       : "#fff",
                   fontSize: "0.8rem",
@@ -7964,7 +8015,8 @@ export default function RegieEventPage() {
                     contestEligibleLoading ||
                     contestEligibleCount <= 0 ||
                     !!contestEligibleError ||
-                    contestQuotaReached
+                    contestQuotaReached ||
+                    voteStateUi === "open"
                       ? "not-allowed"
                       : "pointer",
                 }}

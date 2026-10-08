@@ -237,6 +237,7 @@ model ContestDrawWinner {
   voterSessionId String
   position       Int         @default(0)
   firstName      String
+  lastName       String?
   phone          String
   email          String?
   createdAt      DateTime    @default(now())
@@ -282,6 +283,7 @@ model LeadCapture {
   pollId         String
   voterSessionId String
   firstName      String
+  lastName       String?
   phone          String
   email          String?
   createdAt      DateTime @default(now())

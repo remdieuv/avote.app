@@ -990,6 +990,8 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
 
   if (effectivePanel === "results") {
     const isContestEntry = String(poll?.type || "").toUpperCase() === "CONTEST_ENTRY";
+    const isLeadCrm =
+      Boolean(poll?.leadEnabled) && !isContestEntry;
     return (
       <main style={shell}>
         {wrapGlass(
@@ -1042,9 +1044,50 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
             >
               {isContestEntry
                 ? "Concours en cours"
-                : getScreenDiffusionLabel("RESULTS")}
+                : isLeadCrm
+                  ? "Collecte"
+                  : getScreenDiffusionLabel("RESULTS")}
             </p>
-            {isContestEntry ? (
+            {isLeadCrm ? (
+              <div>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: v.rowRem,
+                    fontWeight: 800,
+                    color: th.text,
+                  }}
+                >
+                  {(typeof poll?.question === "string" && poll.question) ||
+                    (typeof poll?.title === "string" && poll.title) ||
+                    "Collecte"}
+                </p>
+                <p
+                  style={{
+                    margin: "0.45rem 0 0 0",
+                    fontSize: `calc(${v.rowRem} * 0.95)`,
+                    color: th.textMuted,
+                    fontWeight: 700,
+                  }}
+                >
+                  {Math.max(
+                    0,
+                    Number(poll?.leadsCount ?? 0) ||
+                      Number(poll?.votersCount ?? 0) ||
+                      0,
+                  )}{" "}
+                  participation
+                  {Math.max(
+                    0,
+                    Number(poll?.leadsCount ?? 0) ||
+                      Number(poll?.votersCount ?? 0) ||
+                      0,
+                  ) !== 1
+                    ? "s"
+                    : ""}
+                </p>
+              </div>
+            ) : isContestEntry ? (
               <div
                 style={{
                   borderRadius: "10px",
@@ -1091,7 +1134,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
                     <ol style={{ margin: "0.3rem 0 0 1rem", padding: 0, color: th.text, fontSize: `calc(${v.rowRem} * 0.9)` }}>
                       {contestWinners.map((w) => (
                         <li key={String(w.id)} style={{ marginBottom: "0.12rem" }}>
-                          {String(w.displayName || "Gagnant")} - {String(w.displayContact || "")}
+                          {String(w.displayName || "Gagnant")}
                         </li>
                       ))}
                     </ol>
