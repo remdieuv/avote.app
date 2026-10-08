@@ -14,6 +14,7 @@ import {
   formatScreenQuestionProgressLabel,
   getScreenDiffusionLabel,
 } from "@/lib/diffusionUx";
+import { getParticipantResultsOptionBadgeLabel } from "@/lib/participantLiveFlow";
 import { formatTestModeVoteCountLabel } from "@/lib/testModeResultsMask";
 import { API_URL } from "@/lib/config";
 
@@ -629,8 +630,6 @@ function ScreenResultsChoixClassiques({
     ? "transform 720ms cubic-bezier(0.33, 1, 0.68, 1)"
     : "none";
 
-  const badgeLeaderLabel = voteOuvertResultats ? "En tête" : "Gagnant";
-
   return (
     <main style={{ ...shell, textAlign: "left" }}>
       {isTestMode ? (
@@ -773,6 +772,13 @@ function ScreenResultsChoixClassiques({
                   : percentRounded.toFixed(1);
             const isWinner = maxVotes > 0 && optVotes === maxVotes;
             const isQuizCorrect = isQuiz && quizRevealed && Boolean(opt?.isCorrect);
+            const optionBadgeLabel = getParticipantResultsOptionBadgeLabel({
+              voteOuvert: voteOuvertResultats,
+              isQuiz,
+              quizRevealed,
+              isCorrect: Boolean(opt?.isCorrect),
+              isWinner,
+            });
             const fillW = barFillPct(percentRaw);
 
             return (
@@ -838,35 +844,22 @@ function ScreenResultsChoixClassiques({
                     >
                       {opt.label}
                     </span>
-                    {isQuizCorrect ? (
+                    {optionBadgeLabel ? (
                       <span
                         style={{
                           fontSize: "clamp(0.65rem, 1.15vw, 0.82rem)",
                           fontWeight: 800,
                           textTransform: "uppercase",
                           letterSpacing: "0.07em",
-                          color: "#14532d",
-                          background: "linear-gradient(180deg, #86efac, #4ade80)",
+                          color: isQuizCorrect ? "#14532d" : "#422006",
+                          background: isQuizCorrect
+                            ? "linear-gradient(180deg, #86efac, #4ade80)"
+                            : "linear-gradient(180deg, #facc15, #eab308)",
                           padding: "0.22rem 0.65rem",
                           borderRadius: "9999px",
                         }}
                       >
-                        Bonne réponse
-                      </span>
-                    ) : isWinner ? (
-                      <span
-                        style={{
-                          fontSize: "clamp(0.65rem, 1.15vw, 0.82rem)",
-                          fontWeight: 800,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.07em",
-                          color: "#422006",
-                          background: "linear-gradient(180deg, #facc15, #eab308)",
-                          padding: "0.22rem 0.65rem",
-                          borderRadius: "9999px",
-                        }}
-                      >
-                        {badgeLeaderLabel}
+                        {optionBadgeLabel}
                       </span>
                     ) : null}
                   </span>

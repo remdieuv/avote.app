@@ -698,8 +698,10 @@ export function countParticipantVoteConfirmedSurfaces(input = {}) {
 }
 
 /**
- * Badge option résultats Salle : Quiz révélé → « Bonne réponse » ; sinon En tête / Gagnant.
- * Sondages non-Quiz inchangés.
+ * Badge option résultats (Salle / Screen) — vocabulaire par type :
+ * - Sondage : « En tête » pour la/les réponses les plus votées
+ * - Quiz : « Plus votée » pour la/les plus votées ; « Bonne réponse » si correcte révélée
+ * - Concours (personnes tirées) : « Gagnant » reste hors de ce helper
  * @param {{
  *   voteOuvert?: boolean;
  *   isQuiz?: boolean;
@@ -718,5 +720,8 @@ export function getParticipantResultsOptionBadgeLabel(input = {}) {
     return "Bonne réponse";
   }
   if (input.isWinner !== true) return null;
-  return input.voteOuvert === true ? "En tête" : "Gagnant";
+  // Quiz : populaire ≠ correct — ne jamais dire « Gagnant » sur une option.
+  if (input.isQuiz === true) return "Plus votée";
+  // Sondage classique (SINGLE / MULTIPLE / LEAD…) : leader = « En tête ».
+  return "En tête";
 }

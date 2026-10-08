@@ -2710,11 +2710,9 @@ export function PollExperience({
                         : percentRounded.toFixed(1);
                   const isQuizCorrect =
                     showQuizAnswerReveal && Boolean(opt?.isCorrect);
-                  // Avant RESULTS Quiz : comme un sondage (En tête / Gagnant). Après reveal : Bonne réponse.
+                  // Leader populaire + bonne réponse Quiz peuvent coexister (badges distincts).
                   const isWinner =
-                    (!isQuiz || !showQuizAnswerReveal) &&
-                    maxVotesResults > 0 &&
-                    optVotes === maxVotesResults;
+                    maxVotesResults > 0 && optVotes === maxVotesResults;
                   const badgeLeaderLabel = getParticipantResultsOptionBadgeLabel({
                     voteOuvert,
                     isQuiz,

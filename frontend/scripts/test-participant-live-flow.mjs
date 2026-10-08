@@ -543,7 +543,18 @@ test("LOT-1. résultats live après vote (comportement /p prod) aussi en Salle",
       voteOuvert: false,
     }),
     "Bonne réponse",
-    "RESULTS Quiz : badge Bonne réponse (pas Gagnant)",
+    "RESULTS Quiz : badge Bonne réponse (pas Gagnant / Plus votée)",
+  );
+  assert.equal(
+    getParticipantResultsOptionBadgeLabel({
+      isQuiz: true,
+      quizRevealed: true,
+      isCorrect: false,
+      isWinner: true,
+      voteOuvert: false,
+    }),
+    "Plus votée",
+    "Quiz : option populaire incorrecte → Plus votée (pas Gagnant)",
   );
   assert.equal(
     getParticipantResultsOptionBadgeLabel({
@@ -553,8 +564,8 @@ test("LOT-1. résultats live après vote (comportement /p prod) aussi en Salle",
       isWinner: true,
       voteOuvert: true,
     }),
-    "En tête",
-    "Quiz non révélé : badge sondage, jamais « Bonne réponse »",
+    "Plus votée",
+    "Quiz non révélé : Plus votée, jamais « Bonne réponse »",
   );
   assert.equal(
     getParticipantResultsOptionBadgeLabel({
@@ -1083,7 +1094,7 @@ test("Finition. Merci une seule fois — VOTING après vote et CLOSED après vot
   );
 });
 
-test("Finition. Badge RESULTS Quiz = Bonne réponse ; sondage = Gagnant", () => {
+test("Finition. Badges RESULTS : sondage=En tête · Quiz=Plus votée/Bonne réponse", () => {
   assert.equal(
     getParticipantResultsOptionBadgeLabel({
       isQuiz: true,
@@ -1106,13 +1117,25 @@ test("Finition. Badge RESULTS Quiz = Bonne réponse ; sondage = Gagnant", () => 
   );
   assert.equal(
     getParticipantResultsOptionBadgeLabel({
+      isQuiz: true,
+      quizRevealed: true,
+      isCorrect: false,
+      isWinner: true,
+      voteOuvert: false,
+    }),
+    "Plus votée",
+    "Quiz populaire ≠ correct → Plus votée",
+  );
+  assert.equal(
+    getParticipantResultsOptionBadgeLabel({
       isQuiz: false,
       quizRevealed: false,
       isCorrect: false,
       isWinner: true,
       voteOuvert: false,
     }),
-    "Gagnant",
+    "En tête",
+    "Sondage clos : En tête (pas Gagnant — réservé concours)",
   );
   assert.equal(
     getParticipantResultsOptionBadgeLabel({
@@ -1130,8 +1153,8 @@ test("Finition. Badge RESULTS Quiz = Bonne réponse ; sondage = Gagnant", () => 
       isWinner: true,
       voteOuvert: false,
     }),
-    "Gagnant",
-    "Quiz non révélé : badge sondage inchangé",
+    "Plus votée",
+    "Quiz non révélé : Plus votée, pas Bonne réponse",
   );
   assert.equal(formatTestModeVoteCountLabel(2), "2 votes");
 });
