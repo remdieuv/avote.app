@@ -36,6 +36,13 @@ import {
   shouldScheduleAutoRevealForPoll,
 } from "@/lib/leadContestLiveFlow";
 import {
+  REGIE_ZONE_PILOTAGE,
+  REGIE_ZONE_PROJECTION_AVANCEE,
+  getRegiePollStatusLabel,
+  getRegiePollTypeLabel,
+  getRegiePrimaryLiveAction,
+} from "@/lib/regieDesktopLayout";
+import {
   normalizePollOptions,
   optionVoteCount,
 } from "@/lib/normalizeLivePayload";
@@ -261,9 +268,10 @@ function isStandardPoll(poll) {
 }
 
 function pollKindStyle(poll) {
+  const label = getRegiePollTypeLabel(poll);
   if (isContestPoll(poll)) {
     return {
-      label: "Concours",
+      label,
       bg: "#faf5ff",
       border: "#d8b4fe",
       color: "#6d28d9",
@@ -272,7 +280,7 @@ function pollKindStyle(poll) {
   }
   if (isLeadPoll(poll)) {
     return {
-      label: "Lead",
+      label,
       bg: "#ecfeff",
       border: "#99f6e4",
       color: "#0f766e",
@@ -281,24 +289,24 @@ function pollKindStyle(poll) {
   }
   if (isQuizPoll(poll)) {
     return {
-      label: "Quiz",
+      label,
       bg: "#ecfdf5",
       border: "#86efac",
       color: "#166534",
       cardBg: "#f7fff9",
     };
   }
-  if (isStandardPoll(poll)) {
+  if (String(poll?.type || "").toUpperCase() === "MULTIPLE_CHOICE") {
     return {
-      label: "Question",
-      bg: "#f8fafc",
-      border: "#cbd5e1",
-      color: "#475569",
-      cardBg: "#ffffff",
+      label,
+      bg: "#eff6ff",
+      border: "#93c5fd",
+      color: "#1d4ed8",
+      cardBg: "#f8fbff",
     };
   }
   return {
-    label: "Question",
+    label,
     bg: "#f8fafc",
     border: "#cbd5e1",
     color: "#475569",
@@ -352,6 +360,7 @@ function PollCard({
   activePollId,
   /** État vote événement (open | closed) — la question peut être ACTIVE sans vote ouvert */
   voteState,
+  displayState = null,
   onOpen,
   onCloseRegie,
   onResults,
@@ -361,10 +370,31 @@ function PollCard({
   contestDrawSummary,
   desktop,
   compact = false,
+  /**
+   * LOT-3 — false = carte Questions (info + Modifier / leads CRM).
+   * Les actions Live restent uniquement dans le Pilotage central.
+   */
+  liveActions = true,
 }) {
-  const badge = badgeStyle(poll.status);
+  const statusLabel = getRegiePollStatusLabel({
+    pollStatus: poll.status,
+    isActive,
+    voteState,
+    displayState,
+    pollType: poll.type,
+    leadEnabled: poll.leadEnabled,
+  });
+  const badge = badgeStyle(
+    statusLabel === "En cours"
+      ? "ACTIVE"
+      : statusLabel === "Résultats" || statusLabel === "Tirage"
+        ? "SCHEDULED"
+        : statusLabel === "Fermée" || statusLabel === "Terminée"
+          ? "CLOSED"
+          : "DRAFT",
+  );
   const kind = pollKindStyle(poll);
-  const scene = String(liveState || "").toLowerCase();
+  void liveState;
   const voteOuvertSurCeSondage =
     String(activePollId || "") === String(poll.id) &&
     String(voteState || "").toLowerCase().trim() === "open";
@@ -385,7 +415,7 @@ function PollCard({
       : "Affiche les résultats finaux à la salle et à l’écran (le vote peut rester ouvert).";
   const contestDrawDisabled = busy || voteOuvertSurCeSondage;
 
-  const boutons = (
+  const boutons = liveActions ? (
     <>
       <button
         type="button"
@@ -398,7 +428,7 @@ function PollCard({
             : undefined
         }
       >
-        Lancer le vote
+        Ouvrir
       </button>
       <button
         type="button"
@@ -411,7 +441,7 @@ function PollCard({
             : undefined
         }
       >
-        Stop vote
+        Fermer
       </button>
       {!isLeadOrContest ? (
         <button
@@ -425,9 +455,10 @@ function PollCard({
         </button>
       ) : null}
     </>
-  );
+  ) : null;
 
-  const quickAction = isContestPoll(poll) ? (
+  const quickAction =
+    liveActions && isContestPoll(poll) ? (
     <button
       type="button"
       disabled={contestDrawDisabled}
@@ -439,7 +470,7 @@ function PollCard({
           : "Raccourci vers le tirage concours"
       }
     >
-      Tirer un gagnant
+      Tirer au sort
     </button>
   ) : isLeadPoll(poll) ? (
     <button
@@ -502,10 +533,10 @@ function PollCard({
           border: `1px solid ${badge.border}`,
         }}
       >
-        {poll.status}
+        {statusLabel}
       </span>
       <span style={{ fontSize: "0.78rem", color: "#6b7280" }}>
-        Ordre {poll.order} · {poll.type}
+        Ordre {poll.order}
       </span>
       <span
         style={{
@@ -632,7 +663,7 @@ function PollCard({
               border: `1px solid ${badge.border}`,
             }}
           >
-            {poll.status}
+            {statusLabel}
           </span>
           <span style={{ fontSize: "0.68rem", color: "#6b7280", marginLeft: "auto" }}>
             <strong style={{ color: "#374151" }}>{poll.voteCount ?? 0}</strong> vote
@@ -663,72 +694,85 @@ function PollCard({
             marginTop: "0.4rem",
           }}
         >
-          <button
-            type="button"
-            disabled={disableLancer}
-            onClick={() => onOpen(poll.id)}
-            style={{
-              ...btnLancerVote(disableLancer),
-              width: "100%",
-              padding: "0.38rem 0.5rem",
-              fontSize: "0.72rem",
-            }}
-          >
-            Lancer le vote
-          </button>
-          <button
-            type="button"
-            disabled={disableStop}
-            onClick={() => onCloseRegie(poll.id)}
-            style={{
-              ...btnStopVote(disableStop),
-              width: "100%",
-              padding: "0.38rem 0.5rem",
-              fontSize: "0.72rem",
-            }}
-          >
-            Stop vote
-          </button>
-          {!isLeadOrContest ? (
-            <button
-              type="button"
-              disabled={disableResultats}
-              onClick={() => onResults(poll.id)}
-              title={resultsButtonTitle}
-              style={{
-                ...btnAfficherResultats(disableResultats),
-                width: "100%",
-                padding: "0.38rem 0.5rem",
-                fontSize: "0.72rem",
-              }}
-            >
-              Afficher les résultats
-            </button>
+          {liveActions ? (
+            <>
+              <button
+                type="button"
+                disabled={disableLancer}
+                onClick={() => onOpen(poll.id)}
+                style={{
+                  ...btnLancerVote(disableLancer),
+                  width: "100%",
+                  padding: "0.38rem 0.5rem",
+                  fontSize: "0.72rem",
+                }}
+              >
+                Ouvrir
+              </button>
+              <button
+                type="button"
+                disabled={disableStop}
+                onClick={() => onCloseRegie(poll.id)}
+                style={{
+                  ...btnStopVote(disableStop),
+                  width: "100%",
+                  padding: "0.38rem 0.5rem",
+                  fontSize: "0.72rem",
+                }}
+              >
+                Fermer
+              </button>
+              {!isLeadOrContest ? (
+                <button
+                  type="button"
+                  disabled={disableResultats}
+                  onClick={() => onResults(poll.id)}
+                  title={resultsButtonTitle}
+                  style={{
+                    ...btnAfficherResultats(disableResultats),
+                    width: "100%",
+                    padding: "0.38rem 0.5rem",
+                    fontSize: "0.72rem",
+                  }}
+                >
+                  Afficher les résultats
+                </button>
+              ) : null}
+              {isContestPoll(poll) ? (
+                <button
+                  type="button"
+                  disabled={contestDrawDisabled}
+                  onClick={() => onContestShortcut?.(poll)}
+                  style={{
+                    ...btnSecondaryAction(contestDrawDisabled),
+                    width: "100%",
+                    padding: "0.38rem 0.5rem",
+                    fontSize: "0.72rem",
+                  }}
+                  title={
+                    voteOuvertSurCeSondage
+                      ? "Fermez d’abord les participations avant de tirer au sort."
+                      : undefined
+                  }
+                >
+                  Tirer au sort
+                </button>
+              ) : null}
+            </>
           ) : null}
-          {quickAction ? (
+          {isLeadPoll(poll) ? (
             <button
               type="button"
-              disabled={isContestPoll(poll) ? contestDrawDisabled : busy}
-              onClick={() =>
-                isContestPoll(poll)
-                  ? onContestShortcut?.(poll)
-                  : onLeadShortcut?.(poll)
-              }
+              disabled={busy}
+              onClick={() => onLeadShortcut?.(poll)}
               style={{
-                ...btnSecondaryAction(
-                  isContestPoll(poll) ? contestDrawDisabled : busy,
-                ),
+                ...btnSecondaryAction(busy),
                 width: "100%",
                 padding: "0.38rem 0.5rem",
                 fontSize: "0.72rem",
               }}
-              title={
-                isContestPoll(poll) && voteOuvertSurCeSondage
-                  ? "Fermez d’abord les participations avant de tirer au sort."
-                  : undefined
-              }
             >
-              {isContestPoll(poll) ? "Tirer un gagnant" : "Voir les leads"}
+              Voir les leads
             </button>
           ) : null}
           {editAction ? (
@@ -5697,6 +5741,24 @@ export default function RegieEventPage() {
   const canManageActivePoll = Boolean(activePollIdJs) && !busy;
   const canToggleVote = Boolean(activePollIdJs) && !busy && !eventFinished && !eventLocked;
   const voteIsOpen = voteStateUi === "open";
+  /** LOT-3 — Afficher dans Pilotage (pas sur les cartes Questions). */
+  const canShowResultsForActive =
+    Boolean(activePollIdJs) &&
+    !busy &&
+    !eventFinished &&
+    !eventLocked &&
+    !isLeadPoll(activePoll) &&
+    !isContestPoll(activePoll);
+  const primaryLiveAction = getRegiePrimaryLiveAction({
+    voteState: voteStateUi,
+    displayState: projectionDisplayStateUi,
+    pollType: activePoll?.type,
+    leadEnabled: activePoll?.leadEnabled,
+    contestQuotaReached,
+    eventFinished,
+    hasActivePoll: Boolean(activePollIdJs),
+  });
+  void primaryLiveAction;
   const canShowQuestionQuick =
     canManageActivePoll && String(projectionDisplayStateUi || "").toLowerCase() !== "question";
   const canShowResultsQuick =
@@ -6062,11 +6124,13 @@ export default function RegieEventPage() {
             key={poll.id}
             poll={poll}
             compact
+            liveActions={false}
             isActive={poll.id === eventData?.activePollId}
             busy={busy}
             liveState={liveState}
             activePollId={eventData?.activePollId}
             voteState={voteStateUi}
+            displayState={projectionDisplayStateUi}
             desktop={desktop}
             onOpen={(id) => postAction(`/polls/${id}/open`)}
             onCloseRegie={(id) => postAction(`/polls/${id}/close`)}
@@ -7758,7 +7822,7 @@ export default function RegieEventPage() {
                         textTransform: "uppercase",
                       }}
                     >
-                      Régie live
+                      {REGIE_ZONE_PILOTAGE}
                     </h3>
                     <p
                       style={{
@@ -7769,11 +7833,11 @@ export default function RegieEventPage() {
                         lineHeight: 1.35,
                       }}
                     >
-                      Pilotage du direct
+                      Commandes essentielles du live — une seule zone d’autorité
                     </p>
                   </div>
                   <p style={{ margin: 0, fontSize: "0.76rem", color: "#64748b" }}>
-                    Les commandes essentielles pendant le live.
+                    Ouvrir · Fermer · Afficher · Suivante · Concours
                   </p>
                 </div>
 
@@ -7789,9 +7853,9 @@ export default function RegieEventPage() {
                 >
                   <div style={liveFunctionCardStyle}>
                     <div style={{ display: "grid", gap: "0.28rem" }}>
-                      <p style={liveFunctionCardTitleStyle}>Vote</p>
+                      <p style={liveFunctionCardTitleStyle}>Participation</p>
                       <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", lineHeight: 1.35 }}>
-                        Participation live
+                        Ouvrir / fermer / afficher
                       </p>
                     </div>
                     <div style={{ display: "grid", gap: "0.55rem", flex: 1 }}>
@@ -7815,7 +7879,7 @@ export default function RegieEventPage() {
                                 boxShadow: voteIsOpen ? "none" : "0 14px 24px rgba(34, 197, 94, 0.12)",
                               }}
                             >
-                              Ouvrir le vote
+                              Ouvrir
                             </button>
                             <button
                               type="button"
@@ -7837,8 +7901,41 @@ export default function RegieEventPage() {
                                 boxShadow: voteIsOpen ? "0 12px 22px rgba(239, 68, 68, 0.08)" : "none",
                               }}
                             >
-                              Fermer le vote
+                              Fermer
                             </button>
+                            {canShowResultsForActive ? (
+                              <button
+                                type="button"
+                                disabled={!canShowResultsForActive}
+                                onClick={async () => {
+                                  if (!activePollIdJs) return;
+                                  await postAction(
+                                    `/polls/${activePollIdJs}/show-results`,
+                                    "Resultats affiches",
+                                  );
+                                }}
+                                title={
+                                  isQuizPoll(activePoll)
+                                    ? "Affiche les résultats finaux. Si le vote est fermé, révèle aussi la bonne réponse."
+                                    : "Affiche les résultats finaux à la salle et à l’écran."
+                                }
+                                style={{
+                                  ...btnGhost,
+                                  minHeight: "3rem",
+                                  width: "100%",
+                                  padding: "0.72rem 0.9rem",
+                                  borderColor: "#93c5fd",
+                                  background:
+                                    "linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%)",
+                                  color: "#1e3a8a",
+                                  fontWeight: 800,
+                                  fontSize: "0.86rem",
+                                  boxShadow: "0 12px 22px rgba(37, 99, 235, 0.10)",
+                                }}
+                              >
+                                Afficher les résultats
+                              </button>
+                            ) : null}
                           </div>
                           <p style={{ margin: 0, fontSize: "0.74rem", color: "#64748b", lineHeight: 1.35 }}>
                             État actuel : <strong style={{ color: "#111827" }}>{voteLabel}</strong>
@@ -7901,9 +7998,10 @@ export default function RegieEventPage() {
                           color: canGoNext ? "#fff" : "#6d28d9",
                           fontWeight: 800,
                           boxShadow: canGoNext ? "0 14px 24px rgba(124, 58, 237, 0.16)" : "none",
-                        }}
+                        }                        }
+                        title="Prépare la question suivante sans ouvrir le vote."
                       >
-                        Question suivante
+                        Suivante
                       </button>
                       <button
                         type="button"
@@ -8285,7 +8383,7 @@ export default function RegieEventPage() {
                       : "pointer",
                 }}
               >
-                Tirer un gagnant
+                Tirer au sort
               </button>
               <button
                 type="button"
@@ -8447,29 +8545,62 @@ export default function RegieEventPage() {
           ) : null}
 
           {eventData.slug ? (
-            <BlocProjectionEcran
-              slug={eventData.slug}
-              activePollId={eventData.activePollId ?? null}
-              liveState={liveState}
-              displayState={projectionDisplayStateUi}
-              busy={busy}
-              postAction={postAction}
-              sendScreenAction={sendScreenAction}
-              screenMainConnected={screenMainConnected}
-              screenBConnected={screenBConnected}
-              screenBDisplayState={screenBDisplayState}
-              desktop={desktop}
-              chronoSection={null}
-              autoRotate={autoRotate}
-              onAutoRotateChange={setAutoRotate}
-              autoRotateAllowed={autoRotateAllowed}
-              autoRotateQuestionSec={autoRotateQuestionSec}
-              autoRotateResultsSec={autoRotateResultsSec}
-              onAutoRotateQuestionSecChange={setAutoRotateQuestionSec}
-              onAutoRotateResultsSecChange={setAutoRotateResultsSec}
-              activePollType={activePoll?.type ?? null}
-              activePollLeadEnabled={activePoll?.leadEnabled ?? null}
-            />
+            <details
+              style={{
+                ...CARD,
+                padding: desktop ? "0.95rem 1.1rem" : "0.85rem 1rem",
+                border: "1px solid #e2e8f0",
+                background:
+                  "linear-gradient(180deg, rgba(248,250,252,0.96) 0%, #ffffff 100%)",
+              }}
+            >
+              <summary
+                style={{
+                  cursor: "pointer",
+                  fontWeight: 800,
+                  fontSize: desktop ? "0.98rem" : "0.92rem",
+                  color: "#0f172a",
+                  letterSpacing: "-0.01em",
+                  listStyle: "none",
+                }}
+              >
+                {REGIE_ZONE_PROJECTION_AVANCEE}
+              </summary>
+              <p
+                style={{
+                  margin: "0.45rem 0 0.75rem 0",
+                  fontSize: "0.78rem",
+                  color: "#64748b",
+                  lineHeight: 1.4,
+                }}
+              >
+                Noir, Attente, écrans A/B, forçage Question/Résultats, auto-rotation —
+                hors parcours principal.
+              </p>
+              <BlocProjectionEcran
+                slug={eventData.slug}
+                activePollId={eventData.activePollId ?? null}
+                liveState={liveState}
+                displayState={projectionDisplayStateUi}
+                busy={busy}
+                postAction={postAction}
+                sendScreenAction={sendScreenAction}
+                screenMainConnected={screenMainConnected}
+                screenBConnected={screenBConnected}
+                screenBDisplayState={screenBDisplayState}
+                desktop={desktop}
+                chronoSection={null}
+                autoRotate={autoRotate}
+                onAutoRotateChange={setAutoRotate}
+                autoRotateAllowed={autoRotateAllowed}
+                autoRotateQuestionSec={autoRotateQuestionSec}
+                autoRotateResultsSec={autoRotateResultsSec}
+                onAutoRotateQuestionSecChange={setAutoRotateQuestionSec}
+                onAutoRotateResultsSecChange={setAutoRotateResultsSec}
+                activePollType={activePoll?.type ?? null}
+                activePollLeadEnabled={activePoll?.leadEnabled ?? null}
+              />
+            </details>
           ) : null}
 
           {!desktop && eventData.slug ? (
