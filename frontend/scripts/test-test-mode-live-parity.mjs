@@ -113,8 +113,8 @@ test("Politique données TEST — audit (pas de reset inventé)", () => {
   assert.equal(audit.resetRepetitionImplemented, false);
   assert.ok(audit.arbitrationNotes.length >= 3);
   assert.ok(
-    audit.arbitrationNotes.some((n) => /Réinitialiser|reset/i.test(n)),
-    "note reset documentée",
+    audit.arbitrationNotes.some((n) => /rejeu|reset/i.test(n)),
+    "note rejeu / reset documentée",
   );
 });
 

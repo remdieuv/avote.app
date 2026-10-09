@@ -51,6 +51,11 @@ import {
   normalizePollOptions,
   optionVoteCount,
 } from "@/lib/normalizeLivePayload";
+import {
+  canOfferReplayTestPoll,
+  getReplayTestPollBlockedLabel,
+  getReplayTestPollConfirmMessage,
+} from "@/lib/testModeReplayPoll";
 
 const VOTE_STATE_LABELS = {
   open: "Vote ouvert",
@@ -6205,7 +6210,7 @@ export default function RegieEventPage() {
       ? "Sélectionnez une question dans la playlist."
       : "Ajoutez une question pour commencer.");
   const selectedConsultOptions = useMemo(() => {
-    if (!selectedPoll || !selectedIsConsultOnly) return [];
+    if (!selectedPoll) return [];
     const opts = normalizePollOptions(selectedPoll?.options);
     const totalVotesSafe = Math.max(
       0,
@@ -6230,11 +6235,46 @@ export default function RegieEventPage() {
         pct: Math.max(0, Math.min(100, pct)),
       };
     });
-  }, [selectedPoll, selectedIsConsultOnly]);
+  }, [selectedPoll]);
 
   const handleSelectPlaylistPoll = useCallback((pollId) => {
     setSelectedPollId(String(pollId || "") || null);
   }, []);
+
+  const selectedReplayGate = canOfferReplayTestPoll({
+    isTestMode: inTestMode,
+    voteState: voteStateUi,
+    eventFinished,
+    eventLocked,
+    busy,
+    poll: selectedPoll,
+  });
+  const canReplaySelected = selectedReplayGate.ok === true;
+
+  const handleReplaySelectedTestPoll = useCallback(async () => {
+    if (!selectedPoll?.id || !canReplaySelected) return;
+    if (typeof window === "undefined") return;
+    const ok = window.confirm(getReplayTestPollConfirmMessage(selectedPoll));
+    if (!ok) return;
+    const pid = String(selectedPoll.id);
+    const success = await postAction(
+      `/polls/${encodeURIComponent(pid)}/replay-test`,
+      "Question réinitialisée (MODE TEST)",
+    );
+    if (success) {
+      setSelectedPollId(pid);
+      setContestWinners([]);
+      setPollDrawSummary((prev) => {
+        const next = { ...prev };
+        delete next[pid];
+        return next;
+      });
+    }
+  }, [
+    selectedPoll,
+    canReplaySelected,
+    // postAction is stable enough via closure; replay gated on selected + flags
+  ]);
 
   const handleContestShortcut = useCallback(
     (poll) => {
@@ -8078,7 +8118,8 @@ export default function RegieEventPage() {
                   </p>
                 </div>
 
-                {selectedIsConsultOnly && selectedPoll ? (
+                {selectedPoll &&
+                (selectedIsConsultOnly || (inTestMode && canReplaySelected)) ? (
                   <div
                     style={{
                       marginTop: "0.85rem",
@@ -8100,7 +8141,9 @@ export default function RegieEventPage() {
                         color: "#92400e",
                       }}
                     >
-                      Consultation — {selectedQuestionNumberLabel}
+                      {selectedIsConsultOnly
+                        ? `Consultation — ${selectedQuestionNumberLabel}`
+                        : `Question jouée — ${selectedQuestionNumberLabel}`}
                     </p>
                     <p
                       style={{
@@ -8123,7 +8166,9 @@ export default function RegieEventPage() {
                       </strong>{" "}
                       vote{(selectedPoll.voteCount ?? 0) !== 1 ? "s" : ""}
                       {" · "}
-                      Aucune rediffusion
+                      {selectedIsConsultOnly
+                        ? "Aucune rediffusion"
+                        : "Antenne — rejeu TEST possible"}
                     </p>
                     {selectedConsultOptions.length > 0 ? (
                       <ul
@@ -8157,6 +8202,51 @@ export default function RegieEventPage() {
                           </li>
                         ))}
                       </ul>
+                    ) : null}
+                    {inTestMode ? (
+                      <div style={{ marginTop: "0.75rem" }}>
+                        <button
+                          type="button"
+                          disabled={!canReplaySelected || busy}
+                          onClick={() => void handleReplaySelectedTestPoll()}
+                          title={
+                            canReplaySelected
+                              ? "Efface les données TEST de cette question puis la remet en attente d’ouverture."
+                              : getReplayTestPollBlockedLabel(selectedReplayGate.reason)
+                          }
+                          style={{
+                            width: "100%",
+                            minHeight: "2.6rem",
+                            padding: "0.55rem 0.85rem",
+                            fontSize: "0.82rem",
+                            fontWeight: 800,
+                            borderRadius: "12px",
+                            border: canReplaySelected
+                              ? "1px solid #f59e0b"
+                              : "1px solid #e2e8f0",
+                            background: canReplaySelected
+                              ? "linear-gradient(180deg, #fef3c7 0%, #fde68a 100%)"
+                              : "#f8fafc",
+                            color: canReplaySelected ? "#92400e" : "#94a3b8",
+                            cursor:
+                              !canReplaySelected || busy ? "not-allowed" : "pointer",
+                            opacity: !canReplaySelected || busy ? 0.6 : 1,
+                          }}
+                        >
+                          Rejouer la question
+                        </button>
+                        <p
+                          style={{
+                            margin: "0.4rem 0 0 0",
+                            fontSize: "0.68rem",
+                            color: "#a16207",
+                            lineHeight: 1.35,
+                          }}
+                        >
+                          MODE TEST uniquement — confirmation avant suppression des
+                          données de cette question.
+                        </p>
+                      </div>
                     ) : null}
                   </div>
                 ) : null}

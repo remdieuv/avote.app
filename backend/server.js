@@ -35,6 +35,14 @@ const {
   createPollExclusiveQueue,
   resolveReplaceContestWinnerPlan,
 } = require("./lib/contestWinnerReplace");
+const {
+  canReplayTestPollOnServer,
+  getReplayTestPollDeletionPlan,
+  buildReplayTestPollEventPatch,
+} = require("./lib/testModeReplayPoll");
+
+/** Anti double-clic rejeu TEST (sérialise par pollId). */
+const runReplayTestExclusive = createPollExclusiveQueue();
 
 /** Anti double-clic tirage / remplacement (sérialise par pollId). */
 const runContestDrawExclusive = createPollExclusiveQueue();
@@ -3722,6 +3730,153 @@ async function handlePollShowResults(req, res) {
 }
 
 app.post("/polls/:pollId/show-results", requireAuth, handlePollShowResults);
+
+/**
+ * LOT-4 — Rejouer une question en MODE TEST uniquement.
+ * Transaction : wipe votes (+ leads / tirages selon type) de CE poll,
+ * bascule antenne PRÉPARÉE sans ouvrir le vote. Autres polls intacts.
+ */
+app.post("/polls/:pollId/replay-test", requireAuth, async (req, res) => {
+  const { pollId } = req.params;
+  try {
+    const pOwn = await assertPollOwnedBy(pollId, req.userId);
+    if (!pOwn.ok) {
+      return res.status(pOwn.status).json({ error: "Sondage introuvable." });
+    }
+
+    const result = await runReplayTestExclusive(pollId, async () => {
+      const poll = await prisma.poll.findUnique({
+        where: { id: pollId },
+        include: {
+          event: true,
+          _count: {
+            select: {
+              votes: true,
+              leads: true,
+              contestDraws: true,
+            },
+          },
+        },
+      });
+      if (!poll) {
+        return { ok: false, status: 404, error: "Sondage introuvable." };
+      }
+
+      const event = poll.event;
+      const gate = canReplayTestPollOnServer({
+        isTestMode: event?.isLiveConsumed === false,
+        voteState: event?.voteState,
+        eventLocked: Boolean(event?.isLocked),
+        eventFinished:
+          String(event?.liveState || "").toUpperCase() === "FINISHED",
+        poll: {
+          status: poll.status,
+          type: poll.type,
+          leadEnabled: poll.leadEnabled,
+        },
+        voteCount: poll._count?.votes ?? 0,
+        leadCount: poll._count?.leads ?? 0,
+        contestDrawCount: poll._count?.contestDraws ?? 0,
+      });
+      if (!gate.ok) {
+        return { ok: false, status: gate.status, error: gate.error };
+      }
+
+      const deletionPlan = getReplayTestPollDeletionPlan(poll);
+      const eventPatch = buildReplayTestPollEventPatch({
+        pollId: poll.id,
+        screenDisplayState: event.screenDisplayState,
+      });
+
+      await annulationAutoRevealProgrammee(poll.eventId);
+
+      const counts = await prisma.$transaction(async (tx) => {
+        const deletedWinners = deletionPlan.deleteContestDrawsAndWinners
+          ? (
+              await tx.contestDrawWinner.deleteMany({
+                where: { pollId: poll.id },
+              })
+            ).count
+          : 0;
+        const deletedDraws = deletionPlan.deleteContestDrawsAndWinners
+          ? (
+              await tx.contestDraw.deleteMany({
+                where: { pollId: poll.id },
+              })
+            ).count
+          : 0;
+        const deletedLeads = deletionPlan.deleteLeads
+          ? (
+              await tx.leadCapture.deleteMany({
+                where: { pollId: poll.id },
+              })
+            ).count
+          : 0;
+        const deletedVotes = (
+          await tx.vote.deleteMany({
+            where: { pollId: poll.id },
+          })
+        ).count;
+
+        await tx.poll.updateMany({
+          where: {
+            eventId: poll.eventId,
+            status: "ACTIVE",
+            NOT: { id: poll.id },
+          },
+          data: { status: "CLOSED" },
+        });
+
+        await tx.poll.update({
+          where: { id: poll.id },
+          data: {
+            status: "ACTIVE",
+            quizRevealed: false,
+          },
+        });
+
+        const updatedEvent = await tx.event.update({
+          where: { id: poll.eventId },
+          data: eventPatch,
+        });
+
+        return {
+          deletedVotes,
+          deletedLeads,
+          deletedDraws,
+          deletedWinners,
+          event: updatedEvent,
+        };
+      });
+
+      await emitPollUpdated(io, poll.id);
+      await emitEventLiveUpdated(io, poll.eventId);
+
+      const full = await loadPollFull(poll.id);
+      return {
+        ok: true,
+        event: counts.event,
+        poll: full ? pollToJson(full) : null,
+        deleted: {
+          votes: counts.deletedVotes,
+          leads: counts.deletedLeads,
+          contestDraws: counts.deletedDraws,
+          contestWinners: counts.deletedWinners,
+        },
+        prepared: true,
+        activePollId: poll.id,
+      };
+    });
+
+    if (!result.ok) {
+      return res.status(result.status || 400).json({ error: result.error });
+    }
+    return res.json(result);
+  } catch (e) {
+    console.error("polls/:pollId/replay-test", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
 
 /** Affichage écran : revenir à la question (ne rouvre pas le vote) */
 app.post("/polls/:pollId/display-question", requireAuth, async (req, res) => {

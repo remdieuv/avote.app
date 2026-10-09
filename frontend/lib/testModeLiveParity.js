@@ -73,14 +73,14 @@ export function getTestModeDataPolicyAudit() {
     /** Exports analytics CSV refusés en TEST (403). */
     exportsBlockedInTest: true,
     /**
-     * Conception §5.3 : « Réinitialiser la répétition » = concept uniquement.
-     * Périmètre effacé/conservé non spécifié → non implémenté.
+     * Reset global « répétition entière » : toujours non implémenté.
+     * Rejeu **par question** : voir `testModeReplayPoll.js` (MODE TEST).
      */
     resetRepetitionImplemented: false,
     arbitrationNotes: [
       "Masque RESULTS TEST (bucket /10) : fidélité vs obscurcissement — arbitrage requis.",
       "Exports bloqués en TEST : conserver tant que pricing / usage non tranché.",
-      "Reset répétition : ne pas implémenter avant spécification métier des données effacées.",
+      "Rejeu par question (MODE TEST) implémenté ; reset global répétition non spécifié.",
       "Passage TEST→RÉEL conserve les données de répétition (risque de mélange stats) — arbitrage si wipe souhaité.",
     ],
   };
