@@ -2895,12 +2895,8 @@ app.post("/events/:eventId/question-timer", requireAuth, async (req, res) => {
       return res.status(404).json({ error: "Événement introuvable." });
     }
 
-    // En mode TEST, le timer est forcé automatiquement (impossible de modifier).
-    if (event.isLiveConsumed === false) {
-      return res.status(403).json({
-        error: "Timer disponible uniquement en mode réel.",
-      });
-    }
+    // LOT-4 — chrono autorisé en TEST comme en RÉEL (durée configurée, pause, reset).
+    // Ancien forçage 30 s / 403 TEST retiré (conception V1.1 §5).
 
     if (action === "reset") {
       await prisma.event.update({
@@ -3124,14 +3120,13 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
 
   const eventMode = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { isLocked: true, isLiveConsumed: true },
+    select: { isLocked: true },
   });
   if (eventMode?.isLocked) {
     return res.status(403).json({
       error: "Cet événement est terminé et ne peut plus être rejoué.",
     });
   }
-  const isTestMode = eventMode?.isLiveConsumed === false;
 
   const body = req.body ?? {};
   const questionBrute =
@@ -3241,14 +3236,8 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
           displayState: "QUESTION",
           liveState: "VOTING",
           autoRevealShowResultsAt: null,
-          ...(isTestMode
-            ? {
-                questionTimerTotalSec: 30,
-                questionTimerAccumulatedSec: 0,
-                questionTimerStartedAt: new Date(),
-                questionTimerIsPaused: false,
-              }
-            : {}),
+          // LOT-4 : pas de chrono auto 30 s en TEST — même comportement que RÉEL
+          // (lancer via POST /events/:id/question-timer si besoin).
         },
       });
     }
@@ -3559,14 +3548,8 @@ app.post("/polls/:pollId/open", requireAuth, async (req, res) => {
         ...(screenAfterOpen !== undefined
           ? { screenDisplayState: screenAfterOpen }
           : {}),
-        ...(poll.event?.isLiveConsumed === false
-          ? {
-              questionTimerTotalSec: 30,
-              questionTimerAccumulatedSec: 0,
-              questionTimerStartedAt: new Date(),
-              questionTimerIsPaused: false,
-            }
-          : {}),
+        // LOT-4 : TEST = RÉEL — pas de forçage questionTimerTotalSec: 30 à l’ouverture.
+        // Le chrono se lance uniquement via question-timer (durée configurée régie).
       },
     });
 

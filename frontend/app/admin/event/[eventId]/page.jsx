@@ -5423,7 +5423,7 @@ export default function RegieEventPage() {
     const planLabel = planType === "FUN" ? "FUN (100 participants max)" : "EVENT (500 participants max)";
     if (typeof window !== "undefined") {
       const ok = window.confirm(
-        `Passer en live réel avec la formule ${planType} ?\n\n1 activation sera consommée (${planLabel}). Vous obtiendrez des résultats exacts, le chrono libre et les exports.`,
+        `Passer en live réel avec la formule ${planType} ?\n\n1 activation sera consommée (${planLabel}). Les données de la répétition (votes, leads, tirages) sont conservées ; les totaux RESULTS ne seront plus masqués et les exports seront disponibles.`,
       );
       if (!ok) return;
     }
@@ -6377,15 +6377,15 @@ export default function RegieEventPage() {
     secondesAfficheGrand !== null
       ? formatCountdownVerbose(secondesAfficheGrand)
       : "—";
-  const legendeChrono = inTestMode
-    ? "Mode TEST : chrono forcé à 30s"
-    : tm?.running && !tm?.isPaused
-      ? "Compte à rebours sur l’écran"
-      : tm?.isPaused
-        ? "En pause"
-        : tm
-          ? "Arrêté — prêt à relancer"
-          : "Durée réglée avant lancement";
+  const legendeChrono = tm?.running && !tm?.isPaused
+    ? inTestMode
+      ? "Compte à rebours (MODE TEST)"
+      : "Compte à rebours sur l’écran"
+    : tm?.isPaused
+      ? "En pause"
+      : tm
+        ? "Arrêté — prêt à relancer"
+        : "Durée réglée avant lancement";
   const chronoEtatLiveTexte = useMemo(() => {
     if (secondesAfficheGrand == null) return "00:00";
     const total = Math.max(0, Math.floor(secondesAfficheGrand));
@@ -6462,7 +6462,7 @@ export default function RegieEventPage() {
       >
         <button
           type="button"
-          disabled={busy || inTestMode}
+          disabled={busy}
           onClick={() => {
             const total = presetChronoSec;
             if (total < 1) {
@@ -6493,7 +6493,7 @@ export default function RegieEventPage() {
         </button>
         <button
           type="button"
-          disabled={busy || inTestMode}
+          disabled={busy}
           onClick={() => void postQuestionTimer({ action: "pause" })}
           style={chronoBtnOutline}
         >
@@ -6501,7 +6501,7 @@ export default function RegieEventPage() {
         </button>
         <button
           type="button"
-          disabled={busy || inTestMode}
+          disabled={busy}
           onClick={() => void postQuestionTimer({ action: "reset" })}
           style={chronoBtnOutline}
         >
