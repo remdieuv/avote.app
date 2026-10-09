@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AVOTE — Maquette régie UX simplifiée</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg0: #e8eef5;
+      --bg1: #f4f7fb;
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: rgba(15, 23, 42, 0.08);
+      --panel: rgba(255, 255, 255, 0.88);
+      --accent: #0d9488;
+      --accent-ink: #115e59;
+      --danger: #e11d48;
+      --danger-soft: #fff1f2;
+      --amber: #b45309;
+      --amber-bg: #fffbeb;
+      --antenna: #059669;
+      --radius: 18px;
+      --shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
+      --font: "DM Sans", system-ui, sans-serif;
+      --display: "Fraunces", Georgia, serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--font);
+      color: var(--ink);
+      background:
+        radial-gradient(1000px 500px at 10% -10%, #c7e7e3 0%, transparent 55%),
+        radial-gradient(900px 480px at 90% 0%, #dbe7f8 0%, transparent 50%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+    }
+    .app {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 1rem 1.15rem 2rem;
+    }
+    .note {
+      margin: 0 0 0.85rem;
+      padding: 0.65rem 0.9rem;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.04);
+      border: 1px solid var(--line);
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .note strong { color: var(--ink); }
+    .top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: var(--radius);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+      margin-bottom: 0.9rem;
+    }
+    .brand {
+      font-family: var(--display);
+      font-weight: 700;
+      font-size: 1.35rem;
+      letter-spacing: -0.03em;
+    }
+    .event-title {
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+    .badge {
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 0.28rem 0.55rem;
+      border-radius: 999px;
+      background: var(--amber-bg);
+      color: var(--amber);
+      border: 1px solid rgba(180, 83, 9, 0.25);
+    }
+    .meta { margin-left: auto; font-size: 0.8rem; color: var(--muted); font-weight: 600; }
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(200px, 240px) minmax(0, 1fr) minmax(220px, 280px);
+      gap: 0.9rem;
+      align-items: start;
+    }
+    @media (max-width: 980px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+    .col {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 0.95rem 1rem 1.1rem;
+      min-height: 520px;
+    }
+    .col h2 {
+      margin: 0 0 0.75rem;
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .q-list { display: grid; gap: 0.4rem; }
+    .q-item {
+      width: 100%;
+      text-align: left;
+      border: 1px solid transparent;
+      background: transparent;
+      border-radius: 12px;
+      padding: 0.55rem 0.6rem;
+      cursor: pointer;
+      font: inherit;
+      display: grid;
+      grid-template-columns: 1.4rem 1fr auto;
+      gap: 0.45rem;
+      align-items: start;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .q-item:hover { background: rgba(13, 148, 136, 0.06); }
+    .q-item.is-antenna {
+      border-color: rgba(5, 150, 105, 0.35);
+      background: rgba(16, 185, 129, 0.08);
+    }
+    .q-item.is-consult {
+      border-color: rgba(180, 83, 9, 0.35);
+      background: rgba(251, 191, 36, 0.12);
+    }
+    .q-num { font-weight: 800; color: var(--muted); font-size: 0.85rem; }
+    .q-title { font-weight: 700; font-size: 0.84rem; line-height: 1.25; }
+    .q-type { font-size: 0.68rem; color: var(--muted); font-weight: 600; margin-top: 0.15rem; }
+    .dot {
+      width: 0.55rem; height: 0.55rem; border-radius: 50%;
+      margin-top: 0.35rem; background: #cbd5e1;
+    }
+    .dot.open { background: var(--antenna); box-shadow: 0 0 0 3px rgba(5,150,105,0.15); }
+    .dot.ready { background: #94a3b8; }
+    .add {
+      margin-top: 0.7rem;
+      border: none;
+      background: none;
+      color: var(--accent-ink);
+      font: inherit;
+      font-weight: 700;
+      font-size: 0.82rem;
+      cursor: pointer;
+      padding: 0.35rem 0.2rem;
+    }
+    .pilot {
+      display: flex;
+      flex-direction: column;
+      min-height: 520px;
+    }
+    .step {
+      align-self: flex-start;
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--accent-ink);
+      background: rgba(13, 148, 136, 0.1);
+      border: 1px solid rgba(13, 148, 136, 0.2);
+      padding: 0.28rem 0.55rem;
+      border-radius: 999px;
+      margin-bottom: 0.85rem;
+    }
+    .q-label { font-size: 0.78rem; color: var(--muted); font-weight: 600; margin: 0 0 0.35rem; }
+    .q-main {
+      font-family: var(--display);
+      font-size: clamp(1.35rem, 2.4vw, 1.85rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      margin: 0 0 0.55rem;
+    }
+    .votes {
+      font-size: 1.05rem;
+      font-weight: 800;
+      margin: 0 0 1.4rem;
+    }
+    .cta-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.85rem;
+      padding: 0.5rem 0 1rem;
+    }
+    .cta {
+      width: min(100%, 360px);
+      min-height: 3.6rem;
+      border: none;
+      border-radius: 16px;
+      font: inherit;
+      font-weight: 800;
+      font-size: 1.05rem;
+      letter-spacing: -0.01em;
+      cursor: pointer;
+      color: #fff;
+      background: linear-gradient(180deg, #f43f5e 0%, #e11d48 100%);
+      box-shadow: 0 16px 28px rgba(225, 29, 72, 0.22);
+      transition: transform 0.12s, filter 0.12s;
+    }
+    .cta:hover { transform: translateY(-1px); filter: brightness(1.03); }
+    .cta.open {
+      background: linear-gradient(180deg, #14b8a6 0%, #0d9488 100%);
+      box-shadow: 0 16px 28px rgba(13, 148, 136, 0.22);
+    }
+    .cta.show {
+      background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+      box-shadow: 0 16px 28px rgba(37, 99, 235, 0.2);
+    }
+    .cta.next {
+      background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+      box-shadow: 0 16px 28px rgba(15, 23, 42, 0.18);
+    }
+    .cta.draw {
+      background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+      box-shadow: 0 16px 28px rgba(217, 119, 6, 0.2);
+    }
+    .cta.back {
+      background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
+      color: #78350f;
+      box-shadow: 0 16px 28px rgba(245, 158, 11, 0.2);
+    }
+    .secondary {
+      border: none;
+      background: none;
+      color: var(--muted);
+      font: inherit;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .chrono {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      padding: 0.55rem 0.7rem;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.03);
+      border: 1px solid var(--line);
+      font-size: 0.86rem;
+      font-weight: 700;
+    }
+    .chrono button {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 8px;
+      padding: 0.25rem 0.5rem;
+      font: inherit;
+      font-weight: 700;
+      font-size: 0.75rem;
+      cursor: pointer;
+    }
+    .chrono .link {
+      margin-left: auto;
+      border: none;
+      background: none;
+      color: var(--accent-ink);
+      font-weight: 700;
+      font-size: 0.78rem;
+      cursor: pointer;
+    }
+    .consult-banner {
+      display: none;
+      margin-bottom: 0.9rem;
+      padding: 0.75rem 0.85rem;
+      border-radius: 14px;
+      background: var(--amber-bg);
+      border: 1px solid rgba(180, 83, 9, 0.28);
+      color: #92400e;
+      font-size: 0.84rem;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+    .pilot.is-consult .consult-banner { display: block; }
+    .pilot.is-consult .cta-live { display: none; }
+    .pilot.is-consult .cta-back-wrap { display: flex; }
+    .cta-back-wrap { display: none; flex-direction: column; align-items: center; gap: 0.75rem; }
+    .share .qr {
+      width: 168px;
+      height: 168px;
+      margin: 0.4rem auto 0.75rem;
+      border-radius: 16px;
+      background:
+        linear-gradient(45deg, #0f172a 25%, transparent 25%) 0 0 / 14px 14px,
+        linear-gradient(-45deg, #0f172a 25%, transparent 25%) 0 0 / 14px 14px,
+        linear-gradient(45deg, transparent 75%, #0f172a 75%) 0 0 / 14px 14px,
+        linear-gradient(-45deg, transparent 75%, #0f172a 75%) 0 0 / 14px 14px,
+        #fff;
+      border: 1px solid var(--line);
+    }
+    .share .caption {
+      text-align: center;
+      font-weight: 800;
+      margin: 0 0 0.55rem;
+      font-size: 0.92rem;
+    }
+    .btn-ghost {
+      width: 100%;
+      min-height: 2.5rem;
+      margin-bottom: 0.45rem;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+      font: inherit;
+      font-weight: 700;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+    .btn-ghost.primary-soft {
+      border-color: rgba(13, 148, 136, 0.35);
+      background: rgba(13, 148, 136, 0.08);
+      color: var(--accent-ink);
+    }
+    details.adv {
+      margin-top: 1rem;
+      border-top: 1px solid var(--line);
+      padding-top: 0.75rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    details.adv summary {
+      cursor: pointer;
+      font-weight: 800;
+      color: var(--ink);
+      margin-bottom: 0.45rem;
+    }
+    .sim {
+      margin-top: 1rem;
+      padding: 0.85rem 1rem;
+      border-radius: var(--radius);
+      background: rgba(15, 23, 42, 0.04);
+      border: 1px dashed rgba(15, 23, 42, 0.15);
+    }
+    .sim h3 {
+      margin: 0 0 0.55rem;
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .sim-row { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .sim-row button {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 999px;
+      padding: 0.35rem 0.7rem;
+      font: inherit;
+      font-size: 0.75rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .sim-row button.active {
+      background: var(--ink);
+      color: #fff;
+      border-color: var(--ink);
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <p class="note">
+      <strong>Maquette conception — non fonctionnelle.</strong>
+      Simule la régie simplifiée (3 zones, 1 CTA). Aucun code applicatif.
+      Document : <code>LIVRABLES/maquette-regie-ux-simplifiee.md</code>
+    </p>
+
+    <header class="top">
+      <div class="brand">AVOTE</div>
+      <div class="event-title">Soirée EVG — Paris</div>
+      <span class="badge" id="modeBadge">Mode test</span>
+      <div class="meta">24 connectés</div>
+    </header>
+
+    <div class="grid">
+      <!-- GAUCHE -->
+      <aside class="col">
+        <h2>Questions</h2>
+        <div class="q-list" id="qList"></div>
+        <button class="add" type="button">+ Ajouter une question</button>
+      </aside>
+
+      <!-- CENTRE -->
+      <main class="col pilot" id="pilot">
+        <div class="consult-banner" id="consultBanner"></div>
+        <div class="step" id="stepPill">Étape · Préparé</div>
+        <p class="q-label" id="qMeta">Question 1/4 · Sondage</p>
+        <h1 class="q-main" id="qTitle">Quelle est votre destination préférée ?</h1>
+        <p class="votes" id="qVotes">0 vote</p>
+
+        <div class="cta-wrap">
+          <div class="cta-live" style="display:flex;flex-direction:column;align-items:center;gap:0.85rem;width:100%">
+            <button class="cta open" type="button" id="primaryCta">Ouvrir le vote</button>
+            <button class="secondary" type="button" id="secNext">Question suivante</button>
+            <button class="secondary" type="button">Terminer l’événement</button>
+          </div>
+          <div class="cta-back-wrap">
+            <button class="cta back" type="button" id="backLive">Retour au direct</button>
+            <p style="margin:0;font-size:0.8rem;color:var(--muted);text-align:center;max-width:28rem">
+              Consultation seule — aucune commande n’agit sur cette question.
+            </p>
+          </div>
+        </div>
+
+        <div class="chrono" id="chronoRow">
+          <span>Chrono</span>
+          <span id="chronoVal">02:00</span>
+          <button type="button" title="Pause">⏸</button>
+          <button class="link" type="button">▸ Régler</button>
+        </div>
+      </main>
+
+      <!-- DROITE -->
+      <aside class="col share">
+        <h2>Partage & accès</h2>
+        <div class="qr" aria-hidden="true"></div>
+        <p class="caption">Rejoindre la salle</p>
+        <button class="btn-ghost primary-soft" type="button">Copier le lien</button>
+        <button class="btn-ghost" type="button">Ouvrir l’écran salle</button>
+        <button class="btn-ghost" type="button">Ouvrir Overlay OBS</button>
+        <details class="adv">
+          <summary>Options avancées</summary>
+          <p>Presets Overlay · Auto-révélation · Projection (Noir, A/B, forçage) · Exports QR · Rejouer (TEST) · Rouvrir le vote</p>
+        </details>
+      </aside>
+    </div>
+
+    <div class="sim">
+      <h3>Simulateur d’étapes (maquette)</h3>
+      <div class="sim-row" id="simSteps"></div>
+      <h3 style="margin-top:0.85rem">Type de question antenne</h3>
+      <div class="sim-row" id="simTypes"></div>
+    </div>
+  </div>
+
+  <script>
+    const polls = [
+      { id: "1", n: 1, type: "Sondage", title: "Quelle est votre destination préférée ?", short: "Destination préférée" },
+      { id: "2", n: 2, type: "Quiz", title: "Quelle est la capitale de l’Italie ?", short: "Capitale de l’Italie" },
+      { id: "3", n: 3, type: "Lead", title: "Laissez vos coordonnées pour le lot", short: "Coordonnées lot" },
+      { id: "4", n: 4, type: "Concours", title: "Participez au tirage du week-end", short: "Tirage week-end" },
+    ];
+
+    const steps = [
+      { id: "prepared", label: "Préparé" },
+      { id: "open", label: "Ouvert" },
+      { id: "closed", label: "Fermé" },
+      { id: "results", label: "Résultats / Tirage" },
+    ];
+
+    let antennaId = "1";
+    let selectedId = "1";
+    let step = "prepared";
+    let antennaType = "Sondage";
+    let votes = 0;
+
+    function isConsult() {
+      return selectedId !== antennaId;
+    }
+
+    function primaryFor() {
+      const t = antennaType;
+      if (step === "prepared") return { label: "Ouvrir le vote", cls: "open" };
+      if (step === "open") return { label: "Fermer le vote", cls: "" };
+      if (step === "closed") {
+        if (t === "Lead") return { label: "Question suivante", cls: "next" };
+        if (t === "Concours") return { label: "Tirer au sort", cls: "draw" };
+        return { label: "Afficher les résultats", cls: "show" };
+      }
+      return { label: "Question suivante", cls: "next" };
+    }
+
+    function stepLabel() {
+      const map = {
+        prepared: "Étape · Préparé",
+        open: "Étape · Vote ouvert",
+        closed: antennaType === "Lead" ? "Étape · Collecte fermée" : antennaType === "Concours" ? "Étape · Prêt pour le tirage" : "Étape · Vote fermé",
+        results: antennaType === "Concours" ? "Étape · Tirage affiché" : "Étape · Résultats affichés",
+      };
+      return map[step];
+    }
+
+    function renderList() {
+      const el = document.getElementById("qList");
+      el.innerHTML = polls.map((p) => {
+        const antenna = p.id === antennaId;
+        const consult = p.id === selectedId && !antenna;
+        const cls = ["q-item", antenna ? "is-antenna" : "", consult ? "is-consult" : ""].filter(Boolean).join(" ");
+        const dot = antenna && step === "open" ? "open" : antenna ? "open" : "ready";
+        return `<button class="${cls}" type="button" data-id="${p.id}">
+          <span class="q-num">${p.n}</span>
+          <span><div class="q-title">${p.short}</div><div class="q-type">${p.type}${antenna ? " · À l’antenne" : ""}</div></span>
+          <span class="dot ${dot}"></span>
+        </button>`;
+      }).join("");
+      el.querySelectorAll(".q-item").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          selectedId = btn.dataset.id;
+          render();
+        });
+      });
+    }
+
+    function renderSim() {
+      const s = document.getElementById("simSteps");
+      s.innerHTML = steps.map((x) =>
+        `<button type="button" class="${x.id === step ? "active" : ""}" data-step="${x.id}">${x.label}</button>`
+      ).join("");
+      s.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+        step = b.dataset.step;
+        votes = step === "prepared" ? 0 : step === "open" ? 18 : 24;
+        render();
+      }));
+
+      const types = ["Sondage", "Quiz", "Lead", "Concours"];
+      const t = document.getElementById("simTypes");
+      t.innerHTML = types.map((x) =>
+        `<button type="button" class="${x === antennaType ? "active" : ""}" data-type="${x}">${x}</button>`
+      ).join("");
+      t.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+        antennaType = b.dataset.type;
+        const match = polls.find((p) => p.type === antennaType);
+        if (match) {
+          antennaId = match.id;
+          selectedId = match.id;
+        }
+        render();
+      }));
+    }
+
+    function render() {
+      const consult = isConsult();
+      const pilot = document.getElementById("pilot");
+      pilot.classList.toggle("is-consult", consult);
+
+      const sel = polls.find((p) => p.id === selectedId) || polls[0];
+      const ant = polls.find((p) => p.id === antennaId) || polls[0];
+      const shown = consult ? sel : ant;
+
+      document.getElementById("qMeta").textContent = `Question ${shown.n}/4 · ${consult ? shown.type : antennaType}`;
+      document.getElementById("qTitle").textContent = shown.title;
+      document.getElementById("qVotes").textContent =
+        antennaType === "Lead" && !consult
+          ? `${votes} lead${votes !== 1 ? "s" : ""}`
+          : antennaType === "Concours" && !consult
+            ? `${votes} inscrit${votes !== 1 ? "s" : ""}`
+            : `${votes} vote${votes !== 1 ? "s" : ""}`;
+
+      document.getElementById("stepPill").textContent = consult
+        ? `Consultation · Q${sel.n}`
+        : stepLabel();
+
+      document.getElementById("consultBanner").textContent =
+        `Vous consultez la question ${sel.n} — le direct reste sur la question ${ant.n}.`;
+
+      const p = primaryFor();
+      const cta = document.getElementById("primaryCta");
+      cta.textContent = p.label;
+      cta.className = "cta " + (p.cls || "");
+
+      document.getElementById("secNext").style.display =
+        !consult && (step === "prepared" || step === "open") ? "inline" : "none";
+
+      document.getElementById("chronoRow").style.opacity =
+        !consult && (step === "open" || step === "prepared") ? "1" : "0.45";
+      document.getElementById("chronoVal").textContent = step === "open" ? "01:42" : "02:00";
+
+      renderList();
+      renderSim();
+    }
+
+    document.getElementById("backLive").addEventListener("click", () => {
+      selectedId = antennaId;
+      render();
+    });
+
+    document.getElementById("primaryCta").addEventListener("click", () => {
+      if (isConsult()) return;
+      if (step === "prepared") { step = "open"; votes = 18; }
+      else if (step === "open") { step = "closed"; votes = 24; }
+      else if (step === "closed") { step = "results"; }
+      else {
+        const idx = polls.findIndex((p) => p.id === antennaId);
+        const next = polls[Math.min(idx + 1, polls.length - 1)];
+        antennaId = next.id;
+        selectedId = next.id;
+        antennaType = next.type;
+        step = "prepared";
+        votes = 0;
+      }
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>
