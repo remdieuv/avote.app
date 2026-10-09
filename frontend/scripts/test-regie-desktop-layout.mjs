@@ -9,6 +9,7 @@ import {
   REGIE_ZONE_PROJECTION_AVANCEE,
   REGIE_ZONE_QUESTIONS,
   getRegieAllowedLiveActions,
+  getRegieOpenVoteButtonCopy,
   getRegiePollStatusLabel,
   getRegiePollTypeLabel,
   getRegiePrimaryLiveAction,
@@ -296,6 +297,17 @@ test("CTA — événement terminé / sans antenne", () => {
     getRegiePrimaryLiveAction({ hasActivePoll: false, eventFinished: false }),
     "finish",
   );
+});
+
+test("LOT-5 — Ouvrir vs Rouvrir (sans wipe) vs Rejouer TEST", () => {
+  const prepared = getRegieOpenVoteButtonCopy({ pollStatus: "ACTIVE" });
+  assert.equal(prepared.label, "Ouvrir");
+  assert.equal(prepared.isReopenWithoutWipe, false);
+  const closed = getRegieOpenVoteButtonCopy({ pollStatus: "CLOSED" });
+  assert.equal(closed.label, "Rouvrir le vote");
+  assert.equal(closed.isReopenWithoutWipe, true);
+  assert.match(closed.title, /sans effacer/i);
+  assert.match(closed.title, /Rejouer/i);
 });
 
 if (failed > 0) {

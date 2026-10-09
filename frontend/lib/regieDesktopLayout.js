@@ -259,6 +259,29 @@ export function getRegieAllowedLiveActions(input = {}) {
   };
 }
 
+/**
+ * LOT-5 — Libellé / titre du bouton Ouvrir vs réouverture vs Rejouer TEST.
+ * Ne change pas la règle métier : open ne wipe jamais ; rejeu TEST efface.
+ * @param {{ pollStatus?: string | null }} input
+ * @returns {{ label: string; title: string; isReopenWithoutWipe: boolean }}
+ */
+export function getRegieOpenVoteButtonCopy(input = {}) {
+  const closed = String(input.pollStatus ?? "").toUpperCase() === "CLOSED";
+  if (closed) {
+    return {
+      label: "Rouvrir le vote",
+      title:
+        "Réouvre le vote sans effacer les votes déjà enregistrés. Pour effacer les données TEST de cette question, utilisez « Rejouer la question ».",
+      isReopenWithoutWipe: true,
+    };
+  }
+  return {
+    label: "Ouvrir",
+    title: "Ouvre le vote sur la question à l’antenne (aucune donnée effacée).",
+    isReopenWithoutWipe: false,
+  };
+}
+
 /** Zones desktop LOT-3. */
 export const REGIE_ZONE_QUESTIONS = "Questions";
 export const REGIE_ZONE_PILOTAGE = "Pilotage du direct";

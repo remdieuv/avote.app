@@ -41,6 +41,7 @@ import {
   getRegieAllowedLiveActions,
   getRegiePollStatusLabel,
   getRegiePollTypeLabel,
+  getRegieOpenVoteButtonCopy,
   getRegiePrimaryLiveAction,
   getRegiePrimaryLiveActionLabel,
   getRegieQuestionNumberLabel,
@@ -5885,6 +5886,9 @@ export default function RegieEventPage() {
     canToggleVote &&
     allowedLiveActions.close &&
     voteIsOpen;
+  const openVoteButtonCopy = getRegieOpenVoteButtonCopy({
+    pollStatus: activePoll?.status,
+  });
   const canGoNext = canGoNextBase && allowedLiveActions.next;
   const primaryLiveActionLabel = getRegiePrimaryLiveActionLabel(primaryLiveAction);
   const antennaStatusLabel = activePoll
@@ -8276,6 +8280,7 @@ export default function RegieEventPage() {
                             <button
                               type="button"
                               disabled={!canOpenVote}
+                              title={openVoteButtonCopy.title}
                               onClick={async () => {
                                 if (!activePollIdJs || !canOpenVote) return;
                                 await postAction(`/polls/${activePollIdJs}/open`, "Vote ouvert");
@@ -8302,7 +8307,7 @@ export default function RegieEventPage() {
                                 opacity: canOpenVote ? 1 : 0.55,
                               }}
                             >
-                              Ouvrir
+                              {openVoteButtonCopy.label}
                             </button>
                             <button
                               type="button"

@@ -438,7 +438,10 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
         } else {
           setLiveScene("results");
         }
-        if (typeof data.eventDisplayState === "string") {
+        // LOT-5 — Screen projection prioritaire (écran ≠ salle) ; fallback displayState.
+        if (typeof data.eventScreenDisplayState === "string") {
+          setDisplayState(data.eventScreenDisplayState.toLowerCase());
+        } else if (typeof data.eventDisplayState === "string") {
           setDisplayState(data.eventDisplayState.toLowerCase());
         } else {
           setDisplayState(deriveDisplayFromLive(data.eventLiveState));

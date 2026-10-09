@@ -20,6 +20,7 @@
     "test:test-mode-parity": "node scripts/test-test-mode-live-parity.mjs",
     "test:test-mode-replay": "node scripts/test-test-mode-replay-poll.mjs",
     "test:lot4": "npm run test:test-mode-parity && npm run test:test-mode-replay",
+    "test:lot5": "node scripts/test-lot5-qa-regressions.mjs",
     "test:lot0-lot1": "npm run test:live-ux && npm run test:participant && npm run test:normalize-live && npm run test:backend-proxy && npm run test:api-browser-base && npm run test:regie-projection",
     "test:lot0-lot2": "npm run test:live-ux && npm run test:diffusion && npm run test:lead-contest && npm run test:contest-replace",
     "test:lot0-lot1-lot2": "npm run test:lot0-lot1 && npm run test:diffusion && npm run test:lead-contest && npm run test:contest-replace && npm run test:regie-desktop"

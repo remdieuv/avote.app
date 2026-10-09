@@ -155,6 +155,10 @@ export function JoinLiveHub({ slug }) {
   /** @type {Record<string, boolean>} */
   const [contestWinByPollId, setContestWinByPollId] = useState({});
   const [isLocked, setIsLocked] = useState(false);
+  /** false = MODE TEST (répétition) ; true = RÉEL — conception §5.2 */
+  const [isLiveConsumed, setIsLiveConsumed] = useState(
+    /** @type {boolean | null} */ (null),
+  );
   /** null = pas encore de socket ; true/false = statut connexion */
   const [socketOnline, setSocketOnline] = useState(/** @type {boolean | null} */ (null));
   /** Bump pour sync PollExperience embedded (un seul socket Join). */
@@ -255,6 +259,11 @@ export function JoinLiveHub({ slug }) {
     setIsLocked(
       axes.isLocked != null ? Boolean(axes.isLocked) : Boolean(data.isLocked),
     );
+    if (typeof data.isLiveConsumed === "boolean") {
+      setIsLiveConsumed(data.isLiveConsumed);
+    } else if (typeof axes.isLiveConsumed === "boolean") {
+      setIsLiveConsumed(axes.isLiveConsumed);
+    }
     setEventId(data.id ?? null);
     setEventTitle(
       typeof data.title === "string" && data.title.trim()
@@ -609,6 +618,17 @@ export function JoinLiveHub({ slug }) {
           }
           setEmbeddedPollSnapshot(pollNorm);
           setEmbeddedPollRevision((n) => n + 1);
+        } else if (
+          String(axes.displayState || "").toLowerCase() === "waiting" &&
+          String(axes.voteState || "").toLowerCase() === "closed" &&
+          payload?.activePollId
+        ) {
+          // LOT-5 — Suivante sans poll nested : éviter CLOSED stale → faux embed.
+          setActivePollStatus("ACTIVE");
+          setEmbeddedPollSnapshot(null);
+        }
+        if (typeof payload?.isLiveConsumed === "boolean") {
+          setIsLiveConsumed(payload.isLiveConsumed);
         }
       }
       setLiveSyncRevision((n) => n + 1);
@@ -1144,6 +1164,31 @@ export function JoinLiveHub({ slug }) {
           display: none;
         }
       `}</style>
+
+      {!loading && !error && isLiveConsumed === false ? (
+        <div
+          style={{
+            position: "fixed",
+            top: "max(14px, env(safe-area-inset-top, 0px))",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 2147483646,
+            pointerEvents: "none",
+            background: "rgba(0,0,0,0.55)",
+            color: "#f8fafc",
+            border: "1px solid rgba(148,163,184,0.35)",
+            borderRadius: 9999,
+            padding: "0.35rem 0.8rem",
+            fontWeight: 900,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            fontSize: "0.78rem",
+          }}
+          aria-label="Mode test"
+        >
+          MODE TEST
+        </div>
+      ) : null}
 
       <ExperienceHeader
         backHref="/"

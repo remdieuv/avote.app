@@ -806,10 +806,20 @@ async function emitEventLiveUpdated(io, eventId) {
         vs === "CLOSED" &&
         String(poll.status).toUpperCase() === "CLOSED" &&
         String(poll.id) === String(event.activePollId);
+      /**
+       * LOT-5 — Suivante / PRÉPARÉ : poll ACTIVE × WAITING × vote CLOSED.
+       * Inclure le poll pour que Join mette à jour activePollStatus (évite CLOSED stale).
+       */
+      const preparedActiveAntenna =
+        vs === "CLOSED" &&
+        ds === "WAITING" &&
+        String(poll.status).toUpperCase() === "ACTIVE" &&
+        String(poll.id) === String(event.activePollId);
       if (
         openActive ||
         sceneQuestionOrResults ||
-        voteTerminePollEncoreAffiche
+        voteTerminePollEncoreAffiche ||
+        preparedActiveAntenna
       ) {
         pollJson = pollToJson(poll);
       }
@@ -2103,6 +2113,8 @@ app.get("/events/slug/:slug", async (req, res) => {
       pastPolls,
       questionTimer: questionTimerSnapshot(eventApres),
       isLocked: Boolean(eventApres.isLocked),
+      /** LOT-5 — badge MODE TEST sur hub /join (conception §5.2 / §9.3). */
+      isLiveConsumed: Boolean(eventApres.isLiveConsumed),
     });
   } catch (e) {
     console.error(e);
@@ -3128,7 +3140,7 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
 
   const eventMode = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { isLocked: true },
+    select: { isLocked: true, screenDisplayState: true },
   });
   if (eventMode?.isLocked) {
     return res.status(403).json({
@@ -3236,6 +3248,10 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
         where: { id: created.id },
         data: { status: "ACTIVE" },
       });
+      const screenAfterLaunch = screenDisplayStateForLiveTransition(
+        eventMode?.screenDisplayState,
+        "open",
+      );
       await prisma.event.update({
         where: { id: eventId },
         data: {
@@ -3244,6 +3260,10 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
           displayState: "QUESTION",
           liveState: "VOTING",
           autoRevealShowResultsAt: null,
+          // LOT-5 — comme POST /open : nettoyer RESULTS collant (préserve BLACK).
+          ...(screenAfterLaunch !== undefined
+            ? { screenDisplayState: screenAfterLaunch }
+            : {}),
           // LOT-4 : pas de chrono auto 30 s en TEST — même comportement que RÉEL
           // (lancer via POST /events/:id/question-timer si besoin).
         },
