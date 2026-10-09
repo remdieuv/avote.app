@@ -38,9 +38,14 @@ import {
 import {
   REGIE_ZONE_PILOTAGE,
   REGIE_ZONE_PROJECTION_AVANCEE,
+  getRegieAllowedLiveActions,
   getRegiePollStatusLabel,
   getRegiePollTypeLabel,
   getRegiePrimaryLiveAction,
+  getRegiePrimaryLiveActionLabel,
+  getRegieQuestionNumberLabel,
+  isRegieConsultSelectionOnly,
+  sortPollsByPlaylistOrder,
 } from "@/lib/regieDesktopLayout";
 import {
   normalizePollOptions,
@@ -375,12 +380,17 @@ function PollCard({
    * Les actions Live restent uniquement dans le Pilotage central.
    */
   liveActions = true,
+  /** LOT-3 QA — sélection playlist (consultation) distincte de l’antenne. */
+  isSelected = false,
+  onSelect = null,
+  /** Libellé « Question N/Total » (ordre playlist). */
+  questionNumberLabel = null,
 }) {
   const statusLabel = getRegiePollStatusLabel({
     pollStatus: poll.status,
     isActive,
-    voteState,
-    displayState,
+    voteState: isActive ? voteState : null,
+    displayState: isActive ? displayState : null,
     pollType: poll.type,
     leadEnabled: poll.leadEnabled,
   });
@@ -391,7 +401,9 @@ function PollCard({
         ? "SCHEDULED"
         : statusLabel === "Fermée" || statusLabel === "Terminée"
           ? "CLOSED"
-          : "DRAFT",
+          : statusLabel === "En attente d'ouverture"
+            ? "SCHEDULED"
+            : "DRAFT",
   );
   const kind = pollKindStyle(poll);
   void liveState;
@@ -522,6 +534,23 @@ function PollCard({
           Antenne
         </span>
       ) : null}
+      {isSelected && !isActive ? (
+        <span
+          title="Question consultée dans la régie (sans effet sur l’antenne)."
+          style={{
+            fontSize: "0.6rem",
+            fontWeight: 800,
+            letterSpacing: "0.06em",
+            padding: "0.16rem 0.45rem",
+            borderRadius: "999px",
+            background: "#fef3c7",
+            color: "#92400e",
+            border: "1px solid #fde68a",
+          }}
+        >
+          Consultation
+        </span>
+      ) : null}
       <span
         style={{
           fontSize: "0.7rem",
@@ -535,8 +564,8 @@ function PollCard({
       >
         {statusLabel}
       </span>
-      <span style={{ fontSize: "0.78rem", color: "#6b7280" }}>
-        Ordre {poll.order}
+      <span style={{ fontSize: "0.78rem", color: "#6b7280", fontWeight: 700 }}>
+        {questionNumberLabel || `Ordre ${poll.order}`}
       </span>
       <span
         style={{
@@ -609,21 +638,60 @@ function PollCard({
   );
 
   if (compact) {
+    const selectable = typeof onSelect === "function";
+    const compactBorder = isSelected
+      ? "1px solid rgba(217, 119, 6, 0.55)"
+      : isActive
+        ? "1px solid rgba(59, 130, 246, 0.35)"
+        : PREMIUM_BORDER;
+    const compactBg = isSelected
+      ? "linear-gradient(180deg, rgba(255, 251, 235, 0.98) 0%, #ffffff 100%)"
+      : isActive
+        ? "linear-gradient(180deg, rgba(239, 246, 255, 0.96) 0%, #ffffff 100%)"
+        : "#ffffff";
+    const compactShadow = isSelected
+      ? "0 14px 28px rgba(217, 119, 6, 0.12)"
+      : isActive
+        ? "0 16px 30px rgba(37, 99, 235, 0.10)"
+        : "0 8px 20px rgba(15, 23, 42, 0.04)";
     return (
       <div
         id={`regie-poll-${poll.id}`}
+        role={selectable ? "button" : undefined}
+        tabIndex={selectable ? 0 : undefined}
+        aria-pressed={selectable ? isSelected : undefined}
+        aria-label={
+          selectable
+            ? `Consulter ${questionNumberLabel || "cette question"} — ${poll.question || poll.title || ""}`
+            : undefined
+        }
+        onClick={
+          selectable
+            ? () => {
+                onSelect(poll.id);
+              }
+            : undefined
+        }
+        onKeyDown={
+          selectable
+            ? (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelect(poll.id);
+                }
+              }
+            : undefined
+        }
         style={{
-          border: isActive ? "1px solid rgba(59, 130, 246, 0.35)" : PREMIUM_BORDER,
+          border: compactBorder,
           borderRadius: "16px",
           padding: "0.68rem 0.72rem",
           marginBottom: "0.5rem",
-          background: isActive
-            ? "linear-gradient(180deg, rgba(239, 246, 255, 0.96) 0%, #ffffff 100%)"
-            : "#ffffff",
-          boxShadow: isActive
-            ? "0 16px 30px rgba(37, 99, 235, 0.10)"
-            : "0 8px 20px rgba(15, 23, 42, 0.04)",
-          cursor: "default",
+          background: compactBg,
+          boxShadow: compactShadow,
+          cursor: selectable ? "pointer" : "default",
+          outline: isSelected ? "2px solid rgba(245, 158, 11, 0.35)" : "none",
+          outlineOffset: isSelected ? "1px" : undefined,
         }}
       >
         <div
@@ -635,9 +703,19 @@ function PollCard({
             marginBottom: "0.2rem",
           }}
         >
+          <span
+            style={{
+              fontSize: "0.62rem",
+              fontWeight: 800,
+              color: "#334155",
+              letterSpacing: "0.02em",
+            }}
+          >
+            {questionNumberLabel || `Ordre ${poll.order}`}
+          </span>
           {isActive ? (
             <span
-              title="Question reliée à l’événement (voir carte étendue)."
+              title="Question à l’antenne (pilotage live). Distinct de la consultation."
               style={{
                 fontSize: "0.56rem",
                 fontWeight: 800,
@@ -650,6 +728,23 @@ function PollCard({
               }}
             >
               Antenne
+            </span>
+          ) : null}
+          {isSelected && !isActive ? (
+            <span
+              title="Consultation régie — aucun effet sur la salle / Screen / Overlay."
+              style={{
+                fontSize: "0.56rem",
+                fontWeight: 800,
+                letterSpacing: "0.05em",
+                padding: "0.13rem 0.4rem",
+                borderRadius: "999px",
+                background: "#fef3c7",
+                color: "#92400e",
+                border: "1px solid #fde68a",
+              }}
+            >
+              Consultation
             </span>
           ) : null}
           <span
@@ -693,6 +788,8 @@ function PollCard({
             gap: "0.3rem",
             marginTop: "0.4rem",
           }}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
         >
           {liveActions ? (
             <>
@@ -4535,6 +4632,8 @@ export default function RegieEventPage() {
   const [autoRotateQuestionSec, setAutoRotateQuestionSec] = useState(10);
   const [autoRotateResultsSec, setAutoRotateResultsSec] = useState(5);
   const [addQuestionModalOpen, setAddQuestionModalOpen] = useState(false);
+  /** LOT-3 QA — sélection playlist (consultation) ; jamais liée aux sockets / antenne. */
+  const [selectedPollId, setSelectedPollId] = useState(/** @type {string | null} */ (null));
   const [toastNotif, setToastNotif] = useState(/** @type {string | null} */ (null));
   const [newLeadCount, setNewLeadCount] = useState(0);
   const [contestEligibleCount, setContestEligibleCount] = useState(0);
@@ -5626,7 +5725,7 @@ export default function RegieEventPage() {
   const canReplaceContestWinner = canOfferContestWinnerReplace({
     winners: contestWinners,
   });
-  const pollsOrdered = Array.isArray(eventData?.polls) ? eventData.polls : [];
+  const pollsOrdered = sortPollsByPlaylistOrder(eventData?.polls);
   const totalQuestions = pollsOrdered.length;
   const activeQuestionIndex = pollsOrdered.findIndex(
     (p) => p.id === eventData?.activePollId,
@@ -5653,7 +5752,8 @@ export default function RegieEventPage() {
   const eventPlanType = eventData?.eventPlanType
     ? String(eventData.eventPlanType).toUpperCase()
     : null;
-  const canGoNext = !busy && !eventFinished && totalQuestions > 0 && !eventLocked;
+  const canGoNextBase =
+    !busy && !eventFinished && totalQuestions > 0 && !eventLocked;
 
   /** Ne jamais déduire « open » depuis liveState : lecture seule du champ API (+ défaut fermé si absent). */
   const rawVoteState = eventData?.voteState;
@@ -5741,24 +5841,59 @@ export default function RegieEventPage() {
   const canManageActivePoll = Boolean(activePollIdJs) && !busy;
   const canToggleVote = Boolean(activePollIdJs) && !busy && !eventFinished && !eventLocked;
   const voteIsOpen = voteStateUi === "open";
-  /** LOT-3 — Afficher dans Pilotage (pas sur les cartes Questions). */
-  const canShowResultsForActive =
-    Boolean(activePollIdJs) &&
-    !busy &&
-    !eventFinished &&
-    !eventLocked &&
-    !isLeadPoll(activePoll) &&
-    !isContestPoll(activePoll);
+  const hasNextPollAfterActive =
+    activeQuestionIndex >= 0 && activeQuestionIndex < totalQuestions - 1;
   const primaryLiveAction = getRegiePrimaryLiveAction({
     voteState: voteStateUi,
     displayState: projectionDisplayStateUi,
+    pollStatus: activePoll?.status,
     pollType: activePoll?.type,
     leadEnabled: activePoll?.leadEnabled,
     contestQuotaReached,
     eventFinished,
     hasActivePoll: Boolean(activePollIdJs),
+    hasNextPoll: hasNextPollAfterActive,
   });
-  void primaryLiveAction;
+  const allowedLiveActions = getRegieAllowedLiveActions({
+    voteState: voteStateUi,
+    displayState: projectionDisplayStateUi,
+    pollStatus: activePoll?.status,
+    pollType: activePoll?.type,
+    leadEnabled: activePoll?.leadEnabled,
+    eventFinished,
+    hasActivePoll: Boolean(activePollIdJs),
+  });
+  /** LOT-3 — Afficher dans Pilotage uniquement après Fermer (poll CLOSED), pas après Suivante. */
+  const canShowResultsForActive =
+    Boolean(activePollIdJs) &&
+    !busy &&
+    !eventFinished &&
+    !eventLocked &&
+    allowedLiveActions.showResults;
+  const canOpenVote =
+    Boolean(activePollIdJs) &&
+    canToggleVote &&
+    allowedLiveActions.open &&
+    !voteIsOpen;
+  const canCloseVote =
+    Boolean(activePollIdJs) &&
+    canToggleVote &&
+    allowedLiveActions.close &&
+    voteIsOpen;
+  const canGoNext = canGoNextBase && allowedLiveActions.next;
+  const primaryLiveActionLabel = getRegiePrimaryLiveActionLabel(primaryLiveAction);
+  const antennaStatusLabel = activePoll
+    ? getRegiePollStatusLabel({
+        pollStatus: activePoll.status,
+        isActive: true,
+        voteState: voteStateUi,
+        displayState: projectionDisplayStateUi,
+        pollType: activePoll.type,
+        leadEnabled: activePoll.leadEnabled,
+      })
+    : eventFinished
+      ? "Terminée"
+      : "—";
   const canShowQuestionQuick =
     canManageActivePoll && String(projectionDisplayStateUi || "").toLowerCase() !== "question";
   const canShowResultsQuick =
@@ -6014,18 +6149,92 @@ export default function RegieEventPage() {
     voteStateUi === "open" &&
     displayStateUi !== "black";
 
-  const pollsOrdonnes = useMemo(() => {
-    const list = [...(eventData?.polls || [])];
-    const ap = eventData?.activePollId;
-    if (!ap) {
-      return list.sort((a, b) => (a.order || 0) - (b.order || 0));
-    }
-    return list.sort((a, b) => {
-      if (a.id === ap) return -1;
-      if (b.id === ap) return 1;
-      return (a.order || 0) - (b.order || 0);
+  /** Playlist stable par `order` (numérotation N/Total respectée après réorga). */
+  const pollsOrdonnes = useMemo(
+    () => sortPollsByPlaylistOrder(eventData?.polls),
+    [eventData?.polls],
+  );
+
+  /** Sync sélection → antenne quand le live change ; jamais l’inverse (clic ≠ pilotage). */
+  useEffect(() => {
+    const ap = eventData?.activePollId ? String(eventData.activePollId) : null;
+    const ids = new Set((eventData?.polls || []).map((p) => String(p.id)));
+    setSelectedPollId((prev) => {
+      if (prev && ids.has(String(prev))) return prev;
+      if (ap && ids.has(ap)) return ap;
+      const first = pollsOrdonnes[0]?.id;
+      return first ? String(first) : null;
     });
-  }, [eventData?.polls, eventData?.activePollId]);
+  }, [eventData?.activePollId, eventData?.polls, pollsOrdonnes]);
+
+  const selectedPoll = useMemo(() => {
+    const sid = String(selectedPollId || "");
+    if (!sid) return null;
+    return (eventData?.polls || []).find((p) => String(p.id) === sid) || null;
+  }, [eventData?.polls, selectedPollId]);
+
+  const selectedIsConsultOnly = isRegieConsultSelectionOnly(
+    selectedPollId,
+    eventData?.activePollId,
+  );
+  const selectedQuestionIndex = pollsOrdonnes.findIndex(
+    (p) => String(p.id) === String(selectedPollId || ""),
+  );
+  const selectedQuestionNumberLabel =
+    selectedQuestionIndex >= 0
+      ? getRegieQuestionNumberLabel(selectedQuestionIndex, pollsOrdonnes.length)
+      : null;
+  const selectedStatusLabel = selectedPoll
+    ? getRegiePollStatusLabel({
+        pollStatus: selectedPoll.status,
+        isActive:
+          String(selectedPoll.id) === String(eventData?.activePollId || ""),
+        voteState: voteStateUi,
+        displayState: projectionDisplayStateUi,
+        pollType: selectedPoll.type,
+        leadEnabled: selectedPoll.leadEnabled,
+      })
+    : "—";
+  const selectedTypeLabel = selectedPoll
+    ? getRegiePollTypeLabel(selectedPoll)
+    : "—";
+  const selectedTitle =
+    selectedPoll?.question ||
+    selectedPoll?.title ||
+    (pollsOrdonnes.length > 0
+      ? "Sélectionnez une question dans la playlist."
+      : "Ajoutez une question pour commencer.");
+  const selectedConsultOptions = useMemo(() => {
+    if (!selectedPoll || !selectedIsConsultOnly) return [];
+    const opts = normalizePollOptions(selectedPoll?.options);
+    const totalVotesSafe = Math.max(
+      0,
+      Number(
+        selectedPoll?.voteCount ||
+          opts.reduce((acc, o) => acc + optionVoteCount(o), 0),
+      ),
+    );
+    return opts.map((o, i) => {
+      const voteCount = optionVoteCount(o);
+      const pctRaw = Number(o?.votePct);
+      const pct =
+        Number.isFinite(pctRaw) && pctRaw >= 0
+          ? pctRaw
+          : totalVotesSafe > 0
+            ? (voteCount / totalVotesSafe) * 100
+            : 0;
+      return {
+        id: String(o?.id || i),
+        label: String(o?.label || `Option ${i + 1}`),
+        voteCount,
+        pct: Math.max(0, Math.min(100, pct)),
+      };
+    });
+  }, [selectedPoll, selectedIsConsultOnly]);
+
+  const handleSelectPlaylistPoll = useCallback((pollId) => {
+    setSelectedPollId(String(pollId || "") || null);
+  }, []);
 
   const handleContestShortcut = useCallback(
     (poll) => {
@@ -6119,13 +6328,19 @@ export default function RegieEventPage() {
           gap: "4px",
         }}
       >
-        {pollsOrdonnes.map((poll) => (
+        {pollsOrdonnes.map((poll, index) => (
           <PollCard
             key={poll.id}
             poll={poll}
             compact
             liveActions={false}
             isActive={poll.id === eventData?.activePollId}
+            isSelected={String(poll.id) === String(selectedPollId || "")}
+            onSelect={handleSelectPlaylistPoll}
+            questionNumberLabel={getRegieQuestionNumberLabel(
+              index,
+              pollsOrdonnes.length,
+            )}
             busy={busy}
             liveState={liveState}
             activePollId={eventData?.activePollId}
@@ -7665,7 +7880,9 @@ export default function RegieEventPage() {
                         color: "rgba(224, 231, 255, 0.78)",
                       }}
                     >
-                      {stateLabel} · {questionProgressSummary}
+                      {selectedIsConsultOnly
+                        ? `${selectedQuestionNumberLabel || "Consultation"} · ${selectedTypeLabel} · ${selectedStatusLabel}`
+                        : `${stateLabel} · ${questionProgressSummary}`}
                     </p>
                     <h3
                       style={{
@@ -7677,7 +7894,7 @@ export default function RegieEventPage() {
                         lineHeight: 1.18,
                       }}
                     >
-                      {activeQuestionTitle}
+                      {selectedIsConsultOnly ? selectedTitle : activeQuestionTitle}
                     </h3>
                     <p
                       style={{
@@ -7687,9 +7904,29 @@ export default function RegieEventPage() {
                         lineHeight: 1.45,
                       }}
                     >
-                      À l’écran : <strong style={{ color: "#ffffff" }}>{displayLabelGlobal}</strong>
-                      {" · "}
-                      {screenBConnected ? `Écran B : ${displayLabelScreenB}` : "Écran B non connecté"}
+                      {selectedIsConsultOnly ? (
+                        <>
+                          Consultation régie — sans effet sur la salle / Screen / Overlay.
+                          {" · "}
+                          Antenne :{" "}
+                          <strong style={{ color: "#ffffff" }}>
+                            {activePoll?.question || activePoll?.title || "aucune"}
+                          </strong>
+                          {" · "}
+                          {antennaStatusLabel}
+                        </>
+                      ) : (
+                        <>
+                          À l’écran :{" "}
+                          <strong style={{ color: "#ffffff" }}>{displayLabelGlobal}</strong>
+                          {" · "}
+                          {screenBConnected
+                            ? `Écran B : ${displayLabelScreenB}`
+                            : "Écran B non connecté"}
+                          {" · "}
+                          {antennaStatusLabel}
+                        </>
+                      )}
                     </p>
                   </div>
 
@@ -7837,9 +8074,92 @@ export default function RegieEventPage() {
                     </p>
                   </div>
                   <p style={{ margin: 0, fontSize: "0.76rem", color: "#64748b" }}>
-                    Ouvrir · Fermer · Afficher · Suivante · Concours
+                    Pilotage = antenne · Clic playlist = consultation seule
                   </p>
                 </div>
+
+                {selectedIsConsultOnly && selectedPoll ? (
+                  <div
+                    style={{
+                      marginTop: "0.85rem",
+                      padding: "0.85rem 0.95rem",
+                      borderRadius: "16px",
+                      border: "1px solid rgba(245, 158, 11, 0.35)",
+                      background:
+                        "linear-gradient(180deg, rgba(255, 251, 235, 0.95) 0%, rgba(255,255,255,0.98) 100%)",
+                      boxShadow: "0 10px 22px rgba(180, 83, 9, 0.06)",
+                    }}
+                  >
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "0.62rem",
+                        fontWeight: 800,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "#92400e",
+                      }}
+                    >
+                      Consultation — {selectedQuestionNumberLabel}
+                    </p>
+                    <p
+                      style={{
+                        margin: "0.35rem 0 0 0",
+                        fontSize: "1rem",
+                        fontWeight: 800,
+                        color: "#111827",
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      {selectedTitle}
+                    </p>
+                    <p style={{ margin: "0.3rem 0 0 0", fontSize: "0.78rem", color: "#64748b" }}>
+                      Type : <strong style={{ color: "#334155" }}>{selectedTypeLabel}</strong>
+                      {" · "}
+                      Statut : <strong style={{ color: "#334155" }}>{selectedStatusLabel}</strong>
+                      {" · "}
+                      <strong style={{ color: "#334155" }}>
+                        {selectedPoll.voteCount ?? 0}
+                      </strong>{" "}
+                      vote{(selectedPoll.voteCount ?? 0) !== 1 ? "s" : ""}
+                      {" · "}
+                      Aucune rediffusion
+                    </p>
+                    {selectedConsultOptions.length > 0 ? (
+                      <ul
+                        style={{
+                          margin: "0.55rem 0 0 0",
+                          padding: 0,
+                          listStyle: "none",
+                          display: "grid",
+                          gap: "0.28rem",
+                        }}
+                      >
+                        {selectedConsultOptions.map((opt) => (
+                          <li
+                            key={opt.id}
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: "0.75rem",
+                              fontSize: "0.74rem",
+                              color: "#475569",
+                            }}
+                          >
+                            <span style={{ overflowWrap: "anywhere" }}>{opt.label}</span>
+                            <span style={{ flexShrink: 0, fontWeight: 700, color: "#1e293b" }}>
+                              {opt.voteCount} ·{" "}
+                              {Number(opt.pct).toLocaleString("fr-FR", {
+                                maximumFractionDigits: 1,
+                              })}
+                              %
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 <div
                   style={{
@@ -7855,15 +8175,19 @@ export default function RegieEventPage() {
                     <div style={{ display: "grid", gap: "0.28rem" }}>
                       <p style={liveFunctionCardTitleStyle}>Participation</p>
                       <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", lineHeight: 1.35 }}>
-                        Ouvrir / fermer / afficher
+                        {antennaStatusLabel === "En attente d'ouverture"
+                          ? "En attente d'ouverture"
+                          : primaryLiveActionLabel
+                            ? `Action : ${primaryLiveActionLabel}`
+                            : "Ouvrir / fermer / afficher"}
                       </p>
                     </div>
                     <div style={{ display: "grid", gap: "0.55rem", flex: 1 }}>
                             <button
                               type="button"
-                              disabled={!activePollIdJs || !canToggleVote || voteIsOpen}
+                              disabled={!canOpenVote}
                               onClick={async () => {
-                                if (!activePollIdJs) return;
+                                if (!activePollIdJs || !canOpenVote) return;
                                 await postAction(`/polls/${activePollIdJs}/open`, "Vote ouvert");
                               }}
                               style={{
@@ -7871,21 +8195,30 @@ export default function RegieEventPage() {
                                 minHeight: "3rem",
                                 width: "100%",
                                 padding: "0.72rem 0.9rem",
-                                borderColor: "#22c55e",
-                                background: voteIsOpen ? "#f8fafc" : "linear-gradient(180deg, #dcfce7 0%, #bbf7d0 100%)",
-                                color: voteIsOpen ? "#94a3b8" : "#166534",
+                                borderColor: canOpenVote ? "#22c55e" : "#e2e8f0",
+                                background:
+                                  primaryLiveAction === "open" && canOpenVote
+                                    ? "linear-gradient(180deg, #dcfce7 0%, #bbf7d0 100%)"
+                                    : canOpenVote
+                                      ? "#f0fdf4"
+                                      : "#f8fafc",
+                                color: canOpenVote ? "#166534" : "#94a3b8",
                                 fontWeight: 800,
                                 fontSize: "0.86rem",
-                                boxShadow: voteIsOpen ? "none" : "0 14px 24px rgba(34, 197, 94, 0.12)",
+                                boxShadow:
+                                  primaryLiveAction === "open" && canOpenVote
+                                    ? "0 14px 24px rgba(34, 197, 94, 0.12)"
+                                    : "none",
+                                opacity: canOpenVote ? 1 : 0.55,
                               }}
                             >
                               Ouvrir
                             </button>
                             <button
                               type="button"
-                              disabled={!activePollIdJs || !canToggleVote || !voteIsOpen}
+                              disabled={!canCloseVote}
                               onClick={async () => {
-                                if (!activePollIdJs) return;
+                                if (!activePollIdJs || !canCloseVote) return;
                                 await postAction(`/polls/${activePollIdJs}/close`, "Vote ferme");
                               }}
                               style={{
@@ -7893,44 +8226,57 @@ export default function RegieEventPage() {
                                 minHeight: "3rem",
                                 width: "100%",
                                 padding: "0.72rem 0.9rem",
-                                borderColor: "#fca5a5",
-                                background: voteIsOpen ? "#fff5f5" : "#f8fafc",
-                                color: voteIsOpen ? "#b91c1c" : "#94a3b8",
+                                borderColor: canCloseVote ? "#fca5a5" : "#e2e8f0",
+                                background:
+                                  primaryLiveAction === "close" && canCloseVote
+                                    ? "#fff5f5"
+                                    : "#f8fafc",
+                                color: canCloseVote ? "#b91c1c" : "#94a3b8",
                                 fontWeight: 800,
                                 fontSize: "0.86rem",
-                                boxShadow: voteIsOpen ? "0 12px 22px rgba(239, 68, 68, 0.08)" : "none",
+                                boxShadow:
+                                  canCloseVote
+                                    ? "0 12px 22px rgba(239, 68, 68, 0.08)"
+                                    : "none",
+                                opacity: canCloseVote ? 1 : 0.55,
                               }}
                             >
                               Fermer
                             </button>
-                            {canShowResultsForActive ? (
+                            {canShowResultsForActive || primaryLiveAction === "show-results" ? (
                               <button
                                 type="button"
                                 disabled={!canShowResultsForActive}
                                 onClick={async () => {
-                                  if (!activePollIdJs) return;
+                                  if (!activePollIdJs || !canShowResultsForActive) return;
                                   await postAction(
                                     `/polls/${activePollIdJs}/show-results`,
                                     "Resultats affiches",
                                   );
                                 }}
                                 title={
-                                  isQuizPoll(activePoll)
-                                    ? "Affiche les résultats finaux. Si le vote est fermé, révèle aussi la bonne réponse."
-                                    : "Affiche les résultats finaux à la salle et à l’écran."
+                                  !canShowResultsForActive
+                                    ? "Disponible après fermeture du vote (pas après « Suivante »)."
+                                    : isQuizPoll(activePoll)
+                                      ? "Affiche les résultats finaux. Si le vote est fermé, révèle aussi la bonne réponse."
+                                      : "Affiche les résultats finaux à la salle et à l’écran."
                                 }
                                 style={{
                                   ...btnGhost,
                                   minHeight: "3rem",
                                   width: "100%",
                                   padding: "0.72rem 0.9rem",
-                                  borderColor: "#93c5fd",
-                                  background:
-                                    "linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%)",
-                                  color: "#1e3a8a",
+                                  borderColor: canShowResultsForActive ? "#93c5fd" : "#e2e8f0",
+                                  background: canShowResultsForActive
+                                    ? "linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%)"
+                                    : "#f8fafc",
+                                  color: canShowResultsForActive ? "#1e3a8a" : "#94a3b8",
                                   fontWeight: 800,
                                   fontSize: "0.86rem",
-                                  boxShadow: "0 12px 22px rgba(37, 99, 235, 0.10)",
+                                  boxShadow: canShowResultsForActive
+                                    ? "0 12px 22px rgba(37, 99, 235, 0.10)"
+                                    : "none",
+                                  opacity: canShowResultsForActive ? 1 : 0.55,
                                 }}
                               >
                                 Afficher les résultats
@@ -7938,7 +8284,9 @@ export default function RegieEventPage() {
                             ) : null}
                           </div>
                           <p style={{ margin: 0, fontSize: "0.74rem", color: "#64748b", lineHeight: 1.35 }}>
-                            État actuel : <strong style={{ color: "#111827" }}>{voteLabel}</strong>
+                            Antenne : <strong style={{ color: "#111827" }}>{antennaStatusLabel}</strong>
+                            {" · "}
+                            Vote : <strong style={{ color: "#111827" }}>{voteLabel}</strong>
                           </p>
                     {shouldScheduleAutoRevealForPoll({
                       pollType: activePoll?.type,
@@ -7959,7 +8307,9 @@ export default function RegieEventPage() {
                     <div style={{ display: "grid", gap: "0.28rem" }}>
                       <p style={liveFunctionCardTitleStyle}>Progression</p>
                       <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", lineHeight: 1.35 }}>
-                        Avancement du live
+                        {primaryLiveAction === "next" || primaryLiveAction === "finish"
+                          ? `Action : ${primaryLiveActionLabel}`
+                          : "Avancement du live"}
                       </p>
                     </div>
                     <div style={{ display: "grid", gap: "0.35rem", flex: 1 }}>
@@ -7993,19 +8343,25 @@ export default function RegieEventPage() {
                           fontSize: "0.84rem",
                           border: "1px solid #8b5cf6",
                           background: canGoNext
-                            ? "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)"
+                            ? primaryLiveAction === "next"
+                              ? "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)"
+                              : "linear-gradient(180deg, #a78bfa 0%, #8b5cf6 100%)"
                             : "#ede9fe",
                           color: canGoNext ? "#fff" : "#6d28d9",
                           fontWeight: 800,
-                          boxShadow: canGoNext ? "0 14px 24px rgba(124, 58, 237, 0.16)" : "none",
-                        }                        }
-                        title="Prépare la question suivante sans ouvrir le vote."
+                          boxShadow:
+                            canGoNext && primaryLiveAction === "next"
+                              ? "0 14px 24px rgba(124, 58, 237, 0.16)"
+                              : "none",
+                          opacity: canGoNext ? 1 : 0.55,
+                        }}
+                        title="Prépare la question suivante sans ouvrir le vote (commande explicite)."
                       >
                         Suivante
                       </button>
                       <button
                         type="button"
-                        disabled={busy || eventFinished}
+                        disabled={busy || eventFinished || !allowedLiveActions.finish}
                         onClick={async () => {
                           if (typeof window === "undefined") return;
                           const ok = window.confirm(
@@ -8025,9 +8381,18 @@ export default function RegieEventPage() {
                           minHeight: "2.35rem",
                           padding: "0.45rem 0.75rem",
                           fontSize: "0.76rem",
-                          border: "1px solid #fda4af",
-                          background: busy || eventFinished ? "#fff1f2" : "#fffafb",
+                          border:
+                            primaryLiveAction === "finish"
+                              ? "1px solid #e11d48"
+                              : "1px solid #fda4af",
+                          background:
+                            busy || eventFinished
+                              ? "#fff1f2"
+                              : primaryLiveAction === "finish"
+                                ? "linear-gradient(180deg, #ffe4e6 0%, #fecdd3 100%)"
+                                : "#fffafb",
                           color: busy || eventFinished ? "#9f1239" : "#be123c",
+                          fontWeight: primaryLiveAction === "finish" ? 800 : 700,
                         }}
                       >
                         Terminer
