@@ -39,6 +39,7 @@ import {
   REGIE_ZONE_PILOTAGE,
   REGIE_ZONE_PROJECTION_AVANCEE,
   getRegieAllowedLiveActions,
+  getRegiePilotageStepLabel,
   getRegiePollStatusLabel,
   getRegiePollTypeLabel,
   getRegieOpenVoteButtonCopy,
@@ -2969,7 +2970,9 @@ function BlocOverlayStreamPresets({ slug, onCopied }) {
 /** Liens participant / vote — version compacte pour colonne partage */
 function LiensDiffusionCompact({ slug }) {
   const [clientPret, setClientPret] = useState(false);
-  const [copied, setCopied] = useState(/** @type {null | "join" | "vote"} */ (null));
+  const [copied, setCopied] = useState(
+    /** @type {null | "join" | "vote" | "screen" | "overlay"} */ (null),
+  );
 
   useEffect(() => {
     if (typeof window !== "undefined") setClientPret(true);
@@ -2984,13 +2987,15 @@ function LiensDiffusionCompact({ slug }) {
   const enc = encodeURIComponent(slug);
   const pathJoin = `/join/${enc}`;
   const pathVote = `/p/${enc}`;
+  const pathScreen = `/screen/${enc}`;
+  const pathOverlay = `/overlay/${enc}`;
 
   const linkAct = {
     fontSize: "0.68rem",
     fontWeight: 700,
-    color: "#7c3aed",
-    background: "rgba(139, 92, 246, 0.08)",
-    border: "1px solid rgba(167, 139, 250, 0.22)",
+    color: "#0f766e",
+    background: "rgba(13, 148, 136, 0.08)",
+    border: "1px solid rgba(13, 148, 136, 0.22)",
     padding: "0.28rem 0.55rem",
     borderRadius: "999px",
     cursor: "pointer",
@@ -3012,7 +3017,7 @@ function LiensDiffusionCompact({ slug }) {
     if (url) window.open(url, "_blank", "noopener,noreferrer");
   }
 
-  /** @param {{ titre: string; path: string; k: "join" | "vote"; hint: string; openLabel?: string; copyLabel?: string }} p */
+  /** @param {{ titre: string; path: string; k: string; hint: string; openLabel?: string; copyLabel?: string }} p */
   function cell(p) {
     const abs = clientPret ? lienDiffusionAbsolu(p.path) : "";
     const openLabel = p.openLabel ?? "Ouvrir";
@@ -3078,13 +3083,31 @@ function LiensDiffusionCompact({ slug }) {
       className="liens-partage-grid"
     >
       {cell({
-        titre: "Entrée participant",
+        titre: "Lien participant",
         path: pathJoin,
         k: "join",
         hint: pathJoin,
+        openLabel: "Ouvrir",
+        copyLabel: "Copier",
       })}
       {cell({
-        titre: "Vote direct",
+        titre: "Screen (salle)",
+        path: pathScreen,
+        k: "screen",
+        hint: pathScreen,
+        openLabel: "Ouvrir",
+        copyLabel: "Copier",
+      })}
+      {cell({
+        titre: "Overlay OBS",
+        path: pathOverlay,
+        k: "overlay",
+        hint: pathOverlay,
+        openLabel: "Ouvrir",
+        copyLabel: "Copier",
+      })}
+      {cell({
+        titre: "Vote /p (deep-link)",
         path: pathVote,
         k: "vote",
         hint: pathVote,
@@ -3314,21 +3337,10 @@ function SidebarPartageDroit({
             Partage & accès
           </h2>
           <p style={{ margin: 0, fontSize: "0.66rem", color: "#64748b", lineHeight: 1.35 }}>
-            QR et liens pour votre audience
-          </p>
-          <p
-            style={{
-              margin: "0.28rem 0 0 0",
-              fontSize: "0.64rem",
-              color: "#64748b",
-              lineHeight: 1.35,
-            }}
-          >
-            Écran = salle / TV · Overlay = fond transparent OBS
+            QR, salle, Screen et Overlay OBS
           </p>
         </div>
       ) : null}
-      <BlocOverlayStreamPresets slug={slug} onCopied={onOverlayCopied} />
       <PanneauQrParticipant
         slug={slug}
         liveState={liveState}
@@ -3337,58 +3349,9 @@ function SidebarPartageDroit({
         embedded
         sceneBadge={sceneBadge}
       />
-      <section
-        style={{
-          border: PREMIUM_BORDER,
-          borderRadius: "16px",
-          background: "rgba(255,255,255,0.78)",
-          padding: "0.78rem 0.82rem",
-          boxShadow: "0 12px 24px rgba(15, 23, 42, 0.05)",
-        }}
-      >
-        <p
-          style={{
-            margin: 0,
-            fontSize: "0.82rem",
-            fontWeight: 800,
-            color: "#0f172a",
-            letterSpacing: "-0.01em",
-          }}
-        >
-          Galerie live
-        </p>
-        <p style={{ margin: "0.3rem 0 0 0", fontSize: "0.74rem", color: "#64748b", lineHeight: 1.35 }}>
-          Ajoutez des photos en direct pendant l’événement.
-        </p>
-        <button
-          type="button"
-          disabled={landingPhotoUploading}
-          onClick={() => onQuickLandingPhoto?.()}
-          style={{
-            marginTop: "0.62rem",
-            width: "100%",
-            minHeight: "2.2rem",
-            padding: "0.45rem 0.68rem",
-            borderRadius: "12px",
-            border: "1px solid rgba(251, 146, 60, 0.22)",
-            background: "linear-gradient(180deg, rgba(255,247,237,0.98) 0%, rgba(255,237,213,0.9) 100%)",
-            color: "#9a3412",
-            fontSize: "0.8rem",
-            fontWeight: 800,
-            cursor: landingPhotoUploading ? "not-allowed" : "pointer",
-          }}
-        >
-          {landingPhotoUploadLabel}
-        </button>
-        <p style={{ margin: "0.42rem 0 0 0", fontSize: "0.7rem", color: "#64748b", fontWeight: 600 }}>
-          {landingPhotosCount} photo{landingPhotosCount > 1 ? "s" : ""} publiée
-          {landingPhotosCount > 1 ? "s" : ""}
-        </p>
-      </section>
-      <CopierLienEcranLeger slug={slug} />
       <div
         style={{
-          paddingTop: "0.55rem",
+          paddingTop: "0.35rem",
         }}
       >
         <p
@@ -3401,15 +3364,99 @@ function SidebarPartageDroit({
             color: "#64748b",
           }}
         >
-          Liens utiles
+          Liens participant · Screen · Overlay
         </p>
         <LiensDiffusionCompact slug={slug} />
       </div>
-      <SectionPartageLandingEvenement
-        slug={slug}
-        landingEnabled={Boolean(landingEnabled)}
-        eventId={eventId}
-      />
+      <details
+        style={{
+          border: PREMIUM_BORDER,
+          borderRadius: "14px",
+          background: "rgba(255,255,255,0.78)",
+          padding: "0.65rem 0.75rem",
+        }}
+      >
+        <summary
+          style={{
+            cursor: "pointer",
+            fontWeight: 800,
+            fontSize: "0.76rem",
+            color: "#0f172a",
+            listStyle: "none",
+          }}
+        >
+          Options avancées
+        </summary>
+        <div style={{ marginTop: "0.65rem", display: "grid", gap: "0.65rem" }}>
+          <BlocOverlayStreamPresets slug={slug} onCopied={onOverlayCopied} />
+          <section
+            style={{
+              border: PREMIUM_BORDER,
+              borderRadius: "14px",
+              background: "rgba(255,255,255,0.9)",
+              padding: "0.7rem 0.75rem",
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontSize: "0.78rem",
+                fontWeight: 800,
+                color: "#0f172a",
+              }}
+            >
+              Galerie live
+            </p>
+            <p
+              style={{
+                margin: "0.28rem 0 0 0",
+                fontSize: "0.72rem",
+                color: "#64748b",
+                lineHeight: 1.35,
+              }}
+            >
+              Ajoutez des photos en direct pendant l’événement.
+            </p>
+            <button
+              type="button"
+              disabled={landingPhotoUploading}
+              onClick={() => onQuickLandingPhoto?.()}
+              style={{
+                marginTop: "0.55rem",
+                width: "100%",
+                minHeight: "2.1rem",
+                padding: "0.4rem 0.65rem",
+                borderRadius: "12px",
+                border: "1px solid rgba(251, 146, 60, 0.22)",
+                background:
+                  "linear-gradient(180deg, rgba(255,247,237,0.98) 0%, rgba(255,237,213,0.9) 100%)",
+                color: "#9a3412",
+                fontSize: "0.78rem",
+                fontWeight: 800,
+                cursor: landingPhotoUploading ? "not-allowed" : "pointer",
+              }}
+            >
+              {landingPhotoUploadLabel}
+            </button>
+            <p
+              style={{
+                margin: "0.38rem 0 0 0",
+                fontSize: "0.68rem",
+                color: "#64748b",
+                fontWeight: 600,
+              }}
+            >
+              {landingPhotosCount} photo{landingPhotosCount > 1 ? "s" : ""}{" "}
+              publiée{landingPhotosCount > 1 ? "s" : ""}
+            </p>
+          </section>
+          <SectionPartageLandingEvenement
+            slug={slug}
+            landingEnabled={Boolean(landingEnabled)}
+            eventId={eventId}
+          />
+        </div>
+      </details>
     </aside>
   );
 }
@@ -4613,6 +4660,8 @@ export default function RegieEventPage() {
   const [previewJoinOpen, setPreviewJoinOpen] = useState(false);
   const [mobileJoinPreviewOpen, setMobileJoinPreviewOpen] = useState(false);
   const [liveAnswersOpen, setLiveAnswersOpen] = useState(false);
+  /** Chrono : panneau « Régler » replié (régie simplifiée). */
+  const [chronoReglerOpen, setChronoReglerOpen] = useState(false);
   const [landingPhotoUploadPhase, setLandingPhotoUploadPhase] = useState(
     /** @type {null | "optimizing" | "uploading"} */ (null),
   );
@@ -5891,6 +5940,26 @@ export default function RegieEventPage() {
   });
   const canGoNext = canGoNextBase && allowedLiveActions.next;
   const primaryLiveActionLabel = getRegiePrimaryLiveActionLabel(primaryLiveAction);
+  const pilotageStepLabel = getRegiePilotageStepLabel({
+    voteState: voteStateUi,
+    displayState: projectionDisplayStateUi,
+    pollStatus: activePoll?.status,
+    pollType: activePoll?.type,
+    leadEnabled: activePoll?.leadEnabled,
+    eventFinished,
+  });
+  const activeParticipationCount = Math.max(0, Number(activePoll?.voteCount || 0));
+  const activeParticipationUnit = isContestPoll(activePoll)
+    ? activeParticipationCount === 1
+      ? "inscrit"
+      : "inscrits"
+    : isLeadPoll(activePoll)
+      ? activeParticipationCount === 1
+        ? "lead"
+        : "leads"
+      : activeParticipationCount === 1
+        ? "vote"
+        : "votes";
   const antennaStatusLabel = activePoll
     ? getRegiePollStatusLabel({
         pollStatus: activePoll.status,
@@ -5903,6 +5972,27 @@ export default function RegieEventPage() {
     : eventFinished
       ? "Terminée"
       : "—";
+  const canRunPrimaryDraw =
+    Boolean(activePollIdJs) &&
+    !busy &&
+    !eventFinished &&
+    !eventLocked &&
+    allowedLiveActions.draw &&
+    !contestEligibleLoading &&
+    contestEligibleCount > 0 &&
+    !contestEligibleError &&
+    !contestQuotaReached &&
+    voteStateUi !== "open";
+  const primaryActionEnabledBase =
+    !busy &&
+    ((primaryLiveAction === "open" && canOpenVote) ||
+      (primaryLiveAction === "close" && canCloseVote) ||
+      (primaryLiveAction === "show-results" && canShowResultsForActive) ||
+      (primaryLiveAction === "draw" && canRunPrimaryDraw) ||
+      (primaryLiveAction === "next" && canGoNext) ||
+      (primaryLiveAction === "finish" &&
+        !eventFinished &&
+        allowedLiveActions.finish));
   const canShowQuestionQuick =
     canManageActivePoll && String(projectionDisplayStateUi || "").toLowerCase() !== "question";
   const canShowResultsQuick =
@@ -6186,6 +6276,71 @@ export default function RegieEventPage() {
     selectedPollId,
     eventData?.activePollId,
   );
+  const primaryActionEnabled =
+    !selectedIsConsultOnly && primaryActionEnabledBase;
+  const returnToLiveAntenna = useCallback(() => {
+    const ap = eventData?.activePollId ? String(eventData.activePollId) : null;
+    if (ap) setSelectedPollId(ap);
+  }, [eventData?.activePollId]);
+  const runPrimaryLiveAction = useCallback(async () => {
+    if (selectedIsConsultOnly || !primaryLiveAction || busy) return;
+    if (primaryLiveAction === "open") {
+      if (!activePollIdJs || !canOpenVote) return;
+      await postAction(`/polls/${activePollIdJs}/open`, "Vote ouvert");
+      return;
+    }
+    if (primaryLiveAction === "close") {
+      if (!activePollIdJs || !canCloseVote) return;
+      await postAction(`/polls/${activePollIdJs}/close`, "Vote ferme");
+      return;
+    }
+    if (primaryLiveAction === "show-results") {
+      if (!activePollIdJs || !canShowResultsForActive) return;
+      await postAction(
+        `/polls/${activePollIdJs}/show-results`,
+        "Resultats affiches",
+      );
+      return;
+    }
+    if (primaryLiveAction === "draw") {
+      if (!canRunPrimaryDraw) return;
+      setContestDrawModalOpen(true);
+      return;
+    }
+    if (primaryLiveAction === "next") {
+      if (!canGoNext) return;
+      await postAction(
+        `/events/${eventId}/next-poll`,
+        "Question suivante diffusee",
+      );
+      return;
+    }
+    if (primaryLiveAction === "finish") {
+      if (typeof window === "undefined") return;
+      const ok = window.confirm(
+        "Terminer l’événement maintenant ? Cette action clôture l’événement.",
+      );
+      if (!ok) return;
+      const confirmWord = window.prompt(
+        "Confirmation de sécurité : tapez TERMINER pour confirmer.",
+        "",
+      );
+      if (String(confirmWord || "").trim().toUpperCase() !== "TERMINER") return;
+      await postAction(`/events/${eventId}/finish`, "Evenement termine");
+    }
+  }, [
+    selectedIsConsultOnly,
+    primaryLiveAction,
+    busy,
+    activePollIdJs,
+    canOpenVote,
+    canCloseVote,
+    canShowResultsForActive,
+    canRunPrimaryDraw,
+    canGoNext,
+    eventId,
+    postAction,
+  ]);
   const selectedQuestionIndex = pollsOrdonnes.findIndex(
     (p) => String(p.id) === String(selectedPollId || ""),
   );
@@ -8122,397 +8277,516 @@ export default function RegieEventPage() {
                   </p>
                 </div>
 
-                {selectedPoll &&
-                (selectedIsConsultOnly || (inTestMode && canReplaySelected)) ? (
+                {selectedIsConsultOnly ? (
                   <div
                     style={{
                       marginTop: "0.85rem",
-                      padding: "0.85rem 0.95rem",
-                      borderRadius: "16px",
+                      padding: "0.95rem 1rem",
+                      borderRadius: "18px",
                       border: "1px solid rgba(245, 158, 11, 0.35)",
                       background:
-                        "linear-gradient(180deg, rgba(255, 251, 235, 0.95) 0%, rgba(255,255,255,0.98) 100%)",
-                      boxShadow: "0 10px 22px rgba(180, 83, 9, 0.06)",
+                        "linear-gradient(180deg, rgba(255, 251, 235, 0.98) 0%, rgba(255,255,255,0.99) 100%)",
+                      boxShadow: "0 12px 28px rgba(180, 83, 9, 0.06)",
+                      display: "grid",
+                      gap: "0.7rem",
                     }}
                   >
                     <p
                       style={{
                         margin: 0,
-                        fontSize: "0.62rem",
-                        fontWeight: 800,
-                        letterSpacing: "0.08em",
-                        textTransform: "uppercase",
+                        fontSize: "0.86rem",
+                        fontWeight: 700,
                         color: "#92400e",
+                        lineHeight: 1.4,
                       }}
                     >
-                      {selectedIsConsultOnly
-                        ? `Consultation — ${selectedQuestionNumberLabel}`
-                        : `Question jouée — ${selectedQuestionNumberLabel}`}
+                      Vous consultez {selectedQuestionNumberLabel || "une question"} — le
+                      direct reste sur{" "}
+                      {activeQuestionIndex >= 0
+                        ? getRegieQuestionNumberLabel(
+                            activeQuestionIndex,
+                            totalQuestions,
+                          )
+                        : "l’antenne"}
+                      .
                     </p>
-                    <p
+                    <button
+                      type="button"
+                      onClick={returnToLiveAntenna}
                       style={{
-                        margin: "0.35rem 0 0 0",
-                        fontSize: "1rem",
+                        width: "100%",
+                        minHeight: "3.1rem",
+                        padding: "0.75rem 1rem",
+                        borderRadius: "14px",
+                        border: "1px solid #0d9488",
+                        background:
+                          "linear-gradient(180deg, #14b8a6 0%, #0d9488 100%)",
+                        color: "#fff",
                         fontWeight: 800,
-                        color: "#111827",
-                        lineHeight: 1.3,
+                        fontSize: "0.95rem",
+                        cursor: "pointer",
+                        boxShadow: "0 14px 28px rgba(13, 148, 136, 0.18)",
                       }}
                     >
-                      {selectedTitle}
-                    </p>
-                    <p style={{ margin: "0.3rem 0 0 0", fontSize: "0.78rem", color: "#64748b" }}>
-                      Type : <strong style={{ color: "#334155" }}>{selectedTypeLabel}</strong>
-                      {" · "}
-                      Statut : <strong style={{ color: "#334155" }}>{selectedStatusLabel}</strong>
-                      {" · "}
-                      <strong style={{ color: "#334155" }}>
-                        {selectedPoll.voteCount ?? 0}
-                      </strong>{" "}
-                      vote{(selectedPoll.voteCount ?? 0) !== 1 ? "s" : ""}
-                      {" · "}
-                      {selectedIsConsultOnly
-                        ? "Aucune rediffusion"
-                        : "Antenne — rejeu TEST possible"}
-                    </p>
-                    {selectedConsultOptions.length > 0 ? (
-                      <ul
-                        style={{
-                          margin: "0.55rem 0 0 0",
-                          padding: 0,
-                          listStyle: "none",
-                          display: "grid",
-                          gap: "0.28rem",
-                        }}
-                      >
-                        {selectedConsultOptions.map((opt) => (
-                          <li
-                            key={opt.id}
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              gap: "0.75rem",
-                              fontSize: "0.74rem",
-                              color: "#475569",
-                            }}
-                          >
-                            <span style={{ overflowWrap: "anywhere" }}>{opt.label}</span>
-                            <span style={{ flexShrink: 0, fontWeight: 700, color: "#1e293b" }}>
-                              {opt.voteCount} ·{" "}
-                              {Number(opt.pct).toLocaleString("fr-FR", {
-                                maximumFractionDigits: 1,
-                              })}
-                              %
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                    {inTestMode ? (
-                      <div style={{ marginTop: "0.75rem" }}>
-                        <button
-                          type="button"
-                          disabled={!canReplaySelected || busy}
-                          onClick={() => void handleReplaySelectedTestPoll()}
-                          title={
-                            canReplaySelected
-                              ? "Efface les données TEST de cette question puis la remet en attente d’ouverture."
-                              : getReplayTestPollBlockedLabel(selectedReplayGate.reason)
-                          }
-                          style={{
-                            width: "100%",
-                            minHeight: "2.6rem",
-                            padding: "0.55rem 0.85rem",
-                            fontSize: "0.82rem",
-                            fontWeight: 800,
-                            borderRadius: "12px",
-                            border: canReplaySelected
-                              ? "1px solid #f59e0b"
-                              : "1px solid #e2e8f0",
-                            background: canReplaySelected
-                              ? "linear-gradient(180deg, #fef3c7 0%, #fde68a 100%)"
-                              : "#f8fafc",
-                            color: canReplaySelected ? "#92400e" : "#94a3b8",
-                            cursor:
-                              !canReplaySelected || busy ? "not-allowed" : "pointer",
-                            opacity: !canReplaySelected || busy ? 0.6 : 1,
-                          }}
-                        >
-                          Rejouer la question
-                        </button>
-                        <p
-                          style={{
-                            margin: "0.4rem 0 0 0",
-                            fontSize: "0.68rem",
-                            color: "#a16207",
-                            lineHeight: 1.35,
-                          }}
-                        >
-                          MODE TEST uniquement — confirmation avant suppression des
-                          données de cette question.
-                        </p>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                <div
-                  style={{
-                    marginTop: "0.95rem",
-                    display: "grid",
-                    gridTemplateColumns: desktop ? "repeat(3, minmax(0, 1fr))" : "1fr",
-                    gap: desktop ? "0.85rem" : "0.75rem",
-                    alignItems: "stretch",
-                    minWidth: 0,
-                  }}
-                >
-                  <div style={liveFunctionCardStyle}>
-                    <div style={{ display: "grid", gap: "0.28rem" }}>
-                      <p style={liveFunctionCardTitleStyle}>Participation</p>
-                      <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", lineHeight: 1.35 }}>
-                        {antennaStatusLabel === "En attente d'ouverture"
-                          ? "En attente d'ouverture"
-                          : primaryLiveActionLabel
-                            ? `Action : ${primaryLiveActionLabel}`
-                            : "Ouvrir / fermer / afficher"}
-                      </p>
-                    </div>
-                    <div style={{ display: "grid", gap: "0.55rem", flex: 1 }}>
-                            <button
-                              type="button"
-                              disabled={!canOpenVote}
-                              title={openVoteButtonCopy.title}
-                              onClick={async () => {
-                                if (!activePollIdJs || !canOpenVote) return;
-                                await postAction(`/polls/${activePollIdJs}/open`, "Vote ouvert");
-                              }}
-                              style={{
-                                ...btnGhost,
-                                minHeight: "3rem",
-                                width: "100%",
-                                padding: "0.72rem 0.9rem",
-                                borderColor: canOpenVote ? "#22c55e" : "#e2e8f0",
-                                background:
-                                  primaryLiveAction === "open" && canOpenVote
-                                    ? "linear-gradient(180deg, #dcfce7 0%, #bbf7d0 100%)"
-                                    : canOpenVote
-                                      ? "#f0fdf4"
-                                      : "#f8fafc",
-                                color: canOpenVote ? "#166534" : "#94a3b8",
-                                fontWeight: 800,
-                                fontSize: "0.86rem",
-                                boxShadow:
-                                  primaryLiveAction === "open" && canOpenVote
-                                    ? "0 14px 24px rgba(34, 197, 94, 0.12)"
-                                    : "none",
-                                opacity: canOpenVote ? 1 : 0.55,
-                              }}
-                            >
-                              {openVoteButtonCopy.label}
-                            </button>
-                            <button
-                              type="button"
-                              disabled={!canCloseVote}
-                              onClick={async () => {
-                                if (!activePollIdJs || !canCloseVote) return;
-                                await postAction(`/polls/${activePollIdJs}/close`, "Vote ferme");
-                              }}
-                              style={{
-                                ...btnGhost,
-                                minHeight: "3rem",
-                                width: "100%",
-                                padding: "0.72rem 0.9rem",
-                                borderColor: canCloseVote ? "#fca5a5" : "#e2e8f0",
-                                background:
-                                  primaryLiveAction === "close" && canCloseVote
-                                    ? "#fff5f5"
-                                    : "#f8fafc",
-                                color: canCloseVote ? "#b91c1c" : "#94a3b8",
-                                fontWeight: 800,
-                                fontSize: "0.86rem",
-                                boxShadow:
-                                  canCloseVote
-                                    ? "0 12px 22px rgba(239, 68, 68, 0.08)"
-                                    : "none",
-                                opacity: canCloseVote ? 1 : 0.55,
-                              }}
-                            >
-                              Fermer
-                            </button>
-                            {canShowResultsForActive || primaryLiveAction === "show-results" ? (
-                              <button
-                                type="button"
-                                disabled={!canShowResultsForActive}
-                                onClick={async () => {
-                                  if (!activePollIdJs || !canShowResultsForActive) return;
-                                  await postAction(
-                                    `/polls/${activePollIdJs}/show-results`,
-                                    "Resultats affiches",
-                                  );
-                                }}
-                                title={
-                                  !canShowResultsForActive
-                                    ? "Disponible après fermeture du vote (pas après « Suivante »)."
-                                    : isQuizPoll(activePoll)
-                                      ? "Affiche les résultats finaux. Si le vote est fermé, révèle aussi la bonne réponse."
-                                      : "Affiche les résultats finaux à la salle et à l’écran."
-                                }
-                                style={{
-                                  ...btnGhost,
-                                  minHeight: "3rem",
-                                  width: "100%",
-                                  padding: "0.72rem 0.9rem",
-                                  borderColor: canShowResultsForActive ? "#93c5fd" : "#e2e8f0",
-                                  background: canShowResultsForActive
-                                    ? "linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%)"
-                                    : "#f8fafc",
-                                  color: canShowResultsForActive ? "#1e3a8a" : "#94a3b8",
-                                  fontWeight: 800,
-                                  fontSize: "0.86rem",
-                                  boxShadow: canShowResultsForActive
-                                    ? "0 12px 22px rgba(37, 99, 235, 0.10)"
-                                    : "none",
-                                  opacity: canShowResultsForActive ? 1 : 0.55,
-                                }}
-                              >
-                                Afficher les résultats
-                              </button>
-                            ) : null}
-                          </div>
-                          <p style={{ margin: 0, fontSize: "0.74rem", color: "#64748b", lineHeight: 1.35 }}>
-                            Antenne : <strong style={{ color: "#111827" }}>{antennaStatusLabel}</strong>
-                            {" · "}
-                            Vote : <strong style={{ color: "#111827" }}>{voteLabel}</strong>
-                          </p>
-                    {shouldScheduleAutoRevealForPoll({
-                      pollType: activePoll?.type,
-                      leadEnabled: activePoll?.leadEnabled,
-                    }) ? (
-                    <RegieAutoRevealCard
-                      embedded
-                      embeddedDividerAbove={false}
-                      eventId={eventId}
-                      autoReveal={Boolean(eventData?.autoReveal)}
-                      autoRevealDelaySec={eventData?.autoRevealDelaySec ?? 5}
-                      onSaved={() => fetchEvent({ silent: true })}
-                    />
-                    ) : null}
-                  </div>
-
-                  <div style={liveFunctionCardStyle}>
-                    <div style={{ display: "grid", gap: "0.28rem" }}>
-                      <p style={liveFunctionCardTitleStyle}>Progression</p>
-                      <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", lineHeight: 1.35 }}>
-                        {primaryLiveAction === "next" || primaryLiveAction === "finish"
-                          ? `Action : ${primaryLiveActionLabel}`
-                          : "Avancement du live"}
-                      </p>
-                    </div>
-                    <div style={{ display: "grid", gap: "0.35rem", flex: 1 }}>
-                      <p style={{ margin: 0, fontSize: "0.88rem", fontWeight: 800, color: "#111827" }}>
-                        {questionProgressSummary}
-                      </p>
+                      Retour au direct
+                    </button>
+                    <div>
                       <p
                         style={{
                           margin: 0,
-                          fontSize: "0.76rem",
-                          color: "#475569",
-                          lineHeight: 1.35,
+                          fontSize: "1.05rem",
+                          fontWeight: 800,
+                          color: "#111827",
+                          lineHeight: 1.3,
+                        }}
+                      >
+                        {selectedTitle}
+                      </p>
+                      <p
+                        style={{
+                          margin: "0.35rem 0 0 0",
+                          fontSize: "0.78rem",
+                          color: "#64748b",
+                        }}
+                      >
+                        {selectedTypeLabel} · {selectedStatusLabel} ·{" "}
+                        {selectedPoll?.voteCount ?? 0} vote
+                        {(selectedPoll?.voteCount ?? 0) !== 1 ? "s" : ""}
+                      </p>
+                      {selectedConsultOptions.length > 0 ? (
+                        <ul
+                          style={{
+                            margin: "0.55rem 0 0 0",
+                            padding: 0,
+                            listStyle: "none",
+                            display: "grid",
+                            gap: "0.28rem",
+                          }}
+                        >
+                          {selectedConsultOptions.map((opt) => (
+                            <li
+                              key={opt.id}
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                gap: "0.75rem",
+                                fontSize: "0.74rem",
+                                color: "#475569",
+                              }}
+                            >
+                              <span style={{ overflowWrap: "anywhere" }}>
+                                {opt.label}
+                              </span>
+                              <span
+                                style={{
+                                  flexShrink: 0,
+                                  fontWeight: 700,
+                                  color: "#1e293b",
+                                }}
+                              >
+                                {opt.voteCount} ·{" "}
+                                {Number(opt.pct).toLocaleString("fr-FR", {
+                                  maximumFractionDigits: 1,
+                                })}
+                                %
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      marginTop: "0.95rem",
+                      padding: desktop ? "1.15rem 1.25rem" : "1rem",
+                      borderRadius: "20px",
+                      border: "1px solid rgba(15, 23, 42, 0.08)",
+                      background:
+                        "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.96) 100%)",
+                      boxShadow: "0 18px 40px rgba(15, 23, 42, 0.05)",
+                      display: "grid",
+                      gap: "1rem",
+                      minWidth: 0,
+                    }}
+                  >
+                    <div style={{ display: "grid", gap: "0.35rem" }}>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          color: "#64748b",
+                          letterSpacing: "0.02em",
+                        }}
+                      >
+                        {questionProgressSummary}
+                        {activePoll
+                          ? ` · ${getRegiePollTypeLabel(activePoll)}`
+                          : ""}
+                        {" · "}
+                        {pilotageStepLabel}
+                      </p>
+                      <h4
+                        style={{
+                          margin: 0,
+                          fontSize: desktop ? "1.35rem" : "1.12rem",
+                          fontWeight: 800,
+                          color: "#0f172a",
+                          letterSpacing: "-0.02em",
+                          lineHeight: 1.25,
                           overflowWrap: "anywhere",
                         }}
                       >
                         {activeQuestionTitle}
+                      </h4>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "0.92rem",
+                          fontWeight: 700,
+                          color: "#334155",
+                        }}
+                      >
+                        {activePoll
+                          ? `${activeParticipationCount} ${activeParticipationUnit}`
+                          : "Aucune question à l’antenne"}
                       </p>
                     </div>
-                    <div style={{ display: "grid", gap: "0.5rem", marginTop: "auto" }}>
+
+                    {primaryLiveActionLabel ? (
                       <button
                         type="button"
-                        disabled={!canGoNext}
-                        onClick={() =>
-                          void postAction(`/events/${eventId}/next-poll`, "Question suivante diffusee")
+                        disabled={!primaryActionEnabled}
+                        onClick={() => void runPrimaryLiveAction()}
+                        title={
+                          primaryLiveAction === "open"
+                            ? openVoteButtonCopy.title
+                            : primaryLiveAction === "show-results"
+                              ? isQuizPoll(activePoll)
+                                ? "Affiche les résultats finaux. Si le vote est fermé, révèle aussi la bonne réponse."
+                                : "Affiche les résultats finaux à la salle et à l’écran."
+                              : primaryLiveAction === "next"
+                                ? "Prépare la question suivante sans ouvrir le vote."
+                                : primaryLiveAction === "draw"
+                                  ? "Ouvre le tirage au sort pour cette question concours."
+                                  : undefined
                         }
                         style={{
-                          ...btnDanger(!canGoNext),
                           width: "100%",
-                          minHeight: "2.95rem",
-                          padding: "0.65rem 0.85rem",
-                          fontSize: "0.84rem",
-                          border: "1px solid #8b5cf6",
-                          background: canGoNext
-                            ? primaryLiveAction === "next"
-                              ? "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)"
-                              : "linear-gradient(180deg, #a78bfa 0%, #8b5cf6 100%)"
-                            : "#ede9fe",
-                          color: canGoNext ? "#fff" : "#6d28d9",
+                          maxWidth: desktop ? "28rem" : "100%",
+                          margin: "0.15rem auto 0",
+                          minHeight: "3.4rem",
+                          padding: "0.85rem 1.25rem",
+                          borderRadius: "16px",
+                          border:
+                            primaryLiveAction === "close"
+                              ? "1px solid #e11d48"
+                              : primaryLiveAction === "finish"
+                                ? "1px solid #be123c"
+                                : primaryLiveAction === "open"
+                                  ? "1px solid #059669"
+                                  : "1px solid #0d9488",
+                          background: !primaryActionEnabled
+                            ? "#f1f5f9"
+                            : primaryLiveAction === "close"
+                              ? "linear-gradient(180deg, #fb7185 0%, #e11d48 100%)"
+                              : primaryLiveAction === "finish"
+                                ? "linear-gradient(180deg, #fb7185 0%, #be123c 100%)"
+                                : primaryLiveAction === "open"
+                                  ? "linear-gradient(180deg, #34d399 0%, #059669 100%)"
+                                  : "linear-gradient(180deg, #2dd4bf 0%, #0d9488 100%)",
+                          color: primaryActionEnabled ? "#fff" : "#94a3b8",
                           fontWeight: 800,
-                          boxShadow:
-                            canGoNext && primaryLiveAction === "next"
-                              ? "0 14px 24px rgba(124, 58, 237, 0.16)"
-                              : "none",
-                          opacity: canGoNext ? 1 : 0.55,
+                          fontSize: desktop ? "1.05rem" : "0.95rem",
+                          letterSpacing: "0.01em",
+                          cursor: primaryActionEnabled ? "pointer" : "not-allowed",
+                          boxShadow: primaryActionEnabled
+                            ? "0 16px 32px rgba(13, 148, 136, 0.18)"
+                            : "none",
+                          opacity: primaryActionEnabled ? 1 : 0.65,
                         }}
-                        title="Prépare la question suivante sans ouvrir le vote (commande explicite)."
                       >
-                        Suivante
+                        {primaryLiveActionLabel}
                       </button>
+                    ) : (
+                      <p
+                        style={{
+                          margin: 0,
+                          textAlign: "center",
+                          fontSize: "0.88rem",
+                          color: "#64748b",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {eventFinished
+                          ? "Événement terminé — plus d’action live."
+                          : "Aucune action disponible."}
+                      </p>
+                    )}
+
+                    <div
+                      id="regie-chrono-panel"
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                        gap: "0.45rem 0.75rem",
+                        paddingTop: "0.15rem",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          color: "#64748b",
+                        }}
+                      >
+                        Chrono
+                      </span>
+                      <span
+                        style={{
+                          fontFamily: "ui-monospace, monospace",
+                          fontVariantNumeric: "tabular-nums",
+                          fontWeight: 800,
+                          fontSize: "1.05rem",
+                          color: "#0f172a",
+                          letterSpacing: "-0.02em",
+                        }}
+                      >
+                        {chronoEtatLiveTexte}
+                      </span>
+                      {tm?.running && !tm?.isPaused ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void postQuestionTimer({ action: "pause" })}
+                          style={{
+                            ...btnGhost,
+                            minHeight: "1.9rem",
+                            padding: "0.2rem 0.55rem",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                          }}
+                          title="Mettre le chrono en pause"
+                        >
+                          Pause
+                        </button>
+                      ) : null}
                       <button
                         type="button"
-                        disabled={busy || eventFinished || !allowedLiveActions.finish}
-                        onClick={async () => {
-                          if (typeof window === "undefined") return;
-                          const ok = window.confirm(
-                            "Terminer l’événement maintenant ? Cette action clôture l’événement.",
-                          );
-                          if (!ok) return;
-                          const confirmWord = window.prompt(
-                            "Confirmation de sécurité : tapez TERMINER pour confirmer.",
-                            "",
-                          );
-                          if (String(confirmWord || "").trim().toUpperCase() !== "TERMINER") return;
-                          await postAction(`/events/${eventId}/finish`, "Evenement termine");
-                        }}
+                        onClick={() => setChronoReglerOpen((v) => !v)}
                         style={{
-                          ...btnFinish(busy || eventFinished),
-                          width: "100%",
-                          minHeight: "2.35rem",
-                          padding: "0.45rem 0.75rem",
-                          fontSize: "0.76rem",
-                          border:
-                            primaryLiveAction === "finish"
-                              ? "1px solid #e11d48"
-                              : "1px solid #fda4af",
-                          background:
-                            busy || eventFinished
-                              ? "#fff1f2"
-                              : primaryLiveAction === "finish"
-                                ? "linear-gradient(180deg, #ffe4e6 0%, #fecdd3 100%)"
-                                : "#fffafb",
-                          color: busy || eventFinished ? "#9f1239" : "#be123c",
-                          fontWeight: primaryLiveAction === "finish" ? 800 : 700,
+                          ...btnGhost,
+                          minHeight: "1.9rem",
+                          padding: "0.2rem 0.55rem",
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          borderColor: "rgba(15, 23, 42, 0.12)",
                         }}
                       >
-                        Terminer
+                        {chronoReglerOpen ? "Masquer" : "Régler"}
                       </button>
                     </div>
-                  </div>
+                    {chronoReglerOpen ? (
+                      <div
+                        style={{
+                          padding: "0.75rem",
+                          borderRadius: "14px",
+                          border: "1px solid rgba(196, 181, 253, 0.35)",
+                          background: "rgba(250, 245, 255, 0.55)",
+                        }}
+                      >
+                        {chronoProjectionInner}
+                      </div>
+                    ) : null}
 
-                  <div
-                    id="regie-chrono-panel"
-                    style={{
-                      ...liveFunctionCardStyle,
-                      background:
-                        "linear-gradient(180deg, rgba(250,245,255,0.72) 0%, rgba(255,255,255,0.97) 100%)",
-                      borderColor: "rgba(196, 181, 253, 0.22)",
-                    }}
-                  >
-                    <div style={{ display: "grid", gap: "0.28rem" }}>
-                      <p style={liveFunctionCardTitleStyle}>Chrono</p>
-                      <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", lineHeight: 1.35 }}>
-                        Rythme du live
-                      </p>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "0.45rem 0.85rem",
+                        alignItems: "center",
+                      }}
+                    >
+                      {primaryLiveAction !== "finish" ? (
+                        <button
+                          type="button"
+                          disabled={busy || eventFinished || !allowedLiveActions.finish}
+                          onClick={async () => {
+                            if (typeof window === "undefined") return;
+                            const ok = window.confirm(
+                              "Terminer l’événement maintenant ? Cette action clôture l’événement.",
+                            );
+                            if (!ok) return;
+                            const confirmWord = window.prompt(
+                              "Confirmation de sécurité : tapez TERMINER pour confirmer.",
+                              "",
+                            );
+                            if (
+                              String(confirmWord || "").trim().toUpperCase() !==
+                              "TERMINER"
+                            )
+                              return;
+                            await postAction(
+                              `/events/${eventId}/finish`,
+                              "Evenement termine",
+                            );
+                          }}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            padding: 0,
+                            fontSize: "0.78rem",
+                            fontWeight: 700,
+                            color:
+                              busy || eventFinished ? "#94a3b8" : "#be123c",
+                            cursor:
+                              busy || eventFinished ? "not-allowed" : "pointer",
+                            textDecoration: "underline",
+                            textUnderlineOffset: "3px",
+                          }}
+                        >
+                          Terminer l’événement
+                        </button>
+                      ) : null}
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>{chronoProjectionInner}</div>
+
+                    <details
+                      style={{
+                        borderTop: "1px solid rgba(15, 23, 42, 0.06)",
+                        paddingTop: "0.75rem",
+                      }}
+                    >
+                      <summary
+                        style={{
+                          cursor: "pointer",
+                          fontWeight: 800,
+                          fontSize: "0.82rem",
+                          color: "#0f172a",
+                          listStyle: "none",
+                        }}
+                      >
+                        Options avancées
+                      </summary>
+                      <div
+                        style={{
+                          marginTop: "0.75rem",
+                          display: "grid",
+                          gap: "0.75rem",
+                        }}
+                      >
+                        {shouldScheduleAutoRevealForPoll({
+                          pollType: activePoll?.type,
+                          leadEnabled: activePoll?.leadEnabled,
+                        }) ? (
+                          <RegieAutoRevealCard
+                            embedded
+                            embeddedDividerAbove={false}
+                            eventId={eventId}
+                            autoReveal={Boolean(eventData?.autoReveal)}
+                            autoRevealDelaySec={
+                              eventData?.autoRevealDelaySec ?? 5
+                            }
+                            onSaved={() => fetchEvent({ silent: true })}
+                          />
+                        ) : null}
+                        {canOpenVote &&
+                        openVoteButtonCopy.isReopenWithoutWipe ? (
+                          <button
+                            type="button"
+                            disabled={!canOpenVote}
+                            title={openVoteButtonCopy.title}
+                            onClick={async () => {
+                              if (!activePollIdJs || !canOpenVote) return;
+                              await postAction(
+                                `/polls/${activePollIdJs}/open`,
+                                "Vote ouvert",
+                              );
+                            }}
+                            style={{
+                              ...btnGhost,
+                              width: "100%",
+                              minHeight: "2.4rem",
+                              fontWeight: 700,
+                              fontSize: "0.8rem",
+                            }}
+                          >
+                            {openVoteButtonCopy.label}
+                          </button>
+                        ) : null}
+                        {inTestMode ? (
+                          <div>
+                            <button
+                              type="button"
+                              disabled={!canReplaySelected || busy}
+                              onClick={() => void handleReplaySelectedTestPoll()}
+                              title={
+                                canReplaySelected
+                                  ? "Efface les données TEST de cette question puis la remet en attente d’ouverture."
+                                  : getReplayTestPollBlockedLabel(
+                                      selectedReplayGate.reason,
+                                    )
+                              }
+                              style={{
+                                width: "100%",
+                                minHeight: "2.4rem",
+                                padding: "0.5rem 0.75rem",
+                                fontSize: "0.8rem",
+                                fontWeight: 800,
+                                borderRadius: "12px",
+                                border: canReplaySelected
+                                  ? "1px solid #f59e0b"
+                                  : "1px solid #e2e8f0",
+                                background: canReplaySelected
+                                  ? "linear-gradient(180deg, #fef3c7 0%, #fde68a 100%)"
+                                  : "#f8fafc",
+                                color: canReplaySelected ? "#92400e" : "#94a3b8",
+                                cursor:
+                                  !canReplaySelected || busy
+                                    ? "not-allowed"
+                                    : "pointer",
+                                opacity: !canReplaySelected || busy ? 0.6 : 1,
+                              }}
+                            >
+                              Rejouer la question
+                            </button>
+                            <p
+                              style={{
+                                margin: "0.35rem 0 0 0",
+                                fontSize: "0.68rem",
+                                color: "#a16207",
+                                lineHeight: 1.35,
+                              }}
+                            >
+                              MODE TEST — confirmation avant suppression des
+                              données de cette question.
+                            </p>
+                          </div>
+                        ) : null}
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "0.72rem",
+                            color: "#64748b",
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          Antenne :{" "}
+                          <strong style={{ color: "#111827" }}>
+                            {antennaStatusLabel}
+                          </strong>
+                          {" · "}
+                          Vote :{" "}
+                          <strong style={{ color: "#111827" }}>
+                            {voteLabel}
+                          </strong>
+                        </p>
+                      </div>
+                    </details>
                   </div>
-                </div>
+                )}
 
               </section>
 
@@ -8791,63 +9065,80 @@ export default function RegieEventPage() {
                   {contestEligibleError}
                 </p>
               ) : null}
+              {primaryLiveAction === "draw" ? (
+                <p
+                  style={{
+                    margin: "0.55rem 0 0 0",
+                    fontSize: "0.76rem",
+                    color: "#6d28d9",
+                    fontWeight: 700,
+                  }}
+                >
+                  Utilisez le bouton principal « Tirer au sort » ci-dessus.
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  disabled={
+                    busy ||
+                    contestEligibleLoading ||
+                    contestEligibleCount <= 0 ||
+                    !!contestEligibleError ||
+                    contestQuotaReached ||
+                    voteStateUi === "open" ||
+                    selectedIsConsultOnly
+                  }
+                  onClick={() => setContestDrawModalOpen(true)}
+                  title={
+                    voteStateUi === "open"
+                      ? "Fermez d’abord les participations avant de tirer au sort."
+                      : undefined
+                  }
+                  style={{
+                    marginTop: "0.6rem",
+                    padding: "0.45rem 0.8rem",
+                    borderRadius: "9px",
+                    border: "1px solid #7c3aed",
+                    background:
+                      busy ||
+                      contestEligibleLoading ||
+                      contestEligibleCount <= 0 ||
+                      !!contestEligibleError ||
+                      contestQuotaReached ||
+                      voteStateUi === "open" ||
+                      selectedIsConsultOnly
+                        ? "#f8fafc"
+                        : "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)",
+                    color:
+                      busy ||
+                      contestEligibleLoading ||
+                      contestEligibleCount <= 0 ||
+                      !!contestEligibleError ||
+                      contestQuotaReached ||
+                      voteStateUi === "open" ||
+                      selectedIsConsultOnly
+                        ? "#94a3b8"
+                        : "#fff",
+                    fontSize: "0.8rem",
+                    fontWeight: 700,
+                    cursor:
+                      busy ||
+                      contestEligibleLoading ||
+                      contestEligibleCount <= 0 ||
+                      !!contestEligibleError ||
+                      contestQuotaReached ||
+                      voteStateUi === "open" ||
+                      selectedIsConsultOnly
+                        ? "not-allowed"
+                        : "pointer",
+                  }}
+                >
+                  Tirer au sort
+                </button>
+              )}
               <button
                 type="button"
-                disabled={
-                  busy ||
-                  contestEligibleLoading ||
-                  contestEligibleCount <= 0 ||
-                  !!contestEligibleError ||
-                  contestQuotaReached ||
-                  voteStateUi === "open"
-                }
-                onClick={() => setContestDrawModalOpen(true)}
-                title={
-                  voteStateUi === "open"
-                    ? "Fermez d’abord les participations avant de tirer au sort."
-                    : undefined
-                }
-                style={{
-                  marginTop: "0.6rem",
-                  padding: "0.45rem 0.8rem",
-                  borderRadius: "9px",
-                  border: "1px solid #7c3aed",
-                  background:
-                    busy ||
-                    contestEligibleLoading ||
-                    contestEligibleCount <= 0 ||
-                    !!contestEligibleError ||
-                    contestQuotaReached ||
-                    voteStateUi === "open"
-                      ? "#f8fafc"
-                      : "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)",
-                  color:
-                    busy ||
-                    contestEligibleLoading ||
-                    contestEligibleCount <= 0 ||
-                    !!contestEligibleError ||
-                    contestQuotaReached ||
-                    voteStateUi === "open"
-                      ? "#94a3b8"
-                      : "#fff",
-                  fontSize: "0.8rem",
-                  fontWeight: 700,
-                  cursor:
-                    busy ||
-                    contestEligibleLoading ||
-                    contestEligibleCount <= 0 ||
-                    !!contestEligibleError ||
-                    contestQuotaReached ||
-                    voteStateUi === "open"
-                      ? "not-allowed"
-                      : "pointer",
-                }}
-              >
-                Tirer au sort
-              </button>
-              <button
-                type="button"
-                disabled={busy || !canReplaceContestWinner}
+                disabled={busy || !canReplaceContestWinner || selectedIsConsultOnly}
                 onClick={() => {
                   const firstActive = activeContestWinnersOnly[0];
                   setContestReplaceWinnerId(
@@ -8857,15 +9148,24 @@ export default function RegieEventPage() {
                 }}
                 style={{
                   marginTop: "0.45rem",
-                  marginLeft: "0.45rem",
+                  marginLeft: primaryLiveAction === "draw" ? 0 : "0.45rem",
                   padding: "0.45rem 0.8rem",
                   borderRadius: "9px",
                   border: "1px solid #c4b5fd",
-                  background: busy || !canReplaceContestWinner ? "#f8fafc" : "#fff",
-                  color: busy || !canReplaceContestWinner ? "#94a3b8" : "#5b21b6",
+                  background:
+                    busy || !canReplaceContestWinner || selectedIsConsultOnly
+                      ? "#f8fafc"
+                      : "#fff",
+                  color:
+                    busy || !canReplaceContestWinner || selectedIsConsultOnly
+                      ? "#94a3b8"
+                      : "#5b21b6",
                   fontSize: "0.8rem",
                   fontWeight: 700,
-                  cursor: busy || !canReplaceContestWinner ? "not-allowed" : "pointer",
+                  cursor:
+                    busy || !canReplaceContestWinner || selectedIsConsultOnly
+                      ? "not-allowed"
+                      : "pointer",
                 }}
               >
                 Remplacer un gagnant
