@@ -4,10 +4,23 @@
  */
 import assert from "node:assert/strict";
 import {
+  LIVE_UX_LABEL_VOTE_CONFIRMED,
+  LIVE_UX_LABEL_WAITING_BETWEEN,
+  LIVE_UX_LABEL_WAITING_START,
   LIVE_UX_STATE,
+  getClosedParticipantTitle,
   getLiveStateLabel,
+  getLiveStatePresentation,
+  getWaitingLiveLabel,
+  isWaitingBetweenQuestions,
   resolveLiveUxState,
 } from "../lib/liveStateUx.js";
+import {
+  applyTestModeResultsVoteMask,
+  formatTestModeVoteCountLabel,
+  maskTestModeOptionVoteCount,
+  shouldShowTestModeApproxPrefix,
+} from "../lib/testModeResultsMask.js";
 
 /** @type {{ name: string; ctx: Parameters<typeof resolveLiveUxState>[0]; expect: string }[]} */
 const cases = [
@@ -32,6 +45,17 @@ const cases = [
       hasActivePoll: true,
     },
     expect: LIVE_UX_STATE.CLOSED,
+  },
+  {
+    name: "CLOSED + WAITING + poll ACTIVE (copie jamais lancée) → WAITING",
+    ctx: {
+      liveScene: "waiting",
+      displayState: "waiting",
+      voteState: "closed",
+      pollStatus: "ACTIVE",
+      hasActivePoll: true,
+    },
+    expect: LIVE_UX_STATE.WAITING,
   },
   {
     name: "CLOSED + WAITING + poll CLOSED → CLOSED",
@@ -169,8 +193,127 @@ for (const ux of Object.values(LIVE_UX_STATE)) {
 }
 console.log("ok  labels sans jargon orga");
 
+/** A0 — MODE TEST : 1 vote ne devient jamais 0 ; cohérence totaux */
+{
+  assert.equal(maskTestModeOptionVoteCount(1), 1);
+  assert.equal(maskTestModeOptionVoteCount(4), 4);
+  assert.equal(maskTestModeOptionVoteCount(5), 5);
+  assert.equal(maskTestModeOptionVoteCount(9), 9);
+  assert.equal(maskTestModeOptionVoteCount(10), 10);
+  assert.equal(maskTestModeOptionVoteCount(12), 10);
+  assert.equal(maskTestModeOptionVoteCount(15), 20);
+  assert.equal(maskTestModeOptionVoteCount(0), 0);
+
+  const masked = applyTestModeResultsVoteMask(
+    { a: 1, b: 0, c: 12 },
+    { isTestMode: true, displayState: "RESULTS" },
+  );
+  assert.equal(masked.a, 1, "TEST+RESULTS 1 vote reste 1 (≠ régie 1 / screen 0)");
+  assert.equal(masked.b, 0);
+  assert.equal(masked.c, 10);
+
+  const rawQuestion = applyTestModeResultsVoteMask(
+    { a: 1 },
+    { isTestMode: true, displayState: "QUESTION" },
+  );
+  assert.equal(rawQuestion.a, 1, "hors RESULTS : pas de mask");
+
+  const realResults = applyTestModeResultsVoteMask(
+    { a: 1 },
+    { isTestMode: false, displayState: "RESULTS" },
+  );
+  assert.equal(realResults.a, 1, "MODE RÉEL : exact");
+
+  assert.equal(shouldShowTestModeApproxPrefix(0), false);
+  assert.equal(shouldShowTestModeApproxPrefix(1), false);
+  assert.equal(shouldShowTestModeApproxPrefix(2), false);
+  assert.equal(shouldShowTestModeApproxPrefix(9), false);
+  assert.equal(shouldShowTestModeApproxPrefix(10), true);
+  assert.equal(shouldShowTestModeApproxPrefix(12), true);
+  assert.equal(formatTestModeVoteCountLabel(1), "1 vote");
+  assert.equal(formatTestModeVoteCountLabel(2), "2 votes");
+  assert.equal(formatTestModeVoteCountLabel(0), "0 vote");
+  assert.equal(formatTestModeVoteCountLabel(10), "≈ 10 votes");
+  assert.equal(formatTestModeVoteCountLabel(12, { withUnit: false }), "≈ 12");
+  assert.equal(formatTestModeVoteCountLabel(2, { withUnit: false }), "2");
+  console.log("ok  A0 MODE TEST mask 1 vote ≠ 0 + ≈ UI seulement si ≥ bucket");
+}
+
+/** A1/A2 — CLOSED Merci seulement si voté ; label CLOSED vote-agnostique */
+{
+  assert.equal(
+    getLiveStateLabel(LIVE_UX_STATE.CLOSED),
+    "Vote fermé — les résultats arrivent bientôt",
+  );
+  assert.ok(
+    !/Merci ! Ton vote/i.test(getLiveStateLabel(LIVE_UX_STATE.CLOSED)),
+    "label CLOSED ne doit pas être une ack personnelle",
+  );
+  assert.equal(getClosedParticipantTitle(false), getLiveStateLabel(LIVE_UX_STATE.CLOSED));
+  assert.equal(getClosedParticipantTitle(true), LIVE_UX_LABEL_VOTE_CONFIRMED);
+  assert.equal(
+    getLiveStateLabel(LIVE_UX_STATE.WAITING),
+    LIVE_UX_LABEL_WAITING_START,
+  );
+  assert.ok(
+    !/Merci ! Ton vote/i.test(getLiveStateLabel(LIVE_UX_STATE.WAITING)),
+  );
+  console.log("ok  A1/A2 WAITING/CLOSED sans Merci non-votant");
+}
+
+{
+  assert.equal(isWaitingBetweenQuestions({}), false);
+  assert.equal(isWaitingBetweenQuestions({ pastPolls: [] }), false);
+  assert.equal(
+    isWaitingBetweenQuestions({ pollsProgress: { current: 1, total: 3 } }),
+    false,
+  );
+  assert.equal(
+    getWaitingLiveLabel({ pollsProgress: { current: 1, total: 3 } }),
+    LIVE_UX_LABEL_WAITING_START,
+  );
+  assert.equal(
+    isWaitingBetweenQuestions({
+      pastPolls: [{ id: "p1", label: "Q1" }],
+    }),
+    true,
+  );
+  assert.equal(
+    isWaitingBetweenQuestions({ pollsProgress: { current: 2, total: 3 } }),
+    true,
+  );
+  assert.equal(
+    getWaitingLiveLabel({ pollsProgress: { current: 2, total: 3 } }),
+    LIVE_UX_LABEL_WAITING_BETWEEN,
+  );
+  assert.equal(
+    getLiveStatePresentation({
+      liveScene: "waiting",
+      displayState: "waiting",
+      voteState: "closed",
+      pollStatus: "ACTIVE",
+      hasActivePoll: true,
+      pollsProgress: { current: 1, total: 2 },
+    }).title,
+    LIVE_UX_LABEL_WAITING_START,
+  );
+  assert.equal(
+    getLiveStatePresentation({
+      liveScene: "waiting",
+      displayState: "waiting",
+      voteState: "closed",
+      pollStatus: "ACTIVE",
+      hasActivePoll: true,
+      pastPolls: [{ id: "p1", label: "Q1" }],
+      pollsProgress: { current: 2, total: 2 },
+    }).title,
+    LIVE_UX_LABEL_WAITING_BETWEEN,
+  );
+  console.log("ok  WAITING start vs entre questions");
+}
+
 if (failed > 0) {
   console.error(`\n${failed} cas en échec`);
   process.exit(1);
 }
-console.log(`\n${cases.length + 1} assertions OK — LOT-0 live UX`);
+console.log(`\n${cases.length + 4} assertions OK — LOT-0 live UX`);

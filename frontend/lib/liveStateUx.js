@@ -32,15 +32,71 @@ export const LIVE_UX_LOCAL = {
   LOADING: "LOADING",
 };
 
+/** Confirmation personnelle après un vote réussi (pas le label d’état CLOSED). */
+export const LIVE_UX_LABEL_VOTE_CONFIRMED =
+  "Merci ! Ton vote est pris en compte";
+
+/** WAITING avant la première question (démarrage live). */
+export const LIVE_UX_LABEL_WAITING_START = "Ça va bientôt commencer";
+
+/** WAITING entre deux questions (après Suivante → PRÉPARÉ). */
+export const LIVE_UX_LABEL_WAITING_BETWEEN = "Prochaine question bientôt";
+
 /** @type {Record<LiveUxState, string>} */
 const LABELS = {
-  WAITING: "Ça va bientôt commencer",
+  WAITING: LIVE_UX_LABEL_WAITING_START,
   VOTING: "Choisis ta réponse",
-  CLOSED: "Merci ! Ton vote est pris en compte",
+  // CLOSED = vote clos pour tous (votants et non-votants) — pas une ack personnelle.
+  CLOSED: "Vote fermé — les résultats arrivent bientôt",
   RESULTS: "Résultats",
   PAUSED: "Petite pause",
   FINISHED: "Merci d’avoir participé !",
 };
+
+/**
+ * True si au moins une question a déjà été enchaînée (entre deux questions).
+ * Sources : `pastPolls` API et/ou `pollsProgress.current > 1`.
+ * @param {{
+ *   pastPolls?: unknown;
+ *   pastPollsCount?: number | null;
+ *   pollsProgress?: { current?: number; total?: number } | null;
+ *   pollsProgressCurrent?: number | null;
+ * }} [input]
+ */
+export function isWaitingBetweenQuestions(input = {}) {
+  const pastFromList = Array.isArray(input.pastPolls)
+    ? input.pastPolls.length
+    : NaN;
+  const pastCount = Number.isFinite(pastFromList)
+    ? pastFromList
+    : Number(input.pastPollsCount);
+  if (Number.isFinite(pastCount) && pastCount > 0) return true;
+
+  const cur = Number(
+    input.pollsProgress?.current ?? input.pollsProgressCurrent,
+  );
+  return Number.isFinite(cur) && cur > 1;
+}
+
+/**
+ * Titre WAITING participant /join (et présentation associée).
+ * @param {Parameters<typeof isWaitingBetweenQuestions>[0]} [input]
+ */
+export function getWaitingLiveLabel(input = {}) {
+  return isWaitingBetweenQuestions(input)
+    ? LIVE_UX_LABEL_WAITING_BETWEEN
+    : LIVE_UX_LABEL_WAITING_START;
+}
+
+/**
+ * Titre carte CLOSED participant : Merci seulement si la personne a voté.
+ * @param {boolean} hasVoted
+ */
+export function getClosedParticipantTitle(hasVoted) {
+  return hasVoted
+    ? LIVE_UX_LABEL_VOTE_CONFIRMED
+    : LABELS.CLOSED;
+}
 
 /** @type {Record<string, string>} */
 const LOCAL_LABELS = {
@@ -257,12 +313,24 @@ export function getScreenResultsPillLabel(voteOuvertResultats) {
   return voteOuvertResultats ? "Résultats en direct" : "Résultat final";
 }
 
-/** @param {Parameters<typeof resolveLiveUxState>[0] & { autoReveal?: boolean; autoRevealShowResultsAt?: string | null }} ctx */
+/**
+ * @param {Parameters<typeof resolveLiveUxState>[0] & {
+ *   autoReveal?: boolean;
+ *   autoRevealShowResultsAt?: string | null;
+ *   pastPolls?: unknown;
+ *   pastPollsCount?: number | null;
+ *   pollsProgress?: { current?: number; total?: number } | null;
+ *   pollsProgressCurrent?: number | null;
+ * }} ctx
+ */
 export function getLiveStatePresentation(ctx) {
   const ux = resolveLiveUxState(ctx);
   return {
     ux,
-    title: getLiveStateLabel(ux),
+    title:
+      ux === LIVE_UX_STATE.WAITING
+        ? getWaitingLiveLabel(ctx)
+        : getLiveStateLabel(ux),
     subtitle: getLiveStateSubtitle(ctx),
   };
 }

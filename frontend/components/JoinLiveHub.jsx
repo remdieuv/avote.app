@@ -1,10 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io } from "socket.io-client";
-import { formatCountdownVerbose } from "@/lib/chronoFormat";
 import {
   buildJoinRoomShellStyle,
   createJoinRoomPalette,
@@ -15,38 +13,33 @@ import {
 import { resolveApiAssetUrlNullable } from "@/lib/assetUrl";
 import { API_URL, SOCKET_URL } from "@/lib/config";
 import {
-  LIVE_UX_BODY_CLOSED_WAIT_RESULTS,
-  LIVE_UX_BODY_FINISHED_MERCI,
-  LIVE_UX_BODY_JOIN_AFTER_RESULTS,
   LIVE_UX_BODY_JOIN_PAUSED,
   LIVE_UX_BODY_JOIN_WAITING,
   LIVE_UX_STATE,
-  LIVE_UX_SUBTITLE_REVEAL_PENDING,
-  getUxState,
   getLiveStatePresentation,
   getLiveStateTone,
 } from "@/lib/liveStateUx";
 import {
+  normalizeLiveAxes,
+  normalizePollJson,
+} from "@/lib/normalizeLivePayload";
+import {
+  getParticipantFullLabel,
+  getParticipantOfflineLabel,
+  resolveJoinFinishedCardContent,
+  resolveJoinHistoriqueQuestions,
+  shouldEmbedPollSurfaceInRoom,
+  shouldJoinApplySocketLiveAxesImmediately,
+  shouldJoinSocketJoinActivePoll,
+  shouldShowParticipantFullUi,
+} from "@/lib/participantLiveFlow";
+import {
   buildJoinPollCardSurfaces,
   getLiveStateVisualTokens,
-  stateBadgeTypography,
 } from "@/lib/liveStateVisual";
 import { ExperienceHeader } from "@/components/navigation/ExperienceHeader";
+import { PollExperience } from "@/components/PollExperience";
 import { getOrCreateVoterSessionId } from "@/lib/votes/voter-session";
-
-/** @param {Record<string, unknown> | null | undefined} tm */
-function chronoRestantSecondes(tm) {
-  if (!tm || typeof tm.totalSec !== "number") return null;
-  if (!tm.running || tm.isPaused) {
-    return typeof tm.remainingSec === "number" ? tm.remainingSec : null;
-  }
-  if (typeof tm.startedAt !== "string") return tm.remainingSec ?? null;
-  const seg = Math.floor(
-    (Date.now() - new Date(tm.startedAt).getTime()) / 1000,
-  );
-  const acc = typeof tm.accumulatedSec === "number" ? tm.accumulatedSec : 0;
-  return Math.max(0, tm.totalSec - acc - seg);
-}
 
 /**
  * @param {{ accent: string; pulseAllowed: boolean }} props
@@ -130,11 +123,11 @@ function AttenteAnimee({ accent, pulseAllowed }) {
 }
 
 /**
- * Hub salle live /join : écran d’attente et lien vers /p/[slug].
+ * Salle live permanente `/join/[slug]` — le contenu évolue (WAITING→…→FINISHED)
+ * sans navigation automatique vers `/p`.
  * @param {{ slug: string }} props
  */
 export function JoinLiveHub({ slug }) {
-  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [eventId, setEventId] = useState(null);
@@ -152,16 +145,32 @@ export function JoinLiveHub({ slug }) {
   const [questionTimer, setQuestionTimer] = useState(null);
   /** @type {string | null} */
   const [activePollId, setActivePollId] = useState(null);
+  /** ACTIVE | CLOSED | DRAFT | … — pour resolveLiveUxState (copie jamais lancée ≠ CLOSED UX). */
   /** @type {string | null} */
-  const [activePollQuestion, setActivePollQuestion] = useState(null);
+  const [activePollStatus, setActivePollStatus] = useState(null);
   /** @type {{ current: number; total: number } | null} */
   const [pollsProgress, setPollsProgress] = useState(null);
   /** @type {{ id: string; label: string }[]} */
   const [pastPolls, setPastPolls] = useState([]);
   /** @type {Record<string, boolean>} */
   const [contestWinByPollId, setContestWinByPollId] = useState({});
-  const [hasVotedActivePoll, setHasVotedActivePoll] = useState(false);
-  const [chronoTick, setChronoTick] = useState(0);
+  const [isLocked, setIsLocked] = useState(false);
+  /** false = MODE TEST (répétition) ; true = RÉEL — conception §5.2 */
+  const [isLiveConsumed, setIsLiveConsumed] = useState(
+    /** @type {boolean | null} */ (null),
+  );
+  /** null = pas encore de socket ; true/false = statut connexion */
+  const [socketOnline, setSocketOnline] = useState(/** @type {boolean | null} */ (null));
+  /** Bump pour sync PollExperience embedded (un seul socket Join). */
+  const [liveSyncRevision, setLiveSyncRevision] = useState(0);
+  /** Snapshot `poll_updated` relayé (peers) — même io Join, pas de 2ᵉ socket. */
+  const [embeddedPollSnapshot, setEmbeddedPollSnapshot] = useState(
+    /** @type {object | null} */ (null),
+  );
+  const [embeddedPollRevision, setEmbeddedPollRevision] = useState(0);
+  const socketRef = useRef(/** @type {import("socket.io-client").Socket | null} */ (null));
+  const activePollIdRef = useRef(/** @type {string | null} */ (null));
+  const joinedPollIdRef = useRef(/** @type {string | null} */ (null));
   /** Personnalisation salle (/admin/.../customization) */
   const [roomDescription, setRoomDescription] = useState(null);
   const [logoUrl, setLogoUrl] = useState(null);
@@ -218,7 +227,7 @@ export function JoinLiveHub({ slug }) {
       setAutoRevealShowResultsAt(null);
       setQuestionTimer(null);
       setActivePollId(null);
-      setActivePollQuestion(null);
+      setActivePollStatus(null);
       setPollsProgress(null);
       setPastPolls([]);
       setRoomDescription(null);
@@ -236,6 +245,7 @@ export function JoinLiveHub({ slug }) {
       setInfoSecondaryCtaUrl(null);
       setInfoShowOnFinished(true);
       setLandingEnabled(false);
+      setIsLocked(false);
       setPreviewCustomization(null);
       return;
     }
@@ -244,26 +254,25 @@ export function JoinLiveHub({ slug }) {
       return;
     }
     const data = await res.json();
+    const axes = normalizeLiveAxes(data);
     setError(null);
+    setIsLocked(
+      axes.isLocked != null ? Boolean(axes.isLocked) : Boolean(data.isLocked),
+    );
+    if (typeof data.isLiveConsumed === "boolean") {
+      setIsLiveConsumed(data.isLiveConsumed);
+    } else if (typeof axes.isLiveConsumed === "boolean") {
+      setIsLiveConsumed(axes.isLiveConsumed);
+    }
     setEventId(data.id ?? null);
     setEventTitle(
       typeof data.title === "string" && data.title.trim()
         ? data.title.trim()
         : null,
     );
-    setLiveState(
-      typeof data.liveState === "string" ? data.liveState.toLowerCase() : null,
-    );
-    setVoteState(
-      typeof data.voteState === "string"
-        ? data.voteState.toLowerCase()
-        : null,
-    );
-    setDisplayState(
-      typeof data.displayState === "string"
-        ? data.displayState.toLowerCase()
-        : null,
-    );
+    setLiveState(axes.liveState);
+    setVoteState(axes.voteState);
+    setDisplayState(axes.displayState);
     setAutoRevealShowResultsAt(
       typeof data.autoRevealShowResultsAt === "string"
         ? data.autoRevealShowResultsAt
@@ -281,9 +290,11 @@ export function JoinLiveHub({ slug }) {
         ? data.activePollId.trim()
         : null,
     );
-    const q = data.activePollQuestion;
-    setActivePollQuestion(
-      typeof q === "string" && q.trim() ? q.trim() : null,
+    const aps = data.activePollStatus;
+    setActivePollStatus(
+      typeof aps === "string" && aps.trim()
+        ? String(aps).trim().toUpperCase()
+        : null,
     );
     const pp = data.pollsProgress;
     if (
@@ -528,19 +539,118 @@ export function JoinLiveHub({ slug }) {
   }, [fetchMeta]);
 
   useEffect(() => {
+    activePollIdRef.current = activePollId;
+  }, [activePollId]);
+
+  useEffect(() => {
     if (!eventId) return;
 
     const socket = io(SOCKET_URL, {
       transports: ["websocket", "polling"],
     });
+    socketRef.current = socket;
 
-    function onConnect() {
-      socket.emit("join_event", eventId);
+    function syncPollRoom(pollId) {
+      const next =
+        typeof pollId === "string" && pollId.trim() ? pollId.trim() : null;
+      const prev = joinedPollIdRef.current;
+      if (prev && prev !== next) {
+        socket.emit("leave_poll", prev);
+      }
+      if (next && shouldJoinSocketJoinActivePoll({ activePollId: next })) {
+        socket.emit("join_poll", next);
+        joinedPollIdRef.current = next;
+      } else {
+        joinedPollIdRef.current = null;
+      }
     }
 
-    /** @param {any} _payload */
-    function onEventLive(_payload) {
+    function onConnect() {
+      setSocketOnline(true);
+      socket.emit("join_event", eventId);
+      syncPollRoom(activePollIdRef.current);
+      setLiveSyncRevision((n) => n + 1);
       void fetchMeta();
+    }
+
+    function onDisconnect() {
+      setSocketOnline(false);
+    }
+
+    /** @param {any} payload */
+    function onEventLive(payload) {
+      if (
+        payload?.eventId != null &&
+        String(payload.eventId) !== String(eventId)
+      ) {
+        return;
+      }
+      // A8 — axes live immédiats, puis réconciliation fetchMeta (activePollStatus, pastPolls…).
+      if (shouldJoinApplySocketLiveAxesImmediately()) {
+        const axes = normalizeLiveAxes(payload);
+        if (axes.liveState) setLiveState(axes.liveState);
+        if (axes.voteState) setVoteState(axes.voteState);
+        if (axes.displayState) setDisplayState(axes.displayState);
+        if (axes.isLocked != null) setIsLocked(Boolean(axes.isLocked));
+        if (payload?.activePollId != null) {
+          const ap =
+            typeof payload.activePollId === "string" &&
+            payload.activePollId.trim()
+              ? payload.activePollId.trim()
+              : null;
+          setActivePollId(ap);
+          activePollIdRef.current = ap;
+          syncPollRoom(ap);
+        }
+        if (typeof payload?.autoRevealShowResultsAt === "string") {
+          setAutoRevealShowResultsAt(payload.autoRevealShowResultsAt);
+        } else if (payload && "autoRevealShowResultsAt" in payload) {
+          setAutoRevealShowResultsAt(null);
+        }
+        if (payload?.questionTimer && typeof payload.questionTimer === "object") {
+          setQuestionTimer(payload.questionTimer);
+        }
+        if (payload?.poll && typeof payload.poll === "object") {
+          const pollNorm = normalizePollJson(payload.poll);
+          const st = pollNorm?.status;
+          if (typeof st === "string" && st.trim()) {
+            setActivePollStatus(String(st).trim().toUpperCase());
+          }
+          setEmbeddedPollSnapshot(pollNorm);
+          setEmbeddedPollRevision((n) => n + 1);
+        } else if (
+          String(axes.displayState || "").toLowerCase() === "waiting" &&
+          String(axes.voteState || "").toLowerCase() === "closed" &&
+          payload?.activePollId
+        ) {
+          // LOT-5 — Suivante sans poll nested : éviter CLOSED stale → faux embed.
+          setActivePollStatus("ACTIVE");
+          setEmbeddedPollSnapshot(null);
+        }
+        if (typeof payload?.isLiveConsumed === "boolean") {
+          setIsLiveConsumed(payload.isLiveConsumed);
+        }
+      }
+      setLiveSyncRevision((n) => n + 1);
+      void fetchMeta();
+    }
+
+    /** A3 — votes peers via room poll, sans second io(). */
+    /** @param {any} payload */
+    function onPollUpdated(payload) {
+      if (!payload || typeof payload !== "object" || !payload.id) return;
+      const current = activePollIdRef.current;
+      if (current && String(payload.id) !== String(current)) return;
+      const pollNorm = normalizePollJson(payload);
+      const axes = normalizeLiveAxes(pollNorm);
+      setEmbeddedPollSnapshot(pollNorm);
+      setEmbeddedPollRevision((n) => n + 1);
+      if (typeof pollNorm?.status === "string" && pollNorm.status.trim()) {
+        setActivePollStatus(String(pollNorm.status).trim().toUpperCase());
+      }
+      if (axes.liveState) setLiveState(axes.liveState);
+      if (axes.voteState) setVoteState(axes.voteState);
+      if (axes.displayState) setDisplayState(axes.displayState);
     }
 
     /** @param {any} payload */
@@ -551,22 +661,52 @@ export function JoinLiveHub({ slug }) {
       ) {
         return;
       }
+      setLiveSyncRevision((n) => n + 1);
       void fetchMeta();
     }
 
     socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
     if (socket.connected) onConnect();
+    else setSocketOnline(false);
     socket.on("event_live_updated", onEventLive);
+    socket.on("poll_updated", onPollUpdated);
     socket.on("event:customization_updated", onCustomizationUpdated);
 
     return () => {
+      const prevPoll = joinedPollIdRef.current;
+      if (prevPoll) socket.emit("leave_poll", prevPoll);
+      joinedPollIdRef.current = null;
       socket.emit("leave_event", eventId);
       socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
       socket.off("event_live_updated", onEventLive);
+      socket.off("poll_updated", onPollUpdated);
       socket.off("event:customization_updated", onCustomizationUpdated);
       socket.disconnect();
+      socketRef.current = null;
     };
   }, [eventId, fetchMeta]);
+
+  /** Quand activePollId change (meta/socket), rejoindre la room poll sur le même io. */
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket?.connected) return;
+    const next =
+      typeof activePollId === "string" && activePollId.trim()
+        ? activePollId.trim()
+        : null;
+    const prev = joinedPollIdRef.current;
+    if (prev && prev !== next) {
+      socket.emit("leave_poll", prev);
+    }
+    if (next && shouldJoinSocketJoinActivePoll({ activePollId: next })) {
+      socket.emit("join_poll", next);
+      joinedPollIdRef.current = next;
+    } else if (!next) {
+      joinedPollIdRef.current = null;
+    }
+  }, [activePollId]);
 
   const sceneRaw = String(liveState || "").toLowerCase();
   const vs = String(voteState || "").toLowerCase();
@@ -581,10 +721,14 @@ export function JoinLiveHub({ slug }) {
       liveScene: sceneRaw || null,
       displayState: ds,
       voteState: vs || null,
-      pollStatus: null,
+      // Statut réel du poll pointé (ACTIVE sur une copie jamais lancée → WAITING, pas CLOSED).
+      pollStatus: activePollStatus,
       hasActivePoll: Boolean(activePollId),
+      // WAITING : « Ça va bientôt commencer » vs « Prochaine question bientôt ».
+      pastPolls,
+      pollsProgress,
     }),
-    [sceneRaw, ds, vs, activePollId],
+    [sceneRaw, ds, vs, activePollStatus, activePollId, pastPolls, pollsProgress],
   );
 
   const joinPresCore = useMemo(
@@ -594,6 +738,13 @@ export function JoinLiveHub({ slug }) {
 
   /** Scène UX canonique (6 états) via resolveLiveUxState — plus de finished|voting|waiting seul */
   const scene = String(joinPresCore.ux || LIVE_UX_STATE.WAITING).toLowerCase();
+  /** G15 — double ancrage (scene + ux) pour ne jamais rerendre le triple Merci. */
+  const isFinishedUx =
+    scene === "finished" ||
+    String(joinPresCore.ux || "").toUpperCase() === LIVE_UX_STATE.FINISHED;
+  const finishedCardContent = isFinishedUx
+    ? resolveJoinFinishedCardContent()
+    : null;
 
   const enAttenteRevealAuto = useMemo(() => {
     if (vs !== "closed") return false;
@@ -604,37 +755,6 @@ export function JoinLiveHub({ slug }) {
       new Date(autoRevealShowResultsAt).getTime() > Date.now() - 500
     );
   }, [vs, ds, scene, autoRevealShowResultsAt]);
-
-  const chronoVoteActif =
-    scene === "voting" &&
-    questionTimer &&
-    typeof questionTimer.totalSec === "number";
-
-  const tickReveal = enAttenteRevealAuto;
-  const tickChronoVote =
-    !!chronoVoteActif &&
-    !!questionTimer &&
-    questionTimer.running &&
-    !questionTimer.isPaused;
-
-  useEffect(() => {
-    if (!tickReveal && !tickChronoVote) return;
-    const id = window.setInterval(() => setChronoTick((t) => t + 1), 1000);
-    return () => window.clearInterval(id);
-  }, [tickReveal, tickChronoVote]);
-
-  const secondesChronoQuestion = useMemo(() => {
-    void chronoTick;
-    return chronoRestantSecondes(questionTimer);
-  }, [questionTimer, chronoTick]);
-
-  const secondesAvantResultats = useMemo(() => {
-    void chronoTick;
-    if (!autoRevealShowResultsAt) return null;
-    const t = new Date(autoRevealShowResultsAt).getTime();
-    if (Number.isNaN(t)) return null;
-    return Math.max(0, Math.ceil((t - Date.now()) / 1000));
-  }, [autoRevealShowResultsAt, chronoTick]);
 
   const joinUxContext = useMemo(
     () => ({
@@ -649,45 +769,28 @@ export function JoinLiveHub({ slug }) {
     () => getLiveStatePresentation(joinUxContext),
     [joinUxContext],
   );
-  const ux = useMemo(
-    () =>
-      getUxState({
-        liveState: sceneRaw || scene,
-        voteState: vs,
-        displayState: ds,
-      }),
-    [sceneRaw, scene, vs, ds],
-  );
 
-  const votePath = `/p/${encodeURIComponent(slug)}`;
+  /** isLocked peut être true après Terminer (réel) — ne pas confondre avec FULL. */
+  const roomIsFull = shouldShowParticipantFullUi({
+    isLocked,
+    uxState: scene,
+  });
+  const isOffline = socketOnline === false;
 
-  function participer() {
-    router.push(votePath);
-  }
+  /** Vote / confirmation / CLOSED / RESULTS — dans la Salle, sans quitter `/join`. */
+  const embedPollSurface = shouldEmbedPollSurfaceInRoom({
+    uxState: scene,
+    isFull: roomIsFull,
+    loading: loading || !!error || !eventId,
+  });
 
-  useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-    if (!activePollId) {
-      setHasVotedActivePoll(false);
-      return undefined;
+  const getPollUrlForRoom = useCallback(() => {
+    const base = `${API_URL}/p/${encodeURIComponent(slug)}`;
+    if (activePollId) {
+      return `${base}?poll=${encodeURIComponent(activePollId)}`;
     }
-    const key = `avote_voted_poll_${activePollId}`;
-    const sync = () => {
-      try {
-        const v = window.localStorage.getItem(key);
-        setHasVotedActivePoll(v === "true" || v === "1");
-      } catch {
-        setHasVotedActivePoll(false);
-      }
-    };
-    sync();
-    window.addEventListener("focus", sync);
-    document.addEventListener("visibilitychange", sync);
-    return () => {
-      window.removeEventListener("focus", sync);
-      document.removeEventListener("visibilitychange", sync);
-    };
-  }, [activePollId]);
+    return base;
+  }, [slug, activePollId]);
 
   const progressionLigne = useMemo(() => {
     if (!pollsProgress) return null;
@@ -698,15 +801,11 @@ export function JoinLiveHub({ slug }) {
     }
     return `Question ${current} sur ${total}`;
   }, [pollsProgress]);
-  const historiqueQuestions = useMemo(() => {
-    const base = Array.isArray(pastPolls) ? pastPolls : [];
-    const activeLabel =
-      typeof activePollQuestion === "string" ? activePollQuestion.trim() : "";
-    if (!activeLabel) return base;
-    const exists = base.some((p) => String(p?.label || "").trim() === activeLabel);
-    if (exists) return base;
-    return [{ id: "__active__", label: activeLabel }, ...base];
-  }, [pastPolls, activePollQuestion]);
+  /** pastPolls API uniquement — pas de préfixe de la question active (isolation copie). */
+  const historiqueQuestions = useMemo(
+    () => resolveJoinHistoriqueQuestions(pastPolls),
+    [pastPolls],
+  );
   const winningContestPolls = useMemo(
     () =>
       historiqueQuestions.filter(
@@ -864,7 +963,8 @@ export function JoinLiveHub({ slug }) {
       justifyContent: "center",
       alignItems: "center",
       width: "100%",
-      padding: "clamp(1rem, 4vw, 2rem) clamp(1rem, 5vw, 2.5rem) 2rem",
+      padding:
+        "clamp(1rem, 4vw, 2rem) clamp(1rem, 5vw, 2.5rem) max(2rem, env(safe-area-inset-bottom, 0px))",
       boxSizing: "border-box",
     }),
     [],
@@ -885,271 +985,30 @@ export function JoinLiveHub({ slug }) {
     [joinCardSurfaces],
   );
 
-  const joinBadgeEtat = useMemo(
-    () => ({
-      ...stateBadgeTypography(joinVisualTokens),
-      fontSize: "0.75rem",
-      color: accent,
-    }),
-    [joinVisualTokens, accent],
-  );
-
-  const joinCtaGradient = useMemo(
-    () =>
-      `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 40%, ${isDark ? "#1e1b4b" : "#c7d2fe"}))`,
-    [accent, isDark],
-  );
-
   const piedEncouragement =
-    scene === "finished"
+    roomIsFull || embedPollSurface
       ? null
-      : scene === "voting"
-        ? hasVotedActivePoll
-          ? "Réponse envoyée. Tu peux suivre le direct depuis cette page."
-          : "Le vote est ouvert : appuie sur « Voter maintenant »."
-        : scene === "results"
-          ? "Les résultats sont visibles ici, puis la prochaine question arrive."
-          : scene === "closed"
-            ? LIVE_UX_BODY_CLOSED_WAIT_RESULTS
-            : "Garde cette page ouverte : la session continue en direct.";
+      : scene === "finished"
+        ? null
+        : "Garde cette page ouverte : la session continue en direct.";
 
   let corps = null;
 
-  if (!loading && !error && eventId) {
-    if (scene === "finished") {
+  if (!loading && !error && eventId && !embedPollSurface) {
+    if (roomIsFull) {
       corps = (
         <>
           <p
             style={{
               margin: 0,
-              fontSize: `clamp(${1.12 * joinVisualTokens.titleClampMul}rem, ${3.8 * joinVisualTokens.titleClampMul}vw, ${1.48 * joinVisualTokens.titleClampMul}rem)`,
+              fontSize: `clamp(${1.2 * joinVisualTokens.titleClampMul}rem, ${4.2 * joinVisualTokens.titleClampMul}vw, ${1.75 * joinVisualTokens.titleClampMul}rem)`,
               fontWeight: joinVisualTokens.stateBadgeWeight,
-              lineHeight: 1.45,
+              lineHeight: 1.35,
               color: palette.fg2,
             }}
           >
-            {joinPres.title}
+            {getParticipantFullLabel()}
           </p>
-          <p
-            style={{
-              margin: "0.85rem 0 0 0",
-              fontSize: "clamp(0.95rem, 3vw, 1.1rem)",
-              color: palette.muted,
-              lineHeight: 1.5,
-            }}
-          >
-            {LIVE_UX_BODY_FINISHED_MERCI}
-          </p>
-        </>
-      );
-    } else if (enAttenteRevealAuto) {
-      corps =
-        secondesAvantResultats != null ? (
-          <>
-            <p style={{ margin: 0, ...joinBadgeEtat }}>{joinPres.title}</p>
-            <p
-              style={{
-                margin: "0.65rem 0 0 0",
-                fontSize: "clamp(1rem, 3.5vw, 1.2rem)",
-                fontWeight: 600,
-                color: palette.muted2,
-              }}
-            >
-              Résultats dans
-            </p>
-            <p
-              style={{
-                margin: "0.35rem 0 0 0",
-                fontSize: "clamp(3.25rem, 14vw, 5.5rem)",
-                fontWeight: 800,
-                lineHeight: 1,
-                letterSpacing: "-0.03em",
-                fontVariantNumeric: "tabular-nums",
-                color: accent,
-                textShadow: `0 0 36px color-mix(in srgb, ${accent} 40%, transparent)`,
-              }}
-            >
-              {formatCountdownVerbose(secondesAvantResultats)}
-            </p>
-          </>
-        ) : (
-          <>
-            <p style={{ margin: 0, ...joinBadgeEtat }}>{joinPres.title}</p>
-            <p
-              style={{
-                margin: "0.75rem 0 0 0",
-                fontSize: "clamp(1.1rem, 3.5vw, 1.35rem)",
-                fontWeight: 600,
-                color: palette.muted2,
-              }}
-            >
-              {joinPres.subtitle ?? LIVE_UX_SUBTITLE_REVEAL_PENDING}
-            </p>
-            <div style={{ marginTop: "1.25rem" }}>
-              <AttenteAnimee
-                accent={accent}
-                pulseAllowed={joinVisualTokens.pulseAllowed}
-              />
-            </div>
-          </>
-        );
-    } else if (scene === "voting") {
-      corps = (
-        <>
-          <p style={{ margin: 0, ...joinBadgeEtat }}>
-            {hasVotedActivePoll
-              ? getUxState({
-                  liveState: "CLOSED",
-                  voteState: "CLOSED",
-                  displayState: "QUESTION",
-                }).label
-              : joinPres.title}
-          </p>
-          <h2
-            style={{
-              margin: "0.65rem 0 0 0",
-              fontSize: `clamp(${1.2 * joinVisualTokens.titleClampMul}rem, ${4.2 * joinVisualTokens.titleClampMul}vw, ${1.65 * joinVisualTokens.titleClampMul}rem)`,
-              fontWeight: 800,
-              lineHeight: 1.35,
-              letterSpacing: "-0.02em",
-              color: palette.fg,
-            }}
-          >
-            {activePollQuestion || "—"}
-          </h2>
-          {chronoVoteActif && secondesChronoQuestion != null ? (
-            <>
-          <p
-            style={{
-              margin: "1rem 0 0 0",
-              fontSize: "0.88rem",
-              fontWeight: 600,
-              color: palette.link,
-              letterSpacing: "0.02em",
-            }}
-          >
-            {questionTimer && questionTimer.isPaused
-              ? "Chrono en pause"
-              : "Temps restant pour voter"}
-          </p>
-              <p
-                style={{
-                  margin: "0.25rem 0 0 0",
-                  fontSize: "clamp(2.5rem, 11vw, 4rem)",
-                  fontWeight: 800,
-                  lineHeight: 1,
-                  fontVariantNumeric: "tabular-nums",
-                  color:
-                    questionTimer && questionTimer.isPaused
-                      ? palette.muted
-                      : accent,
-                }}
-              >
-                {formatCountdownVerbose(secondesChronoQuestion)}
-              </p>
-            </>
-          ) : null}
-          <button
-            className="join-live-cta"
-            type="button"
-            onClick={participer}
-            style={{
-              marginTop: "1.35rem",
-              width: "100%",
-              maxWidth: "20rem",
-              alignSelf: "center",
-              padding: `${1.05 * joinVisualTokens.ctaScale}rem ${1.4 * joinVisualTokens.ctaScale}rem`,
-              fontSize: `clamp(${1.05 * joinVisualTokens.ctaScale}rem, 3.5vw, ${1.15 * joinVisualTokens.ctaScale}rem)`,
-              fontWeight: 800,
-              border: "none",
-              borderRadius: "14px",
-              background: hasVotedActivePoll ? "transparent" : joinCtaGradient,
-              color: hasVotedActivePoll ? palette.link : "#fff",
-              border: hasVotedActivePoll ? `1px solid ${palette.cardBorder}` : "none",
-              cursor: "pointer",
-              boxShadow: `0 ${Math.round(8 * joinVisualTokens.shadowScale)}px ${Math.round(30 * joinVisualTokens.shadowScale)}px rgba(0, 0, 0, ${isDark ? 0.32 : 0.18})`,
-            }}
-          >
-            {hasVotedActivePoll ? "Voir mon vote" : "Voter maintenant"}
-          </button>
-        </>
-      );
-    } else if (scene === "results") {
-      const resultHref =
-        activePollId != null
-          ? `/p/${encodeURIComponent(slug)}?poll=${encodeURIComponent(activePollId)}`
-          : null;
-      corps = (
-        <>
-          <p
-            style={{
-              margin: 0,
-              ...joinBadgeEtat,
-              color: `color-mix(in srgb, ${accent} 72%, ${palette.fg})`,
-            }}
-          >
-            {joinPres.title}
-          </p>
-          <h2
-            style={{
-              margin: "0.75rem 0 0 0",
-              fontSize: `clamp(${1.15 * joinVisualTokens.titleClampMul}rem, ${4 * joinVisualTokens.titleClampMul}vw, ${1.55 * joinVisualTokens.titleClampMul}rem)`,
-              fontWeight: 800,
-              lineHeight: 1.35,
-              letterSpacing: "-0.02em",
-              color: palette.fg,
-            }}
-          >
-            {activePollQuestion || "—"}
-          </h2>
-          <div style={{ marginTop: "1rem" }}>
-            {resultHref ? (
-              <Link
-                href={resultHref}
-                style={{
-                  display: "inline-block",
-                  fontSize: "1rem",
-                  fontWeight: 700,
-                  color: palette.link,
-                  textDecoration: "underline",
-                  textUnderlineOffset: "4px",
-                }}
-              >
-                Consulter les résultats
-              </Link>
-            ) : (
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "0.9rem",
-                  fontWeight: 600,
-                  color: palette.muted,
-                }}
-              >
-                Le détail des scores s’affiche dès que la page vote est à jour.
-              </p>
-            )}
-          </div>
-          <p
-            style={{
-              margin: "1.15rem 0 0 0",
-              fontSize: "clamp(0.95rem, 3vw, 1.08rem)",
-              fontWeight: 500,
-              color: palette.muted,
-              lineHeight: 1.55,
-              maxWidth: "28rem",
-              marginLeft: "auto",
-              marginRight: "auto",
-            }}
-          >
-            {LIVE_UX_BODY_JOIN_AFTER_RESULTS}
-          </p>
-        </>
-      );
-    } else if (scene === "closed") {
-      corps = (
-        <>
-          <p style={{ margin: 0, ...joinBadgeEtat }}>{joinPres.title}</p>
           <p
             style={{
               margin: "0.85rem 0 0 0",
@@ -1162,31 +1021,27 @@ export function JoinLiveHub({ slug }) {
               marginRight: "auto",
             }}
           >
-            {LIVE_UX_BODY_CLOSED_WAIT_RESULTS}
+            Impossible de rejoindre le vote pour le moment. Réessaie plus tard ou demande à l’organisateur.
           </p>
-          {activePollQuestion ? (
-            <h2
-              style={{
-                margin: "1rem 0 0 0",
-                fontSize: `clamp(${1.05 * joinVisualTokens.titleClampMul}rem, ${3.6 * joinVisualTokens.titleClampMul}vw, ${1.4 * joinVisualTokens.titleClampMul}rem)`,
-                fontWeight: 700,
-                lineHeight: 1.35,
-                color: palette.fg2,
-              }}
-            >
-              {activePollQuestion}
-            </h2>
-          ) : null}
-          <div style={{ marginTop: "1.35rem" }}>
-            <AttenteAnimee
-              accent={accent}
-              pulseAllowed={joinVisualTokens.pulseAllowed}
-            />
-          </div>
         </>
       );
-    } else if (scene === "paused") {
+    } else if (isFinishedUx) {
+      // G15 — contrat resolveJoinFinishedCardContent : 1 seul « Merci… », pas eyebrow/body.
       corps = (
+        <p
+          style={{
+            margin: 0,
+            fontSize: `clamp(${1.2 * joinVisualTokens.titleClampMul}rem, ${4 * joinVisualTokens.titleClampMul}vw, ${1.65 * joinVisualTokens.titleClampMul}rem)`,
+            fontWeight: joinVisualTokens.stateBadgeWeight,
+            lineHeight: 1.4,
+            color: palette.fg2,
+            letterSpacing: "-0.02em",
+          }}
+        >
+          {finishedCardContent.title}
+        </p>
+      );
+    } else if (scene === "paused") {      corps = (
         <>
           <p
             style={{
@@ -1291,17 +1146,12 @@ export function JoinLiveHub({ slug }) {
         }
         @media (max-width: 640px) {
           .join-live-zone {
-            padding: 0.75rem 0.8rem 1.25rem !important;
+            padding: 0.75rem 0.8rem max(1.25rem, env(safe-area-inset-bottom, 0px)) !important;
           }
           .join-live-card {
             max-width: 100% !important;
             padding: 1rem 0.9rem !important;
             border-radius: 16px !important;
-          }
-          .join-live-cta {
-            max-width: 100% !important;
-            min-height: 50px !important;
-            font-size: 1rem !important;
           }
           .join-landing-link-label-long {
             display: none !important;
@@ -1314,6 +1164,31 @@ export function JoinLiveHub({ slug }) {
           display: none;
         }
       `}</style>
+
+      {!loading && !error && isLiveConsumed === false ? (
+        <div
+          style={{
+            position: "fixed",
+            top: "max(14px, env(safe-area-inset-top, 0px))",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 2147483646,
+            pointerEvents: "none",
+            background: "rgba(0,0,0,0.55)",
+            color: "#f8fafc",
+            border: "1px solid rgba(148,163,184,0.35)",
+            borderRadius: 9999,
+            padding: "0.35rem 0.8rem",
+            fontWeight: 900,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            fontSize: "0.78rem",
+          }}
+          aria-label="Mode test"
+        >
+          MODE TEST
+        </div>
+      ) : null}
 
       <ExperienceHeader
         backHref="/"
@@ -1460,6 +1335,51 @@ export function JoinLiveHub({ slug }) {
       </ExperienceHeader>
 
       <div className="join-live-zone" style={zoneMain}>
+        {isOffline && !loading ? (
+          <div
+            role="status"
+            style={{
+              width: "100%",
+              maxWidth: "min(36rem, 100%)",
+              marginBottom: "0.85rem",
+              padding: "0.85rem 1rem",
+              borderRadius: "14px",
+              border: isDark
+                ? "1px solid rgba(251, 191, 36, 0.4)"
+                : "1px solid rgba(217, 119, 6, 0.35)",
+              background: isDark
+                ? "rgba(120, 53, 15, 0.35)"
+                : "rgba(254, 243, 199, 0.95)",
+              color: isDark ? "#fde68a" : "#92400e",
+              boxSizing: "border-box",
+              textAlign: "center",
+            }}
+          >
+            <p style={{ margin: 0, fontWeight: 700, fontSize: "0.95rem" }}>
+              {getParticipantOfflineLabel()}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                void fetchMeta();
+              }}
+              style={{
+                marginTop: "0.65rem",
+                minHeight: "44px",
+                padding: "0.55rem 1.1rem",
+                borderRadius: "10px",
+                border: "none",
+                fontWeight: 700,
+                cursor: "pointer",
+                background: accent,
+                color: "#fff",
+              }}
+            >
+              Réessayer
+            </button>
+          </div>
+        ) : null}
+
         {loading ? (
           <div className="join-live-card" style={carteCentral}>
             <p
@@ -1483,20 +1403,58 @@ export function JoinLiveHub({ slug }) {
           </div>
         ) : null}
 
-        {!loading && !error && corps ? (
+        {!loading && !error && embedPollSurface ? (
+          <div
+            style={{
+              width: "100%",
+              display: "flex",
+              justifyContent: "center",
+              boxSizing: "border-box",
+            }}
+          >
+            <PollExperience
+              key={`room-poll-${activePollId || "live"}`}
+              getPollUrl={getPollUrlForRoom}
+              titrePage={eventTitle || "Salle live"}
+              slugPublic={slug}
+              embedded
+              parentSocketOnline={socketOnline}
+              parentLiveRevision={liveSyncRevision}
+              parentPollSnapshot={embeddedPollSnapshot}
+              parentPollRevision={embeddedPollRevision}
+              parentEventId={eventId}
+              parentLiveState={liveState}
+              parentVoteState={voteState}
+              parentDisplayState={displayState}
+              parentIsLocked={isLocked}
+              parentPrimaryColor={effectivePrimaryColor}
+              parentThemeMode={effectiveThemeMode}
+              parentOverlayStrength={effectiveOverlayStrength}
+            />
+          </div>
+        ) : null}
+
+        {!loading && !error && !embedPollSurface && corps ? (
           <div className="join-live-card" style={carteCentral}>
-            <div
-              className="text-center text-sm opacity-80 mb-2"
-              style={{
-                textAlign: "center",
-                fontSize: "0.86rem",
-                opacity: 0.82,
-                marginBottom: "0.5rem",
-                color: palette.muted,
-              }}
-            >
-              {ux.label}
-            </div>
+            {/*
+              G15 — l’eyebrow reprenait le même libellé FINISHED au-dessus du corps
+              (titre + ancien sous-texte redondant identique).
+              En FINISHED : jamais d’eyebrow (contrat resolveJoinFinishedCardContent).
+            */}
+            {!isFinishedUx ? (
+              <div
+                className="text-center text-sm opacity-80 mb-2"
+                style={{
+                  textAlign: "center",
+                  fontSize: "0.86rem",
+                  opacity: 0.82,
+                  marginBottom: "0.5rem",
+                  color: palette.muted,
+                }}
+              >
+                {joinPres.title}
+              </div>
+            ) : null}
             {corps}
           </div>
         ) : null}

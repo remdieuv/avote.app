@@ -124,7 +124,7 @@ model Event {
   screenDisplayState DisplayState?
   /** Participants peuvent voter (indépendant de displayState) */
   voteState    VoteState    @default(CLOSED)
-  /** Révélation automatique des résultats après fermeture du vote (délai en secondes) */
+  /** Affichage automatique des résultats après fermeture du vote (délai en secondes) */
   autoReveal             Boolean   @default(false)
   autoRevealDelaySec     Int       @default(5)
   /** Quand défini, projection / public : compte à rebours jusqu’à passage display RESULTS */
@@ -230,23 +230,34 @@ model ContestDraw {
   @@index([eventId, createdAt])
 }
 
-model ContestDrawWinner {
-  id             String      @id @default(cuid())
-  drawId         String
-  pollId         String
-  voterSessionId String
-  position       Int         @default(0)
-  firstName      String
-  phone          String
-  email          String?
-  createdAt      DateTime    @default(now())
+enum ContestWinnerStatus {
+  ACTIVE
+  REPLACED
+}
 
-  draw           ContestDraw @relation(fields: [drawId], references: [id], onDelete: Cascade)
-  poll           Poll        @relation(fields: [pollId], references: [id], onDelete: Cascade)
+model ContestDrawWinner {
+  id                 String               @id @default(cuid())
+  drawId             String
+  pollId             String
+  voterSessionId     String
+  position           Int                  @default(0)
+  firstName          String
+  lastName           String?
+  phone              String
+  email              String?
+  /** ACTIVE = gagnant courant ; REPLACED = historique (non affiché publiquement). */
+  status             ContestWinnerStatus  @default(ACTIVE)
+  replacedAt         DateTime?
+  replacedByWinnerId String?
+  createdAt          DateTime             @default(now())
+
+  draw               ContestDraw          @relation(fields: [drawId], references: [id], onDelete: Cascade)
+  poll               Poll                 @relation(fields: [pollId], references: [id], onDelete: Cascade)
 
   @@unique([drawId, position])
   @@unique([pollId, voterSessionId])
   @@index([pollId, createdAt])
+  @@index([pollId, status])
 }
 
 model PollOption {
@@ -282,6 +293,7 @@ model LeadCapture {
   pollId         String
   voterSessionId String
   firstName      String
+  lastName       String?
   phone          String
   email          String?
   createdAt      DateTime @default(now())

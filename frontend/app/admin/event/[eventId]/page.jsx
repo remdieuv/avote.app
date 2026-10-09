@@ -24,18 +24,43 @@ import {
   getEventUxSceneBadgeFromKey,
   getEventUxState,
 } from "@/lib/eventUxState";
+import {
+  getRegieDisplayStateLabel,
+  getRegieIdleProjectionHint,
+} from "@/lib/regieProjectionLabels";
+import {
+  CONTEST_WINNER_STATUS_REPLACED,
+  canOfferContestWinnerReplace,
+  filterActiveContestWinners,
+  normalizeContestWinnerStatus,
+  shouldScheduleAutoRevealForPoll,
+} from "@/lib/leadContestLiveFlow";
+import {
+  REGIE_ZONE_PILOTAGE,
+  REGIE_ZONE_PROJECTION_AVANCEE,
+  getRegieAllowedLiveActions,
+  getRegiePollStatusLabel,
+  getRegiePollTypeLabel,
+  getRegieOpenVoteButtonCopy,
+  getRegiePrimaryLiveAction,
+  getRegiePrimaryLiveActionLabel,
+  getRegieQuestionNumberLabel,
+  isRegieConsultSelectionOnly,
+  sortPollsByPlaylistOrder,
+} from "@/lib/regieDesktopLayout";
+import {
+  normalizePollOptions,
+  optionVoteCount,
+} from "@/lib/normalizeLivePayload";
+import {
+  canOfferReplayTestPoll,
+  getReplayTestPollBlockedLabel,
+  getReplayTestPollConfirmMessage,
+} from "@/lib/testModeReplayPoll";
 
 const VOTE_STATE_LABELS = {
   open: "Vote ouvert",
   closed: "Vote fermé",
-};
-
-const DISPLAY_STATE_LABELS = {
-  question: "Question (réponses à l’écran)",
-  results: "Résultats (barres)",
-  black: "Pause",
-  waiting:
-    "Attente — la salle ne voit rien. Relancez la projection : « Afficher la question » ou « Afficher les résultats en direct ».",
 };
 
 const AUTO_ROTATE_SEC_MIN = 3;
@@ -254,9 +279,10 @@ function isStandardPoll(poll) {
 }
 
 function pollKindStyle(poll) {
+  const label = getRegiePollTypeLabel(poll);
   if (isContestPoll(poll)) {
     return {
-      label: "Concours",
+      label,
       bg: "#faf5ff",
       border: "#d8b4fe",
       color: "#6d28d9",
@@ -265,7 +291,7 @@ function pollKindStyle(poll) {
   }
   if (isLeadPoll(poll)) {
     return {
-      label: "Lead",
+      label,
       bg: "#ecfeff",
       border: "#99f6e4",
       color: "#0f766e",
@@ -274,24 +300,24 @@ function pollKindStyle(poll) {
   }
   if (isQuizPoll(poll)) {
     return {
-      label: "Quiz",
+      label,
       bg: "#ecfdf5",
       border: "#86efac",
       color: "#166534",
       cardBg: "#f7fff9",
     };
   }
-  if (isStandardPoll(poll)) {
+  if (String(poll?.type || "").toUpperCase() === "MULTIPLE_CHOICE") {
     return {
-      label: "Question",
-      bg: "#f8fafc",
-      border: "#cbd5e1",
-      color: "#475569",
-      cardBg: "#ffffff",
+      label,
+      bg: "#eff6ff",
+      border: "#93c5fd",
+      color: "#1d4ed8",
+      cardBg: "#f8fbff",
     };
   }
   return {
-    label: "Question",
+    label,
     bg: "#f8fafc",
     border: "#cbd5e1",
     color: "#475569",
@@ -313,9 +339,10 @@ function formatContestDrawSummary(summary, poll) {
 
 function formatWinnerName(winner) {
   const first = String(winner?.firstName || "").trim();
-  if (!first) return "Participant";
-  const initial = first.charAt(0).toUpperCase();
-  return `${first} ${initial}.`;
+  const last = String(winner?.lastName || "").trim();
+  if (first && last) return `${first} ${last[0].toUpperCase()}.`;
+  if (first) return first;
+  return "Participant";
 }
 
 function maskPhone(phoneRaw) {
@@ -344,20 +371,48 @@ function PollCard({
   activePollId,
   /** État vote événement (open | closed) — la question peut être ACTIVE sans vote ouvert */
   voteState,
+  displayState = null,
   onOpen,
   onCloseRegie,
   onResults,
-  onReveal,
   onContestShortcut,
   onLeadShortcut,
   onEdit,
   contestDrawSummary,
   desktop,
   compact = false,
+  /**
+   * LOT-3 — false = carte Questions (info + Modifier / leads CRM).
+   * Les actions Live restent uniquement dans le Pilotage central.
+   */
+  liveActions = true,
+  /** LOT-3 QA — sélection playlist (consultation) distincte de l’antenne. */
+  isSelected = false,
+  onSelect = null,
+  /** Libellé « Question N/Total » (ordre playlist). */
+  questionNumberLabel = null,
 }) {
-  const badge = badgeStyle(poll.status);
+  const statusLabel = getRegiePollStatusLabel({
+    pollStatus: poll.status,
+    isActive,
+    voteState: isActive ? voteState : null,
+    displayState: isActive ? displayState : null,
+    pollType: poll.type,
+    leadEnabled: poll.leadEnabled,
+  });
+  const badge = badgeStyle(
+    statusLabel === "En cours"
+      ? "ACTIVE"
+      : statusLabel === "Résultats" || statusLabel === "Tirage"
+        ? "SCHEDULED"
+        : statusLabel === "Fermée" || statusLabel === "Terminée"
+          ? "CLOSED"
+          : statusLabel === "En attente d'ouverture"
+            ? "SCHEDULED"
+            : "DRAFT",
+  );
   const kind = pollKindStyle(poll);
-  const scene = String(liveState || "").toLowerCase();
+  void liveState;
   const voteOuvertSurCeSondage =
     String(activePollId || "") === String(poll.id) &&
     String(voteState || "").toLowerCase().trim() === "open";
@@ -366,14 +421,19 @@ function PollCard({
     poll.status === "ARCHIVED" ||
     voteOuvertSurCeSondage;
   const disableStop = busy || poll.status !== "ACTIVE";
-  const disableResultats = busy;
-  const disableRevealQuiz =
-    busy ||
-    !isQuizPoll(poll) ||
-    String(voteState || "").toLowerCase().trim() !== "closed" ||
-    Boolean(poll?.quizRevealed);
+  const isLeadOrContest = isLeadPoll(poll) || isContestPoll(poll);
+  /** LOT-2 — Afficher hors parcours principal Lead / Concours. */
+  const disableResultats = busy || isLeadOrContest;
+  const resultsButtonTitle = isLeadOrContest
+    ? isContestPoll(poll)
+      ? "Concours : utilisez « Tirer un gagnant » après fermeture (pas d’Afficher)."
+      : "Lead : collecte CRM sans résultats publics. Consultez « Voir les leads »."
+    : isQuizPoll(poll)
+      ? "Affiche les résultats finaux à la salle et à l’écran. Si le vote est fermé, révèle aussi la bonne réponse et le verdict participant."
+      : "Affiche les résultats finaux à la salle et à l’écran (le vote peut rester ouvert).";
+  const contestDrawDisabled = busy || voteOuvertSurCeSondage;
 
-  const boutons = (
+  const boutons = liveActions ? (
     <>
       <button
         type="button"
@@ -386,7 +446,7 @@ function PollCard({
             : undefined
         }
       >
-        Lancer le vote
+        Ouvrir
       </button>
       <button
         type="button"
@@ -399,38 +459,36 @@ function PollCard({
             : undefined
         }
       >
-        Stop vote
+        Fermer
       </button>
-      <button
-        type="button"
-        disabled={disableResultats}
-        onClick={() => onResults(poll.id)}
-        style={btnAfficherResultats(disableResultats)}
-        title="Affiche les barres à la salle. Même commande que « Afficher les résultats en direct » (le vote peut rester ouvert)."
-      >
-        Projeter les résultats finaux
-      </button>
-      <button
-        type="button"
-        disabled={disableRevealQuiz}
-        onClick={() => onReveal?.(poll.id)}
-        style={btnAfficherResultats(disableRevealQuiz)}
-        title="Révèle la bonne réponse du quiz (uniquement vote fermé)."
-      >
-        Révéler la réponse
-      </button>
+      {!isLeadOrContest ? (
+        <button
+          type="button"
+          disabled={disableResultats}
+          onClick={() => onResults(poll.id)}
+          style={btnAfficherResultats(disableResultats)}
+          title={resultsButtonTitle}
+        >
+          Afficher les résultats
+        </button>
+      ) : null}
     </>
-  );
+  ) : null;
 
-  const quickAction = isContestPoll(poll) ? (
+  const quickAction =
+    liveActions && isContestPoll(poll) ? (
     <button
       type="button"
-      disabled={busy}
+      disabled={contestDrawDisabled}
       onClick={() => onContestShortcut?.(poll)}
-      style={btnSecondaryAction(busy)}
-      title="Raccourci vers le tirage concours"
+      style={btnSecondaryAction(contestDrawDisabled)}
+      title={
+        voteOuvertSurCeSondage
+          ? "Fermez d’abord les participations avant de tirer au sort."
+          : "Raccourci vers le tirage concours"
+      }
     >
-      Tirer un gagnant
+      Tirer au sort
     </button>
   ) : isLeadPoll(poll) ? (
     <button
@@ -482,6 +540,23 @@ function PollCard({
           Antenne
         </span>
       ) : null}
+      {isSelected && !isActive ? (
+        <span
+          title="Question consultée dans la régie (sans effet sur l’antenne)."
+          style={{
+            fontSize: "0.6rem",
+            fontWeight: 800,
+            letterSpacing: "0.06em",
+            padding: "0.16rem 0.45rem",
+            borderRadius: "999px",
+            background: "#fef3c7",
+            color: "#92400e",
+            border: "1px solid #fde68a",
+          }}
+        >
+          Consultation
+        </span>
+      ) : null}
       <span
         style={{
           fontSize: "0.7rem",
@@ -493,10 +568,10 @@ function PollCard({
           border: `1px solid ${badge.border}`,
         }}
       >
-        {poll.status}
+        {statusLabel}
       </span>
-      <span style={{ fontSize: "0.78rem", color: "#6b7280" }}>
-        Ordre {poll.order} · {poll.type}
+      <span style={{ fontSize: "0.78rem", color: "#6b7280", fontWeight: 700 }}>
+        {questionNumberLabel || `Ordre ${poll.order}`}
       </span>
       <span
         style={{
@@ -569,21 +644,60 @@ function PollCard({
   );
 
   if (compact) {
+    const selectable = typeof onSelect === "function";
+    const compactBorder = isSelected
+      ? "1px solid rgba(217, 119, 6, 0.55)"
+      : isActive
+        ? "1px solid rgba(59, 130, 246, 0.35)"
+        : PREMIUM_BORDER;
+    const compactBg = isSelected
+      ? "linear-gradient(180deg, rgba(255, 251, 235, 0.98) 0%, #ffffff 100%)"
+      : isActive
+        ? "linear-gradient(180deg, rgba(239, 246, 255, 0.96) 0%, #ffffff 100%)"
+        : "#ffffff";
+    const compactShadow = isSelected
+      ? "0 14px 28px rgba(217, 119, 6, 0.12)"
+      : isActive
+        ? "0 16px 30px rgba(37, 99, 235, 0.10)"
+        : "0 8px 20px rgba(15, 23, 42, 0.04)";
     return (
       <div
         id={`regie-poll-${poll.id}`}
+        role={selectable ? "button" : undefined}
+        tabIndex={selectable ? 0 : undefined}
+        aria-pressed={selectable ? isSelected : undefined}
+        aria-label={
+          selectable
+            ? `Consulter ${questionNumberLabel || "cette question"} — ${poll.question || poll.title || ""}`
+            : undefined
+        }
+        onClick={
+          selectable
+            ? () => {
+                onSelect(poll.id);
+              }
+            : undefined
+        }
+        onKeyDown={
+          selectable
+            ? (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelect(poll.id);
+                }
+              }
+            : undefined
+        }
         style={{
-          border: isActive ? "1px solid rgba(59, 130, 246, 0.35)" : PREMIUM_BORDER,
+          border: compactBorder,
           borderRadius: "16px",
           padding: "0.68rem 0.72rem",
           marginBottom: "0.5rem",
-          background: isActive
-            ? "linear-gradient(180deg, rgba(239, 246, 255, 0.96) 0%, #ffffff 100%)"
-            : "#ffffff",
-          boxShadow: isActive
-            ? "0 16px 30px rgba(37, 99, 235, 0.10)"
-            : "0 8px 20px rgba(15, 23, 42, 0.04)",
-          cursor: "default",
+          background: compactBg,
+          boxShadow: compactShadow,
+          cursor: selectable ? "pointer" : "default",
+          outline: isSelected ? "2px solid rgba(245, 158, 11, 0.35)" : "none",
+          outlineOffset: isSelected ? "1px" : undefined,
         }}
       >
         <div
@@ -595,9 +709,19 @@ function PollCard({
             marginBottom: "0.2rem",
           }}
         >
+          <span
+            style={{
+              fontSize: "0.62rem",
+              fontWeight: 800,
+              color: "#334155",
+              letterSpacing: "0.02em",
+            }}
+          >
+            {questionNumberLabel || `Ordre ${poll.order}`}
+          </span>
           {isActive ? (
             <span
-              title="Question reliée à l’événement (voir carte étendue)."
+              title="Question à l’antenne (pilotage live). Distinct de la consultation."
               style={{
                 fontSize: "0.56rem",
                 fontWeight: 800,
@@ -612,6 +736,23 @@ function PollCard({
               Antenne
             </span>
           ) : null}
+          {isSelected && !isActive ? (
+            <span
+              title="Consultation régie — aucun effet sur la salle / Screen / Overlay."
+              style={{
+                fontSize: "0.56rem",
+                fontWeight: 800,
+                letterSpacing: "0.05em",
+                padding: "0.13rem 0.4rem",
+                borderRadius: "999px",
+                background: "#fef3c7",
+                color: "#92400e",
+                border: "1px solid #fde68a",
+              }}
+            >
+              Consultation
+            </span>
+          ) : null}
           <span
             style={{
               fontSize: "0.62rem",
@@ -623,7 +764,7 @@ function PollCard({
               border: `1px solid ${badge.border}`,
             }}
           >
-            {poll.status}
+            {statusLabel}
           </span>
           <span style={{ fontSize: "0.68rem", color: "#6b7280", marginLeft: "auto" }}>
             <strong style={{ color: "#374151" }}>{poll.voteCount ?? 0}</strong> vote
@@ -653,70 +794,80 @@ function PollCard({
             gap: "0.3rem",
             marginTop: "0.4rem",
           }}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
         >
-          <button
-            type="button"
-            disabled={disableLancer}
-            onClick={() => onOpen(poll.id)}
-            style={{
-              ...btnLancerVote(disableLancer),
-              width: "100%",
-              padding: "0.38rem 0.5rem",
-              fontSize: "0.72rem",
-            }}
-          >
-            Lancer le vote
-          </button>
-          <button
-            type="button"
-            disabled={disableStop}
-            onClick={() => onCloseRegie(poll.id)}
-            style={{
-              ...btnStopVote(disableStop),
-              width: "100%",
-              padding: "0.38rem 0.5rem",
-              fontSize: "0.72rem",
-            }}
-          >
-            Stop vote
-          </button>
-          <button
-            type="button"
-            disabled={disableResultats}
-            onClick={() => onResults(poll.id)}
-            title="Affiche les barres à la salle. Même commande que « Afficher les résultats en direct »."
-            style={{
-              ...btnAfficherResultats(disableResultats),
-              width: "100%",
-              padding: "0.38rem 0.5rem",
-              fontSize: "0.72rem",
-            }}
-          >
-            Projeter les résultats finaux
-          </button>
-          <button
-            type="button"
-            disabled={disableRevealQuiz}
-            onClick={() => onReveal?.(poll.id)}
-            title="Révèle la bonne réponse du quiz (uniquement vote fermé)."
-            style={{
-              ...btnAfficherResultats(disableRevealQuiz),
-              width: "100%",
-              padding: "0.38rem 0.5rem",
-              fontSize: "0.72rem",
-            }}
-          >
-            Révéler la réponse
-          </button>
-          {quickAction ? (
+          {liveActions ? (
+            <>
+              <button
+                type="button"
+                disabled={disableLancer}
+                onClick={() => onOpen(poll.id)}
+                style={{
+                  ...btnLancerVote(disableLancer),
+                  width: "100%",
+                  padding: "0.38rem 0.5rem",
+                  fontSize: "0.72rem",
+                }}
+              >
+                Ouvrir
+              </button>
+              <button
+                type="button"
+                disabled={disableStop}
+                onClick={() => onCloseRegie(poll.id)}
+                style={{
+                  ...btnStopVote(disableStop),
+                  width: "100%",
+                  padding: "0.38rem 0.5rem",
+                  fontSize: "0.72rem",
+                }}
+              >
+                Fermer
+              </button>
+              {!isLeadOrContest ? (
+                <button
+                  type="button"
+                  disabled={disableResultats}
+                  onClick={() => onResults(poll.id)}
+                  title={resultsButtonTitle}
+                  style={{
+                    ...btnAfficherResultats(disableResultats),
+                    width: "100%",
+                    padding: "0.38rem 0.5rem",
+                    fontSize: "0.72rem",
+                  }}
+                >
+                  Afficher les résultats
+                </button>
+              ) : null}
+              {isContestPoll(poll) ? (
+                <button
+                  type="button"
+                  disabled={contestDrawDisabled}
+                  onClick={() => onContestShortcut?.(poll)}
+                  style={{
+                    ...btnSecondaryAction(contestDrawDisabled),
+                    width: "100%",
+                    padding: "0.38rem 0.5rem",
+                    fontSize: "0.72rem",
+                  }}
+                  title={
+                    voteOuvertSurCeSondage
+                      ? "Fermez d’abord les participations avant de tirer au sort."
+                      : undefined
+                  }
+                >
+                  Tirer au sort
+                </button>
+              ) : null}
+            </>
+          ) : null}
+          {isLeadPoll(poll) ? (
             <button
               type="button"
               disabled={busy}
-              onClick={() =>
-                isContestPoll(poll)
-                  ? onContestShortcut?.(poll)
-                  : onLeadShortcut?.(poll)
-              }
+              onClick={() => onLeadShortcut?.(poll)}
               style={{
                 ...btnSecondaryAction(busy),
                 width: "100%",
@@ -724,7 +875,7 @@ function PollCard({
                 fontSize: "0.72rem",
               }}
             >
-              {isContestPoll(poll) ? "Tirer un gagnant" : "Voir les leads"}
+              Voir les leads
             </button>
           ) : null}
           {editAction ? (
@@ -1221,6 +1372,8 @@ function RegieAutoRotatePanel({
  *   autoRotateResultsSec: number;
  *   onAutoRotateQuestionSecChange: (n: number) => void;
  *   onAutoRotateResultsSecChange: (n: number) => void;
+ *   activePollType?: string | null;
+ *   activePollLeadEnabled?: boolean | null;
  * }} props
  */
 function BlocProjectionEcran({
@@ -1243,6 +1396,8 @@ function BlocProjectionEcran({
   autoRotateResultsSec,
   onAutoRotateQuestionSecChange,
   onAutoRotateResultsSecChange,
+  activePollType = null,
+  activePollLeadEnabled = null,
 }) {
   const [clientPret, setClientPret] = useState(false);
   const [projectionMode, setProjectionMode] = useState("standard");
@@ -1341,12 +1496,14 @@ function BlocProjectionEcran({
         : screenMainConnected
           ? statutEcranPrincipal
           : statutEcranB;
-  const affichageStandardLabel =
-    DISPLAY_STATE_LABELS[d] ?? String(d || "waiting").toUpperCase();
+  const regiePollContext = {
+    pollType: activePollType,
+    leadEnabled: activePollLeadEnabled,
+  };
+  const affichageStandardLabel = getRegieDisplayStateLabel(d, regiePollContext);
   const ecranBDisplayLower = String(screenBDisplayState || "").toLowerCase();
   const affichageBLabel = screenBConnected
-    ? (DISPLAY_STATE_LABELS[ecranBDisplayLower] ??
-      String(ecranBDisplayLower || "waiting").toUpperCase())
+    ? getRegieDisplayStateLabel(ecranBDisplayLower, regiePollContext)
     : "Non connecté";
   const styleBadgeAffichage = (state) => {
     const s = String(state || "").toLowerCase();
@@ -2536,6 +2693,16 @@ function CopierLienEcranLeger({ slug }) {
       >
         Projection salle
       </p>
+      <p
+        style={{
+          margin: "0 0 0.4rem 0",
+          fontSize: "0.66rem",
+          color: "#64748b",
+          lineHeight: 1.35,
+        }}
+      >
+        TV / vidéoprojecteur — distinct de l’overlay OBS.
+      </p>
       <button
         type="button"
         onClick={() => void copier()}
@@ -2647,14 +2814,34 @@ function BlocOverlayStreamPresets({ slug, onCopied }) {
       </p>
       <p
         style={{
-          margin: "0 0 0.5rem 0",
+          margin: "0 0 0.35rem 0",
           fontSize: "0.7rem",
           color: "#64748b",
           lineHeight: 1.35,
         }}
       >
-        Utilisable dans OBS, streaming ou affichage discret.
+        Fond transparent pour OBS / Twitch — distinct de l’écran salle.
       </p>
+      <ol
+        style={{
+          margin: "0 0 0.55rem 0",
+          padding: "0.45rem 0.55rem 0.45rem 1.35rem",
+          borderRadius: "12px",
+          border: "1px solid rgba(148, 163, 184, 0.28)",
+          background: "rgba(248, 250, 252, 0.72)",
+          fontSize: "0.68rem",
+          color: "#475569",
+          lineHeight: 1.45,
+        }}
+      >
+        <li style={{ marginBottom: "0.15rem" }}>
+          Copier l’URL Overlay (Stream compact)
+        </li>
+        <li style={{ marginBottom: "0.15rem" }}>
+          Ajouter une Source Navigateur dans OBS
+        </li>
+        <li>Coller l’URL et vérifier la transparence</li>
+      </ol>
       {principal ? (
         <div
           style={{
@@ -3129,6 +3316,16 @@ function SidebarPartageDroit({
           <p style={{ margin: 0, fontSize: "0.66rem", color: "#64748b", lineHeight: 1.35 }}>
             QR et liens pour votre audience
           </p>
+          <p
+            style={{
+              margin: "0.28rem 0 0 0",
+              fontSize: "0.64rem",
+              color: "#64748b",
+              lineHeight: 1.35,
+            }}
+          >
+            Écran = salle / TV · Overlay = fond transparent OBS
+          </p>
         </div>
       ) : null}
       <BlocOverlayStreamPresets slug={slug} onCopied={onOverlayCopied} />
@@ -3550,7 +3747,8 @@ function RegiePublicPreviewPanel({
 }
 
 /**
- * Option auto-reveal : délai après fermeture du vote avant passage écran résultats.
+ * Option affichage auto des résultats : délai après fermeture du vote
+ * (même logique métier que « Afficher les résultats »).
  * @param {{ embedded?: boolean; embeddedDividerAbove?: boolean }} props
  */
 function RegieAutoRevealCard({
@@ -3643,7 +3841,7 @@ function RegieAutoRevealCard({
             <span aria-hidden style={{ marginRight: "0.28rem" }}>
               ⏱
             </span>
-            Révélation automatique des résultats
+            Affichage automatique des résultats
           </p>
           <p
             style={{
@@ -3654,7 +3852,8 @@ function RegieAutoRevealCard({
               lineHeight: 1.45,
             }}
           >
-            Affiche automatiquement les résultats après la fermeture du vote.
+            Affiche automatiquement les résultats après la fermeture du vote
+            (même action que « Afficher les résultats »).
           </p>
         </div>
         <label
@@ -3665,7 +3864,11 @@ function RegieAutoRevealCard({
             cursor: busy ? "wait" : "pointer",
             marginTop: "0.1rem",
           }}
-          title={enabled ? "Désactiver la révélation automatique" : "Activer la révélation automatique"}
+          title={
+            enabled
+              ? "Désactiver l’affichage automatique"
+              : "Activer l’affichage automatique"
+          }
         >
           <input
             type="checkbox"
@@ -3687,7 +3890,7 @@ function RegieAutoRevealCard({
               whiteSpace: "nowrap",
               border: 0,
             }}
-            aria-label="Révélation automatique des résultats"
+            aria-label="Affichage automatique des résultats"
           />
           <span
             aria-hidden
@@ -4435,6 +4638,8 @@ export default function RegieEventPage() {
   const [autoRotateQuestionSec, setAutoRotateQuestionSec] = useState(10);
   const [autoRotateResultsSec, setAutoRotateResultsSec] = useState(5);
   const [addQuestionModalOpen, setAddQuestionModalOpen] = useState(false);
+  /** LOT-3 QA — sélection playlist (consultation) ; jamais liée aux sockets / antenne. */
+  const [selectedPollId, setSelectedPollId] = useState(/** @type {string | null} */ (null));
   const [toastNotif, setToastNotif] = useState(/** @type {string | null} */ (null));
   const [newLeadCount, setNewLeadCount] = useState(0);
   const [contestEligibleCount, setContestEligibleCount] = useState(0);
@@ -4443,6 +4648,8 @@ export default function RegieEventPage() {
     /** @type {string | null} */ (null),
   );
   const [contestDrawModalOpen, setContestDrawModalOpen] = useState(false);
+  const [contestReplaceModalOpen, setContestReplaceModalOpen] = useState(false);
+  const [contestReplaceWinnerId, setContestReplaceWinnerId] = useState("");
   const [contestDrawResult, setContestDrawResult] = useState(
     /** @type {{
      *   pollId: string;
@@ -4455,7 +4662,7 @@ export default function RegieEventPage() {
     /** @type {Record<string, { totalDraws: number; totalWinners: number; contestWinnerCount: number }>} */ ({}),
   );
   const [contestWinners, setContestWinners] = useState(
-    /** @type {{ id: string; drawId: string; position: number; firstName: string; phone: string; email: string | null; createdAt: string }[]} */ ([]),
+    /** @type {{ id: string; drawId: string; position: number; firstName: string; lastName: string | null; phone: string; email: string | null; status: string; createdAt: string }[]} */ ([]),
   );
   const [contestWinnersLoading, setContestWinnersLoading] = useState(false);
   const [contestWinnersError, setContestWinnersError] = useState(
@@ -4635,8 +4842,10 @@ export default function RegieEventPage() {
         drawId: String(w?.drawId || ""),
         position: Number(w?.position || 1),
         firstName: String(w?.firstName || ""),
+        lastName: w?.lastName ? String(w.lastName) : null,
         phone: String(w?.phone || ""),
         email: w?.email ? String(w.email) : null,
+        status: normalizeContestWinnerStatus(w?.status),
         createdAt: String(w?.createdAt || ""),
       }));
     } catch {
@@ -5027,6 +5236,31 @@ export default function RegieEventPage() {
       if (!data?.id) return;
       if (!eventPollIdsRef.current.has(String(data.id))) return;
       loadPollAbortRef.current?.abort();
+      // Merge immédiat pour « Réponses en direct » ; refetch réconcilie (totaux bruts régie).
+      // En TEST+RESULTS, pollToJson peut masker : ne pas écraser les totaux régie.
+      setEventData((prev) => {
+        if (!prev?.polls) return prev;
+        const inTestResults =
+          prev.isLiveConsumed === false &&
+          String(prev.displayState || "").toLowerCase() === "results";
+        if (inTestResults) return prev;
+        return {
+          ...prev,
+          polls: prev.polls.map((p) => {
+            if (String(p.id) !== String(data.id)) return p;
+            const opts = normalizePollOptions(data.options);
+            return {
+              ...p,
+              options: opts,
+              voteCount: opts.reduce((a, o) => a + optionVoteCount(o), 0),
+              contestWinnersCount:
+                data.contestWinnersCount != null
+                  ? Math.max(0, Number(data.contestWinnersCount) || 0)
+                  : p.contestWinnersCount,
+            };
+          }),
+        };
+      });
       void fetchEvent({ silent: true });
     }
 
@@ -5195,7 +5429,7 @@ export default function RegieEventPage() {
     const planLabel = planType === "FUN" ? "FUN (100 participants max)" : "EVENT (500 participants max)";
     if (typeof window !== "undefined") {
       const ok = window.confirm(
-        `Passer en live réel avec la formule ${planType} ?\n\n1 activation sera consommée (${planLabel}). Vous obtiendrez des résultats exacts, le chrono libre et les exports.`,
+        `Passer en live réel avec la formule ${planType} ?\n\n1 activation sera consommée (${planLabel}). Les données de la répétition (votes, leads, tirages) sont conservées ; les totaux RESULTS ne seront plus masqués et les exports seront disponibles.`,
       );
       if (!ok) return;
     }
@@ -5388,19 +5622,82 @@ export default function RegieEventPage() {
     }
   }
 
+  async function postContestReplaceWinner(pollId, winnerId) {
+    const pid = String(pollId || "").trim();
+    const wid = String(winnerId || "").trim();
+    if (!pid || !wid) return false;
+    setBusy(true);
+    setActionError(null);
+    try {
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/polls/${encodeURIComponent(pid)}/winners/${encodeURIComponent(wid)}/replace`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(mapApiError(body, res.status));
+      }
+      setContestReplaceModalOpen(false);
+      setContestReplaceWinnerId("");
+      const newWinner = body?.winner || null;
+      setContestDrawResult({
+        pollId: pid,
+        drawId: String(body?.drawId || ""),
+        winner: newWinner
+          ? {
+              firstName: String(newWinner.firstName || ""),
+              phone: String(newWinner.phone || ""),
+              email: newWinner.email ? String(newWinner.email) : null,
+            }
+          : null,
+        contestPrize: body?.contestPrize ? String(body.contestPrize) : null,
+      });
+      setToastNotif("Gagnant remplacé");
+      window.setTimeout(() => setToastNotif(null), 3200);
+      if (typeof body?.eligibleRemainingCount === "number") {
+        setContestEligibleCount(Math.max(0, body.eligibleRemainingCount));
+      }
+      const updatedSummary = await fetchPollDrawSummary(pid);
+      if (updatedSummary) {
+        setPollDrawSummary((prev) => ({
+          ...prev,
+          [pid]: updatedSummary,
+        }));
+      }
+      const updatedWinners = await fetchContestWinners(pid);
+      if (updatedWinners) {
+        setContestWinners(updatedWinners);
+        setContestWinnersError(null);
+      }
+      return true;
+    } catch (e) {
+      setActionError(e.message || "Remplacement impossible.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const liveState = eventData?.liveState ?? "—";
   const activePoll = eventData?.polls?.find(
     (p) => p.id === eventData.activePollId,
   );
   const liveResponsesOptions = useMemo(() => {
-    const opts = Array.isArray(activePoll?.options) ? activePoll.options : [];
+    const opts = normalizePollOptions(activePoll?.options);
     const totalVotesSafe = Math.max(
       0,
-      Number(activePoll?.voteCount || opts.reduce((acc, o) => acc + Number(o?.voteCount || 0), 0)),
+      Number(
+        activePoll?.voteCount ||
+          opts.reduce((acc, o) => acc + optionVoteCount(o), 0),
+      ),
     );
     return opts
       .map((o, i) => {
-        const voteCount = Math.max(0, Number(o?.voteCount || 0));
+        const voteCount = optionVoteCount(o);
         const pctRaw = Number(o?.votePct);
         const pct =
           Number.isFinite(pctRaw) && pctRaw >= 0
@@ -5430,7 +5727,11 @@ export default function RegieEventPage() {
     Number(activeContestSummary?.totalWinners || 0),
   );
   const contestQuotaReached = activeContestTotalWinners >= activeContestWinnerQuota;
-  const pollsOrdered = Array.isArray(eventData?.polls) ? eventData.polls : [];
+  const activeContestWinnersOnly = filterActiveContestWinners(contestWinners);
+  const canReplaceContestWinner = canOfferContestWinnerReplace({
+    winners: contestWinners,
+  });
+  const pollsOrdered = sortPollsByPlaylistOrder(eventData?.polls);
   const totalQuestions = pollsOrdered.length;
   const activeQuestionIndex = pollsOrdered.findIndex(
     (p) => p.id === eventData?.activePollId,
@@ -5457,7 +5758,8 @@ export default function RegieEventPage() {
   const eventPlanType = eventData?.eventPlanType
     ? String(eventData.eventPlanType).toUpperCase()
     : null;
-  const canGoNext = !busy && !eventFinished && totalQuestions > 0 && !eventLocked;
+  const canGoNextBase =
+    !busy && !eventFinished && totalQuestions > 0 && !eventLocked;
 
   /** Ne jamais déduire « open » depuis liveState : lecture seule du champ API (+ défaut fermé si absent). */
   const rawVoteState = eventData?.voteState;
@@ -5507,18 +5809,24 @@ export default function RegieEventPage() {
 
   const voteLabel =
     VOTE_STATE_LABELS[voteStateUi] ?? String(voteStateUi).toUpperCase();
-  const displayLabelGlobal =
-    DISPLAY_STATE_LABELS[displayStateUi] ??
-    String(displayStateUi).toUpperCase();
+  const regieActivePollContext = {
+    pollType: activePoll?.type,
+    leadEnabled: activePoll?.leadEnabled,
+  };
+  /** « À l’écran » = état projection réel (screenDisplayState prioritaire). */
+  const displayLabelGlobal = getRegieDisplayStateLabel(
+    projectionDisplayStateUi,
+    regieActivePollContext,
+  );
   const displayStateBUi = String(screenBDisplayState || "waiting").toLowerCase();
-  const displayLabelScreenB =
-    DISPLAY_STATE_LABELS[displayStateBUi] ?? String(displayStateBUi).toUpperCase();
+  const displayLabelScreenB = getRegieDisplayStateLabel(
+    displayStateBUi,
+    regieActivePollContext,
+  );
   const hasDisplayGap =
     Boolean(screenBConnected) &&
     ["question", "results", "waiting", "black"].includes(displayStateBUi) &&
     displayStateBUi !== String(projectionDisplayStateUi || "").toLowerCase();
-  const affichageEnAttente =
-    String(projectionDisplayStateUi || "").toLowerCase() === "waiting";
   const compactTopPanel = !desktop;
   const socketStatusLabel = socketConnected
     ? "Sync live connectee"
@@ -5539,6 +5847,62 @@ export default function RegieEventPage() {
   const canManageActivePoll = Boolean(activePollIdJs) && !busy;
   const canToggleVote = Boolean(activePollIdJs) && !busy && !eventFinished && !eventLocked;
   const voteIsOpen = voteStateUi === "open";
+  const hasNextPollAfterActive =
+    activeQuestionIndex >= 0 && activeQuestionIndex < totalQuestions - 1;
+  const primaryLiveAction = getRegiePrimaryLiveAction({
+    voteState: voteStateUi,
+    displayState: projectionDisplayStateUi,
+    pollStatus: activePoll?.status,
+    pollType: activePoll?.type,
+    leadEnabled: activePoll?.leadEnabled,
+    contestQuotaReached,
+    eventFinished,
+    hasActivePoll: Boolean(activePollIdJs),
+    hasNextPoll: hasNextPollAfterActive,
+  });
+  const allowedLiveActions = getRegieAllowedLiveActions({
+    voteState: voteStateUi,
+    displayState: projectionDisplayStateUi,
+    pollStatus: activePoll?.status,
+    pollType: activePoll?.type,
+    leadEnabled: activePoll?.leadEnabled,
+    eventFinished,
+    hasActivePoll: Boolean(activePollIdJs),
+  });
+  /** LOT-3 — Afficher dans Pilotage uniquement après Fermer (poll CLOSED), pas après Suivante. */
+  const canShowResultsForActive =
+    Boolean(activePollIdJs) &&
+    !busy &&
+    !eventFinished &&
+    !eventLocked &&
+    allowedLiveActions.showResults;
+  const canOpenVote =
+    Boolean(activePollIdJs) &&
+    canToggleVote &&
+    allowedLiveActions.open &&
+    !voteIsOpen;
+  const canCloseVote =
+    Boolean(activePollIdJs) &&
+    canToggleVote &&
+    allowedLiveActions.close &&
+    voteIsOpen;
+  const openVoteButtonCopy = getRegieOpenVoteButtonCopy({
+    pollStatus: activePoll?.status,
+  });
+  const canGoNext = canGoNextBase && allowedLiveActions.next;
+  const primaryLiveActionLabel = getRegiePrimaryLiveActionLabel(primaryLiveAction);
+  const antennaStatusLabel = activePoll
+    ? getRegiePollStatusLabel({
+        pollStatus: activePoll.status,
+        isActive: true,
+        voteState: voteStateUi,
+        displayState: projectionDisplayStateUi,
+        pollType: activePoll.type,
+        leadEnabled: activePoll.leadEnabled,
+      })
+    : eventFinished
+      ? "Terminée"
+      : "—";
   const canShowQuestionQuick =
     canManageActivePoll && String(projectionDisplayStateUi || "").toLowerCase() !== "question";
   const canShowResultsQuick =
@@ -5611,13 +5975,11 @@ export default function RegieEventPage() {
         : "#2563eb";
   const ecranLabel = activePoll
     ? activePoll.question || activePoll.title
-    : eventLocked
-      ? "Cet événement est terminé. Créez un nouvel événement pour une nouvelle session."
-      : eventFinished
-        ? "Événement terminé — aucune question active."
-      : affichageEnAttente
-        ? "Projection en attente — choisissez « Afficher la question » ou « Afficher les résultats »."
-        : "Aucun contenu synchronisé pour l’instant.";
+    : getRegieIdleProjectionHint({
+        projectionDisplayState: projectionDisplayStateUi,
+        eventFinished,
+        eventLocked,
+      });
   const questionProgressSummary =
     totalQuestions > 0
       ? eventFinished
@@ -5796,24 +6158,141 @@ export default function RegieEventPage() {
     voteStateUi === "open" &&
     displayStateUi !== "black";
 
-  const pollsOrdonnes = useMemo(() => {
-    const list = [...(eventData?.polls || [])];
-    const ap = eventData?.activePollId;
-    if (!ap) {
-      return list.sort((a, b) => (a.order || 0) - (b.order || 0));
-    }
-    return list.sort((a, b) => {
-      if (a.id === ap) return -1;
-      if (b.id === ap) return 1;
-      return (a.order || 0) - (b.order || 0);
+  /** Playlist stable par `order` (numérotation N/Total respectée après réorga). */
+  const pollsOrdonnes = useMemo(
+    () => sortPollsByPlaylistOrder(eventData?.polls),
+    [eventData?.polls],
+  );
+
+  /** Sync sélection → antenne quand le live change ; jamais l’inverse (clic ≠ pilotage). */
+  useEffect(() => {
+    const ap = eventData?.activePollId ? String(eventData.activePollId) : null;
+    const ids = new Set((eventData?.polls || []).map((p) => String(p.id)));
+    setSelectedPollId((prev) => {
+      if (prev && ids.has(String(prev))) return prev;
+      if (ap && ids.has(ap)) return ap;
+      const first = pollsOrdonnes[0]?.id;
+      return first ? String(first) : null;
     });
-  }, [eventData?.polls, eventData?.activePollId]);
+  }, [eventData?.activePollId, eventData?.polls, pollsOrdonnes]);
+
+  const selectedPoll = useMemo(() => {
+    const sid = String(selectedPollId || "");
+    if (!sid) return null;
+    return (eventData?.polls || []).find((p) => String(p.id) === sid) || null;
+  }, [eventData?.polls, selectedPollId]);
+
+  const selectedIsConsultOnly = isRegieConsultSelectionOnly(
+    selectedPollId,
+    eventData?.activePollId,
+  );
+  const selectedQuestionIndex = pollsOrdonnes.findIndex(
+    (p) => String(p.id) === String(selectedPollId || ""),
+  );
+  const selectedQuestionNumberLabel =
+    selectedQuestionIndex >= 0
+      ? getRegieQuestionNumberLabel(selectedQuestionIndex, pollsOrdonnes.length)
+      : null;
+  const selectedStatusLabel = selectedPoll
+    ? getRegiePollStatusLabel({
+        pollStatus: selectedPoll.status,
+        isActive:
+          String(selectedPoll.id) === String(eventData?.activePollId || ""),
+        voteState: voteStateUi,
+        displayState: projectionDisplayStateUi,
+        pollType: selectedPoll.type,
+        leadEnabled: selectedPoll.leadEnabled,
+      })
+    : "—";
+  const selectedTypeLabel = selectedPoll
+    ? getRegiePollTypeLabel(selectedPoll)
+    : "—";
+  const selectedTitle =
+    selectedPoll?.question ||
+    selectedPoll?.title ||
+    (pollsOrdonnes.length > 0
+      ? "Sélectionnez une question dans la playlist."
+      : "Ajoutez une question pour commencer.");
+  const selectedConsultOptions = useMemo(() => {
+    if (!selectedPoll) return [];
+    const opts = normalizePollOptions(selectedPoll?.options);
+    const totalVotesSafe = Math.max(
+      0,
+      Number(
+        selectedPoll?.voteCount ||
+          opts.reduce((acc, o) => acc + optionVoteCount(o), 0),
+      ),
+    );
+    return opts.map((o, i) => {
+      const voteCount = optionVoteCount(o);
+      const pctRaw = Number(o?.votePct);
+      const pct =
+        Number.isFinite(pctRaw) && pctRaw >= 0
+          ? pctRaw
+          : totalVotesSafe > 0
+            ? (voteCount / totalVotesSafe) * 100
+            : 0;
+      return {
+        id: String(o?.id || i),
+        label: String(o?.label || `Option ${i + 1}`),
+        voteCount,
+        pct: Math.max(0, Math.min(100, pct)),
+      };
+    });
+  }, [selectedPoll]);
+
+  const handleSelectPlaylistPoll = useCallback((pollId) => {
+    setSelectedPollId(String(pollId || "") || null);
+  }, []);
+
+  const selectedReplayGate = canOfferReplayTestPoll({
+    isTestMode: inTestMode,
+    voteState: voteStateUi,
+    eventFinished,
+    eventLocked,
+    busy,
+    poll: selectedPoll,
+  });
+  const canReplaySelected = selectedReplayGate.ok === true;
+
+  const handleReplaySelectedTestPoll = useCallback(async () => {
+    if (!selectedPoll?.id || !canReplaySelected) return;
+    if (typeof window === "undefined") return;
+    const ok = window.confirm(getReplayTestPollConfirmMessage(selectedPoll));
+    if (!ok) return;
+    const pid = String(selectedPoll.id);
+    const success = await postAction(
+      `/polls/${encodeURIComponent(pid)}/replay-test`,
+      "Question réinitialisée (MODE TEST)",
+    );
+    if (success) {
+      setSelectedPollId(pid);
+      setContestWinners([]);
+      setPollDrawSummary((prev) => {
+        const next = { ...prev };
+        delete next[pid];
+        return next;
+      });
+    }
+  }, [
+    selectedPoll,
+    canReplaySelected,
+    // postAction is stable enough via closure; replay gated on selected + flags
+  ]);
 
   const handleContestShortcut = useCallback(
     (poll) => {
       const isContest = isContestPoll(poll);
       if (!isContest) return;
       const isActive = String(eventData?.activePollId || "") === String(poll?.id || "");
+      const voteOpen =
+        isActive &&
+        String(eventData?.voteState || "").toLowerCase().trim() === "open";
+      if (voteOpen) {
+        setToastNotif("Fermez d’abord les participations avant de tirer au sort.");
+        window.setTimeout(() => setToastNotif(null), 2800);
+        return;
+      }
       if (isActive) {
         setContestDrawModalOpen(true);
         return;
@@ -5825,7 +6304,7 @@ export default function RegieEventPage() {
       setToastNotif("Astuce : activez d’abord cette question pour le tirage.");
       window.setTimeout(() => setToastNotif(null), 2600);
     },
-    [eventData?.activePollId],
+    [eventData?.activePollId, eventData?.voteState],
   );
 
   const handleLeadShortcut = useCallback(
@@ -5893,21 +6372,28 @@ export default function RegieEventPage() {
           gap: "4px",
         }}
       >
-        {pollsOrdonnes.map((poll) => (
+        {pollsOrdonnes.map((poll, index) => (
           <PollCard
             key={poll.id}
             poll={poll}
             compact
+            liveActions={false}
             isActive={poll.id === eventData?.activePollId}
+            isSelected={String(poll.id) === String(selectedPollId || "")}
+            onSelect={handleSelectPlaylistPoll}
+            questionNumberLabel={getRegieQuestionNumberLabel(
+              index,
+              pollsOrdonnes.length,
+            )}
             busy={busy}
             liveState={liveState}
             activePollId={eventData?.activePollId}
             voteState={voteStateUi}
+            displayState={projectionDisplayStateUi}
             desktop={desktop}
             onOpen={(id) => postAction(`/polls/${id}/open`)}
             onCloseRegie={(id) => postAction(`/polls/${id}/close`)}
             onResults={(id) => postAction(`/polls/${id}/show-results`)}
-            onReveal={(id) => postAction(`/polls/${id}/reveal`)}
             onContestShortcut={handleContestShortcut}
             onLeadShortcut={handleLeadShortcut}
             onEdit={openEditPollModal}
@@ -5935,15 +6421,15 @@ export default function RegieEventPage() {
     secondesAfficheGrand !== null
       ? formatCountdownVerbose(secondesAfficheGrand)
       : "—";
-  const legendeChrono = inTestMode
-    ? "Mode TEST : chrono forcé à 30s"
-    : tm?.running && !tm?.isPaused
-      ? "Compte à rebours sur l’écran"
-      : tm?.isPaused
-        ? "En pause"
-        : tm
-          ? "Arrêté — prêt à relancer"
-          : "Durée réglée avant lancement";
+  const legendeChrono = tm?.running && !tm?.isPaused
+    ? inTestMode
+      ? "Compte à rebours (MODE TEST)"
+      : "Compte à rebours sur l’écran"
+    : tm?.isPaused
+      ? "En pause"
+      : tm
+        ? "Arrêté — prêt à relancer"
+        : "Durée réglée avant lancement";
   const chronoEtatLiveTexte = useMemo(() => {
     if (secondesAfficheGrand == null) return "00:00";
     const total = Math.max(0, Math.floor(secondesAfficheGrand));
@@ -6020,7 +6506,7 @@ export default function RegieEventPage() {
       >
         <button
           type="button"
-          disabled={busy || inTestMode}
+          disabled={busy}
           onClick={() => {
             const total = presetChronoSec;
             if (total < 1) {
@@ -6051,7 +6537,7 @@ export default function RegieEventPage() {
         </button>
         <button
           type="button"
-          disabled={busy || inTestMode}
+          disabled={busy}
           onClick={() => void postQuestionTimer({ action: "pause" })}
           style={chronoBtnOutline}
         >
@@ -6059,7 +6545,7 @@ export default function RegieEventPage() {
         </button>
         <button
           type="button"
-          disabled={busy || inTestMode}
+          disabled={busy}
           onClick={() => void postQuestionTimer({ action: "reset" })}
           style={chronoBtnOutline}
         >
@@ -6777,18 +7263,30 @@ export default function RegieEventPage() {
               </button>
               <button
                 type="button"
-                disabled={busy || !activePoll?.id || contestQuotaReached}
+                disabled={
+                  busy ||
+                  !activePoll?.id ||
+                  contestQuotaReached ||
+                  voteStateUi === "open"
+                }
                 onClick={() => void postContestDraw(activePoll?.id || "")}
                 style={{
                   padding: "0.45rem 0.8rem",
                   borderRadius: "9px",
                   border: "1px solid #7c3aed",
-                  background: busy || contestQuotaReached
-                    ? "#f1f5f9"
-                    : "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)",
-                  color: busy || contestQuotaReached ? "#94a3b8" : "#fff",
+                  background:
+                    busy || contestQuotaReached || voteStateUi === "open"
+                      ? "#f1f5f9"
+                      : "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)",
+                  color:
+                    busy || contestQuotaReached || voteStateUi === "open"
+                      ? "#94a3b8"
+                      : "#fff",
                   fontWeight: 800,
-                  cursor: busy || contestQuotaReached ? "not-allowed" : "pointer",
+                  cursor:
+                    busy || contestQuotaReached || voteStateUi === "open"
+                      ? "not-allowed"
+                      : "pointer",
                 }}
               >
                 {busy ? "Tirage..." : "Confirmer le tirage"}
@@ -6805,6 +7303,172 @@ export default function RegieEventPage() {
                 Tous les gagnants ont déjà été tirés.
               </p>
             ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {contestReplaceModalOpen &&
+      String(activePoll?.type || "").toUpperCase() === "CONTEST_ENTRY" ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="contest-replace-title"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 80,
+            background: "rgba(15, 23, 42, 0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+          }}
+          onClick={() => {
+            if (!busy) setContestReplaceModalOpen(false);
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "28rem",
+              borderRadius: "14px",
+              background: "#fff",
+              border: "1px solid #e5e7eb",
+              boxShadow: "0 24px 60px rgba(0, 0, 0, 0.25)",
+              padding: "1rem 1.1rem",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                color: "#6b7280",
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+              }}
+            >
+              Concours
+            </p>
+            <h3
+              id="contest-replace-title"
+              style={{
+                margin: "0.35rem 0 0 0",
+                fontSize: "1.05rem",
+                fontWeight: 800,
+                color: "#111827",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              Remplacer un gagnant ?
+            </h3>
+            <p style={{ margin: "0.55rem 0 0 0", fontSize: "0.88rem", color: "#4b5563" }}>
+              Un nouveau gagnant sera tiré au sort parmi les participants éligibles
+              n’ayant jamais gagné. L’ancien gagnant restera visible comme{" "}
+              <strong>Remplacé</strong> dans l’historique. Le nombre de gagnants
+              actifs ne dépassera pas le quota ({activeContestWinnerQuota}).
+            </p>
+            {activeContestWinnersOnly.length > 1 ? (
+              <label
+                style={{
+                  display: "grid",
+                  gap: "0.35rem",
+                  marginTop: "0.75rem",
+                  fontSize: "0.82rem",
+                  fontWeight: 700,
+                  color: "#374151",
+                }}
+              >
+                Gagnant à remplacer
+                <select
+                  value={contestReplaceWinnerId}
+                  disabled={busy}
+                  onChange={(e) => setContestReplaceWinnerId(e.target.value)}
+                  style={{
+                    padding: "0.45rem 0.55rem",
+                    borderRadius: "8px",
+                    border: "1px solid #d1d5db",
+                    fontWeight: 600,
+                    color: "#111827",
+                  }}
+                >
+                  {activeContestWinnersOnly.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {formatWinnerName(w)}
+                      {w.phone ? ` — ${maskPhone(w.phone)}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : activeContestWinnersOnly[0] ? (
+              <p style={{ margin: "0.65rem 0 0 0", fontSize: "0.88rem", color: "#111827", fontWeight: 700 }}>
+                {formatWinnerName(activeContestWinnersOnly[0])}
+                {activeContestWinnersOnly[0].phone
+                  ? ` — ${maskPhone(activeContestWinnersOnly[0].phone)}`
+                  : ""}
+              </p>
+            ) : (
+              <p style={{ margin: "0.65rem 0 0 0", fontSize: "0.86rem", color: "#b91c1c" }}>
+                Aucun gagnant actif à remplacer.
+              </p>
+            )}
+            <div
+              style={{
+                marginTop: "0.9rem",
+                display: "flex",
+                gap: "0.55rem",
+                justifyContent: "flex-end",
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setContestReplaceModalOpen(false)}
+                style={{
+                  padding: "0.45rem 0.75rem",
+                  borderRadius: "9px",
+                  border: "1px solid #d1d5db",
+                  background: "#fff",
+                  color: "#475569",
+                  fontWeight: 700,
+                  cursor: busy ? "not-allowed" : "pointer",
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={
+                  busy ||
+                  !activePoll?.id ||
+                  !contestReplaceWinnerId ||
+                  activeContestWinnersOnly.length < 1
+                }
+                onClick={() =>
+                  void postContestReplaceWinner(
+                    activePoll?.id || "",
+                    contestReplaceWinnerId,
+                  )
+                }
+                style={{
+                  padding: "0.45rem 0.8rem",
+                  borderRadius: "9px",
+                  border: "1px solid #7c3aed",
+                  background:
+                    busy || !contestReplaceWinnerId
+                      ? "#f1f5f9"
+                      : "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)",
+                  color: busy || !contestReplaceWinnerId ? "#94a3b8" : "#fff",
+                  fontWeight: 800,
+                  cursor:
+                    busy || !contestReplaceWinnerId ? "not-allowed" : "pointer",
+                }}
+              >
+                {busy ? "Remplacement..." : "Confirmer le remplacement"}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
@@ -7260,7 +7924,9 @@ export default function RegieEventPage() {
                         color: "rgba(224, 231, 255, 0.78)",
                       }}
                     >
-                      {stateLabel} · {questionProgressSummary}
+                      {selectedIsConsultOnly
+                        ? `${selectedQuestionNumberLabel || "Consultation"} · ${selectedTypeLabel} · ${selectedStatusLabel}`
+                        : `${stateLabel} · ${questionProgressSummary}`}
                     </p>
                     <h3
                       style={{
@@ -7272,7 +7938,7 @@ export default function RegieEventPage() {
                         lineHeight: 1.18,
                       }}
                     >
-                      {activeQuestionTitle}
+                      {selectedIsConsultOnly ? selectedTitle : activeQuestionTitle}
                     </h3>
                     <p
                       style={{
@@ -7282,9 +7948,29 @@ export default function RegieEventPage() {
                         lineHeight: 1.45,
                       }}
                     >
-                      À l’écran : <strong style={{ color: "#ffffff" }}>{displayLabelGlobal}</strong>
-                      {" · "}
-                      {screenBConnected ? `Écran B : ${displayLabelScreenB}` : "Écran B non connecté"}
+                      {selectedIsConsultOnly ? (
+                        <>
+                          Consultation régie — sans effet sur la salle / Screen / Overlay.
+                          {" · "}
+                          Antenne :{" "}
+                          <strong style={{ color: "#ffffff" }}>
+                            {activePoll?.question || activePoll?.title || "aucune"}
+                          </strong>
+                          {" · "}
+                          {antennaStatusLabel}
+                        </>
+                      ) : (
+                        <>
+                          À l’écran :{" "}
+                          <strong style={{ color: "#ffffff" }}>{displayLabelGlobal}</strong>
+                          {" · "}
+                          {screenBConnected
+                            ? `Écran B : ${displayLabelScreenB}`
+                            : "Écran B non connecté"}
+                          {" · "}
+                          {antennaStatusLabel}
+                        </>
+                      )}
                     </p>
                   </div>
 
@@ -7417,7 +8103,7 @@ export default function RegieEventPage() {
                         textTransform: "uppercase",
                       }}
                     >
-                      Régie live
+                      {REGIE_ZONE_PILOTAGE}
                     </h3>
                     <p
                       style={{
@@ -7428,13 +8114,146 @@ export default function RegieEventPage() {
                         lineHeight: 1.35,
                       }}
                     >
-                      Pilotage du direct
+                      Commandes essentielles du live — une seule zone d’autorité
                     </p>
                   </div>
                   <p style={{ margin: 0, fontSize: "0.76rem", color: "#64748b" }}>
-                    Les commandes essentielles pendant le live.
+                    Pilotage = antenne · Clic playlist = consultation seule
                   </p>
                 </div>
+
+                {selectedPoll &&
+                (selectedIsConsultOnly || (inTestMode && canReplaySelected)) ? (
+                  <div
+                    style={{
+                      marginTop: "0.85rem",
+                      padding: "0.85rem 0.95rem",
+                      borderRadius: "16px",
+                      border: "1px solid rgba(245, 158, 11, 0.35)",
+                      background:
+                        "linear-gradient(180deg, rgba(255, 251, 235, 0.95) 0%, rgba(255,255,255,0.98) 100%)",
+                      boxShadow: "0 10px 22px rgba(180, 83, 9, 0.06)",
+                    }}
+                  >
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "0.62rem",
+                        fontWeight: 800,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "#92400e",
+                      }}
+                    >
+                      {selectedIsConsultOnly
+                        ? `Consultation — ${selectedQuestionNumberLabel}`
+                        : `Question jouée — ${selectedQuestionNumberLabel}`}
+                    </p>
+                    <p
+                      style={{
+                        margin: "0.35rem 0 0 0",
+                        fontSize: "1rem",
+                        fontWeight: 800,
+                        color: "#111827",
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      {selectedTitle}
+                    </p>
+                    <p style={{ margin: "0.3rem 0 0 0", fontSize: "0.78rem", color: "#64748b" }}>
+                      Type : <strong style={{ color: "#334155" }}>{selectedTypeLabel}</strong>
+                      {" · "}
+                      Statut : <strong style={{ color: "#334155" }}>{selectedStatusLabel}</strong>
+                      {" · "}
+                      <strong style={{ color: "#334155" }}>
+                        {selectedPoll.voteCount ?? 0}
+                      </strong>{" "}
+                      vote{(selectedPoll.voteCount ?? 0) !== 1 ? "s" : ""}
+                      {" · "}
+                      {selectedIsConsultOnly
+                        ? "Aucune rediffusion"
+                        : "Antenne — rejeu TEST possible"}
+                    </p>
+                    {selectedConsultOptions.length > 0 ? (
+                      <ul
+                        style={{
+                          margin: "0.55rem 0 0 0",
+                          padding: 0,
+                          listStyle: "none",
+                          display: "grid",
+                          gap: "0.28rem",
+                        }}
+                      >
+                        {selectedConsultOptions.map((opt) => (
+                          <li
+                            key={opt.id}
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: "0.75rem",
+                              fontSize: "0.74rem",
+                              color: "#475569",
+                            }}
+                          >
+                            <span style={{ overflowWrap: "anywhere" }}>{opt.label}</span>
+                            <span style={{ flexShrink: 0, fontWeight: 700, color: "#1e293b" }}>
+                              {opt.voteCount} ·{" "}
+                              {Number(opt.pct).toLocaleString("fr-FR", {
+                                maximumFractionDigits: 1,
+                              })}
+                              %
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {inTestMode ? (
+                      <div style={{ marginTop: "0.75rem" }}>
+                        <button
+                          type="button"
+                          disabled={!canReplaySelected || busy}
+                          onClick={() => void handleReplaySelectedTestPoll()}
+                          title={
+                            canReplaySelected
+                              ? "Efface les données TEST de cette question puis la remet en attente d’ouverture."
+                              : getReplayTestPollBlockedLabel(selectedReplayGate.reason)
+                          }
+                          style={{
+                            width: "100%",
+                            minHeight: "2.6rem",
+                            padding: "0.55rem 0.85rem",
+                            fontSize: "0.82rem",
+                            fontWeight: 800,
+                            borderRadius: "12px",
+                            border: canReplaySelected
+                              ? "1px solid #f59e0b"
+                              : "1px solid #e2e8f0",
+                            background: canReplaySelected
+                              ? "linear-gradient(180deg, #fef3c7 0%, #fde68a 100%)"
+                              : "#f8fafc",
+                            color: canReplaySelected ? "#92400e" : "#94a3b8",
+                            cursor:
+                              !canReplaySelected || busy ? "not-allowed" : "pointer",
+                            opacity: !canReplaySelected || busy ? 0.6 : 1,
+                          }}
+                        >
+                          Rejouer la question
+                        </button>
+                        <p
+                          style={{
+                            margin: "0.4rem 0 0 0",
+                            fontSize: "0.68rem",
+                            color: "#a16207",
+                            lineHeight: 1.35,
+                          }}
+                        >
+                          MODE TEST uniquement — confirmation avant suppression des
+                          données de cette question.
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 <div
                   style={{
@@ -7448,17 +8267,22 @@ export default function RegieEventPage() {
                 >
                   <div style={liveFunctionCardStyle}>
                     <div style={{ display: "grid", gap: "0.28rem" }}>
-                      <p style={liveFunctionCardTitleStyle}>Vote</p>
+                      <p style={liveFunctionCardTitleStyle}>Participation</p>
                       <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", lineHeight: 1.35 }}>
-                        Participation live
+                        {antennaStatusLabel === "En attente d'ouverture"
+                          ? "En attente d'ouverture"
+                          : primaryLiveActionLabel
+                            ? `Action : ${primaryLiveActionLabel}`
+                            : "Ouvrir / fermer / afficher"}
                       </p>
                     </div>
                     <div style={{ display: "grid", gap: "0.55rem", flex: 1 }}>
                             <button
                               type="button"
-                              disabled={!activePollIdJs || !canToggleVote || voteIsOpen}
+                              disabled={!canOpenVote}
+                              title={openVoteButtonCopy.title}
                               onClick={async () => {
-                                if (!activePollIdJs) return;
+                                if (!activePollIdJs || !canOpenVote) return;
                                 await postAction(`/polls/${activePollIdJs}/open`, "Vote ouvert");
                               }}
                               style={{
@@ -7466,21 +8290,30 @@ export default function RegieEventPage() {
                                 minHeight: "3rem",
                                 width: "100%",
                                 padding: "0.72rem 0.9rem",
-                                borderColor: "#22c55e",
-                                background: voteIsOpen ? "#f8fafc" : "linear-gradient(180deg, #dcfce7 0%, #bbf7d0 100%)",
-                                color: voteIsOpen ? "#94a3b8" : "#166534",
+                                borderColor: canOpenVote ? "#22c55e" : "#e2e8f0",
+                                background:
+                                  primaryLiveAction === "open" && canOpenVote
+                                    ? "linear-gradient(180deg, #dcfce7 0%, #bbf7d0 100%)"
+                                    : canOpenVote
+                                      ? "#f0fdf4"
+                                      : "#f8fafc",
+                                color: canOpenVote ? "#166534" : "#94a3b8",
                                 fontWeight: 800,
                                 fontSize: "0.86rem",
-                                boxShadow: voteIsOpen ? "none" : "0 14px 24px rgba(34, 197, 94, 0.12)",
+                                boxShadow:
+                                  primaryLiveAction === "open" && canOpenVote
+                                    ? "0 14px 24px rgba(34, 197, 94, 0.12)"
+                                    : "none",
+                                opacity: canOpenVote ? 1 : 0.55,
                               }}
                             >
-                              Ouvrir le vote
+                              {openVoteButtonCopy.label}
                             </button>
                             <button
                               type="button"
-                              disabled={!activePollIdJs || !canToggleVote || !voteIsOpen}
+                              disabled={!canCloseVote}
                               onClick={async () => {
-                                if (!activePollIdJs) return;
+                                if (!activePollIdJs || !canCloseVote) return;
                                 await postAction(`/polls/${activePollIdJs}/close`, "Vote ferme");
                               }}
                               style={{
@@ -7488,20 +8321,72 @@ export default function RegieEventPage() {
                                 minHeight: "3rem",
                                 width: "100%",
                                 padding: "0.72rem 0.9rem",
-                                borderColor: "#fca5a5",
-                                background: voteIsOpen ? "#fff5f5" : "#f8fafc",
-                                color: voteIsOpen ? "#b91c1c" : "#94a3b8",
+                                borderColor: canCloseVote ? "#fca5a5" : "#e2e8f0",
+                                background:
+                                  primaryLiveAction === "close" && canCloseVote
+                                    ? "#fff5f5"
+                                    : "#f8fafc",
+                                color: canCloseVote ? "#b91c1c" : "#94a3b8",
                                 fontWeight: 800,
                                 fontSize: "0.86rem",
-                                boxShadow: voteIsOpen ? "0 12px 22px rgba(239, 68, 68, 0.08)" : "none",
+                                boxShadow:
+                                  canCloseVote
+                                    ? "0 12px 22px rgba(239, 68, 68, 0.08)"
+                                    : "none",
+                                opacity: canCloseVote ? 1 : 0.55,
                               }}
                             >
-                              Fermer le vote
+                              Fermer
                             </button>
+                            {canShowResultsForActive || primaryLiveAction === "show-results" ? (
+                              <button
+                                type="button"
+                                disabled={!canShowResultsForActive}
+                                onClick={async () => {
+                                  if (!activePollIdJs || !canShowResultsForActive) return;
+                                  await postAction(
+                                    `/polls/${activePollIdJs}/show-results`,
+                                    "Resultats affiches",
+                                  );
+                                }}
+                                title={
+                                  !canShowResultsForActive
+                                    ? "Disponible après fermeture du vote (pas après « Suivante »)."
+                                    : isQuizPoll(activePoll)
+                                      ? "Affiche les résultats finaux. Si le vote est fermé, révèle aussi la bonne réponse."
+                                      : "Affiche les résultats finaux à la salle et à l’écran."
+                                }
+                                style={{
+                                  ...btnGhost,
+                                  minHeight: "3rem",
+                                  width: "100%",
+                                  padding: "0.72rem 0.9rem",
+                                  borderColor: canShowResultsForActive ? "#93c5fd" : "#e2e8f0",
+                                  background: canShowResultsForActive
+                                    ? "linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%)"
+                                    : "#f8fafc",
+                                  color: canShowResultsForActive ? "#1e3a8a" : "#94a3b8",
+                                  fontWeight: 800,
+                                  fontSize: "0.86rem",
+                                  boxShadow: canShowResultsForActive
+                                    ? "0 12px 22px rgba(37, 99, 235, 0.10)"
+                                    : "none",
+                                  opacity: canShowResultsForActive ? 1 : 0.55,
+                                }}
+                              >
+                                Afficher les résultats
+                              </button>
+                            ) : null}
                           </div>
                           <p style={{ margin: 0, fontSize: "0.74rem", color: "#64748b", lineHeight: 1.35 }}>
-                            État actuel : <strong style={{ color: "#111827" }}>{voteLabel}</strong>
+                            Antenne : <strong style={{ color: "#111827" }}>{antennaStatusLabel}</strong>
+                            {" · "}
+                            Vote : <strong style={{ color: "#111827" }}>{voteLabel}</strong>
                           </p>
+                    {shouldScheduleAutoRevealForPoll({
+                      pollType: activePoll?.type,
+                      leadEnabled: activePoll?.leadEnabled,
+                    }) ? (
                     <RegieAutoRevealCard
                       embedded
                       embeddedDividerAbove={false}
@@ -7510,13 +8395,16 @@ export default function RegieEventPage() {
                       autoRevealDelaySec={eventData?.autoRevealDelaySec ?? 5}
                       onSaved={() => fetchEvent({ silent: true })}
                     />
+                    ) : null}
                   </div>
 
                   <div style={liveFunctionCardStyle}>
                     <div style={{ display: "grid", gap: "0.28rem" }}>
                       <p style={liveFunctionCardTitleStyle}>Progression</p>
                       <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", lineHeight: 1.35 }}>
-                        Avancement du live
+                        {primaryLiveAction === "next" || primaryLiveAction === "finish"
+                          ? `Action : ${primaryLiveActionLabel}`
+                          : "Avancement du live"}
                       </p>
                     </div>
                     <div style={{ display: "grid", gap: "0.35rem", flex: 1 }}>
@@ -7550,18 +8438,25 @@ export default function RegieEventPage() {
                           fontSize: "0.84rem",
                           border: "1px solid #8b5cf6",
                           background: canGoNext
-                            ? "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)"
+                            ? primaryLiveAction === "next"
+                              ? "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)"
+                              : "linear-gradient(180deg, #a78bfa 0%, #8b5cf6 100%)"
                             : "#ede9fe",
                           color: canGoNext ? "#fff" : "#6d28d9",
                           fontWeight: 800,
-                          boxShadow: canGoNext ? "0 14px 24px rgba(124, 58, 237, 0.16)" : "none",
+                          boxShadow:
+                            canGoNext && primaryLiveAction === "next"
+                              ? "0 14px 24px rgba(124, 58, 237, 0.16)"
+                              : "none",
+                          opacity: canGoNext ? 1 : 0.55,
                         }}
+                        title="Prépare la question suivante sans ouvrir le vote (commande explicite)."
                       >
-                        Question suivante
+                        Suivante
                       </button>
                       <button
                         type="button"
-                        disabled={busy || eventFinished}
+                        disabled={busy || eventFinished || !allowedLiveActions.finish}
                         onClick={async () => {
                           if (typeof window === "undefined") return;
                           const ok = window.confirm(
@@ -7581,9 +8476,18 @@ export default function RegieEventPage() {
                           minHeight: "2.35rem",
                           padding: "0.45rem 0.75rem",
                           fontSize: "0.76rem",
-                          border: "1px solid #fda4af",
-                          background: busy || eventFinished ? "#fff1f2" : "#fffafb",
+                          border:
+                            primaryLiveAction === "finish"
+                              ? "1px solid #e11d48"
+                              : "1px solid #fda4af",
+                          background:
+                            busy || eventFinished
+                              ? "#fff1f2"
+                              : primaryLiveAction === "finish"
+                                ? "linear-gradient(180deg, #ffe4e6 0%, #fecdd3 100%)"
+                                : "#fffafb",
                           color: busy || eventFinished ? "#9f1239" : "#be123c",
+                          fontWeight: primaryLiveAction === "finish" ? 800 : 700,
                         }}
                       >
                         Terminer
@@ -7894,9 +8798,15 @@ export default function RegieEventPage() {
                   contestEligibleLoading ||
                   contestEligibleCount <= 0 ||
                   !!contestEligibleError ||
-                  contestQuotaReached
+                  contestQuotaReached ||
+                  voteStateUi === "open"
                 }
                 onClick={() => setContestDrawModalOpen(true)}
+                title={
+                  voteStateUi === "open"
+                    ? "Fermez d’abord les participations avant de tirer au sort."
+                    : undefined
+                }
                 style={{
                   marginTop: "0.6rem",
                   padding: "0.45rem 0.8rem",
@@ -7907,7 +8817,8 @@ export default function RegieEventPage() {
                     contestEligibleLoading ||
                     contestEligibleCount <= 0 ||
                     !!contestEligibleError ||
-                    contestQuotaReached
+                    contestQuotaReached ||
+                    voteStateUi === "open"
                       ? "#f8fafc"
                       : "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)",
                   color:
@@ -7915,7 +8826,8 @@ export default function RegieEventPage() {
                     contestEligibleLoading ||
                     contestEligibleCount <= 0 ||
                     !!contestEligibleError ||
-                    contestQuotaReached
+                    contestQuotaReached ||
+                    voteStateUi === "open"
                       ? "#94a3b8"
                       : "#fff",
                   fontSize: "0.8rem",
@@ -7925,12 +8837,38 @@ export default function RegieEventPage() {
                     contestEligibleLoading ||
                     contestEligibleCount <= 0 ||
                     !!contestEligibleError ||
-                    contestQuotaReached
+                    contestQuotaReached ||
+                    voteStateUi === "open"
                       ? "not-allowed"
                       : "pointer",
                 }}
               >
-                Tirer un gagnant
+                Tirer au sort
+              </button>
+              <button
+                type="button"
+                disabled={busy || !canReplaceContestWinner}
+                onClick={() => {
+                  const firstActive = activeContestWinnersOnly[0];
+                  setContestReplaceWinnerId(
+                    firstActive ? String(firstActive.id || "") : "",
+                  );
+                  setContestReplaceModalOpen(true);
+                }}
+                style={{
+                  marginTop: "0.45rem",
+                  marginLeft: "0.45rem",
+                  padding: "0.45rem 0.8rem",
+                  borderRadius: "9px",
+                  border: "1px solid #c4b5fd",
+                  background: busy || !canReplaceContestWinner ? "#f8fafc" : "#fff",
+                  color: busy || !canReplaceContestWinner ? "#94a3b8" : "#5b21b6",
+                  fontSize: "0.8rem",
+                  fontWeight: 700,
+                  cursor: busy || !canReplaceContestWinner ? "not-allowed" : "pointer",
+                }}
+              >
+                Remplacer un gagnant
               </button>
               {contestQuotaReached ? (
                 <p
@@ -8026,19 +8964,35 @@ export default function RegieEventPage() {
                       gap: "0.25rem",
                     }}
                   >
-                    {contestWinners.map((winner, idx) => (
+                    {contestWinners.map((winner, idx) => {
+                      const status = normalizeContestWinnerStatus(winner.status);
+                      const isReplaced = status === CONTEST_WINNER_STATUS_REPLACED;
+                      return (
                       <li
                         key={`${winner.id || winner.drawId}-${idx}`}
                         style={{
                           fontSize: "0.8rem",
-                          color: "#374151",
+                          color: isReplaced ? "#6b7280" : "#374151",
                           lineHeight: 1.35,
                         }}
                       >
                         {formatWinnerName(winner)} — {maskPhone(winner.phone)}
                         {maskEmail(winner.email) ? ` · ${maskEmail(winner.email)}` : ""}
+                        <span
+                          style={{
+                            marginLeft: "0.4rem",
+                            fontSize: "0.68rem",
+                            fontWeight: 800,
+                            letterSpacing: "0.04em",
+                            textTransform: "uppercase",
+                            color: isReplaced ? "#92400e" : "#166534",
+                          }}
+                        >
+                          {isReplaced ? "Remplacé" : "Actif"}
+                        </span>
                       </li>
-                    ))}
+                      );
+                    })}
                   </ol>
                 )}
                 {contestWinnersError ? (
@@ -8051,27 +9005,62 @@ export default function RegieEventPage() {
           ) : null}
 
           {eventData.slug ? (
-            <BlocProjectionEcran
-              slug={eventData.slug}
-              activePollId={eventData.activePollId ?? null}
-              liveState={liveState}
-              displayState={projectionDisplayStateUi}
-              busy={busy}
-              postAction={postAction}
-              sendScreenAction={sendScreenAction}
-              screenMainConnected={screenMainConnected}
-              screenBConnected={screenBConnected}
-              screenBDisplayState={screenBDisplayState}
-              desktop={desktop}
-              chronoSection={null}
-              autoRotate={autoRotate}
-              onAutoRotateChange={setAutoRotate}
-              autoRotateAllowed={autoRotateAllowed}
-              autoRotateQuestionSec={autoRotateQuestionSec}
-              autoRotateResultsSec={autoRotateResultsSec}
-              onAutoRotateQuestionSecChange={setAutoRotateQuestionSec}
-              onAutoRotateResultsSecChange={setAutoRotateResultsSec}
-            />
+            <details
+              style={{
+                ...CARD,
+                padding: desktop ? "0.95rem 1.1rem" : "0.85rem 1rem",
+                border: "1px solid #e2e8f0",
+                background:
+                  "linear-gradient(180deg, rgba(248,250,252,0.96) 0%, #ffffff 100%)",
+              }}
+            >
+              <summary
+                style={{
+                  cursor: "pointer",
+                  fontWeight: 800,
+                  fontSize: desktop ? "0.98rem" : "0.92rem",
+                  color: "#0f172a",
+                  letterSpacing: "-0.01em",
+                  listStyle: "none",
+                }}
+              >
+                {REGIE_ZONE_PROJECTION_AVANCEE}
+              </summary>
+              <p
+                style={{
+                  margin: "0.45rem 0 0.75rem 0",
+                  fontSize: "0.78rem",
+                  color: "#64748b",
+                  lineHeight: 1.4,
+                }}
+              >
+                Noir, Attente, écrans A/B, forçage Question/Résultats, auto-rotation —
+                hors parcours principal.
+              </p>
+              <BlocProjectionEcran
+                slug={eventData.slug}
+                activePollId={eventData.activePollId ?? null}
+                liveState={liveState}
+                displayState={projectionDisplayStateUi}
+                busy={busy}
+                postAction={postAction}
+                sendScreenAction={sendScreenAction}
+                screenMainConnected={screenMainConnected}
+                screenBConnected={screenBConnected}
+                screenBDisplayState={screenBDisplayState}
+                desktop={desktop}
+                chronoSection={null}
+                autoRotate={autoRotate}
+                onAutoRotateChange={setAutoRotate}
+                autoRotateAllowed={autoRotateAllowed}
+                autoRotateQuestionSec={autoRotateQuestionSec}
+                autoRotateResultsSec={autoRotateResultsSec}
+                onAutoRotateQuestionSecChange={setAutoRotateQuestionSec}
+                onAutoRotateResultsSecChange={setAutoRotateResultsSec}
+                activePollType={activePoll?.type ?? null}
+                activePollLeadEnabled={activePoll?.leadEnabled ?? null}
+              />
+            </details>
           ) : null}
 
           {!desktop && eventData.slug ? (

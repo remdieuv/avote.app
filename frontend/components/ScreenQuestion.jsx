@@ -3,7 +3,16 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { formatCountdownVerbose } from "@/lib/chronoFormat";
-import { getUxState } from "@/lib/liveStateUx";
+import {
+  SCREEN_QR_CTA_VOTE,
+  countScreenVotesReceived,
+  formatScreenOptionLine,
+  formatScreenQuestionProgressLabel,
+  getScreenClosedAwaitingResultsLabel,
+  isScreenQuizAnswerRevealed,
+  screenOptionLetter,
+  sortScreenOptions,
+} from "@/lib/diffusionUx";
 import { useEventMode } from "@/lib/useEventMode";
 
 /** @param {Record<string, unknown> | null | undefined} tm */
@@ -20,36 +29,13 @@ function chronoRestantSecondes(tm) {
   return Math.max(0, tm.totalSec - acc - seg);
 }
 
-const PILL_VOTE_OPEN = {
-  label: getUxState({
-    liveState: "VOTING",
-    voteState: "OPEN",
-    displayState: "QUESTION",
-  }).label,
-  bg: "rgba(34, 197, 94, 0.22)",
-  color: "#86efac",
-  border: "1px solid rgba(34, 197, 94, 0.5)",
-};
-
-const PILL_VOTE_CLOSED = {
-  label: getUxState({
-    liveState: "CLOSED",
-    voteState: "CLOSED",
-    displayState: "QUESTION",
-  }).label,
-  bg: "rgba(148, 163, 184, 0.2)",
-  color: "#cbd5e1",
-  border: "1px solid rgba(148, 163, 184, 0.45)",
-};
-
 /**
- * Bloc QR responsive : occupe l’espace restant sans faire défiler la page.
- * @param {{ slug: string; qrScale?: number; compactText?: boolean; fullScreen?: boolean }} props
+ * QR secondaire (retardataires) — compact, ne rivalise pas avec question/réponses.
+ * @param {{ slug: string }} props
  */
-function BlocQrVote({ slug, qrScale = 1, compactText = false, fullScreen = false }) {
-  const zoneRef = useRef(/** @type {HTMLDivElement | null} */ (null));
-  const [cotePx, setCotePx] = useState(200);
+function BlocQrSecondaire({ slug }) {
   const [joinUrl, setJoinUrl] = useState("");
+  const [cotePx, setCotePx] = useState(112);
 
   useEffect(() => {
     if (!slug || typeof window === "undefined") return;
@@ -59,127 +45,63 @@ function BlocQrVote({ slug, qrScale = 1, compactText = false, fullScreen = false
   }, [slug]);
 
   useLayoutEffect(() => {
-    const el = zoneRef.current;
-    if (!el) return;
-    const scaleSafe = Math.max(0.8, Math.min(1.8, qrScale));
-
-    // Mode QR plein écran: priorise un QR dominant (quasi plein écran)
-    if (typeof window !== "undefined" && fullScreen) {
-      const applyViewportSize = () => {
-        const forced = Math.round(
-          Math.min(window.innerWidth * 0.72, window.innerHeight * 0.78),
-        );
-        setCotePx(Math.max(520, Math.min(forced, 2200)));
-      };
-      applyViewportSize();
-      window.addEventListener("resize", applyViewportSize);
-      return () => window.removeEventListener("resize", applyViewportSize);
-    }
-
-    // Mode grande salle: taille forcée depuis le viewport (différence visible garantie)
-    if (typeof window !== "undefined" && scaleSafe > 1.1) {
-      const applyViewportSize = () => {
-        const forced = Math.round(
-          Math.min(window.innerWidth * 0.42, window.innerHeight * 0.52),
-        );
-        setCotePx(Math.max(260, Math.min(forced, 1700)));
-      };
-      applyViewportSize();
-      window.addEventListener("resize", applyViewportSize);
-      return () => window.removeEventListener("resize", applyViewportSize);
-    }
-
-    if (typeof ResizeObserver === "undefined") return;
-    const maj = () => {
-      const w = el.clientWidth;
-      const h = el.clientHeight;
-      /* place pour la légende + interstice (le mesureur voit toute la zone flex) */
-      const reserveLegende = 128;
-      const padCarte =
-        2 * Math.max(10, Math.min(22, Math.round(Math.min(w, h) * 0.035)));
-      const brut = Math.min(
-        w * 0.995 - padCarte,
-        Math.max(0, h - reserveLegende - padCarte),
+    if (typeof window === "undefined") return;
+    const apply = () => {
+      const forced = Math.round(
+        Math.min(window.innerWidth * 0.14, window.innerHeight * 0.18),
       );
-      const avecMarge = Math.floor(Math.max(0, brut) * 1);
-      let scaled = Math.round(avecMarge * scaleSafe);
-      const minPx = 170;
-      const maxPx = 1400;
-      setCotePx(Math.max(minPx, Math.min(scaled, maxPx)));
+      setCotePx(Math.max(88, Math.min(forced, 160)));
     };
-    maj();
-    const ro = new ResizeObserver(maj);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [qrScale, fullScreen]);
+    apply();
+    window.addEventListener("resize", apply);
+    return () => window.removeEventListener("resize", apply);
+  }, []);
 
   if (!joinUrl) return null;
-  const scaleSafe = Math.max(0.8, Math.min(1.8, qrScale));
-  const forceLargeMode = scaleSafe > 1.1;
-  const qrRenderedSize = fullScreen
-    ? Math.max(cotePx, 520)
-    : forceLargeMode
-      ? Math.max(cotePx, 420)
-      : cotePx;
 
   return (
-    <div
-      ref={zoneRef}
+    <aside
+      aria-label="Rejoindre pour voter"
       style={{
-        flex: "1 1 0",
-        minHeight: 0,
-        width: "100%",
+        flexShrink: 0,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        justifyContent: "center",
-        gap: "clamp(0.7rem, 2.2vw, 1.35rem)",
+        gap: "0.45rem",
+        padding: "0.55rem 0.65rem",
+        borderRadius: "14px",
+        background: "rgba(255,255,255,0.97)",
+        boxShadow: "0 10px 28px rgba(0,0,0,0.28)",
       }}
     >
-      <div
-        style={{
-          flex: "0 0 auto",
-          padding: "clamp(0.5rem, 1.4vw, 0.95rem)",
-          borderRadius: "clamp(16px, 3vw, 26px)",
-          background: "#ffffff",
-          boxShadow:
-            "0 22px 64px rgba(0, 0, 0, 0.44), 0 0 0 1px rgba(15, 23, 42, 0.06)",
-          lineHeight: 0,
-        }}
-      >
-        <QRCodeSVG
-          value={joinUrl}
-          size={qrRenderedSize}
-          level="M"
-          marginSize={2}
-          bgColor="#ffffff"
-          fgColor="#0f172a"
-        />
-      </div>
+      <QRCodeSVG
+        value={joinUrl}
+        size={cotePx}
+        level="M"
+        marginSize={1}
+        bgColor="#ffffff"
+        fgColor="#0f172a"
+      />
       <p
         style={{
           margin: 0,
-          fontSize: fullScreen
-            ? "clamp(1.05rem, 2.4vw, 1.5rem)"
-            : compactText
-            ? "clamp(1.25rem, 4.2vw, 2.3rem)"
-            : "clamp(1.55rem, 5.2vw, 3.35rem)",
+          fontSize: "clamp(0.72rem, 1.35vw, 0.92rem)",
           fontWeight: 800,
-          color: "#f1f5f9",
-          letterSpacing: "0.03em",
+          color: "#334155",
           textAlign: "center",
-          flexShrink: 0,
-          textWrap: "balance",
+          letterSpacing: "0.02em",
         }}
       >
-        Scannez pour voter
+        {SCREEN_QR_CTA_VOTE}
       </p>
-    </div>
+    </aside>
   );
 }
 
 /**
- * Écran projection : phase vote (question + chrono + QR, sans liste des réponses).
+ * Écran projection : VOTING (question + options + chrono + votes + QR secondaire)
+ * ou CLOSED (même composition sans résultats, bandeau VOTE TERMINÉ).
+ *
  * @param {{
  *   shell: Record<string, unknown>;
  *   poll: Record<string, unknown>;
@@ -187,6 +109,7 @@ function BlocQrVote({ slug, qrScale = 1, compactText = false, fullScreen = false
  *   chronoTick: number;
  *   voteOuvert: boolean;
  *   joinSlug: string | null | undefined;
+ *   questionProgress?: { current: number; total: number } | null;
  *   qrScale?: number;
  *   compactQuestionText?: boolean;
  *   fullScreenQr?: boolean;
@@ -200,12 +123,15 @@ export function ScreenQuestion({
   chronoTick,
   voteOuvert,
   joinSlug,
+  questionProgress = null,
   qrScale = 1,
   compactQuestionText = false,
   fullScreenQr = false,
   compactChrono = false,
 }) {
   const eventMode = useEventMode(poll);
+  void qrScale;
+  void fullScreenQr;
 
   const secondesChronoVote = useMemo(() => {
     void chronoTick;
@@ -227,7 +153,39 @@ export function ScreenQuestion({
 
   const slugQr =
     typeof joinSlug === "string" && joinSlug.length > 0 ? joinSlug : null;
-  const votePill = voteOuvert ? PILL_VOTE_OPEN : PILL_VOTE_CLOSED;
+
+  const options = useMemo(
+    () => sortScreenOptions(poll?.options),
+    [poll?.options],
+  );
+
+  const votesInfo = useMemo(() => countScreenVotesReceived(poll), [poll]);
+  const quizRevealedClosed =
+    !voteOuvert && isScreenQuizAnswerRevealed(poll);
+
+  const closedAwaitLabel = !voteOuvert
+    ? getScreenClosedAwaitingResultsLabel({
+        quizAnswerRevealed: quizRevealedClosed,
+        pollType: poll?.type,
+        leadEnabled: poll?.leadEnabled,
+      })
+    : null;
+
+  const progressLabel = formatScreenQuestionProgressLabel(
+    questionProgress,
+    voteOuvert ? "voting" : "closed",
+  );
+
+  const optCount = options.length;
+  const gridCols =
+    optCount <= 2
+      ? "repeat(2, minmax(0, 1fr))"
+      : optCount === 3
+        ? "repeat(3, minmax(0, 1fr))"
+        : "repeat(2, minmax(0, 1fr))";
+
+  const chronoUrgent =
+    secondesChronoVote !== null && secondesChronoVote <= 10;
 
   return (
     <main
@@ -239,11 +197,12 @@ export function ScreenQuestion({
         overflow: "hidden",
         display: "flex",
         flexDirection: "column",
-        alignItems: "center",
+        alignItems: "stretch",
         textAlign: "center",
         boxSizing: "border-box",
         padding:
-          "clamp(0.65rem, 2.2vw, 1.35rem) clamp(0.85rem, 3vw, 1.75rem)",
+          "clamp(0.75rem, 2.2vw, 1.5rem) clamp(0.9rem, 3vw, 1.85rem)",
+        gap: "clamp(0.55rem, 1.6vw, 1rem)",
       }}
     >
       {eventMode.isTestMode ? (
@@ -271,178 +230,271 @@ export function ScreenQuestion({
         </div>
       ) : null}
 
-      <div
+      <header
         style={{
           flexShrink: 0,
-          width: "100%",
-          maxWidth: "min(1100px, 100%)",
-          marginLeft: "auto",
-          marginRight: "auto",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
+          gap: "clamp(0.35rem, 1vw, 0.65rem)",
         }}
       >
-        <span
-          style={{
-            display: "inline-block",
-            fontSize: "clamp(0.7rem, 1.4vw, 0.82rem)",
-            fontWeight: 800,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            padding: "0.4rem 0.9rem",
-            borderRadius: "9999px",
-            marginBottom: "clamp(0.55rem, 1.8vw, 1rem)",
-            background: votePill.bg,
-            color: votePill.color,
-            border: votePill.border,
-          }}
-        >
-          {votePill.label}
-        </span>
-
-        {eventMode.isTestMode ? (
+        {progressLabel ? (
           <p
             style={{
-              margin: "0 0 clamp(0.55rem, 1.8vw, 1rem) 0",
-              fontSize: "clamp(0.78rem, 1.7vw, 1.02rem)",
-              fontWeight: 700,
-              color: "#94a3b8",
-              lineHeight: 1.25,
-              textWrap: "balance",
-              maxWidth: "42ch",
+              margin: 0,
+              fontSize: "clamp(0.95rem, 2.4vw, 1.45rem)",
+              fontWeight: 900,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: voteOuvert ? "#86efac" : "#cbd5e1",
             }}
           >
-            Mode TEST actif : résultats et exports limités.
-            <br />
-            Passez en mode réel pour une expérience complète.
+            {progressLabel}
+          </p>
+        ) : null}
+
+        {!voteOuvert ? (
+          <p
+            style={{
+              margin: 0,
+              fontSize: "clamp(1.35rem, 4.2vw, 2.75rem)",
+              fontWeight: 900,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              color: "#f8fafc",
+            }}
+          >
+            VOTE TERMINÉ
           </p>
         ) : null}
 
         <h1
           style={{
             margin: 0,
-            fontSize: "clamp(1.65rem, 6vw, 4.25rem)",
-            ...(compactQuestionText
-              ? { fontSize: "clamp(1.3rem, 4.5vw, 2.7rem)" }
-              : {}),
+            fontSize: compactQuestionText
+              ? "clamp(1.35rem, 4.2vw, 2.6rem)"
+              : "clamp(1.75rem, 5.5vw, 3.85rem)",
             fontWeight: 900,
             lineHeight: 1.08,
-            letterSpacing: "-0.035em",
+            letterSpacing: "-0.03em",
             color: "#f8fafc",
-            maxWidth: compactQuestionText ? "26ch" : "34ch",
+            maxWidth: "28ch",
             textWrap: "balance",
           }}
         >
           {questionAffichee}
         </h1>
-      </div>
+      </header>
 
-      {voteOuvert ? (
-        chronometreApi ? (
-          <div
+      {voteOuvert && chronometreApi ? (
+        <div
+          style={{
+            flexShrink: 0,
+            alignSelf: "center",
+            padding: compactChrono
+              ? "clamp(0.35rem, 1vw, 0.55rem) clamp(0.75rem, 2vw, 1.2rem)"
+              : "clamp(0.55rem, 1.4vw, 0.85rem) clamp(1.1rem, 3vw, 2rem)",
+            borderRadius: "16px",
+            background: chronoUrgent
+              ? "rgba(127, 29, 29, 0.55)"
+              : "rgba(15, 23, 42, 0.72)",
+            border: chronoUrgent
+              ? "2px solid rgba(251, 113, 133, 0.75)"
+              : "2px solid rgba(148, 163, 184, 0.35)",
+            minWidth: "min(280px, 90%)",
+          }}
+        >
+          <p
             style={{
-              marginTop: compactChrono
-                ? "clamp(0.5rem, 1.2vw, 0.8rem)"
-                : "clamp(0.85rem, 2.5vw, 1.65rem)",
-              marginBottom: compactChrono
-                ? "clamp(0.3rem, 0.8vw, 0.6rem)"
-                : "clamp(0.55rem, 1.8vw, 1rem)",
-              padding: compactChrono
-                ? "clamp(0.45rem, 1.1vw, 0.75rem) clamp(0.75rem, 2vw, 1.35rem)"
-                : "clamp(1rem, 2.6vw, 1.65rem) clamp(1.5rem, 4.5vw, 3rem)",
-              borderRadius: compactChrono ? "14px" : "28px",
-              background:
-                "linear-gradient(165deg, rgba(49, 46, 129, 0.9) 0%, rgba(15, 23, 42, 0.94) 100%)",
-              border: compactChrono
-                ? "2px solid rgba(129, 140, 248, 0.65)"
-                : "4px solid rgba(129, 140, 248, 0.7)",
-              boxShadow:
-                "0 0 0 1px rgba(255,255,255,0.07) inset, 0 16px 48px rgba(79, 70, 229, 0.42)",
-              minWidth: compactChrono ? "min(360px, 90%)" : "min(580px, 100%)",
-              maxWidth: compactChrono ? "min(100%, 520px)" : "min(100%, 780px)",
-              marginLeft: "auto",
-              marginRight: "auto",
-              flexShrink: 0,
+              margin: 0,
+              fontSize: "clamp(0.7rem, 1.3vw, 0.85rem)",
+              color: chronoUrgent ? "#fecdd3" : "#94a3b8",
+              fontWeight: 800,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
             }}
           >
+            {chronometreApi.isPaused ? "Chrono en pause" : "Temps restant"}
+          </p>
+          <p
+            style={{
+              margin: "0.25rem 0 0 0",
+              fontSize: compactChrono
+                ? affichageChrono.chronoLong
+                  ? "clamp(1.2rem, 4vw, 2.2rem)"
+                  : "clamp(1.8rem, 6.5vw, 3.6rem)"
+                : affichageChrono.chronoLong
+                  ? "clamp(1.5rem, 5.5vw, 3.2rem)"
+                  : "clamp(2.6rem, 10vw, 5.5rem)",
+              fontWeight: 900,
+              fontVariantNumeric: "tabular-nums",
+              lineHeight: 1,
+              color: chronoUrgent ? "#fb7185" : "#f1f5f9",
+            }}
+          >
+            {affichageChrono.text}
+          </p>
+        </div>
+      ) : null}
+
+      <ul
+        style={{
+          listStyle: "none",
+          margin: 0,
+          padding: 0,
+          flex: "1 1 0",
+          minHeight: 0,
+          width: "100%",
+          maxWidth: "min(1200px, 100%)",
+          alignSelf: "center",
+          display: "grid",
+          gridTemplateColumns: gridCols,
+          gap: "clamp(0.55rem, 1.5vw, 1rem)",
+          alignContent: optCount <= 4 ? "center" : "start",
+          overflow: "auto",
+        }}
+      >
+        {options.map((opt, idx) => {
+          const letter = screenOptionLetter(idx);
+          const label =
+            (typeof opt?.label === "string" && opt.label) || `Option ${letter}`;
+          const isCorrectHighlight =
+            quizRevealedClosed && Boolean(opt?.isCorrect);
+          const displayLabel = quizRevealedClosed
+            ? formatScreenOptionLine(letter, label)
+            : label;
+          return (
+            <li
+              key={String(opt.id ?? idx)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "clamp(0.65rem, 1.8vw, 1.15rem)",
+                textAlign: "left",
+                padding:
+                  "clamp(0.75rem, 2vw, 1.25rem) clamp(0.85rem, 2.2vw, 1.35rem)",
+                borderRadius: "16px",
+                background: isCorrectHighlight
+                  ? "rgba(22, 163, 74, 0.28)"
+                  : "rgba(30, 41, 59, 0.72)",
+                border: isCorrectHighlight
+                  ? "3px solid #4ade80"
+                  : "2px solid rgba(148, 163, 184, 0.28)",
+                minHeight: "clamp(4.2rem, 10vh, 6.5rem)",
+                opacity:
+                  quizRevealedClosed && !isCorrectHighlight ? 0.55 : 1,
+                boxShadow: isCorrectHighlight
+                  ? "0 0 0 1px rgba(74, 222, 128, 0.35), 0 12px 36px rgba(22, 163, 74, 0.25)"
+                  : undefined,
+              }}
+            >
+              <span
+                style={{
+                  flexShrink: 0,
+                  width: "clamp(2.4rem, 5vw, 3.4rem)",
+                  height: "clamp(2.4rem, 5vw, 3.4rem)",
+                  borderRadius: "12px",
+                  display: "grid",
+                  placeItems: "center",
+                  fontWeight: 900,
+                  fontSize: "clamp(1.25rem, 3vw, 1.85rem)",
+                  color: "#0f172a",
+                  background: isCorrectHighlight
+                    ? "#4ade80"
+                    : voteOuvert
+                      ? "#86efac"
+                      : "#cbd5e1",
+                }}
+              >
+                {letter}
+              </span>
+              <span
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.2rem",
+                  minWidth: 0,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "clamp(1.15rem, 3.2vw, 2.15rem)",
+                    fontWeight: 800,
+                    lineHeight: 1.15,
+                    color: "#f8fafc",
+                    textWrap: "balance",
+                  }}
+                >
+                  {displayLabel}
+                </span>
+                {isCorrectHighlight ? (
+                  <span
+                    style={{
+                      fontSize: "clamp(0.85rem, 1.8vw, 1.15rem)",
+                      fontWeight: 900,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      color: "#bbf7d0",
+                    }}
+                  >
+                    Bonne réponse
+                  </span>
+                ) : null}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+
+      <footer
+        style={{
+          flexShrink: 0,
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "flex-end",
+          justifyContent: slugQr && voteOuvert ? "space-between" : "center",
+          gap: "clamp(0.65rem, 2vw, 1.25rem)",
+          width: "100%",
+          maxWidth: "min(1200px, 100%)",
+          alignSelf: "center",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: voteOuvert ? "flex-start" : "center",
+            gap: "0.35rem",
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontSize: "clamp(1.1rem, 2.8vw, 1.85rem)",
+              fontWeight: 800,
+              color: "#e2e8f0",
+              letterSpacing: "-0.01em",
+            }}
+          >
+            {votesInfo.label}
+          </p>
+          {closedAwaitLabel ? (
             <p
               style={{
                 margin: 0,
-                fontSize: compactChrono
-                  ? "clamp(0.72rem, 1.4vw, 0.86rem)"
-                  : "clamp(0.85rem, 1.8vw, 1.05rem)",
-                color: "#c7d2fe",
-                fontWeight: 800,
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
+                fontSize: "clamp(1rem, 2.4vw, 1.45rem)",
+                fontWeight: 700,
+                color: "#94a3b8",
               }}
             >
-              {chronometreApi.isPaused ? "Chrono en pause" : "Temps restant"}
+              {closedAwaitLabel}
             </p>
-            <p
-              style={{
-                margin: "clamp(0.45rem, 1.2vw, 0.85rem) 0 0 0",
-                fontSize: compactChrono
-                  ? affichageChrono.chronoLong
-                    ? "clamp(1.2rem, 4.2vw, 2.5rem)"
-                    : "clamp(1.9rem, 7.2vw, 4.25rem)"
-                  : affichageChrono.chronoLong
-                    ? "clamp(1.75rem, 7vw, 4rem)"
-                    : "clamp(3.5rem, 15vw, 8.25rem)",
-                fontWeight: 900,
-                fontVariantNumeric: "tabular-nums",
-                lineHeight: 1,
-                color:
-                  secondesChronoVote !== null && secondesChronoVote <= 10
-                    ? "#fb7185"
-                    : "#eef2ff",
-                textShadow: "0 4px 32px rgba(99, 102, 241, 0.5)",
-                wordBreak: "break-word",
-                maxWidth: "min(95vw, 52rem)",
-              }}
-            >
-              {affichageChrono.text}
-            </p>
-          </div>
-        ) : (
-          <p
-            style={{
-              marginTop: "clamp(0.75rem, 2vw, 1.25rem)",
-              marginBottom: "clamp(0.35rem, 1vw, 0.65rem)",
-              fontSize: "clamp(0.95rem, 2vw, 1.15rem)",
-              color: "#64748b",
-              fontStyle: "italic",
-              flexShrink: 0,
-            }}
-          >
-            En attente du chrono (régie)
-          </p>
-        )
-      ) : (
-        <p
-          style={{
-            marginTop: "clamp(0.75rem, 2.2vw, 1.35rem)",
-            marginBottom: "clamp(0.35rem, 1vw, 0.65rem)",
-            fontSize: "clamp(0.95rem, 2.2vw, 1.25rem)",
-            color: "#94a3b8",
-            fontWeight: 600,
-            flexShrink: 0,
-            maxWidth: "36ch",
-          }}
-        >
-          Le vote va bientôt s’ouvrir — scannez le QR pour être prêt.
-        </p>
-      )}
+          ) : null}
+        </div>
 
-      {slugQr ? (
-        <BlocQrVote
-          slug={slugQr}
-          qrScale={qrScale}
-          compactText={compactQuestionText}
-          fullScreen={fullScreenQr}
-        />
-      ) : null}
+        {slugQr && voteOuvert ? <BlocQrSecondaire slug={slugQr} /> : null}
+      </footer>
     </main>
   );
 }

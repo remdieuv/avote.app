@@ -1,7 +1,10 @@
 "use client";
 
 import { useMemo } from "react";
-import { getUxState } from "@/lib/liveStateUx";
+import {
+  formatScreenQuestionProgressLabel,
+  getScreenDiffusionLabel,
+} from "@/lib/diffusionUx";
 
 /**
  * Attente auto-reveal : vote terminé, résultats annoncés avec compte à rebours.
@@ -9,9 +12,15 @@ import { getUxState } from "@/lib/liveStateUx";
  *   shell: Record<string, unknown>;
  *   untilIso: string;
  *   chronoTick: number;
+ *   questionProgress?: { current: number; total: number } | null;
  * }} props
  */
-export function ScreenAutoRevealWait({ shell, untilIso, chronoTick }) {
+export function ScreenAutoRevealWait({
+  shell,
+  untilIso,
+  chronoTick,
+  questionProgress = null,
+}) {
   const secondesRestantes = useMemo(() => {
     void chronoTick;
     const t = new Date(untilIso).getTime();
@@ -19,6 +28,11 @@ export function ScreenAutoRevealWait({ shell, untilIso, chronoTick }) {
     /* eslint-disable-next-line react-hooks/purity -- décompte temps réel (chronoTick chaque seconde) */
     return Math.max(0, Math.ceil((t - Date.now()) / 1000));
   }, [untilIso, chronoTick]);
+
+  const progressLabel = formatScreenQuestionProgressLabel(
+    questionProgress,
+    "closed",
+  );
 
   return (
     <main
@@ -31,17 +45,31 @@ export function ScreenAutoRevealWait({ shell, untilIso, chronoTick }) {
         textAlign: "center",
       }}
     >
+      {progressLabel ? (
+        <p
+          style={{
+            margin: "0 0 clamp(0.55rem, 1.5vw, 0.9rem) 0",
+            fontSize: "clamp(0.9rem, 2.2vw, 1.25rem)",
+            fontWeight: 900,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            color: "#94a3b8",
+          }}
+        >
+          {progressLabel}
+        </p>
+      ) : null}
       <p
         style={{
           margin: "0 0 clamp(0.75rem, 2vw, 1.25rem) 0",
-          fontSize: "clamp(0.7rem, 1.35vw, 0.9rem)",
-          fontWeight: 800,
-          letterSpacing: "0.14em",
+          fontSize: "clamp(1.35rem, 4vw, 2.5rem)",
+          fontWeight: 900,
+          letterSpacing: "0.08em",
           textTransform: "uppercase",
-          color: "#5eead4",
+          color: "#f8fafc",
         }}
       >
-        {getUxState({ liveState: "CLOSED" }).label}
+        {getScreenDiffusionLabel("CLOSED")}
       </p>
       <h1
         style={{
@@ -65,17 +93,6 @@ export function ScreenAutoRevealWait({ shell, untilIso, chronoTick }) {
         </span>{" "}
         seconde{secondesRestantes !== 1 ? "s" : ""}
       </h1>
-      <p
-        style={{
-          margin: "clamp(1rem, 3vw, 1.75rem) 0 0 0",
-          fontSize: "clamp(0.92rem, 2vw, 1.15rem)",
-          color: "#94a3b8",
-          fontWeight: 500,
-          maxWidth: "36ch",
-        }}
-      >
-        Les résultats arrivent dans quelques secondes.
-      </p>
     </main>
   );
 }

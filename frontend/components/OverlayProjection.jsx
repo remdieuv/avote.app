@@ -13,10 +13,13 @@ import { io } from "socket.io-client";
 import { QRCodeSVG } from "qrcode.react";
 import { formatCountdownVerbose } from "@/lib/chronoFormat";
 import { API_URL, SOCKET_URL } from "@/lib/config";
+import { getScreenDiffusionLabel, overlayMustStayTransparent } from "@/lib/diffusionUx";
+import { getContestParticipantPhaseLabel } from "@/lib/leadContestLiveFlow";
 import {
-  LIVE_UX_DETAIL_SCREEN_WAITING_SLUG,
-  getUxState,
+  LIVE_UX_LOCAL,
+  getLiveStateLabel,
 } from "@/lib/liveStateUx";
+import { formatTestModeVoteCountLabel } from "@/lib/testModeResultsMask";
 
 const FADE_MS = 260;
 
@@ -255,6 +258,8 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
   const [poll, setPoll] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  /** Slug introuvable — rester transparent OBS (P8), pas de panneau glass. */
+  const [eventInvalid, setEventInvalid] = useState(false);
   const [overlayNoPoll404, setOverlayNoPoll404] = useState(false);
   const [liveScene, setLiveScene] = useState(null);
   const [displayState, setDisplayState] = useState(null);
@@ -292,10 +297,14 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
   useEffect(() => {
     if (typeof window === "undefined" || !slugPublic) return;
     document.documentElement.style.background = "transparent";
+    document.documentElement.style.backgroundColor = "transparent";
     document.body.style.background = "transparent";
+    document.body.style.backgroundColor = "transparent";
     return () => {
       document.documentElement.style.background = "";
+      document.documentElement.style.backgroundColor = "";
       document.body.style.background = "";
+      document.body.style.backgroundColor = "";
     };
   }, [slugPublic]);
 
@@ -333,11 +342,13 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
         );
         if (res.status === 404) {
           evenementInvalideRef.current = true;
+          setEventInvalid(true);
           if (!silent) {
-            setError("Événement introuvable.");
+            setError(getLiveStateLabel(LIVE_UX_LOCAL.ERROR));
           }
           setEventId(null);
           setEventPrimaryHex(null);
+          setLoading(false);
           return;
         }
         if (!res.ok) {
@@ -346,6 +357,8 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
           }
           return;
         }
+        evenementInvalideRef.current = false;
+        setEventInvalid(false);
         const meta = await res.json();
         applyEventSlugMeta(meta);
       } catch {
@@ -360,9 +373,11 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
   useEffect(() => {
     if (!slugPublic) {
       evenementInvalideRef.current = false;
+      setEventInvalid(false);
       return;
     }
     evenementInvalideRef.current = false;
+    setEventInvalid(false);
     void fetchEventSlugMeta();
   }, [slugPublic, fetchEventSlugMeta]);
 
@@ -377,7 +392,9 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
         loadPollAbortRef.current = ac;
         signal = ac.signal;
 
-        setError(null);
+        if (!evenementInvalideRef.current) {
+          setError(null);
+        }
         setOverlayNoPoll404(false);
         setLoading(true);
       }
@@ -393,10 +410,14 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
         if (res.status === 404) {
           setPoll(null);
           if (slugPublic && evenementInvalideRef.current) {
+            setEventInvalid(true);
+            setError((prev) => prev || getLiveStateLabel(LIVE_UX_LOCAL.ERROR));
             return;
           }
           if (slugPublic) {
-            setError(null);
+            if (!evenementInvalideRef.current) {
+              setError(null);
+            }
             setOverlayNoPoll404(true);
           } else {
             setError("Sondage introuvable.");
@@ -417,7 +438,10 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
         } else {
           setLiveScene("results");
         }
-        if (typeof data.eventDisplayState === "string") {
+        // LOT-5 — Screen projection prioritaire (écran ≠ salle) ; fallback displayState.
+        if (typeof data.eventScreenDisplayState === "string") {
+          setDisplayState(data.eventScreenDisplayState.toLowerCase());
+        } else if (typeof data.eventDisplayState === "string") {
           setDisplayState(data.eventDisplayState.toLowerCase());
         } else {
           setDisplayState(deriveDisplayFromLive(data.eventLiveState));
@@ -432,10 +456,22 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
           return;
         }
         setPoll(null);
-        setError(
-          e.message ||
-            "Impossible de charger le sondage (API sur le port 4000 ?)",
-        );
+        if (evenementInvalideRef.current) {
+          setEventInvalid(true);
+          setError((prev) => prev || getLiveStateLabel(LIVE_UX_LOCAL.ERROR));
+        } else {
+          const msg = String(e?.message || "");
+          const network =
+            !msg ||
+            /failed to fetch|networkerror|load failed|network request failed/i.test(
+              msg,
+            );
+          setError(
+            network
+              ? "Impossible de joindre l’API."
+              : msg || "Impossible de charger le sondage (API sur le port 4000 ?)",
+          );
+        }
       } finally {
         if (!silent) {
           setLoading(false);
@@ -653,22 +689,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
     return () => {
       cancelled = true;
     };
-  }, [poll?.id, poll?.eventSlug, poll?.options]);
-  const overlayVoteState = useMemo(() => {
-    if (typeof poll?.eventVoteState === "string" && poll.eventVoteState.trim()) {
-      return poll.eventVoteState;
-    }
-    return null;
-  }, [poll?.eventVoteState]);
-  const overlayUx = useMemo(
-    () =>
-      getUxState({
-        liveState: liveScene,
-        voteState: overlayVoteState,
-        displayState: ds,
-      }),
-    [liveScene, overlayVoteState, ds],
-  );
+  }, [poll?.id, poll?.eventSlug, poll?.options, poll?.contestWinnersCount]);
 
   const fadeKey = `${effectivePanel}|${pollId}|${variant}|${theme}|${position}|only:${onlyQr ? "qr" : "0"}|brand:${eventPrimaryHex || ""}`;
 
@@ -829,38 +850,37 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
     );
   };
 
+  /** Fond OBS : aucune surface opaque (P8). */
+  const stayTransparent = overlayMustStayTransparent({
+    loading,
+    error,
+    eventInvalid,
+    noPollIdle: overlayNoPoll404,
+    effectivePanel,
+    displayState: ds,
+  });
+
+  useEffect(() => {
+    if (!(error || eventInvalid)) return;
+    if (typeof console !== "undefined" && typeof console.warn === "function") {
+      console.warn(
+        "[AVOTE overlay]",
+        error || getLiveStateLabel(LIVE_UX_LOCAL.ERROR),
+        slugPublic ? `(slug: ${slugPublic})` : "",
+      );
+    }
+  }, [error, eventInvalid, slugPublic]);
+
   if (ds === "black") {
-    return (
-      <main style={shellEmptyTransparent} aria-hidden>
-        {}
-      </main>
-    );
+    return <main style={shellEmptyTransparent} aria-hidden />;
   }
 
-  if (loading) {
-    return (
-      <main style={shell}>
-        {wrapGlass(
-          <p style={{ margin: 0, fontSize: v.rowRem, color: th.textMuted }}>
-            Chargement…
-          </p>,
-        )}
-      </main>
-    );
+  // Erreur / chargement / événement invalide : transparent (jamais de glass blanc OBS).
+  if (loading || error || eventInvalid) {
+    return <main style={shellEmptyTransparent} aria-hidden />;
   }
 
-  if (error) {
-    return (
-      <main style={shell}>
-        {wrapGlass(
-          <p style={{ margin: 0, fontSize: v.rowRem, color: "#fecaca" }}>
-            {error}
-          </p>,
-        )}
-      </main>
-    );
-  }
-
+  // Preset only=qr : QR seul même en attente (slug valide) — avant idle vide.
   if (onlyQr && joinUrl) {
     return (
       <main style={shell}>
@@ -879,44 +899,8 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
     );
   }
 
-  if (!poll && overlayNoPoll404) {
-    return (
-      <main style={shell}>
-        {wrapGlass(
-          <>
-            <p
-              style={{
-                margin: "0 0 0.5rem 0",
-                fontSize: v.questionRem,
-                fontWeight: 700,
-                color: th.text,
-              }}
-            >
-              {overlayUx.label}
-            </p>
-            <p style={{ margin: 0, fontSize: v.muted, color: th.textMuted }}>
-              {LIVE_UX_DETAIL_SCREEN_WAITING_SLUG}
-            </p>
-          </>,
-        )}
-      </main>
-    );
-  }
-
-  if (
-    !poll &&
-    (ds === "waiting" ||
-      liveScene === "paused" ||
-      ds === "black")
-  ) {
-    return <main style={shellEmptyTransparent} aria-hidden />;
-  }
-
-  if (!poll) {
-    return <main style={shellEmptyTransparent} aria-hidden />;
-  }
-
-  if (effectivePanel === "empty") {
+  // Idle / pas de contenu : vide transparent (comportement OBS nominal).
+  if (!poll || overlayNoPoll404 || effectivePanel === "empty" || stayTransparent) {
     return <main style={shellEmptyTransparent} aria-hidden />;
   }
 
@@ -979,7 +963,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
                 color: th.teal,
               }}
             >
-              {getUxState({ liveState: "CLOSED" }).label}
+              {getScreenDiffusionLabel("CLOSED")}
             </p>
             <p
               style={{
@@ -1010,6 +994,8 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
 
   if (effectivePanel === "results") {
     const isContestEntry = String(poll?.type || "").toUpperCase() === "CONTEST_ENTRY";
+    const isLeadCrm =
+      Boolean(poll?.leadEnabled) && !isContestEntry;
     return (
       <main style={shell}>
         {wrapGlass(
@@ -1061,10 +1047,53 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
               }}
             >
               {isContestEntry
-                ? "Concours en cours"
-                : getUxState({ liveState: "RESULTS", displayState: "RESULTS" }).label}
+                ? getContestParticipantPhaseLabel({
+                    hasWinners: contestWinners.length > 0,
+                  })
+                : isLeadCrm
+                  ? "Collecte"
+                  : getScreenDiffusionLabel("RESULTS")}
             </p>
-            {isContestEntry ? (
+            {isLeadCrm ? (
+              <div>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: v.rowRem,
+                    fontWeight: 800,
+                    color: th.text,
+                  }}
+                >
+                  {(typeof poll?.question === "string" && poll.question) ||
+                    (typeof poll?.title === "string" && poll.title) ||
+                    "Collecte"}
+                </p>
+                <p
+                  style={{
+                    margin: "0.45rem 0 0 0",
+                    fontSize: `calc(${v.rowRem} * 0.95)`,
+                    color: th.textMuted,
+                    fontWeight: 700,
+                  }}
+                >
+                  {Math.max(
+                    0,
+                    Number(poll?.leadsCount ?? 0) ||
+                      Number(poll?.votersCount ?? 0) ||
+                      0,
+                  )}{" "}
+                  participation
+                  {Math.max(
+                    0,
+                    Number(poll?.leadsCount ?? 0) ||
+                      Number(poll?.votersCount ?? 0) ||
+                      0,
+                  ) !== 1
+                    ? "s"
+                    : ""}
+                </p>
+              </div>
+            ) : isContestEntry ? (
               <div
                 style={{
                   borderRadius: "10px",
@@ -1111,7 +1140,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
                     <ol style={{ margin: "0.3rem 0 0 1rem", padding: 0, color: th.text, fontSize: `calc(${v.rowRem} * 0.9)` }}>
                       {contestWinners.map((w) => (
                         <li key={String(w.id)} style={{ marginBottom: "0.12rem" }}>
-                          {String(w.displayName || "Gagnant")} - {String(w.displayContact || "")}
+                          {String(w.displayName || "Gagnant")}
                         </li>
                       ))}
                     </ol>
@@ -1183,7 +1212,11 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
                           fontSize: `calc(${v.rowRem} * 0.92)`,
                         }}
                       >
-                        {isTestMode ? `≈ ${optVotes}` : `${percentRounded}% · ${optVotes}`}
+                        {isTestMode
+                          ? formatTestModeVoteCountLabel(optVotes, {
+                              withUnit: false,
+                            })
+                          : `${percentRounded}% · ${optVotes}`}
                       </span>
                     </div>
                     <div

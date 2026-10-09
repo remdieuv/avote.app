@@ -9,6 +9,7 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
+    "test:contest-replace": "node scripts/test-contest-winner-replace.mjs",
     "postinstall": "prisma generate"
   },
   "keywords": [],

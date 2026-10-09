@@ -12,6 +12,8 @@ export default function ProjectionSallePage() {
   const slug = typeof slugParam === "string" ? slugParam : slugParam?.[0];
   const searchParams = useSearchParams();
   const [surface, setSurface] = useState("other");
+  /** LOT-2 P8 : QR coin uniquement si ScreenProjection le juge pertinent. */
+  const [allowCornerQr, setAllowCornerQr] = useState(false);
   const projectionMode = String(searchParams?.get("pm") || "standard")
     .trim()
     .toLowerCase();
@@ -43,6 +45,11 @@ export default function ProjectionSallePage() {
     );
   }
 
+  const showCornerQr =
+    allowCornerQr &&
+    surface !== "question" &&
+    projectionMode !== "results_focus";
+
   return (
     <>
       <ScreenProjection
@@ -50,8 +57,9 @@ export default function ProjectionSallePage() {
         screenId={screenId}
         getPollUrl={getPollUrl}
         onSurfaceChange={setSurface}
+        onAllowCornerQrChange={setAllowCornerQr}
       />
-      {surface !== "question" && projectionMode !== "results_focus" ? (
+      {showCornerQr ? (
         <QrAccesVoteEcran slug={slug} compact={surface === "results"} />
       ) : null}
     </>

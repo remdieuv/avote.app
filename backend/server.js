@@ -29,6 +29,23 @@ const {
   assertEventOwnedByOrPlatformAdmin,
   assertPollOwnedBy,
 } = require("./lib/eventAccess");
+const {
+  STATUS_ACTIVE,
+  STATUS_REPLACED,
+  createPollExclusiveQueue,
+  resolveReplaceContestWinnerPlan,
+} = require("./lib/contestWinnerReplace");
+const {
+  canReplayTestPollOnServer,
+  getReplayTestPollDeletionPlan,
+  buildReplayTestPollEventPatch,
+} = require("./lib/testModeReplayPoll");
+
+/** Anti double-clic rejeu TEST (sérialise par pollId). */
+const runReplayTestExclusive = createPollExclusiveQueue();
+
+/** Anti double-clic tirage / remplacement (sérialise par pollId). */
+const runContestDrawExclusive = createPollExclusiveQueue();
 
 /** Origine publique de l’API (URLs absolues assets /join). */
 const PUBLIC_API_ORIGIN = (
@@ -141,6 +158,7 @@ const authAttemptLimiter = rateLimit({
   message: { error: "Trop de tentatives. Réessayez plus tard." },
 });
 
+/** CORS navigateur → API (dev local : Next :3000 → Express :4000 direct). */
 const allowedOrigins = [
   "http://localhost:3000",
   "http://127.0.0.1:3000",
@@ -269,6 +287,71 @@ const QUESTION_TIMER_RESET = {
   questionTimerIsPaused: true,
 };
 
+/**
+ * Transitions Live normales : nettoie un `screenDisplayState=RESULTS` collant
+ * sans fusionner Screen et Salle. Préserve BLACK (projection avancée).
+ *
+ * @param {string | null | undefined} currentScreenDisplayState
+ * @param {"close" | "prepare" | "open" | "show-results"} intent
+ * @returns {"RESULTS" | "BLACK" | null | undefined}
+ *   - valeur → écrire dans le patch
+ *   - `undefined` → ne pas toucher le champ
+ */
+function screenDisplayStateForLiveTransition(currentScreenDisplayState, intent) {
+  const sds = String(currentScreenDisplayState ?? "").toUpperCase();
+  if (intent === "show-results") return "RESULTS";
+  if (sds === "BLACK") return undefined;
+  if (intent === "prepare" || intent === "open") return null;
+  if (intent === "close" && sds === "RESULTS") return null;
+  return undefined;
+}
+
+/**
+ * G13 — Transition d’événement après fermeture de vote (chrono OU régie).
+ * Les deux chemins doivent produire les mêmes axes pour le Screen CLOSED :
+ * vote CLOSED × display WAITING × live WAITING + reset chrono.
+ * Efface uniquement un `screenDisplayState=RESULTS` collant (préserve BLACK).
+ * LOT-2 : pas d’auto-reveal pour Lead CRM / Concours.
+ *
+ * @param {{
+ *   autoReveal?: boolean | null;
+ *   autoRevealDelaySec?: number | null;
+ *   displayState?: string | null;
+ *   screenDisplayState?: string | null;
+ * }} event
+ * @param {{ type?: string | null; leadEnabled?: boolean | null } | null} [activePoll]
+ * @returns {Record<string, unknown>}
+ */
+function buildEventDataAfterVoteClose(event, activePoll = null) {
+  const delaySec = [3, 5, 10].includes(event?.autoRevealDelaySec)
+    ? event.autoRevealDelaySec
+    : 5;
+  /** @type {Record<string, unknown>} */
+  const data = {
+    voteState: "CLOSED",
+    displayState: "WAITING",
+    liveState: "WAITING",
+    ...QUESTION_TIMER_RESET,
+  };
+  const screenPatch = screenDisplayStateForLiveTransition(
+    event?.screenDisplayState,
+    "close",
+  );
+  if (screenPatch !== undefined) {
+    data.screenDisplayState = screenPatch;
+  }
+  const allowAuto =
+    shouldScheduleAutoRevealForPoll(activePoll) &&
+    event?.autoReveal &&
+    String(event?.displayState || "").toUpperCase() !== "RESULTS";
+  if (allowAuto) {
+    data.autoRevealShowResultsAt = new Date(Date.now() + delaySec * 1000);
+  } else {
+    data.autoRevealShowResultsAt = null;
+  }
+  return data;
+}
+
 /** Chrono scène : max 90 jours (Int Prisma suffit largement). */
 const QUESTION_TIMER_SEC_MAX = 90 * 24 * 60 * 60;
 
@@ -305,23 +388,41 @@ function questionTimerSnapshot(event) {
  *   event?: import("@prisma/client").Event | null;
  * }} poll
  */
+/**
+ * Masque un compteur option en MODE TEST (RESULTS).
+ * Aligné `frontend/lib/testModeResultsMask.js` — ne jamais transformer 1 → 0.
+ * @param {unknown} raw
+ * @param {number} [bucket]
+ */
+function maskTestModeOptionVoteCount(raw, bucket = 10) {
+  const n = Math.max(0, Number(raw) || 0);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  const b = Math.max(1, Number(bucket) || 10);
+  if (n < b) return Math.floor(n);
+  return Math.round(n / b) * b;
+}
+
 function pollToJson(poll) {
   const eventIsTestMode = poll?.event?.isLiveConsumed === false;
   const eventDisplayStateUpper = String(poll?.event?.displayState || "").toUpperCase();
   const maskResultsInTestMode = eventIsTestMode && eventDisplayStateUpper === "RESULTS";
 
   const voteCounts = {};
-  for (const v of poll.votes) {
+  /** Participants distincts ayant voté (1 voterSessionId = 1, même en MULTIPLE_CHOICE). */
+  const uniqueVoterSessions = new Set();
+  for (const v of poll.votes || []) {
     voteCounts[v.optionId] = (voteCounts[v.optionId] || 0) + 1;
+    if (v.voterSessionId != null && String(v.voterSessionId).trim()) {
+      uniqueVoterSessions.add(String(v.voterSessionId));
+    }
   }
 
-  // En mode TEST, on masque fortement la précision des résultats en "bucketisant"
-  // les votes bruts avant le calcul des pourcentages côté écran.
+  // En mode TEST + RESULTS : bucket /10 pour obscurcir, mais totaux < 10 restent bruts
+  // (sinon 1 vote → 0 et régie/Salle/screen divergent).
   if (maskResultsInTestMode) {
-    const bucket = 10; // faible granularité = plus difficile d'exploiter via réseau
+    const bucket = 10;
     for (const k of Object.keys(voteCounts)) {
-      const raw = voteCounts[k] || 0;
-      voteCounts[k] = Math.round(raw / bucket) * bucket;
+      voteCounts[k] = maskTestModeOptionVoteCount(voteCounts[k] || 0, bucket);
     }
   }
 
@@ -362,47 +463,70 @@ function pollToJson(poll) {
       ? questionTimerSnapshot(poll.event)
       : null,
     options: poll.options.map((option) => {
+      const n = voteCounts[option.id] || 0;
       const base = {
         id: option.id,
         label: option.label,
         order: option.order,
-        votes: voteCounts[option.id] || 0,
+        votes: n,
+        /** Alias régie / FE (voteCount ?? votes). */
+        voteCount: n,
       };
       if (poll.quizRevealed) {
         return { ...base, isCorrect: Boolean(option.isCorrect) };
       }
       return base;
     }),
+    /**
+     * Bump après tirage / remplacement concours — refresh contest-status.
+     * Compte toutes les lignes (ACTIVE + REPLACED) pour qu’un remplacement
+     * incrémente aussi le signal (le quota métier utilise les ACTIVE seuls).
+     */
+    contestWinnersCount: Number(poll._count?.contestWinners || 0),
+    /**
+     * Nombre de participants ayant voté (distinct voterSessionId).
+     * Screen VOTING : à préférer à la somme des options (MULTIPLE_CHOICE).
+     */
+    votersCount: uniqueVoterSessions.size,
+    /**
+     * Compteur CRM Lead / inscriptions Concours (LeadCapture).
+     * Screen Lead : compteur global sans répartition ni PII.
+     */
+    leadsCount: Number(poll._count?.leads || 0),
   };
 }
 
-function maskPhoneForPublic(phone) {
-  const digits = String(phone || "").replace(/\D/g, "");
-  if (!digits) return null;
-  if (digits.length <= 4) return "XX XX";
-  const head = digits.slice(0, 2);
-  const tail = digits.slice(-2);
-  return `${head} XX XX XX ${tail}`;
+/**
+ * Affichage public Concours : Prénom + initiale du nom.
+ * Sans nom de famille collecté → libellé non identifiant (pas d’initiale inventée).
+ * @param {string | null | undefined} firstName
+ * @param {string | null | undefined} lastName
+ * @param {number} position
+ */
+function winnerDisplayNameForPublic(firstName, lastName, position) {
+  const first = String(firstName || "").trim();
+  const last = String(lastName || "").trim();
+  const pos = Math.max(1, Number(position) || 1);
+  if (first && last) {
+    const f =
+      first.length === 1
+        ? first.toUpperCase()
+        : `${first[0].toUpperCase()}${first.slice(1)}`;
+    return `${f} ${last[0].toUpperCase()}.`;
+  }
+  return `Gagnant ${pos}`;
 }
 
-function maskEmailForPublic(email) {
-  const raw = String(email || "").trim();
-  if (!raw || !raw.includes("@")) return null;
-  const [local, domain] = raw.split("@");
-  if (!domain) return null;
-  const safeLocal =
-    local.length <= 2 ? `${local[0] || "*"}*` : `${local.slice(0, 2)}***`;
-  return `${safeLocal}@${domain}`;
-}
-
-function winnerDisplayNameForPublic(firstName, position) {
-  const n = String(firstName || "").trim();
-  if (!n) return `Gagnant ${position}`;
-  return `${n[0].toUpperCase()}${n.slice(1)}.`;
-}
-
-function winnerDisplayContactForPublic(phone, email) {
-  return maskPhoneForPublic(phone) || maskEmailForPublic(email) || "Contact privé";
+/**
+ * Auto-reveal RESULTS : Sondage / Multiple / Quiz uniquement (pas Lead CRM / Concours).
+ * @param {{ type?: string | null; leadEnabled?: boolean | null } | null | undefined} poll
+ */
+function shouldScheduleAutoRevealForPoll(poll) {
+  if (!poll) return true;
+  const type = String(poll.type || "").toUpperCase();
+  if (type === "CONTEST_ENTRY") return false;
+  if (poll.leadEnabled === true && type !== "CONTEST_ENTRY") return false;
+  return true;
 }
 
 async function loadPollFull(pollId) {
@@ -412,6 +536,7 @@ async function loadPollFull(pollId) {
       event: true,
       options: { orderBy: { order: "asc" } },
       votes: true,
+      _count: { select: { contestWinners: true, leads: true } },
     },
   });
 }
@@ -433,6 +558,7 @@ async function loadPublicPollPourSlug(slug) {
       event: true,
       options: { orderBy: { order: "asc" } },
       votes: true,
+      _count: { select: { contestWinners: true, leads: true } },
     },
   });
   if (!poll) return null;
@@ -680,10 +806,20 @@ async function emitEventLiveUpdated(io, eventId) {
         vs === "CLOSED" &&
         String(poll.status).toUpperCase() === "CLOSED" &&
         String(poll.id) === String(event.activePollId);
+      /**
+       * LOT-5 — Suivante / PRÉPARÉ : poll ACTIVE × WAITING × vote CLOSED.
+       * Inclure le poll pour que Join mette à jour activePollStatus (évite CLOSED stale).
+       */
+      const preparedActiveAntenna =
+        vs === "CLOSED" &&
+        ds === "WAITING" &&
+        String(poll.status).toUpperCase() === "ACTIVE" &&
+        String(poll.id) === String(event.activePollId);
       if (
         openActive ||
         sceneQuestionOrResults ||
-        voteTerminePollEncoreAffiche
+        voteTerminePollEncoreAffiche ||
+        preparedActiveAntenna
       ) {
         pollJson = pollToJson(poll);
       }
@@ -744,7 +880,10 @@ async function annulationAutoRevealProgrammee(eventId) {
   });
 }
 
-/** Applique display RESULTS après délai auto-reveal (timer ou file d’attente serveur). */
+/**
+ * Affichage automatique après délai : même logique métier que le bouton
+ * « Afficher les résultats » (`appliquerAffichageResultats`) — pas un 2ᵉ chemin.
+ */
 async function appliquerAutoRevealResultats(io, eventId) {
   clearAutoRevealTimer(eventId);
   const fresh = await prisma.event.findUnique({ where: { id: eventId } });
@@ -758,15 +897,20 @@ async function appliquerAutoRevealResultats(io, eventId) {
     await emitEventLiveUpdated(io, eventId);
     return;
   }
-  await prisma.event.update({
-    where: { id: eventId },
-    data: {
-      displayState: "RESULTS",
-      liveState: computeLiveState(fresh.voteState, "RESULTS"),
-      autoRevealShowResultsAt: null,
-    },
+  const activePoll = await prisma.poll.findUnique({
+    where: { id: fresh.activePollId },
+    select: { type: true, leadEnabled: true },
   });
-  await emitEventLiveUpdated(io, eventId);
+  // LOT-2 — Lead / Concours : pas d’auto-affichage RESULTS.
+  if (!shouldScheduleAutoRevealForPoll(activePoll)) {
+    await prisma.event.update({
+      where: { id: eventId },
+      data: { autoRevealShowResultsAt: null },
+    });
+    await emitEventLiveUpdated(io, eventId);
+    return;
+  }
+  await appliquerAffichageResultats(io, fresh.activePollId);
 }
 
 function planifierTimeoutAutoReveal(io, eventId, delayMs) {
@@ -798,20 +942,14 @@ async function fermerVoteSiChronoEpuise(io, eventId) {
   });
   if (closed.count === 0) return false;
 
+  const activePollMeta = await prisma.poll.findUnique({
+    where: { id: activeId },
+    select: { type: true, leadEnabled: true },
+  });
+  const dataReveil = buildEventDataAfterVoteClose(event, activePollMeta);
   const delaySec = [3, 5, 10].includes(event.autoRevealDelaySec)
     ? event.autoRevealDelaySec
     : 5;
-  const dataReveil = {
-    voteState: "CLOSED",
-    displayState: "WAITING",
-    liveState: "WAITING",
-    ...QUESTION_TIMER_RESET,
-  };
-  if (event.autoReveal) {
-    dataReveil.autoRevealShowResultsAt = new Date(Date.now() + delaySec * 1000);
-  } else {
-    dataReveil.autoRevealShowResultsAt = null;
-  }
 
   clearAutoRevealTimer(eventId);
   await prisma.event.update({
@@ -824,12 +962,16 @@ async function fermerVoteSiChronoEpuise(io, eventId) {
   if (pollFerme) {
     io.to(roomPourPoll(activeId)).emit("poll_updated", pollToJson(pollFerme));
   }
-  if (event.autoReveal) {
+  if (dataReveil.autoRevealShowResultsAt) {
     planifierTimeoutAutoReveal(io, eventId, delaySec * 1000);
   }
   return true;
 }
 
+/**
+ * Suivante → PRÉPARÉ (V1.1) : antenne = question suivante, vote fermé, pas d’ouverture.
+ * Ouvrir reste l’unique déclencheur de VOTING.
+ */
 async function passerAuSondageSuivant(eventId) {
   const event = await prisma.event.findUnique({
     where: { id: eventId },
@@ -842,14 +984,6 @@ async function passerAuSondageSuivant(eventId) {
     return { ok: false, code: 404, message: "Événement introuvable." };
   }
 
-  const isTestMode = event.isLiveConsumed === false;
-  const forcedTestTimer = {
-    questionTimerTotalSec: 30,
-    questionTimerAccumulatedSec: 0,
-    questionTimerStartedAt: new Date(),
-    questionTimerIsPaused: false,
-  };
-
   await annulationAutoRevealProgrammee(eventId);
 
   const liste = event.polls.filter((p) => p.status !== "ARCHIVED");
@@ -861,6 +995,16 @@ async function passerAuSondageSuivant(eventId) {
     data: { status: "CLOSED" },
   });
 
+  const screenAfterPrepare = screenDisplayStateForLiveTransition(
+    event.screenDisplayState,
+    "prepare",
+  );
+  /** @type {Record<string, unknown>} */
+  const clearStickyScreen =
+    screenAfterPrepare !== undefined
+      ? { screenDisplayState: screenAfterPrepare }
+      : {};
+
   if (!suivant) {
     const misAJour = await prisma.event.update({
       where: { id: eventId },
@@ -870,6 +1014,7 @@ async function passerAuSondageSuivant(eventId) {
         voteState: "CLOSED",
         displayState: "WAITING",
         autoRevealShowResultsAt: null,
+        ...clearStickyScreen,
         ...QUESTION_TIMER_RESET,
       },
     });
@@ -882,24 +1027,30 @@ async function passerAuSondageSuivant(eventId) {
 
   await prisma.poll.update({
     where: { id: suivant.id },
-    data: { status: "ACTIVE" },
+    data: {
+      status: "ACTIVE",
+      quizRevealed:
+        String(suivant.type || "").toUpperCase() === "QUIZ" ? false : undefined,
+    },
   });
 
   const misAJour = await prisma.event.update({
     where: { id: eventId },
     data: {
       activePollId: suivant.id,
-      voteState: "OPEN",
-      displayState: "QUESTION",
-      liveState: "VOTING",
+      voteState: "CLOSED",
+      displayState: "WAITING",
+      liveState: "WAITING",
       autoRevealShowResultsAt: null,
-      ...(isTestMode ? forcedTestTimer : QUESTION_TIMER_RESET),
+      ...clearStickyScreen,
+      ...QUESTION_TIMER_RESET,
     },
   });
 
   return {
     ok: true,
     finished: false,
+    prepared: true,
     activePollId: suivant.id,
     event: misAJour,
   };
@@ -1884,15 +2035,21 @@ app.get("/events/slug/:slug", async (req, res) => {
     if (eventApres) await repairStaleVotingLiveState(eventApres);
 
     let activePollQuestion = null;
+    /** Statut du poll pointé (Join : distinguer attente jamais lancée vs vote fermé). */
+    let activePollStatus = null;
     if (eventApres.activePollId) {
       const p = await prisma.poll.findFirst({
         where: { id: eventApres.activePollId, eventId: eventApres.id },
-        select: { question: true, title: true },
+        select: { question: true, title: true, status: true },
       });
       if (p) {
         const q = (p.question && p.question.trim()) || "";
         const t = (p.title && p.title.trim()) || "";
         activePollQuestion = q || t || null;
+        activePollStatus =
+          typeof p.status === "string" && p.status.trim()
+            ? String(p.status).toUpperCase()
+            : null;
       }
     }
 
@@ -1950,10 +2107,14 @@ app.get("/events/slug/:slug", async (req, res) => {
       autoRevealShowResultsAt:
         eventApres.autoRevealShowResultsAt?.toISOString() ?? null,
       activePollQuestion,
+      activePollStatus,
       pollsProgress,
       pastPollLabels,
       pastPolls,
       questionTimer: questionTimerSnapshot(eventApres),
+      isLocked: Boolean(eventApres.isLocked),
+      /** LOT-5 — badge MODE TEST sur hub /join (conception §5.2 / §9.3). */
+      isLiveConsumed: Boolean(eventApres.isLiveConsumed),
     });
   } catch (e) {
     console.error(e);
@@ -2046,6 +2207,11 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       infoSecondaryCtaLabel: info.infoSecondaryCtaLabel,
       infoSecondaryCtaUrl: info.infoSecondaryCtaUrl,
       joinPath: `/join/${event.slug}`,
+      /** Phase Page événement (LOT-1/7) — pas de nouvel enum ; axes live existants. */
+      liveState: String(event.liveState || "").toLowerCase(),
+      voteState: String(event.voteState || "").toLowerCase(),
+      displayState: String(event.displayState || "").toLowerCase(),
+      isLocked: Boolean(event.isLocked),
     });
   } catch (e) {
     console.error(e);
@@ -2069,7 +2235,8 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
         polls: {
           orderBy: { order: "asc" },
           include: {
-            _count: { select: { votes: true } },
+            options: { orderBy: { order: "asc" } },
+            _count: { select: { votes: true, contestWinners: true } },
           },
         },
         landingPhotos: {
@@ -2089,6 +2256,17 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
       distinct: ["voterSessionId"],
       select: { voterSessionId: true },
     });
+    /** Régie « Réponses en direct » : totaux bruts par option (pas de mask TEST). */
+    const optionVoteRows = await prisma.vote.findMany({
+      where: { poll: { eventId: event.id } },
+      select: { optionId: true },
+    });
+    const optionVoteCounts = {};
+    for (const row of optionVoteRows) {
+      const oid = row.optionId;
+      if (!oid) continue;
+      optionVoteCounts[oid] = (optionVoteCounts[oid] || 0) + 1;
+    }
     return res.json({
       id: event.id,
       title: event.title,
@@ -2118,6 +2296,7 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
         question: p.question,
         contestPrize: p.contestPrize ?? null,
         contestWinnerCount: Number(p.contestWinnerCount || 1),
+        contestWinnersCount: Number(p._count?.contestWinners || 0),
         quizRevealed: Boolean(p.quizRevealed),
         order: p.order,
         status: p.status,
@@ -2125,6 +2304,16 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
         leadEnabled: Boolean(p.leadEnabled),
         leadTriggerOptionId: p.leadTriggerOptionId ?? null,
         voteCount: p._count.votes,
+        options: (p.options || []).map((option) => {
+          const n = optionVoteCounts[option.id] || 0;
+          return {
+            id: option.id,
+            label: option.label,
+            order: option.order,
+            votes: n,
+            voteCount: n,
+          };
+        }),
       })),
       landingPhotos: (event.landingPhotos || []).map((ph) => ({
         id: ph.id,
@@ -2726,12 +2915,8 @@ app.post("/events/:eventId/question-timer", requireAuth, async (req, res) => {
       return res.status(404).json({ error: "Événement introuvable." });
     }
 
-    // En mode TEST, le timer est forcé automatiquement (impossible de modifier).
-    if (event.isLiveConsumed === false) {
-      return res.status(403).json({
-        error: "Timer disponible uniquement en mode réel.",
-      });
-    }
+    // LOT-4 — chrono autorisé en TEST comme en RÉEL (durée configurée, pause, reset).
+    // Ancien forçage 30 s / 403 TEST retiré (conception V1.1 §5).
 
     if (action === "reset") {
       await prisma.event.update({
@@ -2897,14 +3082,13 @@ app.get("/p/:slug/contest-status", async (req, res) => {
     if (!poll) return res.status(404).json({ error: "Question concours introuvable." });
 
     const winners = await prisma.contestDrawWinner.findMany({
-      where: { pollId: poll.id },
-      orderBy: [{ draw: { createdAt: "asc" } }, { position: "asc" }],
+      where: { pollId: poll.id, status: STATUS_ACTIVE },
+      orderBy: [{ position: "asc" }, { createdAt: "asc" }],
       select: {
         id: true,
         voterSessionId: true,
         firstName: true,
-        phone: true,
-        email: true,
+        lastName: true,
         position: true,
         createdAt: true,
       },
@@ -2918,6 +3102,8 @@ app.get("/p/:slug/contest-status", async (req, res) => {
       !!voterSessionId &&
       winners.some((w) => String(w.voterSessionId) === String(voterSessionId));
 
+    // LOT-2 — public : Prénom + initiale du nom ; aucune coordonnée.
+    // Remplacés exclus : l’ancien gagnant ne voit plus « Félicitations ».
     return res.json({
       pollId: poll.id,
       contestPrize: poll.contestPrize ?? null,
@@ -2926,9 +3112,12 @@ app.get("/p/:slug/contest-status", async (req, res) => {
       isCurrentVoterWinner,
       winners: winners.map((w, idx) => ({
         id: w.id,
-        position: idx + 1,
-        displayName: winnerDisplayNameForPublic(w.firstName, idx + 1),
-        displayContact: winnerDisplayContactForPublic(w.phone, w.email),
+        position: Number(w.position) > 0 ? Number(w.position) : idx + 1,
+        displayName: winnerDisplayNameForPublic(
+          w.firstName,
+          w.lastName,
+          Number(w.position) > 0 ? Number(w.position) : idx + 1,
+        ),
         createdAt: w.createdAt.toISOString(),
       })),
     });
@@ -2951,14 +3140,13 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
 
   const eventMode = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { isLocked: true, isLiveConsumed: true },
+    select: { isLocked: true, screenDisplayState: true },
   });
   if (eventMode?.isLocked) {
     return res.status(403).json({
       error: "Cet événement est terminé et ne peut plus être rejoué.",
     });
   }
-  const isTestMode = eventMode?.isLiveConsumed === false;
 
   const body = req.body ?? {};
   const questionBrute =
@@ -3060,6 +3248,10 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
         where: { id: created.id },
         data: { status: "ACTIVE" },
       });
+      const screenAfterLaunch = screenDisplayStateForLiveTransition(
+        eventMode?.screenDisplayState,
+        "open",
+      );
       await prisma.event.update({
         where: { id: eventId },
         data: {
@@ -3068,14 +3260,12 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
           displayState: "QUESTION",
           liveState: "VOTING",
           autoRevealShowResultsAt: null,
-          ...(isTestMode
-            ? {
-                questionTimerTotalSec: 30,
-                questionTimerAccumulatedSec: 0,
-                questionTimerStartedAt: new Date(),
-                questionTimerIsPaused: false,
-              }
+          // LOT-5 — comme POST /open : nettoyer RESULTS collant (préserve BLACK).
+          ...(screenAfterLaunch !== undefined
+            ? { screenDisplayState: screenAfterLaunch }
             : {}),
+          // LOT-4 : pas de chrono auto 30 s en TEST — même comportement que RÉEL
+          // (lancer via POST /events/:id/question-timer si besoin).
         },
       });
     }
@@ -3371,6 +3561,10 @@ app.post("/polls/:pollId/open", requireAuth, async (req, res) => {
       },
     });
 
+    const screenAfterOpen = screenDisplayStateForLiveTransition(
+      poll.event?.screenDisplayState,
+      "open",
+    );
     const event = await prisma.event.update({
       where: { id: poll.eventId },
       data: {
@@ -3379,14 +3573,11 @@ app.post("/polls/:pollId/open", requireAuth, async (req, res) => {
         displayState: "QUESTION",
         liveState: "VOTING",
         autoRevealShowResultsAt: null,
-        ...(poll.event?.isLiveConsumed === false
-          ? {
-              questionTimerTotalSec: 30,
-              questionTimerAccumulatedSec: 0,
-              questionTimerStartedAt: new Date(),
-              questionTimerIsPaused: false,
-            }
+        ...(screenAfterOpen !== undefined
+          ? { screenDisplayState: screenAfterOpen }
           : {}),
+        // LOT-4 : TEST = RÉEL — pas de forçage questionTimerTotalSec: 30 à l’ouverture.
+        // Le chrono se lance uniquement via question-timer (durée configurée régie).
       },
     });
 
@@ -3423,35 +3614,22 @@ app.post("/polls/:pollId/close", requireAuth, async (req, res) => {
       data: { status: "CLOSED" },
     });
 
-    /** Stop vote : fermer la session de vote sans imposer l’affichage écran */
+    /**
+     * G13 — même transition que fin de chrono (`fermerVoteSiChronoEpuise`) :
+     * vote CLOSED + display WAITING + live WAITING + reset chrono.
+     * Ne force pas RESULTS ; efface un screenDisplayState RESULTS collant.
+     * LOT-2 : skip auto-reveal Lead / Concours.
+     */
     let majEvent =
       poll.event.activePollId === poll.id
-        ? {
-            voteState: "CLOSED",
-            liveState: computeLiveState(
-              "CLOSED",
-              poll.event.displayState ?? "WAITING",
-            ),
-          }
+        ? buildEventDataAfterVoteClose(poll.event, {
+            type: poll.type,
+            leadEnabled: poll.leadEnabled,
+          })
         : {};
 
     if (poll.event.activePollId === poll.id) {
-      const evSnap = poll.event;
       clearAutoRevealTimer(poll.eventId);
-      if (
-        evSnap.autoReveal &&
-        String(evSnap.displayState).toUpperCase() !== "RESULTS"
-      ) {
-        const delaySec = [3, 5, 10].includes(evSnap.autoRevealDelaySec)
-          ? evSnap.autoRevealDelaySec
-          : 5;
-        majEvent = {
-          ...majEvent,
-          autoRevealShowResultsAt: new Date(Date.now() + delaySec * 1000),
-        };
-      } else {
-        majEvent = { ...majEvent, autoRevealShowResultsAt: null };
-      }
     }
 
     const event =
@@ -3485,41 +3663,237 @@ app.post("/polls/:pollId/close", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/polls/:pollId/show-results", requireAuth, async (req, res) => {
+/**
+ * Logique métier unique « Afficher les résultats » (bouton régie + affichage auto).
+ * - Salle / displayState → RESULTS
+ * - Screen / screenDisplayState → RESULTS au moment Afficher/auto seulement
+ *   (close / open / Suivante nettoient un RESULTS collant ; BLACK préservé)
+ * - Quiz + vote CLOSED → quizRevealed (+ emit poll_updated)
+ *
+ * @param {import("socket.io").Server} io
+ * @param {string} pollId
+ * @returns {Promise<
+ *   | { ok: true; event: import("@prisma/client").Event; pollId: string }
+ *   | { ok: false; status: number; error: string }
+ * >}
+ */
+async function appliquerAffichageResultats(io, pollId) {
+  let poll = await prisma.poll.findUnique({
+    where: { id: pollId },
+    include: { event: true },
+  });
+  if (!poll) {
+    return { ok: false, status: 404, error: "Sondage introuvable." };
+  }
+
+  await annulationAutoRevealProgrammee(poll.eventId);
+
+  const voteClosed =
+    String(poll.event.voteState || "").toUpperCase() === "CLOSED";
+  const isQuiz = String(poll.type || "").toUpperCase() === "QUIZ";
+  const revealQuizNow = isQuiz && voteClosed && !poll.quizRevealed;
+  if (revealQuizNow) {
+    poll = await prisma.poll.update({
+      where: { id: poll.id },
+      data: { quizRevealed: true },
+      include: { event: true },
+    });
+  }
+
+  const event = await prisma.event.update({
+    where: { id: poll.eventId },
+    data: {
+      activePollId: poll.id,
+      displayState: "RESULTS",
+      screenDisplayState: screenDisplayStateForLiveTransition(
+        poll.event.screenDisplayState,
+        "show-results",
+      ),
+      liveState: computeLiveState(poll.event.voteState, "RESULTS"),
+      autoRevealShowResultsAt: null,
+    },
+  });
+
+  if (revealQuizNow) {
+    await emitPollUpdated(io, poll.id);
+  }
+  await emitEventLiveUpdated(io, poll.eventId);
+
+  return { ok: true, event, pollId: poll.id };
+}
+
+/**
+ * Régie « Afficher les résultats » — délègue à `appliquerAffichageResultats`.
+ * @param {import("express").Request} req
+ * @param {import("express").Response} res
+ */
+async function handlePollShowResults(req, res) {
   const { pollId } = req.params;
   try {
     const pOwn = await assertPollOwnedBy(pollId, req.userId);
     if (!pOwn.ok) {
       return res.status(pOwn.status).json({ error: "Sondage introuvable." });
     }
-    const poll = await prisma.poll.findUnique({
-      where: { id: pollId },
-      include: { event: true },
-    });
-    if (!poll) {
-      return res.status(404).json({ error: "Sondage introuvable." });
+    const result = await appliquerAffichageResultats(io, pollId);
+    if (!result.ok) {
+      return res.status(result.status).json({ error: result.error });
     }
-
-    await annulationAutoRevealProgrammee(poll.eventId);
-
-    const event = await prisma.event.update({
-      where: { id: poll.eventId },
-      data: {
-        activePollId: poll.id,
-        displayState: "RESULTS",
-        liveState: computeLiveState(poll.event.voteState, "RESULTS"),
-      },
-    });
-
-    await emitEventLiveUpdated(io, poll.eventId);
-
-    const full = await loadPollFull(poll.id);
+    const full = await loadPollFull(pollId);
     return res.json({
-      event,
+      event: result.event,
       poll: full ? pollToJson(full) : null,
     });
   } catch (e) {
     console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+}
+
+app.post("/polls/:pollId/show-results", requireAuth, handlePollShowResults);
+
+/**
+ * LOT-4 — Rejouer une question en MODE TEST uniquement.
+ * Transaction : wipe votes (+ leads / tirages selon type) de CE poll,
+ * bascule antenne PRÉPARÉE sans ouvrir le vote. Autres polls intacts.
+ */
+app.post("/polls/:pollId/replay-test", requireAuth, async (req, res) => {
+  const { pollId } = req.params;
+  try {
+    const pOwn = await assertPollOwnedBy(pollId, req.userId);
+    if (!pOwn.ok) {
+      return res.status(pOwn.status).json({ error: "Sondage introuvable." });
+    }
+
+    const result = await runReplayTestExclusive(pollId, async () => {
+      const poll = await prisma.poll.findUnique({
+        where: { id: pollId },
+        include: {
+          event: true,
+          _count: {
+            select: {
+              votes: true,
+              leads: true,
+              contestDraws: true,
+            },
+          },
+        },
+      });
+      if (!poll) {
+        return { ok: false, status: 404, error: "Sondage introuvable." };
+      }
+
+      const event = poll.event;
+      const gate = canReplayTestPollOnServer({
+        isTestMode: event?.isLiveConsumed === false,
+        voteState: event?.voteState,
+        eventLocked: Boolean(event?.isLocked),
+        eventFinished:
+          String(event?.liveState || "").toUpperCase() === "FINISHED",
+        poll: {
+          status: poll.status,
+          type: poll.type,
+          leadEnabled: poll.leadEnabled,
+        },
+        voteCount: poll._count?.votes ?? 0,
+        leadCount: poll._count?.leads ?? 0,
+        contestDrawCount: poll._count?.contestDraws ?? 0,
+      });
+      if (!gate.ok) {
+        return { ok: false, status: gate.status, error: gate.error };
+      }
+
+      const deletionPlan = getReplayTestPollDeletionPlan(poll);
+      const eventPatch = buildReplayTestPollEventPatch({
+        pollId: poll.id,
+        screenDisplayState: event.screenDisplayState,
+      });
+
+      await annulationAutoRevealProgrammee(poll.eventId);
+
+      const counts = await prisma.$transaction(async (tx) => {
+        const deletedWinners = deletionPlan.deleteContestDrawsAndWinners
+          ? (
+              await tx.contestDrawWinner.deleteMany({
+                where: { pollId: poll.id },
+              })
+            ).count
+          : 0;
+        const deletedDraws = deletionPlan.deleteContestDrawsAndWinners
+          ? (
+              await tx.contestDraw.deleteMany({
+                where: { pollId: poll.id },
+              })
+            ).count
+          : 0;
+        const deletedLeads = deletionPlan.deleteLeads
+          ? (
+              await tx.leadCapture.deleteMany({
+                where: { pollId: poll.id },
+              })
+            ).count
+          : 0;
+        const deletedVotes = (
+          await tx.vote.deleteMany({
+            where: { pollId: poll.id },
+          })
+        ).count;
+
+        await tx.poll.updateMany({
+          where: {
+            eventId: poll.eventId,
+            status: "ACTIVE",
+            NOT: { id: poll.id },
+          },
+          data: { status: "CLOSED" },
+        });
+
+        await tx.poll.update({
+          where: { id: poll.id },
+          data: {
+            status: "ACTIVE",
+            quizRevealed: false,
+          },
+        });
+
+        const updatedEvent = await tx.event.update({
+          where: { id: poll.eventId },
+          data: eventPatch,
+        });
+
+        return {
+          deletedVotes,
+          deletedLeads,
+          deletedDraws,
+          deletedWinners,
+          event: updatedEvent,
+        };
+      });
+
+      await emitPollUpdated(io, poll.id);
+      await emitEventLiveUpdated(io, poll.eventId);
+
+      const full = await loadPollFull(poll.id);
+      return {
+        ok: true,
+        event: counts.event,
+        poll: full ? pollToJson(full) : null,
+        deleted: {
+          votes: counts.deletedVotes,
+          leads: counts.deletedLeads,
+          contestDraws: counts.deletedDraws,
+          contestWinners: counts.deletedWinners,
+        },
+        prepared: true,
+        activePollId: poll.id,
+      };
+    });
+
+    if (!result.ok) {
+      return res.status(result.status || 400).json({ error: result.error });
+    }
+    return res.json(result);
+  } catch (e) {
+    console.error("polls/:pollId/replay-test", e);
     return res.status(500).json({ error: "Erreur serveur." });
   }
 });
@@ -3565,47 +3939,8 @@ app.post("/polls/:pollId/display-question", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/polls/:pollId/reveal", requireAuth, async (req, res) => {
-  const { pollId } = req.params;
-  try {
-    const pOwn = await assertPollOwnedBy(pollId, req.userId);
-    if (!pOwn.ok) {
-      return res.status(pOwn.status).json({ error: "Sondage introuvable." });
-    }
-    const poll = await prisma.poll.findUnique({
-      where: { id: pollId },
-      include: { event: true },
-    });
-    if (!poll) {
-      return res.status(404).json({ error: "Sondage introuvable." });
-    }
-    if (String(poll.type || "").toUpperCase() !== "QUIZ") {
-      return res.status(400).json({ error: "Cette action est réservée aux QUIZ." });
-    }
-    if (String(poll.event.voteState || "").toUpperCase() !== "CLOSED") {
-      return res
-        .status(400)
-        .json({ error: "Fermez d'abord le vote avant de révéler la réponse." });
-    }
-
-    await prisma.poll.update({
-      where: { id: poll.id },
-      data: { quizRevealed: true },
-    });
-
-    const full = await loadPollFull(poll.id);
-    if (!full) {
-      return res.status(404).json({ error: "Sondage introuvable." });
-    }
-    await emitPollUpdated(io, poll.id);
-    await emitEventLiveUpdated(io, poll.eventId);
-
-    return res.json({ ok: true, poll: pollToJson(full) });
-  } catch (e) {
-    console.error("polls/:pollId/reveal", e);
-    return res.status(500).json({ error: "Erreur serveur." });
-  }
-});
+/** @deprecated Régie : chemins unifiés via show-results (Afficher les résultats). */
+app.post("/polls/:pollId/reveal", requireAuth, handlePollShowResults);
 
 app.get("/polls", requireAuth, async (req, res) => {
   try {
@@ -4219,6 +4554,9 @@ app.post("/polls/:pollId/leads", async (req, res) => {
     typeof body.voterSessionId === "string" ? body.voterSessionId.trim() : "";
   const firstName =
     typeof body.firstName === "string" ? body.firstName.trim() : "";
+  const lastNameRaw =
+    typeof body.lastName === "string" ? body.lastName.trim() : "";
+  const lastName = lastNameRaw === "" ? null : lastNameRaw.slice(0, 120);
   const phone = typeof body.phone === "string" ? body.phone.trim() : "";
   const emailRaw = typeof body.email === "string" ? body.email.trim() : "";
   const email = emailRaw === "" ? null : emailRaw.slice(0, 320);
@@ -4245,6 +4583,8 @@ app.post("/polls/:pollId/leads", async (req, res) => {
       return res.status(400).json({ error: "Collecte lead non activée." });
     }
 
+    // Grace post-Fermer : autorisé si vote déclencheur déjà enregistré
+    // (pas de contrôle voteState — un nouveau vote reste refusé côté submitVote).
     const aDeclenche = await prisma.vote.findFirst({
       where: {
         pollId,
@@ -4264,12 +4604,13 @@ app.post("/polls/:pollId/leads", async (req, res) => {
           voterSessionId,
         },
       },
-      update: { firstName, phone, email },
+      update: { firstName, lastName, phone, email },
       create: {
         pollId,
         eventId: poll.eventId,
         voterSessionId,
         firstName,
+        lastName,
         phone,
         email,
       },
@@ -4315,6 +4656,7 @@ async function listContestEligibleParticipants(pollId, opts = {}) {
       select: {
         voterSessionId: true,
         firstName: true,
+        lastName: true,
         phone: true,
         email: true,
         createdAt: true,
@@ -4326,6 +4668,7 @@ async function listContestEligibleParticipants(pollId, opts = {}) {
       l.voterSessionId,
       {
         firstName: l.firstName,
+        lastName: l.lastName ?? null,
         phone: l.phone,
         email: l.email,
         leadCapturedAt: l.createdAt,
@@ -4381,119 +4724,164 @@ app.post("/polls/:pollId/draw", requireAuth, async (req, res) => {
     ? Math.max(1, Math.floor(winnerCountRaw))
     : 1;
   try {
-    const pOwn = await assertPollOwnedBy(pollId, req.userId);
-    if (!pOwn.ok) {
-      return res.status(pOwn.status).json({ error: "Sondage introuvable." });
-    }
-    const poll = await prisma.poll.findUnique({
-      where: { id: pollId },
-      select: {
-        id: true,
-        eventId: true,
-        type: true,
-        contestPrize: true,
-        contestWinnerCount: true,
-      },
-    });
-    if (!poll || poll.type !== "CONTEST_ENTRY") {
-      return res
-        .status(400)
-        .json({ error: "Le tirage est réservé aux questions concours." });
-    }
-
-    const contestWinnerCount = normalizeContestWinnerCount(
-      poll.contestWinnerCount,
-    );
-    const totalWinnersAlready = await prisma.contestDrawWinner.count({
-      where: { pollId },
-    });
-    if (totalWinnersAlready >= contestWinnerCount) {
-      return res.status(409).json({
-        error: "Tous les gagnants ont déjà été tirés.",
-        pollId,
-        quotaReached: true,
-        totalWinners: totalWinnersAlready,
-        contestWinnerCount,
-      });
-    }
-    const remainingSlots = contestWinnerCount - totalWinnersAlready;
-    if (winnerCount > remainingSlots) {
-      return res.status(400).json({
-        error: `Nombre de gagnants demandé (${winnerCount}) supérieur au quota restant (${remainingSlots}).`,
-        pollId,
-        totalWinners: totalWinnersAlready,
-        contestWinnerCount,
-      });
-    }
-
-    const participants = await listContestEligibleParticipants(pollId, {
-      excludeAlreadyDrawn: true,
-    });
-    if (participants.length < 1) {
-      return res.status(409).json({
-        error: "Aucun participant éligible disponible pour le tirage.",
-        pollId,
-        eligibleRemainingCount: 0,
-        totalWinners: totalWinnersAlready,
-        contestWinnerCount,
-      });
-    }
-    if (winnerCount > participants.length) {
-      return res.status(400).json({
-        error: `Nombre de gagnants demandé (${winnerCount}) supérieur aux participants éligibles restants (${participants.length}).`,
-      });
-    }
-
-    const pool = [...participants];
-    const winners = [];
-    for (let i = 0; i < winnerCount; i++) {
-      const idx = crypto.randomInt(0, pool.length);
-      const picked = pool[idx];
-      winners.push(picked);
-      pool.splice(idx, 1);
-    }
-
-    const draw = await prisma.$transaction(async (tx) => {
-      const createdDraw = await tx.contestDraw.create({
-        data: {
-          pollId,
-          eventId: poll.eventId,
-          createdByUserId: req.userId,
-          winnerCount,
-          eligibleCountAtDraw: participants.length,
+    return await runContestDrawExclusive(pollId, async () => {
+      const pOwn = await assertPollOwnedBy(pollId, req.userId);
+      if (!pOwn.ok) {
+        return res.status(pOwn.status).json({ error: "Sondage introuvable." });
+      }
+      const poll = await prisma.poll.findUnique({
+        where: { id: pollId },
+        select: {
+          id: true,
+          eventId: true,
+          type: true,
+          contestPrize: true,
+          contestWinnerCount: true,
+          event: {
+            select: {
+              voteState: true,
+              screenDisplayState: true,
+              activePollId: true,
+            },
+          },
         },
       });
-      await tx.contestDrawWinner.createMany({
-        data: winners.map((w, index) => ({
-          drawId: createdDraw.id,
+      if (!poll || poll.type !== "CONTEST_ENTRY") {
+        return res
+          .status(400)
+          .json({ error: "Le tirage est réservé aux questions concours." });
+      }
+
+      // LOT-2 — séquence Ouvrir → Fermer → Tirer (pas de tirage en VOTING).
+      if (String(poll.event?.voteState || "").toUpperCase() !== "CLOSED") {
+        return res.status(409).json({
+          error: "Fermez d’abord les participations avant de tirer au sort.",
+          voteOpen: true,
+        });
+      }
+
+      const contestWinnerCount = normalizeContestWinnerCount(
+        poll.contestWinnerCount,
+      );
+      // Quota = gagnants ACTIVE uniquement (les REPLACED restent en historique).
+      const totalWinnersAlready = await prisma.contestDrawWinner.count({
+        where: { pollId, status: STATUS_ACTIVE },
+      });
+      if (totalWinnersAlready >= contestWinnerCount) {
+        return res.status(409).json({
+          error: "Tous les gagnants ont déjà été tirés.",
           pollId,
+          quotaReached: true,
+          totalWinners: totalWinnersAlready,
+          contestWinnerCount,
+        });
+      }
+      const remainingSlots = contestWinnerCount - totalWinnersAlready;
+      if (winnerCount > remainingSlots) {
+        return res.status(400).json({
+          error: `Nombre de gagnants demandé (${winnerCount}) supérieur au quota restant (${remainingSlots}).`,
+          pollId,
+          totalWinners: totalWinnersAlready,
+          contestWinnerCount,
+        });
+      }
+
+      const participants = await listContestEligibleParticipants(pollId, {
+        excludeAlreadyDrawn: true,
+      });
+      if (participants.length < 1) {
+        return res.status(409).json({
+          error: "Aucun participant éligible disponible pour le tirage.",
+          pollId,
+          eligibleRemainingCount: 0,
+          totalWinners: totalWinnersAlready,
+          contestWinnerCount,
+        });
+      }
+      if (winnerCount > participants.length) {
+        return res.status(400).json({
+          error: `Nombre de gagnants demandé (${winnerCount}) supérieur aux participants éligibles restants (${participants.length}).`,
+        });
+      }
+
+      const pool = [...participants];
+      const winners = [];
+      for (let i = 0; i < winnerCount; i++) {
+        const idx = crypto.randomInt(0, pool.length);
+        const picked = pool[idx];
+        winners.push(picked);
+        pool.splice(idx, 1);
+      }
+
+      const draw = await prisma.$transaction(async (tx) => {
+        const createdDraw = await tx.contestDraw.create({
+          data: {
+            pollId,
+            eventId: poll.eventId,
+            createdByUserId: req.userId,
+            winnerCount,
+            eligibleCountAtDraw: participants.length,
+          },
+        });
+        await tx.contestDrawWinner.createMany({
+          data: winners.map((w, index) => ({
+            drawId: createdDraw.id,
+            pollId,
+            voterSessionId: w.voterSessionId,
+            position: index + 1 + totalWinnersAlready,
+            firstName: w.firstName,
+            lastName: w.lastName ?? null,
+            phone: w.phone,
+            email: w.email ?? null,
+            status: STATUS_ACTIVE,
+          })),
+        });
+        return createdDraw;
+      });
+
+      // LOT-2 — le tirage déclenche l’affichage public (TIRAGE ≡ RESULTS métier).
+      await annulationAutoRevealProgrammee(poll.eventId);
+      await prisma.event.update({
+        where: { id: poll.eventId },
+        data: {
+          activePollId: poll.id,
+          displayState: "RESULTS",
+          screenDisplayState: screenDisplayStateForLiveTransition(
+            poll.event?.screenDisplayState,
+            "show-results",
+          ),
+          liveState: computeLiveState("CLOSED", "RESULTS"),
+          autoRevealShowResultsAt: null,
+        },
+      });
+
+      await emitPollUpdated(io, pollId);
+      await emitEventLiveUpdated(io, poll.eventId);
+
+      return res.json({
+        ok: true,
+        pollId,
+        drawId: draw.id,
+        winnerCount,
+        eligibleCountAtDraw: participants.length,
+        eligibleRemainingCount: participants.length - winners.length,
+        contestPrize: poll.contestPrize ?? null,
+        totalWinners: totalWinnersAlready + winners.length,
+        contestWinnerCount,
+        winners: winners.map((w, index) => ({
+          position: index + 1 + totalWinnersAlready,
           voterSessionId: w.voterSessionId,
-          position: index + 1,
           firstName: w.firstName,
+          lastName: w.lastName ?? null,
           phone: w.phone,
           email: w.email ?? null,
+          displayName: winnerDisplayNameForPublic(
+            w.firstName,
+            w.lastName,
+            index + 1 + totalWinnersAlready,
+          ),
         })),
       });
-      return createdDraw;
-    });
-
-    return res.json({
-      ok: true,
-      pollId,
-      drawId: draw.id,
-      winnerCount,
-      eligibleCountAtDraw: participants.length,
-      eligibleRemainingCount: participants.length - winners.length,
-      contestPrize: poll.contestPrize ?? null,
-      totalWinners: totalWinnersAlready + winners.length,
-      contestWinnerCount,
-      winners: winners.map((w, index) => ({
-        position: index + 1,
-        voterSessionId: w.voterSessionId,
-        firstName: w.firstName,
-        phone: w.phone,
-        email: w.email ?? null,
-      })),
     });
   } catch (e) {
     console.error("polls/:pollId/draw", e);
@@ -4512,14 +4900,20 @@ app.get("/polls/:pollId/draws/summary", requireAuth, async (req, res) => {
       where: { id: pollId },
       select: { contestWinnerCount: true },
     });
-    const [totalDraws, totalWinners] = await prisma.$transaction([
+    const [totalDraws, totalWinners, totalReplaced] = await prisma.$transaction([
       prisma.contestDraw.count({ where: { pollId } }),
-      prisma.contestDrawWinner.count({ where: { pollId } }),
+      prisma.contestDrawWinner.count({
+        where: { pollId, status: STATUS_ACTIVE },
+      }),
+      prisma.contestDrawWinner.count({
+        where: { pollId, status: STATUS_REPLACED },
+      }),
     ]);
     return res.json({
       pollId,
       totalDraws,
       totalWinners,
+      totalReplaced,
       contestWinnerCount: normalizeContestWinnerCount(poll?.contestWinnerCount),
     });
   } catch (e) {
@@ -4537,27 +4931,37 @@ app.get("/polls/:pollId/draws/winners", requireAuth, async (req, res) => {
     }
     const winners = await prisma.contestDrawWinner.findMany({
       where: { pollId },
-      orderBy: [{ draw: { createdAt: "asc" } }, { position: "asc" }],
+      orderBy: [{ position: "asc" }, { createdAt: "asc" }],
       select: {
         id: true,
         drawId: true,
         position: true,
         firstName: true,
+        lastName: true,
         phone: true,
         email: true,
+        status: true,
+        replacedAt: true,
+        replacedByWinnerId: true,
         createdAt: true,
       },
     });
+    const active = winners.filter((w) => w.status === STATUS_ACTIVE);
     return res.json({
       pollId,
-      totalWinners: winners.length,
+      totalWinners: active.length,
+      totalReplaced: winners.length - active.length,
       winners: winners.map((w) => ({
         id: w.id,
         drawId: w.drawId,
         position: w.position,
         firstName: w.firstName,
+        lastName: w.lastName ?? null,
         phone: w.phone,
         email: w.email ?? null,
+        status: w.status,
+        replacedAt: w.replacedAt ? w.replacedAt.toISOString() : null,
+        replacedByWinnerId: w.replacedByWinnerId ?? null,
         createdAt: w.createdAt.toISOString(),
       })),
     });
@@ -4566,6 +4970,226 @@ app.get("/polls/:pollId/draws/winners", requireAuth, async (req, res) => {
     return res.status(500).json({ error: "Erreur serveur." });
   }
 });
+
+/**
+ * LOT-2 — Remplacer un gagnant ACTIVE par un éligible n’ayant jamais gagné.
+ * Historique : l’ancien passe en REPLACED (non détruit). Quota ACTIVE inchangé.
+ */
+app.post(
+  "/polls/:pollId/winners/:winnerId/replace",
+  requireAuth,
+  async (req, res) => {
+    const { pollId, winnerId } = req.params;
+    try {
+      return await runContestDrawExclusive(pollId, async () => {
+        const pOwn = await assertPollOwnedBy(pollId, req.userId);
+        if (!pOwn.ok) {
+          return res.status(pOwn.status).json({ error: "Sondage introuvable." });
+        }
+        const poll = await prisma.poll.findUnique({
+          where: { id: pollId },
+          select: {
+            id: true,
+            eventId: true,
+            type: true,
+            contestPrize: true,
+            contestWinnerCount: true,
+            event: {
+              select: {
+                voteState: true,
+                screenDisplayState: true,
+              },
+            },
+          },
+        });
+        if (!poll || poll.type !== "CONTEST_ENTRY") {
+          return res
+            .status(400)
+            .json({ error: "Le remplacement est réservé aux questions concours." });
+        }
+
+        const target = await prisma.contestDrawWinner.findFirst({
+          where: { id: winnerId, pollId },
+          select: {
+            id: true,
+            status: true,
+            position: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            email: true,
+            voterSessionId: true,
+          },
+        });
+
+        const eligiblePool = await listContestEligibleParticipants(pollId, {
+          excludeAlreadyDrawn: true,
+        });
+        const plan = resolveReplaceContestWinnerPlan({
+          target,
+          eligiblePool,
+          randomInt: (min, maxExclusive) => crypto.randomInt(min, maxExclusive),
+        });
+        if (!plan.ok) {
+          const status =
+            plan.code === "MISSING_TARGET"
+              ? 404
+              : plan.code === "NOT_ACTIVE"
+                ? 409
+                : 409;
+          return res.status(status).json({
+            error: plan.error,
+            code: plan.code,
+            pollId,
+            winnerId,
+            eligibleRemainingCount: eligiblePool.length,
+          });
+        }
+
+        const picked = plan.picked;
+        const result = await prisma.$transaction(async (tx) => {
+          // Re-check sous transaction (course simultanée).
+          const locked = await tx.contestDrawWinner.findFirst({
+            where: { id: winnerId, pollId, status: STATUS_ACTIVE },
+          });
+          if (!locked) {
+            const err = new Error("NOT_ACTIVE");
+            err.code = "NOT_ACTIVE";
+            throw err;
+          }
+          const stillEligible = await listContestEligibleParticipants(pollId, {
+            excludeAlreadyDrawn: true,
+          });
+          const plan2 = resolveReplaceContestWinnerPlan({
+            target: locked,
+            eligiblePool: stillEligible,
+            randomInt: (min, maxExclusive) =>
+              crypto.randomInt(min, maxExclusive),
+          });
+          if (!plan2.ok) {
+            const err = new Error(plan2.code);
+            err.code = plan2.code;
+            err.publicMessage = plan2.error;
+            throw err;
+          }
+          const chosen = plan2.picked;
+          const createdDraw = await tx.contestDraw.create({
+            data: {
+              pollId,
+              eventId: poll.eventId,
+              createdByUserId: req.userId,
+              winnerCount: 1,
+              eligibleCountAtDraw: stillEligible.length,
+            },
+          });
+          const newWinner = await tx.contestDrawWinner.create({
+            data: {
+              drawId: createdDraw.id,
+              pollId,
+              voterSessionId: chosen.voterSessionId,
+              position: plan2.position,
+              firstName: chosen.firstName,
+              lastName: chosen.lastName ?? null,
+              phone: chosen.phone,
+              email: chosen.email ?? null,
+              status: STATUS_ACTIVE,
+            },
+          });
+          const replaced = await tx.contestDrawWinner.update({
+            where: { id: locked.id },
+            data: {
+              status: STATUS_REPLACED,
+              replacedAt: new Date(),
+              replacedByWinnerId: newWinner.id,
+            },
+          });
+          return {
+            draw: createdDraw,
+            newWinner,
+            replaced,
+            eligibleRemainingCount: Math.max(0, stillEligible.length - 1),
+          };
+        });
+
+        // Garder l’affichage public RESULTS synchronisé (Screen /join).
+        await annulationAutoRevealProgrammee(poll.eventId);
+        await prisma.event.update({
+          where: { id: poll.eventId },
+          data: {
+            activePollId: poll.id,
+            displayState: "RESULTS",
+            screenDisplayState: screenDisplayStateForLiveTransition(
+              poll.event?.screenDisplayState,
+              "show-results",
+            ),
+            liveState: computeLiveState("CLOSED", "RESULTS"),
+            autoRevealShowResultsAt: null,
+          },
+        });
+
+        await emitPollUpdated(io, pollId);
+        await emitEventLiveUpdated(io, poll.eventId);
+
+        const activeCount = await prisma.contestDrawWinner.count({
+          where: { pollId, status: STATUS_ACTIVE },
+        });
+
+        return res.json({
+          ok: true,
+          pollId,
+          drawId: result.draw.id,
+          contestPrize: poll.contestPrize ?? null,
+          totalWinners: activeCount,
+          contestWinnerCount: normalizeContestWinnerCount(
+            poll.contestWinnerCount,
+          ),
+          eligibleRemainingCount: result.eligibleRemainingCount,
+          replaced: {
+            id: result.replaced.id,
+            status: STATUS_REPLACED,
+            position: result.replaced.position,
+            firstName: result.replaced.firstName,
+            lastName: result.replaced.lastName ?? null,
+            phone: result.replaced.phone,
+            email: result.replaced.email ?? null,
+          },
+          winner: {
+            id: result.newWinner.id,
+            status: STATUS_ACTIVE,
+            position: result.newWinner.position,
+            voterSessionId: result.newWinner.voterSessionId,
+            firstName: result.newWinner.firstName,
+            lastName: result.newWinner.lastName ?? null,
+            phone: result.newWinner.phone,
+            email: result.newWinner.email ?? null,
+            displayName: winnerDisplayNameForPublic(
+              result.newWinner.firstName,
+              result.newWinner.lastName,
+              result.newWinner.position,
+            ),
+          },
+        });
+      });
+    } catch (e) {
+      if (e && (e.code === "NOT_ACTIVE" || e.code === "NO_REPLACEMENT" || e.code === "MISSING_TARGET")) {
+        return res.status(409).json({
+          error:
+            e.publicMessage ||
+            (e.code === "NOT_ACTIVE"
+              ? "Ce gagnant a déjà été remplacé."
+              : e.code === "NO_REPLACEMENT"
+                ? "Aucun remplaçant disponible : tous les participants éligibles ont déjà gagné lors de ce concours."
+                : "Gagnant à remplacer introuvable."),
+          code: e.code,
+          pollId,
+          winnerId,
+        });
+      }
+      console.error("polls/:pollId/winners/:winnerId/replace", e);
+      return res.status(500).json({ error: "Erreur serveur." });
+    }
+  },
+);
 
 /**
  * Leads agrégés : tous les événements du compte connecté (filtres query).
