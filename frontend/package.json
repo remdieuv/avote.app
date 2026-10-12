@@ -18,6 +18,7 @@
     "test:contest-replace": "node ../backend/scripts/test-contest-winner-replace.mjs",
     "test:regie-desktop": "node scripts/test-regie-desktop-layout.mjs",
     "test:regie-chrono": "node scripts/test-regie-chrono-enabled.mjs",
+    "test:regie-quiz-edit": "node scripts/test-regie-quiz-edit.mjs",
     "test:test-mode-parity": "node scripts/test-test-mode-live-parity.mjs",
     "test:test-mode-replay": "node scripts/test-test-mode-replay-poll.mjs",
     "test:lot4": "npm run test:test-mode-parity && npm run test:test-mode-replay",

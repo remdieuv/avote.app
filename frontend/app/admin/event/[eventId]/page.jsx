@@ -64,6 +64,7 @@ import {
   getReplayTestPollBlockedLabel,
   getReplayTestPollConfirmMessage,
 } from "@/lib/testModeReplayPoll";
+import { getQuizCorrectAnswerEditStatus } from "@/lib/regieQuizEdit";
 
 const VOTE_STATE_LABELS = {
   open: "Vote ouvert",
@@ -5427,14 +5428,8 @@ export default function RegieEventPage() {
     setEditContestWinnerCount(normalizeContestWinnerCount(poll?.contestWinnerCount));
     const opts = Array.isArray(poll?.options) ? poll.options : [];
     const correctIdx = opts.findIndex((o) => o?.isCorrect === true);
-    setEditQuizCorrectOrder(
-      correctIdx >= 0
-        ? correctIdx
-        : Math.min(
-            Math.max(0, Number(poll?.quizCorrectOrder ?? 0) || 0),
-            Math.max(0, opts.length - 1),
-          ),
-    );
+    // Sélecteur : valeur enregistrée si connue, sinon 1re option (brouillon).
+    setEditQuizCorrectOrder(correctIdx >= 0 ? correctIdx : 0);
     setEditPollModalOpen(true);
   }, []);
 
@@ -5586,6 +5581,30 @@ export default function RegieEventPage() {
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(mapApiError(body, res.status));
+      }
+      // Actualise le snapshot local (isCorrect) : pollToJson public peut omettre
+      // isCorrect tant que quizRevealed est false ; le GET admin le réconcilie après.
+      if (isQuiz && editingPoll) {
+        const savedOrder = Number(editQuizCorrectOrder);
+        const nextOpts = (Array.isArray(editingPoll.options)
+          ? editingPoll.options
+          : []
+        ).map((o, idx) => ({
+          ...o,
+          isCorrect: idx === savedOrder,
+        }));
+        setEditingPoll({ ...editingPoll, options: nextOpts });
+        setEventData((prev) => {
+          if (!prev?.polls) return prev;
+          return {
+            ...prev,
+            polls: prev.polls.map((p) =>
+              String(p.id) === pollId
+                ? { ...p, question, options: nextOpts, title: p.title }
+                : p,
+            ),
+          };
+        });
       }
       setEditPollModalOpen(false);
       setEditingPoll(null);
@@ -6805,6 +6824,15 @@ export default function RegieEventPage() {
     textTransform: "uppercase",
   };
 
+  const quizCorrectEditStatus = useMemo(
+    () =>
+      getQuizCorrectAnswerEditStatus({
+        poll: editingPoll,
+        draftOrder: editQuizCorrectOrder,
+      }),
+    [editingPoll, editQuizCorrectOrder],
+  );
+
   /** Panneau Régler : durée + Confirmer + Réinitialiser uniquement. */
   const chronoProjectionInner = (
     <div style={{ display: "grid", gap: "0.85rem" }}>
@@ -7256,6 +7284,35 @@ export default function RegieEventPage() {
                     </option>
                   ))}
                 </select>
+                <p
+                  style={{
+                    margin: "0.45rem 0 0 0",
+                    fontSize: "0.78rem",
+                    fontWeight: 700,
+                    color: quizCorrectEditStatus.hasSaved
+                      ? "#166534"
+                      : "#b45309",
+                  }}
+                >
+                  {quizCorrectEditStatus.hasSaved
+                    ? `Bonne réponse enregistrée : ${quizCorrectEditStatus.savedLabel}`
+                    : "Aucune bonne réponse enregistrée"}
+                </p>
+                {quizCorrectEditStatus.draftPending &&
+                quizCorrectEditStatus.draftLabel ? (
+                  <p
+                    style={{
+                      margin: "0.25rem 0 0 0",
+                      fontSize: "0.74rem",
+                      fontWeight: 600,
+                      color: "#b45309",
+                    }}
+                  >
+                    {quizCorrectEditStatus.hasSaved
+                      ? `Modification non enregistrée : ${quizCorrectEditStatus.draftLabel}`
+                      : `Sélection en cours (non enregistrée) : ${quizCorrectEditStatus.draftLabel}`}
+                  </p>
+                ) : null}
                 <p
                   style={{
                     margin: "0.35rem 0 0 0",
