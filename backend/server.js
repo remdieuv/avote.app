@@ -2923,7 +2923,7 @@ app.post("/events/:eventId/question-timer", requireAuth, async (req, res) => {
         where: { id: eventId },
         data: { ...QUESTION_TIMER_RESET },
       });
-    } else if (action === "enable") {
+    } else if (action === "enable" || action === "arm") {
       // Arme le chrono (durée configurée) sans le démarrer — régie simplifiée.
       const totalParsed =
         typeof totalSecBrut === "number"
@@ -2981,6 +2981,38 @@ app.post("/events/:eventId/question-timer", requireAuth, async (req, res) => {
         typeof totalSecBrut === "number"
           ? Math.floor(totalSecBrut)
           : parseInt(String(totalSecBrut ?? ""), 10);
+      // Compat : { action:"start", arm:true } ou running:false = activer sans démarrer.
+      const armOnly =
+        body.arm === true ||
+        body.startPaused === true ||
+        body.running === false;
+      if (armOnly) {
+        if (
+          !Number.isFinite(totalParsed) ||
+          totalParsed < 1 ||
+          totalParsed > QUESTION_TIMER_SEC_MAX
+        ) {
+          return res.status(400).json({
+            error: `Durée invalide : indique totalSec entre 1 et ${QUESTION_TIMER_SEC_MAX} (1 s à 90 jours).`,
+          });
+        }
+        const runningNow =
+          !event.questionTimerIsPaused && event.questionTimerStartedAt != null;
+        if (runningNow) {
+          return res.status(400).json({
+            error: "Mettez le chrono en pause avant de modifier la durée.",
+          });
+        }
+        await prisma.event.update({
+          where: { id: eventId },
+          data: {
+            questionTimerTotalSec: totalParsed,
+            questionTimerAccumulatedSec: 0,
+            questionTimerStartedAt: null,
+            questionTimerIsPaused: true,
+          },
+        });
+      } else {
       const pausedEnAttente =
         event.questionTimerIsPaused &&
         event.questionTimerTotalSec != null &&
@@ -3038,9 +3070,10 @@ app.post("/events/:eventId/question-timer", requireAuth, async (req, res) => {
           },
         });
       }
+      } // end !armOnly
     } else {
       return res.status(400).json({
-        error: 'action attendue : "enable", "start", "pause" ou "reset".',
+        error: 'action attendue : "enable", "arm", "start", "pause" ou "reset".',
       });
     }
 

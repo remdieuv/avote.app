@@ -5571,27 +5571,40 @@ export default function RegieEventPage() {
     }
   }
 
+  /**
+   * Appel brut question-timer (sans busy UI) — pour chaîner enable / start / pause.
+   * @param {Record<string, unknown>} body
+   */
+  async function requestQuestionTimer(body) {
+    const res = await adminFetch(
+      `${apiBaseBrowser()}/events/${eventId}/question-timer`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+    const out = await res.json().catch(() => ({}));
+    return { res, out };
+  }
+
+  /** @param {unknown} questionTimer */
+  function applyQuestionTimerToState(questionTimer) {
+    if (questionTimer === undefined) return;
+    setEventData((prev) =>
+      prev ? { ...prev, questionTimer } : prev,
+    );
+  }
+
   async function postQuestionTimer(body) {
     setBusy(true);
     setActionError(null);
     try {
-      const res = await adminFetch(
-        `${apiBaseBrowser()}/events/${eventId}/question-timer`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        },
-      );
-      const out = await res.json().catch(() => ({}));
+      const { res, out } = await requestQuestionTimer(body);
       if (!res.ok) {
         throw new Error(mapApiError(out, res.status));
       }
-      if (out.questionTimer !== undefined) {
-        setEventData((prev) =>
-          prev ? { ...prev, questionTimer: out.questionTimer } : prev,
-        );
-      }
+      applyQuestionTimerToState(out.questionTimer);
       const action =
         typeof body?.action === "string" ? body.action.trim().toLowerCase() : "";
       if (action === "pause" && out.questionTimer) {
@@ -5611,8 +5624,74 @@ export default function RegieEventPage() {
         setChronoSeconds(0);
       }
       await fetchEvent({ silent: true });
+      return true;
     } catch (e) {
       setActionError(e.message || "Action chrono échouée.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Activer = armer la durée sans démarrer le compte à rebours.
+   * 1) `enable` (backend à jour)
+   * 2) sinon `start` + `pause` (backend qui ne connaît pas encore enable)
+   * @param {number} totalSec
+   */
+  async function activateQuestionTimer(totalSec) {
+    setBusy(true);
+    setActionError(null);
+    try {
+      let { res, out } = await requestQuestionTimer({
+        action: "enable",
+        totalSec,
+      });
+      if (res.ok) {
+        applyQuestionTimerToState(out.questionTimer);
+        await fetchEvent({ silent: true });
+        return true;
+      }
+
+      const errMsg = String(out?.error || out?.message || "");
+      const enableUnsupported =
+        res.status === 400 && /action attendue/i.test(errMsg);
+
+      if (!enableUnsupported) {
+        throw new Error(mapApiError(out, res.status));
+      }
+
+      // Backend sans "enable" : start puis pause immédiate → état Actif / en pause.
+      ({ res, out } = await requestQuestionTimer({
+        action: "start",
+        totalSec,
+        arm: true,
+      }));
+      if (!res.ok) {
+        throw new Error(mapApiError(out, res.status));
+      }
+      applyQuestionTimerToState(out.questionTimer);
+
+      if (out?.questionTimer?.running === true) {
+        ({ res, out } = await requestQuestionTimer({ action: "pause" }));
+        if (!res.ok) {
+          throw new Error(mapApiError(out, res.status));
+        }
+        applyQuestionTimerToState(out.questionTimer);
+        if (out.questionTimer && typeof out.questionTimer.remainingSec === "number") {
+          const x = decomposeTimerSeconds(out.questionTimer.remainingSec);
+          setChronoDays(x.days);
+          setChronoHours(x.hours);
+          setChronoMinutes(x.minutes);
+          setChronoSeconds(x.seconds);
+        }
+      }
+
+      await fetchEvent({ silent: true });
+      return true;
+    } catch (e) {
+      setActionError(e.message || "Activation du chrono échouée.");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -8648,10 +8727,7 @@ export default function RegieEventPage() {
                               );
                               return;
                             }
-                            void postQuestionTimer({
-                              action: "enable",
-                              totalSec: presetChronoSec,
-                            });
+                            void activateQuestionTimer(presetChronoSec);
                           }}
                           style={{
                             ...btnGhost,
