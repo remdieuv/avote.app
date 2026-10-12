@@ -56,15 +56,109 @@ export function getRegieChronoEnabledLabel(questionTimer) {
 }
 
 /**
- * Sous-libellé (en cours / en pause / prêt) — uniquement si actif.
- * @param {{ running?: boolean; isPaused?: boolean } | null | undefined} questionTimer
+ * Mode de pilotage dérivé uniquement du snapshot serveur (pas de 2e état UI).
+ * - inactive : pas de durée armée
+ * - stopped : armé, à l’arrêt (jamais démarré / remis à zéro)
+ * - running : compte à rebours en cours
+ * - paused : en pause après avoir consommé du temps
+ *
+ * @param {{
+ *   totalSec?: number | null;
+ *   remainingSec?: number | null;
+ *   accumulatedSec?: number | null;
+ *   running?: boolean;
+ *   isPaused?: boolean;
+ * } | null | undefined} questionTimer
+ * @returns {"inactive" | "stopped" | "running" | "paused"}
+ */
+export function getRegieChronoControlMode(questionTimer) {
+  if (!isRegieChronoEnabled(questionTimer)) return "inactive";
+  if (questionTimer?.running && !questionTimer?.isPaused) return "running";
+  const total = Number(questionTimer?.totalSec) || 0;
+  const remaining = Number(questionTimer?.remainingSec);
+  const accumulated = Number(questionTimer?.accumulatedSec) || 0;
+  const consumed =
+    accumulated > 0 ||
+    (Number.isFinite(remaining) && total > 0 && remaining < total);
+  return consumed ? "paused" : "stopped";
+}
+
+/**
+ * Boutons visibles selon le mode (pilotage régie).
+ * @param {"inactive" | "stopped" | "running" | "paused"} mode
+ */
+export function getRegieChronoControlFlags(mode) {
+  switch (mode) {
+    case "inactive":
+      return {
+        activer: true,
+        demarrer: false,
+        reprendre: false,
+        pause: false,
+        reinitialiser: false,
+        desactiver: false,
+        regler: true,
+      };
+    case "stopped":
+      return {
+        activer: false,
+        demarrer: true,
+        reprendre: false,
+        pause: false,
+        reinitialiser: false,
+        desactiver: true,
+        regler: true,
+      };
+    case "running":
+      return {
+        activer: false,
+        demarrer: false,
+        reprendre: false,
+        pause: true,
+        reinitialiser: false,
+        desactiver: true,
+        regler: false,
+      };
+    case "paused":
+      return {
+        activer: false,
+        demarrer: false,
+        reprendre: true,
+        pause: false,
+        reinitialiser: true,
+        desactiver: true,
+        regler: false,
+      };
+    default:
+      return {
+        activer: false,
+        demarrer: false,
+        reprendre: false,
+        pause: false,
+        reinitialiser: false,
+        desactiver: false,
+        regler: false,
+      };
+  }
+}
+
+/**
+ * Sous-libellé (en cours / en pause / à l’arrêt) — uniquement si actif.
+ * @param {{
+ *   totalSec?: number | null;
+ *   remainingSec?: number | null;
+ *   accumulatedSec?: number | null;
+ *   running?: boolean;
+ *   isPaused?: boolean;
+ * } | null | undefined} questionTimer
  * @returns {string}
  */
 export function getRegieChronoRunningHint(questionTimer) {
-  if (!isRegieChronoEnabled(questionTimer)) return "";
-  if (questionTimer?.running && !questionTimer?.isPaused) return "en cours";
-  if (questionTimer?.isPaused) return "en pause";
-  return "prêt";
+  const mode = getRegieChronoControlMode(questionTimer);
+  if (mode === "running") return "en cours";
+  if (mode === "paused") return "en pause";
+  if (mode === "stopped") return "à l’arrêt";
+  return "";
 }
 
 /**

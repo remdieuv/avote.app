@@ -10,6 +10,8 @@ import {
   decomposeTimerSeconds,
   formatCountdownCompact,
   formatCountdownVerbose,
+  getRegieChronoControlFlags,
+  getRegieChronoControlMode,
   getRegieChronoEnabledLabel,
   getRegieChronoRunningHint,
   isRegieChronoEnabled,
@@ -6651,6 +6653,8 @@ export default function RegieEventPage() {
   const chronoEnabled = isRegieChronoEnabled(tm);
   const chronoEnabledLabel = getRegieChronoEnabledLabel(tm);
   const chronoRunningHint = getRegieChronoRunningHint(tm);
+  const chronoControlMode = getRegieChronoControlMode(tm);
+  const chronoControls = getRegieChronoControlFlags(chronoControlMode);
   /** Durée « live » seulement si le chrono est armé/actif côté serveur. */
   const secondesChronoActif =
     secondesChrono !== null
@@ -8677,42 +8681,7 @@ export default function RegieEventPage() {
                       >
                         {chronoEtatLiveTexte}
                       </span>
-                      {chronoEnabled && tm?.running && !tm?.isPaused ? (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void postQuestionTimer({ action: "pause" })}
-                          style={{
-                            ...btnGhost,
-                            minHeight: "1.9rem",
-                            padding: "0.2rem 0.55rem",
-                            fontSize: "0.72rem",
-                            fontWeight: 700,
-                          }}
-                          title="Mettre le chrono en pause"
-                        >
-                          Pause
-                        </button>
-                      ) : null}
-                      {chronoEnabled ? (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void postQuestionTimer({ action: "reset" })}
-                          style={{
-                            ...btnGhost,
-                            minHeight: "1.9rem",
-                            padding: "0.2rem 0.55rem",
-                            fontSize: "0.72rem",
-                            fontWeight: 700,
-                            borderColor: "rgba(148, 163, 184, 0.45)",
-                            color: "#475569",
-                          }}
-                          title="Désactive le chrono (aucune durée armée côté serveur)."
-                        >
-                          Désactiver
-                        </button>
-                      ) : (
+                      {chronoControls.activer ? (
                         <button
                           type="button"
                           disabled={busy || presetChronoSec < 1}
@@ -8743,23 +8712,147 @@ export default function RegieEventPage() {
                         >
                           Activer
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setChronoReglerOpen((v) => !v)}
-                        style={{
-                          ...btnGhost,
-                          minHeight: "1.9rem",
-                          padding: "0.2rem 0.55rem",
-                          fontSize: "0.72rem",
-                          fontWeight: 700,
-                          borderColor: "rgba(15, 23, 42, 0.12)",
-                        }}
-                      >
-                        {chronoReglerOpen ? "Masquer" : "Régler"}
-                      </button>
+                      ) : null}
+                      {chronoControls.demarrer ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => {
+                            const total =
+                              typeof tm?.totalSec === "number" && tm.totalSec > 0
+                                ? tm.totalSec
+                                : presetChronoSec;
+                            if (total < 1) {
+                              setActionError("Indique au moins 1 seconde.");
+                              return;
+                            }
+                            void postQuestionTimer({
+                              action: "start",
+                              totalSec: total,
+                            });
+                          }}
+                          style={{
+                            ...btnGhost,
+                            minHeight: "1.9rem",
+                            padding: "0.2rem 0.55rem",
+                            fontSize: "0.72rem",
+                            fontWeight: 800,
+                            borderColor: "rgba(13, 148, 136, 0.45)",
+                            background:
+                              "linear-gradient(180deg, #14b8a6 0%, #0d9488 100%)",
+                            color: "#fff",
+                          }}
+                          title="Démarre le compte à rebours sur le chrono serveur."
+                        >
+                          Démarrer
+                        </button>
+                      ) : null}
+                      {chronoControls.reprendre ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void postQuestionTimer({ action: "start" })
+                          }
+                          style={{
+                            ...btnGhost,
+                            minHeight: "1.9rem",
+                            padding: "0.2rem 0.55rem",
+                            fontSize: "0.72rem",
+                            fontWeight: 800,
+                            borderColor: "rgba(13, 148, 136, 0.45)",
+                            background:
+                              "linear-gradient(180deg, #14b8a6 0%, #0d9488 100%)",
+                            color: "#fff",
+                          }}
+                          title="Reprend le compte à rebours en pause."
+                        >
+                          Reprendre
+                        </button>
+                      ) : null}
+                      {chronoControls.pause ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void postQuestionTimer({ action: "pause" })
+                          }
+                          style={{
+                            ...btnGhost,
+                            minHeight: "1.9rem",
+                            padding: "0.2rem 0.55rem",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                          }}
+                          title="Mettre le chrono en pause"
+                        >
+                          Pause
+                        </button>
+                      ) : null}
+                      {chronoControls.reinitialiser ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => {
+                            const total =
+                              typeof tm?.totalSec === "number" && tm.totalSec > 0
+                                ? tm.totalSec
+                                : presetChronoSec;
+                            void activateQuestionTimer(total);
+                          }}
+                          style={{
+                            ...btnGhost,
+                            minHeight: "1.9rem",
+                            padding: "0.2rem 0.55rem",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            borderColor: "rgba(124, 58, 237, 0.3)",
+                            color: "#5b21b6",
+                          }}
+                          title="Remet la durée initiale sans désactiver ni démarrer."
+                        >
+                          Réinitialiser
+                        </button>
+                      ) : null}
+                      {chronoControls.desactiver ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void postQuestionTimer({ action: "reset" })
+                          }
+                          style={{
+                            ...btnGhost,
+                            minHeight: "1.9rem",
+                            padding: "0.2rem 0.55rem",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            borderColor: "rgba(148, 163, 184, 0.45)",
+                            color: "#475569",
+                          }}
+                          title="Désactive le chrono (aucune durée armée côté serveur)."
+                        >
+                          Désactiver
+                        </button>
+                      ) : null}
+                      {chronoControls.regler ? (
+                        <button
+                          type="button"
+                          onClick={() => setChronoReglerOpen((v) => !v)}
+                          style={{
+                            ...btnGhost,
+                            minHeight: "1.9rem",
+                            padding: "0.2rem 0.55rem",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            borderColor: "rgba(15, 23, 42, 0.12)",
+                          }}
+                        >
+                          {chronoReglerOpen ? "Masquer" : "Régler"}
+                        </button>
+                      ) : null}
                     </div>
-                    {chronoReglerOpen ? (
+                    {chronoControls.regler && chronoReglerOpen ? (
                       <div
                         style={{
                           padding: "0.75rem",
