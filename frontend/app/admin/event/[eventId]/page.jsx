@@ -8,7 +8,11 @@ import { io } from "socket.io-client";
 import {
   QUESTION_TIMER_MAX_SEC,
   decomposeTimerSeconds,
+  formatCountdownCompact,
   formatCountdownVerbose,
+  getRegieChronoEnabledLabel,
+  getRegieChronoRunningHint,
+  isRegieChronoEnabled,
 } from "@/lib/chronoFormat";
 import { AjouterQuestionLiveModal } from "@/components/AjouterQuestionLiveModal";
 import { LiveMicroLabel } from "@/components/admin/LiveMicroIcon";
@@ -6564,40 +6568,41 @@ export default function RegieEventPage() {
     chronoHours * 3600 +
     chronoMinutes * 60 +
     chronoSeconds;
-  const secondesAfficheGrand =
+  /** État réel API uniquement — pas de second flag UI. */
+  const chronoEnabled = isRegieChronoEnabled(tm);
+  const chronoEnabledLabel = getRegieChronoEnabledLabel(tm);
+  const chronoRunningHint = getRegieChronoRunningHint(tm);
+  /** Durée « live » seulement si le chrono est armé/actif côté serveur. */
+  const secondesChronoActif =
     secondesChrono !== null
       ? secondesChrono
-      : tm && typeof tm.remainingSec === "number"
+      : chronoEnabled && typeof tm?.remainingSec === "number"
         ? tm.remainingSec
-        : presetChronoSec > 0
-          ? presetChronoSec
-          : null;
+        : null;
+  /** Durée affichée : réelle si actif, sinon preset (référence grisée). */
+  const secondesAfficheGrand =
+    secondesChronoActif !== null
+      ? secondesChronoActif
+      : presetChronoSec > 0
+        ? presetChronoSec
+        : null;
   const texteGrandChrono =
     secondesAfficheGrand !== null
       ? formatCountdownVerbose(secondesAfficheGrand)
       : "—";
-  const legendeChrono = tm?.running && !tm?.isPaused
-    ? inTestMode
-      ? "Compte à rebours (MODE TEST)"
-      : "Compte à rebours sur l’écran"
-    : tm?.isPaused
-      ? "En pause"
-      : tm
-        ? "Arrêté — prêt à relancer"
-        : "Durée réglée avant lancement";
-  const chronoEtatLiveTexte = useMemo(() => {
-    if (secondesAfficheGrand == null) return "00:00";
-    const total = Math.max(0, Math.floor(secondesAfficheGrand));
-    const d = Math.floor(total / 86400);
-    const h = Math.floor((total % 86400) / 3600);
-    const m = Math.floor((total % 3600) / 60);
-    const s = total % 60;
-    if (d > 0) return `${d}j ${String(h).padStart(2, "0")}h`;
-    if (h > 0) {
-      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-    }
-    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  }, [secondesAfficheGrand]);
+  const legendeChrono = !chronoEnabled
+    ? "Chrono inactif — activez-le pour l’utiliser"
+    : tm?.running && !tm?.isPaused
+      ? inTestMode
+        ? "Compte à rebours (MODE TEST)"
+        : "Compte à rebours sur l’écran"
+      : tm?.isPaused
+        ? "En pause — prêt à lancer"
+        : "Arrêté — prêt à relancer";
+  const chronoEtatLiveTexte = useMemo(
+    () => formatCountdownCompact(secondesAfficheGrand),
+    [secondesAfficheGrand],
+  );
 
   const chronoAffichageLong = texteGrandChrono.includes(" j ");
 
@@ -6619,6 +6624,18 @@ export default function RegieEventPage() {
         <p
           style={{
             margin: 0,
+            fontSize: "0.72rem",
+            fontWeight: 800,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            color: chronoEnabled ? "#0f766e" : "#94a3b8",
+          }}
+        >
+          {chronoEnabledLabel}
+        </p>
+        <p
+          style={{
+            margin: "0.35rem 0 0 0",
             fontSize: chronoAffichageLong
               ? desktop
                 ? "1.55rem"
@@ -6629,10 +6646,11 @@ export default function RegieEventPage() {
             fontWeight: 800,
             fontFamily: "ui-monospace, monospace",
             letterSpacing: "-0.04em",
-            color: "#3b0764",
+            color: chronoEnabled ? "#3b0764" : "#94a3b8",
             lineHeight: 1.05,
             fontVariantNumeric: "tabular-nums",
             wordBreak: "break-word",
+            opacity: chronoEnabled ? 1 : 0.65,
           }}
         >
           {texteGrandChrono}
@@ -6641,7 +6659,7 @@ export default function RegieEventPage() {
           style={{
             margin: "0.4rem 0 0 0",
             fontSize: "0.74rem",
-            color: "#6b21a8",
+            color: chronoEnabled ? "#6b21a8" : "#64748b",
             fontWeight: 600,
             opacity: 0.95,
           }}
@@ -8137,6 +8155,7 @@ export default function RegieEventPage() {
                       gap: "0.16rem",
                       justifyItems: desktop ? "end" : "start",
                       textAlign: desktop ? "right" : "left",
+                      opacity: chronoEnabled ? 1 : 0.55,
                     }}
                   >
                     <p
@@ -8157,7 +8176,9 @@ export default function RegieEventPage() {
                         fontSize: desktop ? "1.85rem" : "1.28rem",
                         fontWeight: 800,
                         lineHeight: 1.02,
-                        color: "#f5f3ff",
+                        color: chronoEnabled
+                          ? "#f5f3ff"
+                          : "rgba(226, 232, 240, 0.42)",
                         fontFamily: "ui-monospace, monospace",
                         fontVariantNumeric: "tabular-nums",
                         letterSpacing: "-0.03em",
@@ -8165,12 +8186,20 @@ export default function RegieEventPage() {
                     >
                       {chronoEtatLiveTexte}
                     </p>
-                    <p style={{ margin: 0, fontSize: "0.7rem", color: "rgba(224, 231, 255, 0.72)" }}>
-                      {tm?.running && !tm?.isPaused
-                        ? "en cours"
-                        : tm?.isPaused
-                          ? "en pause"
-                          : "prêt"}
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "0.7rem",
+                        fontWeight: 700,
+                        color: chronoEnabled
+                          ? "rgba(224, 231, 255, 0.78)"
+                          : "rgba(226, 232, 240, 0.45)",
+                      }}
+                    >
+                      {chronoEnabledLabel}
+                      {chronoEnabled && chronoRunningHint
+                        ? ` · ${chronoRunningHint}`
+                        : ""}
                     </p>
                     <button
                       type="button"
@@ -8547,17 +8576,29 @@ export default function RegieEventPage() {
                       </span>
                       <span
                         style={{
+                          fontSize: "0.72rem",
+                          fontWeight: 800,
+                          letterSpacing: "0.04em",
+                          textTransform: "uppercase",
+                          color: chronoEnabled ? "#0f766e" : "#94a3b8",
+                        }}
+                      >
+                        {chronoEnabledLabel}
+                      </span>
+                      <span
+                        style={{
                           fontFamily: "ui-monospace, monospace",
                           fontVariantNumeric: "tabular-nums",
                           fontWeight: 800,
                           fontSize: "1.05rem",
-                          color: "#0f172a",
+                          color: chronoEnabled ? "#0f172a" : "#94a3b8",
                           letterSpacing: "-0.02em",
+                          opacity: chronoEnabled ? 1 : 0.7,
                         }}
                       >
                         {chronoEtatLiveTexte}
                       </span>
-                      {tm?.running && !tm?.isPaused ? (
+                      {chronoEnabled && tm?.running && !tm?.isPaused ? (
                         <button
                           type="button"
                           disabled={busy}
@@ -8574,6 +8615,59 @@ export default function RegieEventPage() {
                           Pause
                         </button>
                       ) : null}
+                      {chronoEnabled ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void postQuestionTimer({ action: "reset" })}
+                          style={{
+                            ...btnGhost,
+                            minHeight: "1.9rem",
+                            padding: "0.2rem 0.55rem",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            borderColor: "rgba(148, 163, 184, 0.45)",
+                            color: "#475569",
+                          }}
+                          title="Désactive le chrono (aucune durée armée côté serveur)."
+                        >
+                          Désactiver
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={busy || presetChronoSec < 1}
+                          onClick={() => {
+                            if (presetChronoSec < 1) {
+                              setActionError("Indique au moins 1 seconde.");
+                              return;
+                            }
+                            if (presetChronoSec > QUESTION_TIMER_MAX_SEC) {
+                              setActionError(
+                                `Durée max. ${Math.floor(QUESTION_TIMER_MAX_SEC / 86400)} jours (réglage API).`,
+                              );
+                              return;
+                            }
+                            void postQuestionTimer({
+                              action: "enable",
+                              totalSec: presetChronoSec,
+                            });
+                          }}
+                          style={{
+                            ...btnGhost,
+                            minHeight: "1.9rem",
+                            padding: "0.2rem 0.55rem",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            borderColor: "rgba(13, 148, 136, 0.35)",
+                            background: "rgba(13, 148, 136, 0.08)",
+                            color: "#0f766e",
+                          }}
+                          title="Active le chrono avec la durée réglée, sans le démarrer."
+                        >
+                          Activer
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setChronoReglerOpen((v) => !v)}
