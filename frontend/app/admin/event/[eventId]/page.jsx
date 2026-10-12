@@ -5636,21 +5636,41 @@ export default function RegieEventPage() {
   }
 
   /**
-   * Activer = armer la durée sans démarrer le compte à rebours.
+   * Arme une durée sur le chrono serveur sans démarrer le compte à rebours.
    * 1) `enable` (backend à jour)
-   * 2) sinon `start` + `pause` (backend qui ne connaît pas encore enable)
+   * 2) sinon `start` + `pause` (backend sans enable)
    * @param {number} totalSec
+   * @param {{ stopIfRunning?: boolean }} [opts]
    */
-  async function activateQuestionTimer(totalSec) {
+  async function activateQuestionTimer(totalSec, opts = {}) {
+    const stopIfRunning = opts.stopIfRunning === true;
     setBusy(true);
     setActionError(null);
     try {
+      if (stopIfRunning) {
+        const runningNow =
+          eventData?.questionTimer?.running === true &&
+          eventData?.questionTimer?.isPaused !== true;
+        if (runningNow) {
+          const paused = await requestQuestionTimer({ action: "pause" });
+          if (!paused.res.ok) {
+            throw new Error(mapApiError(paused.out, paused.res.status));
+          }
+          applyQuestionTimerToState(paused.out.questionTimer);
+        }
+      }
+
       let { res, out } = await requestQuestionTimer({
         action: "enable",
         totalSec,
       });
       if (res.ok) {
         applyQuestionTimerToState(out.questionTimer);
+        const x = decomposeTimerSeconds(totalSec);
+        setChronoDays(x.days);
+        setChronoHours(x.hours);
+        setChronoMinutes(x.minutes);
+        setChronoSeconds(x.seconds);
         await fetchEvent({ silent: true });
         return true;
       }
@@ -5663,7 +5683,7 @@ export default function RegieEventPage() {
         throw new Error(mapApiError(out, res.status));
       }
 
-      // Backend sans "enable" : start puis pause immédiate → état Actif / en pause.
+      // Backend sans "enable" : start puis pause immédiate → état Actif / arrêté.
       ({ res, out } = await requestQuestionTimer({
         action: "start",
         totalSec,
@@ -5680,14 +5700,13 @@ export default function RegieEventPage() {
           throw new Error(mapApiError(out, res.status));
         }
         applyQuestionTimerToState(out.questionTimer);
-        if (out.questionTimer && typeof out.questionTimer.remainingSec === "number") {
-          const x = decomposeTimerSeconds(out.questionTimer.remainingSec);
-          setChronoDays(x.days);
-          setChronoHours(x.hours);
-          setChronoMinutes(x.minutes);
-          setChronoSeconds(x.seconds);
-        }
       }
+
+      const x = decomposeTimerSeconds(totalSec);
+      setChronoDays(x.days);
+      setChronoHours(x.hours);
+      setChronoMinutes(x.minutes);
+      setChronoSeconds(x.seconds);
 
       await fetchEvent({ silent: true });
       return true;
@@ -5697,6 +5716,43 @@ export default function RegieEventPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  /** Confirmer la durée du panneau Régler (sans démarrer). */
+  async function confirmChronoSelection() {
+    const total = presetChronoSec;
+    if (total < 1) {
+      setActionError("Indique au moins 1 seconde.");
+      return false;
+    }
+    if (total > QUESTION_TIMER_MAX_SEC) {
+      setActionError(
+        `Durée max. ${Math.floor(QUESTION_TIMER_MAX_SEC / 86400)} jours (réglage API).`,
+      );
+      return false;
+    }
+    if (
+      eventData?.questionTimer?.running === true &&
+      eventData?.questionTimer?.isPaused !== true
+    ) {
+      setActionError("Mettez le chrono en pause avant de modifier la durée.");
+      return false;
+    }
+    return activateQuestionTimer(total);
+  }
+
+  /**
+   * Réinitialiser (panneau) : durée configurée, arrêt du décompte, chrono reste actif.
+   */
+  async function reinitialiserChronoSelection() {
+    const configured =
+      typeof eventData?.questionTimer?.totalSec === "number" &&
+      eventData.questionTimer.totalSec > 0
+        ? eventData.questionTimer.totalSec
+        : presetChronoSec > 0
+          ? presetChronoSec
+          : 120;
+    return activateQuestionTimer(configured, { stopIfRunning: true });
   }
 
   async function postContestDraw(pollId) {
@@ -6701,114 +6757,27 @@ export default function RegieEventPage() {
     opacity: busy ? 0.55 : 1,
   };
 
+  const chronoInputStyle = {
+    display: "block",
+    width: "3.1rem",
+    marginTop: "0.2rem",
+    padding: "0.22rem 0.28rem",
+    borderRadius: "6px",
+    border: "1px solid #d8b4fe",
+    background: "#faf5ff",
+    fontSize: "0.78rem",
+  };
+  const chronoLabelStyle = {
+    fontSize: "0.65rem",
+    fontWeight: 700,
+    color: "#64748b",
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+  };
+
+  /** Panneau Régler : durée + Confirmer + Réinitialiser uniquement. */
   const chronoProjectionInner = (
-    <>
-      <div style={{ textAlign: "center", marginBottom: "0.85rem" }}>
-        <p
-          style={{
-            margin: 0,
-            fontSize: "0.72rem",
-            fontWeight: 800,
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            color: chronoEnabled ? "#0f766e" : "#94a3b8",
-          }}
-        >
-          {chronoEnabledLabel}
-        </p>
-        <p
-          style={{
-            margin: "0.35rem 0 0 0",
-            fontSize: chronoAffichageLong
-              ? desktop
-                ? "1.55rem"
-                : "1.35rem"
-              : desktop
-                ? "2.75rem"
-                : "2.4rem",
-            fontWeight: 800,
-            fontFamily: "ui-monospace, monospace",
-            letterSpacing: "-0.04em",
-            color: chronoEnabled ? "#3b0764" : "#94a3b8",
-            lineHeight: 1.05,
-            fontVariantNumeric: "tabular-nums",
-            wordBreak: "break-word",
-            opacity: chronoEnabled ? 1 : 0.65,
-          }}
-        >
-          {texteGrandChrono}
-        </p>
-        <p
-          style={{
-            margin: "0.4rem 0 0 0",
-            fontSize: "0.74rem",
-            color: chronoEnabled ? "#6b21a8" : "#64748b",
-            fontWeight: 600,
-            opacity: 0.95,
-          }}
-        >
-          {legendeChrono}
-        </p>
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          justifyContent: "center",
-          gap: "0.5rem",
-          marginBottom: "0.85rem",
-        }}
-      >
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => {
-            const total = presetChronoSec;
-            if (total < 1) {
-              setActionError("Indique au moins 1 seconde.");
-              return;
-            }
-            if (total > QUESTION_TIMER_MAX_SEC) {
-              setActionError(
-                `Durée max. ${Math.floor(QUESTION_TIMER_MAX_SEC / 86400)} jours (réglage API).`,
-              );
-              return;
-            }
-            void postQuestionTimer({ action: "start", totalSec: total });
-          }}
-          style={{
-            padding: "0.48rem 1.15rem",
-            fontSize: "0.84rem",
-            fontWeight: 700,
-            borderRadius: "10px",
-            border: "1px solid #5b21b6",
-            background: busy ? "#c4b5fd" : "linear-gradient(180deg, #7c3aed 0%, #6d28d9 100%)",
-            color: "#fff",
-            cursor: busy ? "not-allowed" : "pointer",
-            boxShadow: busy ? "none" : "0 2px 10px rgba(109, 40, 217, 0.3)",
-          }}
-        >
-          Lancer
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void postQuestionTimer({ action: "pause" })}
-          style={chronoBtnOutline}
-        >
-          Pause
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void postQuestionTimer({ action: "reset" })}
-          style={chronoBtnOutline}
-        >
-          Réinitialiser
-        </button>
-      </div>
-
+    <div style={{ display: "grid", gap: "0.85rem" }}>
       <div
         style={{
           display: "flex",
@@ -6816,19 +6785,9 @@ export default function RegieEventPage() {
           justifyContent: "center",
           alignItems: "flex-end",
           gap: "0.65rem 1rem",
-          paddingTop: "0.65rem",
-          borderTop: "1px solid rgba(196, 181, 253, 0.6)",
         }}
       >
-        <label
-          style={{
-            fontSize: "0.65rem",
-            fontWeight: 700,
-            color: "#64748b",
-            letterSpacing: "0.04em",
-            textTransform: "uppercase",
-          }}
-        >
+        <label style={chronoLabelStyle}>
           Jours
           <input
             type="number"
@@ -6841,27 +6800,10 @@ export default function RegieEventPage() {
                 Math.min(90, Math.max(0, parseInt(e.target.value, 10) || 0)),
               )
             }
-            style={{
-              display: "block",
-              width: "3.1rem",
-              marginTop: "0.2rem",
-              padding: "0.22rem 0.28rem",
-              borderRadius: "6px",
-              border: "1px solid #d8b4fe",
-              background: "#faf5ff",
-              fontSize: "0.78rem",
-            }}
+            style={chronoInputStyle}
           />
         </label>
-        <label
-          style={{
-            fontSize: "0.65rem",
-            fontWeight: 700,
-            color: "#64748b",
-            letterSpacing: "0.04em",
-            textTransform: "uppercase",
-          }}
-        >
+        <label style={chronoLabelStyle}>
           Heures
           <input
             type="number"
@@ -6874,28 +6816,11 @@ export default function RegieEventPage() {
                 Math.min(23, Math.max(0, parseInt(e.target.value, 10) || 0)),
               )
             }
-            style={{
-              display: "block",
-              width: "3.1rem",
-              marginTop: "0.2rem",
-              padding: "0.22rem 0.28rem",
-              borderRadius: "6px",
-              border: "1px solid #d8b4fe",
-              background: "#faf5ff",
-              fontSize: "0.78rem",
-            }}
+            style={chronoInputStyle}
           />
         </label>
-        <label
-          style={{
-            fontSize: "0.65rem",
-            fontWeight: 700,
-            color: "#64748b",
-            letterSpacing: "0.04em",
-            textTransform: "uppercase",
-          }}
-        >
-          Min.
+        <label style={chronoLabelStyle}>
+          Minutes
           <input
             type="number"
             min={0}
@@ -6907,28 +6832,11 @@ export default function RegieEventPage() {
                 Math.min(59, Math.max(0, parseInt(e.target.value, 10) || 0)),
               )
             }
-            style={{
-              display: "block",
-              width: "3.1rem",
-              marginTop: "0.2rem",
-              padding: "0.22rem 0.28rem",
-              borderRadius: "6px",
-              border: "1px solid #d8b4fe",
-              background: "#faf5ff",
-              fontSize: "0.78rem",
-            }}
+            style={chronoInputStyle}
           />
         </label>
-        <label
-          style={{
-            fontSize: "0.65rem",
-            fontWeight: 700,
-            color: "#64748b",
-            letterSpacing: "0.04em",
-            textTransform: "uppercase",
-          }}
-        >
-          Sec.
+        <label style={chronoLabelStyle}>
+          Secondes
           <input
             type="number"
             min={0}
@@ -6940,32 +6848,61 @@ export default function RegieEventPage() {
                 Math.min(59, Math.max(0, parseInt(e.target.value, 10) || 0)),
               )
             }
-            style={{
-              display: "block",
-              width: "3.1rem",
-              marginTop: "0.2rem",
-              padding: "0.22rem 0.28rem",
-              borderRadius: "6px",
-              border: "1px solid #d8b4fe",
-              background: "#faf5ff",
-              fontSize: "0.78rem",
-            }}
+            style={chronoInputStyle}
           />
         </label>
-        <span
-          style={{
-            fontSize: "0.6rem",
-            color: "#94a3b8",
-            fontWeight: 500,
-            maxWidth: "10rem",
-            lineHeight: 1.35,
-            paddingBottom: "0.12rem",
-          }}
-        >
-          Max. {Math.floor(QUESTION_TIMER_MAX_SEC / 86400)} j côté serveur.
-        </span>
       </div>
-    </>
+      <p
+        style={{
+          margin: 0,
+          textAlign: "center",
+          fontSize: "0.68rem",
+          color: "#94a3b8",
+          fontWeight: 500,
+        }}
+      >
+        Max. {Math.floor(QUESTION_TIMER_MAX_SEC / 86400)} j — la durée n’est
+        appliquée qu’après confirmation.
+      </p>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "center",
+          gap: "0.5rem",
+        }}
+      >
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void confirmChronoSelection()}
+          style={{
+            padding: "0.48rem 1rem",
+            fontSize: "0.82rem",
+            fontWeight: 800,
+            borderRadius: "10px",
+            border: "1px solid #0d9488",
+            background: busy
+              ? "#99f6e4"
+              : "linear-gradient(180deg, #14b8a6 0%, #0d9488 100%)",
+            color: "#fff",
+            cursor: busy ? "not-allowed" : "pointer",
+          }}
+          title="Applique la durée sur le chrono serveur sans démarrer le décompte."
+        >
+          Confirmer la sélection
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void reinitialiserChronoSelection()}
+          style={chronoBtnOutline}
+          title="Remet la durée configurée et arrête le décompte, sans désactiver."
+        >
+          Réinitialiser
+        </button>
+      </div>
+    </div>
   );
 
   if (!eventId) {
@@ -8789,31 +8726,6 @@ export default function RegieEventPage() {
                           Pause
                         </button>
                       ) : null}
-                      {chronoControls.reinitialiser ? (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => {
-                            const total =
-                              typeof tm?.totalSec === "number" && tm.totalSec > 0
-                                ? tm.totalSec
-                                : presetChronoSec;
-                            void activateQuestionTimer(total);
-                          }}
-                          style={{
-                            ...btnGhost,
-                            minHeight: "1.9rem",
-                            padding: "0.2rem 0.55rem",
-                            fontSize: "0.72rem",
-                            fontWeight: 700,
-                            borderColor: "rgba(124, 58, 237, 0.3)",
-                            color: "#5b21b6",
-                          }}
-                          title="Remet la durée initiale sans désactiver ni démarrer."
-                        >
-                          Réinitialiser
-                        </button>
-                      ) : null}
                       {chronoControls.desactiver ? (
                         <button
                           type="button"
@@ -8852,7 +8764,7 @@ export default function RegieEventPage() {
                         </button>
                       ) : null}
                     </div>
-                    {chronoControls.regler && chronoReglerOpen ? (
+                    {chronoReglerOpen ? (
                       <div
                         style={{
                           padding: "0.75rem",

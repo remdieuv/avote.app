@@ -25,7 +25,15 @@ function test(name, fn) {
   }
 }
 
-test("Inactif = pas de snapshot (totalSec null côté serveur)", () => {
+/** Ligne principale : pas de Réinitialiser (réservé au panneau Régler). */
+function assertNoMainLineReset(flags) {
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(flags, "reinitialiser"),
+    false,
+  );
+}
+
+test("Inactif → Activer + Régler", () => {
   assert.equal(isRegieChronoEnabled(null), false);
   assert.equal(getRegieChronoControlMode(null), "inactive");
   assert.equal(getRegieChronoEnabledLabel(null), "Inactif");
@@ -35,6 +43,9 @@ test("Inactif = pas de snapshot (totalSec null côté serveur)", () => {
   assert.equal(flags.regler, true);
   assert.equal(flags.demarrer, false);
   assert.equal(flags.desactiver, false);
+  assert.equal(flags.pause, false);
+  assert.equal(flags.reprendre, false);
+  assertNoMainLineReset(flags);
 });
 
 test("Actif à l’arrêt → Démarrer + Désactiver + Régler", () => {
@@ -53,9 +64,11 @@ test("Actif à l’arrêt → Démarrer + Désactiver + Régler", () => {
   assert.equal(flags.regler, true);
   assert.equal(flags.activer, false);
   assert.equal(flags.pause, false);
+  assert.equal(flags.reprendre, false);
+  assertNoMainLineReset(flags);
 });
 
-test("En cours → Pause + Désactiver", () => {
+test("En cours → Pause + Désactiver + Régler", () => {
   const running = {
     totalSec: 120,
     remainingSec: 90,
@@ -68,11 +81,14 @@ test("En cours → Pause + Désactiver", () => {
   const flags = getRegieChronoControlFlags("running");
   assert.equal(flags.pause, true);
   assert.equal(flags.desactiver, true);
-  assert.equal(flags.regler, false);
+  assert.equal(flags.regler, true);
   assert.equal(flags.demarrer, false);
+  assert.equal(flags.activer, false);
+  assert.equal(flags.reprendre, false);
+  assertNoMainLineReset(flags);
 });
 
-test("En pause → Reprendre + Réinitialiser + Désactiver", () => {
+test("En pause → Reprendre + Désactiver + Régler", () => {
   const paused = {
     totalSec: 120,
     remainingSec: 90,
@@ -84,10 +100,12 @@ test("En pause → Reprendre + Réinitialiser + Désactiver", () => {
   assert.equal(getRegieChronoRunningHint(paused), "en pause");
   const flags = getRegieChronoControlFlags("paused");
   assert.equal(flags.reprendre, true);
-  assert.equal(flags.reinitialiser, true);
   assert.equal(flags.desactiver, true);
-  assert.equal(flags.regler, false);
+  assert.equal(flags.regler, true);
   assert.equal(flags.demarrer, false);
+  assert.equal(flags.pause, false);
+  assert.equal(flags.activer, false);
+  assertNoMainLineReset(flags);
 });
 
 test("Compact + pas de second flag UI", () => {

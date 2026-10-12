@@ -88,6 +88,7 @@ export function getRegieChronoControlMode(questionTimer) {
  * @param {"inactive" | "stopped" | "running" | "paused"} mode
  */
 export function getRegieChronoControlFlags(mode) {
+  // Ligne principale : jamais de Réinitialiser (réservé au panneau Régler).
   switch (mode) {
     case "inactive":
       return {
@@ -95,7 +96,6 @@ export function getRegieChronoControlFlags(mode) {
         demarrer: false,
         reprendre: false,
         pause: false,
-        reinitialiser: false,
         desactiver: false,
         regler: true,
       };
@@ -105,7 +105,6 @@ export function getRegieChronoControlFlags(mode) {
         demarrer: true,
         reprendre: false,
         pause: false,
-        reinitialiser: false,
         desactiver: true,
         regler: true,
       };
@@ -115,9 +114,8 @@ export function getRegieChronoControlFlags(mode) {
         demarrer: false,
         reprendre: false,
         pause: true,
-        reinitialiser: false,
         desactiver: true,
-        regler: false,
+        regler: true,
       };
     case "paused":
       return {
@@ -125,9 +123,8 @@ export function getRegieChronoControlFlags(mode) {
         demarrer: false,
         reprendre: true,
         pause: false,
-        reinitialiser: true,
         desactiver: true,
-        regler: false,
+        regler: true,
       };
     default:
       return {
@@ -135,7 +132,6 @@ export function getRegieChronoControlFlags(mode) {
         demarrer: false,
         reprendre: false,
         pause: false,
-        reinitialiser: false,
         desactiver: false,
         regler: false,
       };
