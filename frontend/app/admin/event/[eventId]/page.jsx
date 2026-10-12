@@ -4728,6 +4728,7 @@ export default function RegieEventPage() {
   const [editQuestionText, setEditQuestionText] = useState("");
   const [editContestPrize, setEditContestPrize] = useState("");
   const [editContestWinnerCount, setEditContestWinnerCount] = useState(1);
+  const [editQuizCorrectOrder, setEditQuizCorrectOrder] = useState(0);
 
   const loadPollAbortRef = useRef(null);
   const socketRef = useRef(null);
@@ -5307,6 +5308,10 @@ export default function RegieEventPage() {
             return {
               ...p,
               options: opts,
+              quizRevealed:
+                typeof data.quizRevealed === "boolean"
+                  ? data.quizRevealed
+                  : p.quizRevealed,
               voteCount: opts.reduce((a, o) => a + optionVoteCount(o), 0),
               contestWinnersCount:
                 data.contestWinnersCount != null
@@ -5420,6 +5425,16 @@ export default function RegieEventPage() {
     setEditQuestionText(String(poll?.question || poll?.title || ""));
     setEditContestPrize(String(poll?.contestPrize || ""));
     setEditContestWinnerCount(normalizeContestWinnerCount(poll?.contestWinnerCount));
+    const opts = Array.isArray(poll?.options) ? poll.options : [];
+    const correctIdx = opts.findIndex((o) => o?.isCorrect === true);
+    setEditQuizCorrectOrder(
+      correctIdx >= 0
+        ? correctIdx
+        : Math.min(
+            Math.max(0, Number(poll?.quizCorrectOrder ?? 0) || 0),
+            Math.max(0, opts.length - 1),
+          ),
+    );
     setEditPollModalOpen(true);
   }, []);
 
@@ -5537,6 +5552,16 @@ export default function RegieEventPage() {
       return;
     }
     const isContest = String(editingPoll?.type || "").toUpperCase() === "CONTEST_ENTRY";
+    const isQuiz = String(editingPoll?.type || "").toUpperCase() === "QUIZ";
+    const quizOpts = Array.isArray(editingPoll?.options) ? editingPoll.options : [];
+    if (isQuiz) {
+      const max = Math.max(0, quizOpts.length - 1);
+      const idx = Number(editQuizCorrectOrder);
+      if (!Number.isFinite(idx) || idx < 0 || idx > max || quizOpts.length < 2) {
+        setActionError("Sélectionnez la bonne réponse du quiz.");
+        return;
+      }
+    }
     const payload = {
       question,
       ...(isContest
@@ -5545,6 +5570,7 @@ export default function RegieEventPage() {
             contestWinnerCount: normalizeContestWinnerCount(editContestWinnerCount),
           }
         : {}),
+      ...(isQuiz ? { quizCorrectOrder: Number(editQuizCorrectOrder) } : {}),
     };
     setBusy(true);
     setActionError(null);
@@ -5878,6 +5904,8 @@ export default function RegieEventPage() {
   );
   const liveResponsesOptions = useMemo(() => {
     const opts = normalizePollOptions(activePoll?.options);
+    const quizRevealed = Boolean(activePoll?.quizRevealed);
+    const isQuiz = String(activePoll?.type || "").toUpperCase() === "QUIZ";
     const totalVotesSafe = Math.max(
       0,
       Number(
@@ -5895,11 +5923,13 @@ export default function RegieEventPage() {
             : totalVotesSafe > 0
               ? (voteCount / totalVotesSafe) * 100
               : 0;
+        const isCorrect = Boolean(o?.isCorrect);
         return {
           id: String(o?.id || i),
           label: String(o?.label || `Option ${i + 1}`),
           voteCount,
           pct: Math.max(0, Math.min(100, pct)),
+          showBonneReponse: isQuiz && quizRevealed && isCorrect,
         };
       })
       .sort((a, b) => b.voteCount - a.voteCount);
@@ -7164,6 +7194,79 @@ export default function RegieEventPage() {
                   }}
                 />
               </>
+            ) : null}
+            {String(editingPoll?.type || "").toUpperCase() === "QUIZ" ? (
+              <div
+                style={{
+                  marginTop: "0.7rem",
+                  padding: "0.55rem 0.65rem",
+                  borderRadius: "8px",
+                  border: "1px solid #dcfce7",
+                  background: "#f0fdf4",
+                }}
+              >
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.74rem",
+                    fontWeight: 700,
+                    color: "#166534",
+                    marginBottom: "0.35rem",
+                  }}
+                >
+                  Bonne réponse
+                </label>
+                <select
+                  value={Math.min(
+                    Math.max(0, Number(editQuizCorrectOrder ?? 0)),
+                    Math.max(
+                      0,
+                      (Array.isArray(editingPoll?.options)
+                        ? editingPoll.options.length
+                        : 1) - 1,
+                    ),
+                  )}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    setEditQuizCorrectOrder(
+                      Number.isFinite(n) && n >= 0 ? n : 0,
+                    );
+                  }}
+                  disabled={busy}
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    padding: "0.42rem 0.5rem",
+                    borderRadius: "7px",
+                    border: "1px solid #86efac",
+                    fontSize: "0.84rem",
+                    background: "#fff",
+                  }}
+                >
+                  {(Array.isArray(editingPoll?.options)
+                    ? editingPoll.options
+                    : []
+                  ).map((opt, idx) => (
+                    <option key={`edit-quiz-correct-${opt?.id || idx}`} value={idx}>
+                      {`Option ${idx + 1}${
+                        String(opt?.label || "").trim()
+                          ? ` - ${String(opt.label).trim()}`
+                          : ""
+                      }`}
+                    </option>
+                  ))}
+                </select>
+                <p
+                  style={{
+                    margin: "0.35rem 0 0 0",
+                    fontSize: "0.72rem",
+                    color: "#64748b",
+                  }}
+                >
+                  Visible sur Screen et participants seulement après « Afficher
+                  les résultats » (vote fermé).
+                </p>
+              </div>
             ) : null}
             <div
               style={{
@@ -9001,6 +9104,21 @@ export default function RegieEventPage() {
                           <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
                             <span style={{ flex: 1, fontSize: "0.78rem", fontWeight: 700, color: "#0f172a" }}>
                               {opt.label}
+                              {opt.showBonneReponse ? (
+                                <span
+                                  style={{
+                                    marginLeft: "0.4rem",
+                                    fontSize: "0.66rem",
+                                    fontWeight: 800,
+                                    color: "#166534",
+                                    background: "#dcfce7",
+                                    borderRadius: "999px",
+                                    padding: "0.1rem 0.4rem",
+                                  }}
+                                >
+                                  Bonne réponse
+                                </span>
+                              ) : null}
                             </span>
                             <span style={{ fontSize: "0.74rem", fontWeight: 800, color: "#334155" }}>
                               {opt.voteCount} · {Number(opt.pct).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}%
@@ -9012,7 +9130,7 @@ export default function RegieEventPage() {
                                 width: `${Math.max(0, Math.min(100, opt.pct))}%`,
                                 height: "100%",
                                 borderRadius: "999px",
-                                background: "#2563eb",
+                                background: opt.showBonneReponse ? "#16a34a" : "#2563eb",
                               }}
                             />
                           </div>
@@ -9141,13 +9259,35 @@ export default function RegieEventPage() {
                           <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
                             <span style={{ flex: 1, fontSize: "0.78rem", fontWeight: 700, color: "#0f172a" }}>
                               {opt.label}
+                              {opt.showBonneReponse ? (
+                                <span
+                                  style={{
+                                    marginLeft: "0.35rem",
+                                    fontSize: "0.64rem",
+                                    fontWeight: 800,
+                                    color: "#166534",
+                                    background: "#dcfce7",
+                                    borderRadius: "999px",
+                                    padding: "0.08rem 0.35rem",
+                                  }}
+                                >
+                                  Bonne réponse
+                                </span>
+                              ) : null}
                             </span>
                             <span style={{ fontSize: "0.72rem", fontWeight: 800, color: "#334155" }}>
                               {opt.voteCount} · {Number(opt.pct).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}%
                             </span>
                           </div>
                           <div style={{ height: "7px", borderRadius: "999px", background: "#dbeafe", overflow: "hidden" }}>
-                            <div style={{ width: `${Math.max(0, Math.min(100, opt.pct))}%`, height: "100%", borderRadius: "999px", background: "#2563eb" }} />
+                            <div
+                              style={{
+                                width: `${Math.max(0, Math.min(100, opt.pct))}%`,
+                                height: "100%",
+                                borderRadius: "999px",
+                                background: opt.showBonneReponse ? "#16a34a" : "#2563eb",
+                              }}
+                            />
                           </div>
                         </div>
                       ))}

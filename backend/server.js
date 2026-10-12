@@ -322,7 +322,33 @@ function screenDisplayStateForLiveTransition(currentScreenDisplayState, intent) 
  * @param {{ type?: string | null; leadEnabled?: boolean | null } | null} [activePoll]
  * @returns {Record<string, unknown>}
  */
+/**
+ * Quiz déjà projeté en RESULTS pendant un vote encore ouvert : à la fermeture,
+ * révéler sans exposer prématurément (pendant OPEN).
+ * @param {{ type?: string | null; quizRevealed?: boolean | null } | null | undefined} poll
+ * @param {{ displayState?: string | null } | null | undefined} event
+ */
+function shouldRevealQuizOnCloseAfterLiveResults(poll, event) {
+  return (
+    String(poll?.type || "").toUpperCase() === "QUIZ" &&
+    poll?.quizRevealed !== true &&
+    String(event?.displayState || "").toUpperCase() === "RESULTS"
+  );
+}
+
 function buildEventDataAfterVoteClose(event, activePoll = null) {
+  /** Quiz : Afficher (live) puis Fermer → garder RESULTS + révéler côté poll. */
+  if (shouldRevealQuizOnCloseAfterLiveResults(activePoll, event)) {
+    return {
+      voteState: "CLOSED",
+      displayState: "RESULTS",
+      liveState: "RESULTS",
+      screenDisplayState: "RESULTS",
+      ...QUESTION_TIMER_RESET,
+      autoRevealShowResultsAt: null,
+    };
+  }
+
   const delaySec = [3, 5, 10].includes(event?.autoRevealDelaySec)
     ? event.autoRevealDelaySec
     : 5;
@@ -932,21 +958,36 @@ async function fermerVoteSiChronoEpuise(io, eventId) {
   /** < 1 s : tolère décalage horloge client/serveur */
   if (!snap || snap.remainingSec >= 1) return false;
 
+  const activePollMeta = await prisma.poll.findUnique({
+    where: { id: activeId },
+    select: { type: true, leadEnabled: true, quizRevealed: true },
+  });
+  if (!activePollMeta) return false;
+
+  const revealQuizAfterLiveResults = shouldRevealQuizOnCloseAfterLiveResults(
+    activePollMeta,
+    event,
+  );
+
   const closed = await prisma.poll.updateMany({
     where: {
       id: activeId,
       eventId,
       status: "ACTIVE",
     },
-    data: { status: "CLOSED" },
+    data: {
+      status: "CLOSED",
+      ...(revealQuizAfterLiveResults ? { quizRevealed: true } : {}),
+    },
   });
   if (closed.count === 0) return false;
 
-  const activePollMeta = await prisma.poll.findUnique({
-    where: { id: activeId },
-    select: { type: true, leadEnabled: true },
+  const dataReveil = buildEventDataAfterVoteClose(event, {
+    ...activePollMeta,
+    quizRevealed: revealQuizAfterLiveResults
+      ? true
+      : activePollMeta.quizRevealed,
   });
-  const dataReveil = buildEventDataAfterVoteClose(event, activePollMeta);
   const delaySec = [3, 5, 10].includes(event.autoRevealDelaySec)
     ? event.autoRevealDelaySec
     : 5;
@@ -2306,13 +2347,19 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
         voteCount: p._count.votes,
         options: (p.options || []).map((option) => {
           const n = optionVoteCounts[option.id] || 0;
-          return {
+          /** Régie (auth propriétaire) : isCorrect pour Modifier / badge après révélation.
+           *  Public `/p` et sockets restent gated par quizRevealed dans pollToJson. */
+          const base = {
             id: option.id,
             label: option.label,
             order: option.order,
             votes: n,
             voteCount: n,
           };
+          if (String(p.type || "").toUpperCase() === "QUIZ") {
+            return { ...base, isCorrect: Boolean(option.isCorrect) };
+          }
+          return base;
         }),
       })),
       landingPhotos: (event.landingPhotos || []).map((ph) => ({
@@ -3690,9 +3737,17 @@ app.post("/polls/:pollId/close", requireAuth, async (req, res) => {
       return res.status(404).json({ error: "Sondage introuvable." });
     }
 
+    const revealQuizAfterLiveResults = shouldRevealQuizOnCloseAfterLiveResults(
+      poll,
+      poll.event,
+    );
+
     await prisma.poll.update({
       where: { id: poll.id },
-      data: { status: "CLOSED" },
+      data: {
+        status: "CLOSED",
+        ...(revealQuizAfterLiveResults ? { quizRevealed: true } : {}),
+      },
     });
 
     /**
@@ -3700,12 +3755,16 @@ app.post("/polls/:pollId/close", requireAuth, async (req, res) => {
      * vote CLOSED + display WAITING + live WAITING + reset chrono.
      * Ne force pas RESULTS ; efface un screenDisplayState RESULTS collant.
      * LOT-2 : skip auto-reveal Lead / Concours.
+     * Quiz déjà en RESULTS (live) : garde RESULTS + quizRevealed (voir helper).
      */
     let majEvent =
       poll.event.activePollId === poll.id
         ? buildEventDataAfterVoteClose(poll.event, {
             type: poll.type,
             leadEnabled: poll.leadEnabled,
+            quizRevealed: revealQuizAfterLiveResults
+              ? true
+              : poll.quizRevealed,
           })
         : {};
 
@@ -3721,6 +3780,9 @@ app.post("/polls/:pollId/close", requireAuth, async (req, res) => {
           })
         : await prisma.event.findUnique({ where: { id: poll.eventId } });
 
+    if (revealQuizAfterLiveResults) {
+      await emitPollUpdated(io, poll.id);
+    }
     await emitEventLiveUpdated(io, poll.eventId);
 
     if (

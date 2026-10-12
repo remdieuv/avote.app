@@ -48,6 +48,7 @@ import {
   getParticipantResultsBlockTitle,
   shouldRevealQuizAnswerToParticipant,
   shouldRevealQuizWhenShowingResults,
+  shouldRevealQuizWhenClosingAfterLiveResults,
   resolveShowResultsEventPatch,
   resolveScreenDisplayAfterLiveTransition,
   resolveNextPollPrepareEventPatch,
@@ -624,6 +625,67 @@ test("Régie. Afficher les résultats — Quiz révélé seulement si vote ferm�
     }),
     false,
   );
+});
+
+test("Régie. Afficher puis Fermer — révèle Quiz sans exposition prématurée", () => {
+  assert.equal(
+    shouldRevealQuizWhenClosingAfterLiveResults({
+      pollType: "QUIZ",
+      quizRevealed: false,
+      displayState: "RESULTS",
+    }),
+    true,
+    "Fermer après RESULTS live → révèle",
+  );
+  assert.equal(
+    shouldRevealQuizWhenClosingAfterLiveResults({
+      pollType: "QUIZ",
+      quizRevealed: false,
+      displayState: "QUESTION",
+    }),
+    false,
+    "Fermer sans RESULTS préalable → pas de révélation (parcours Fermer→Afficher)",
+  );
+  assert.equal(
+    shouldRevealQuizWhenClosingAfterLiveResults({
+      pollType: "QUIZ",
+      quizRevealed: true,
+      displayState: "RESULTS",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldRevealQuizWhenClosingAfterLiveResults({
+      pollType: "SINGLE_CHOICE",
+      quizRevealed: false,
+      displayState: "RESULTS",
+    }),
+    false,
+  );
+
+  const closeAfterLiveQuiz = resolveEventPatchAfterVoteClose({
+    pollType: "QUIZ",
+    quizRevealed: false,
+    displayState: "RESULTS",
+    screenDisplayState: "RESULTS",
+    autoReveal: true,
+  });
+  assert.equal(closeAfterLiveQuiz.voteState, "CLOSED");
+  assert.equal(closeAfterLiveQuiz.displayState, "RESULTS");
+  assert.equal(closeAfterLiveQuiz.liveState, "RESULTS");
+  assert.equal(closeAfterLiveQuiz.screenDisplayState, "RESULTS");
+  assert.equal(closeAfterLiveQuiz.schedulesAutoReveal, false);
+  assert.equal(closeAfterLiveQuiz.revealQuiz, true);
+
+  const closeNormalQuiz = resolveEventPatchAfterVoteClose({
+    pollType: "QUIZ",
+    quizRevealed: false,
+    displayState: "QUESTION",
+    screenDisplayState: "QUESTION",
+    autoReveal: false,
+  });
+  assert.equal(closeNormalQuiz.displayState, "WAITING");
+  assert.equal(closeNormalQuiz.revealQuiz, false);
 });
 
 test("LOT-1. Afficher manuel = auto — RESULTS momentané, pas sticky", () => {

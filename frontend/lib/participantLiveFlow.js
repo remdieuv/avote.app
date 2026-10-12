@@ -384,6 +384,26 @@ export function shouldRevealQuizWhenShowingResults(input = {}) {
 }
 
 /**
+ * Afficher (RESULTS) puis Fermer : révéler le Quiz sans l’avoir exposé pendant
+ * le vote ouvert. Ne s’applique pas au parcours Fermer → Afficher (déjà couvert
+ * par `shouldRevealQuizWhenShowingResults`).
+ *
+ * @param {{
+ *   pollType?: string | null;
+ *   quizRevealed?: boolean;
+ *   displayState?: string | null;
+ * }} input
+ * @returns {boolean}
+ */
+export function shouldRevealQuizWhenClosingAfterLiveResults(input = {}) {
+  return (
+    String(input.pollType ?? "").toUpperCase() === "QUIZ" &&
+    input.quizRevealed !== true &&
+    String(input.displayState ?? "").toUpperCase() === "RESULTS"
+  );
+}
+
+/**
  * Contrat unique bouton manuel « Afficher les résultats » et affichage automatique
  * après délai. Auto et manuel doivent produire les mêmes effets (pas deux chemins).
  * `screenDisplayState: RESULTS` uniquement au moment Afficher/auto — les transitions
@@ -455,20 +475,40 @@ export function resolveNextPollPrepareEventPatch() {
 /**
  * LOT-1 / LOT-2 — Fermer (manuel ou chrono) : axes Salle + clear sticky Screen RESULTS.
  * Auto-reveal skip Lead CRM / Concours.
+ * Quiz déjà en RESULTS (affichés pendant vote ouvert) : garde RESULTS + révèle.
  *
  * @param {{
  *   autoReveal?: boolean;
  *   screenDisplayState?: string | null;
+ *   displayState?: string | null;
  *   pollType?: string | null;
  *   leadEnabled?: boolean | null;
+ *   quizRevealed?: boolean;
  * }} [input]
  */
 export function resolveEventPatchAfterVoteClose(input = {}) {
+  const type = String(input.pollType ?? "").toUpperCase();
+  const revealQuizAfterLiveResults =
+    shouldRevealQuizWhenClosingAfterLiveResults({
+      pollType: type,
+      quizRevealed: input.quizRevealed,
+      displayState: input.displayState,
+    });
+  if (revealQuizAfterLiveResults) {
+    return {
+      voteState: "CLOSED",
+      displayState: "RESULTS",
+      liveState: "RESULTS",
+      screenDisplayState: "RESULTS",
+      schedulesAutoReveal: false,
+      revealQuiz: true,
+    };
+  }
+
   const screenDisplayState = resolveScreenDisplayAfterLiveTransition(
     input.screenDisplayState,
     "close",
   );
-  const type = String(input.pollType ?? "").toUpperCase();
   const leadCrm =
     input.leadEnabled === true && type !== "CONTEST_ENTRY";
   const skipAuto =
@@ -479,6 +519,7 @@ export function resolveEventPatchAfterVoteClose(input = {}) {
     displayState: "WAITING",
     liveState: "WAITING",
     schedulesAutoReveal: input.autoReveal === true && !skipAuto,
+    revealQuiz: false,
   };
   if (screenDisplayState !== undefined) {
     patch.screenDisplayState = screenDisplayState;
