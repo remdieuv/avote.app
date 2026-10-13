@@ -25,6 +25,7 @@ import {
   getParticipantFullLabel,
   getParticipantOfflineLabel,
   getParticipantResultsOptionBadgeLabel,
+  getResultsLeadTieInfo,
   isParticipantRoomFull,
   resolveEventLandingPhase,
   resolveJoinHistoriqueQuestions,
@@ -1219,6 +1220,71 @@ test("Finition. Badges RESULTS : sondage=En tête · Quiz=Plus votée/Bonne rép
     "Quiz non révélé : Plus votée, pas Bonne réponse",
   );
   assert.equal(formatTestModeVoteCountLabel(2), "2 votes");
+});
+
+test("Égalité en tête → badge Égalité (Salle / Screen)", () => {
+  const tied = [
+    { label: "A", votes: 1 },
+    { label: "B", votes: 1 },
+    { label: "C", votes: 0 },
+  ];
+  const info = getResultsLeadTieInfo(tied);
+  assert.equal(info.maxVotes, 1);
+  assert.equal(info.tiedCount, 2);
+  assert.equal(
+    getParticipantResultsOptionBadgeLabel({
+      isQuiz: false,
+      isWinner: true,
+      isTie: true,
+    }),
+    "Égalité",
+    "Sondage à égalité → Égalité (pas un seul En tête)",
+  );
+  assert.equal(
+    getParticipantResultsOptionBadgeLabel({
+      isQuiz: true,
+      quizRevealed: false,
+      isCorrect: false,
+      isWinner: true,
+      isTie: true,
+    }),
+    "Égalité",
+    "Quiz non révélé à égalité → Égalité",
+  );
+  assert.equal(
+    getParticipantResultsOptionBadgeLabel({
+      isQuiz: true,
+      quizRevealed: true,
+      isCorrect: true,
+      isWinner: true,
+      isTie: true,
+    }),
+    "Bonne réponse",
+    "Bonne réponse prime sur Égalité",
+  );
+  assert.equal(
+    getParticipantResultsOptionBadgeLabel({
+      isQuiz: true,
+      quizRevealed: true,
+      isCorrect: false,
+      isWinner: true,
+      isTie: true,
+    }),
+    "Égalité",
+  );
+  assert.equal(
+    getParticipantResultsOptionBadgeLabel({
+      isQuiz: false,
+      isWinner: true,
+      isTie: false,
+    }),
+    "En tête",
+    "Seul en tête → En tête",
+  );
+  assert.deepEqual(getResultsLeadTieInfo([{ votes: 3 }, { votes: 1 }]), {
+    maxVotes: 3,
+    tiedCount: 1,
+  });
 });
 
 test("G15. JoinLiveHub source : pas de triple Merci FINISHED", () => {

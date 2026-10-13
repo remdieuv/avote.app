@@ -751,9 +751,30 @@ export function countParticipantVoteConfirmedSurfaces(input = {}) {
 }
 
 /**
+ * Nombre d’options à égalité en tête (votes = max, max > 0).
+ * @param {Array<{ voteCount?: unknown; votes?: unknown } | null | undefined> | null | undefined} options
+ * @returns {{ maxVotes: number; tiedCount: number }}
+ */
+export function getResultsLeadTieInfo(options) {
+  const opts = Array.isArray(options) ? options : [];
+  let maxVotes = 0;
+  for (const o of opts) {
+    const n = Number(o?.voteCount ?? o?.votes ?? 0) || 0;
+    if (n > maxVotes) maxVotes = n;
+  }
+  if (maxVotes <= 0) return { maxVotes: 0, tiedCount: 0 };
+  let tiedCount = 0;
+  for (const o of opts) {
+    const n = Number(o?.voteCount ?? o?.votes ?? 0) || 0;
+    if (n === maxVotes) tiedCount += 1;
+  }
+  return { maxVotes, tiedCount };
+}
+
+/**
  * Badge option résultats (Salle / Screen) — vocabulaire par type :
- * - Sondage : « En tête » pour la/les réponses les plus votées
- * - Quiz : « Plus votée » pour la/les plus votées ; « Bonne réponse » si correcte révélée
+ * - Sondage : « En tête » (seule en tête) ou « Égalité » (plusieurs)
+ * - Quiz : « Plus votée » / « Égalité » ; « Bonne réponse » si correcte révélée
  * - Concours (personnes tirées) : « Gagnant » reste hors de ce helper
  * @param {{
  *   voteOuvert?: boolean;
@@ -761,6 +782,7 @@ export function countParticipantVoteConfirmedSurfaces(input = {}) {
  *   quizRevealed?: boolean;
  *   isCorrect?: boolean;
  *   isWinner?: boolean;
+ *   isTie?: boolean;
  * }} input
  * @returns {string | null}
  */
@@ -773,6 +795,7 @@ export function getParticipantResultsOptionBadgeLabel(input = {}) {
     return "Bonne réponse";
   }
   if (input.isWinner !== true) return null;
+  if (input.isTie === true) return "Égalité";
   // Quiz : populaire ≠ correct — ne jamais dire « Gagnant » sur une option.
   if (input.isQuiz === true) return "Plus votée";
   // Sondage classique (SINGLE / MULTIPLE / LEAD…) : leader = « En tête ».

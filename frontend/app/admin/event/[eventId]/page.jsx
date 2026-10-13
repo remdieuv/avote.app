@@ -64,7 +64,10 @@ import {
   getReplayTestPollBlockedLabel,
   getReplayTestPollConfirmMessage,
 } from "@/lib/testModeReplayPoll";
-import { getQuizCorrectAnswerEditStatus } from "@/lib/regieQuizEdit";
+import {
+  getQuizCorrectAnswerEditStatus,
+  getSavedQuizCorrectAnswer,
+} from "@/lib/regieQuizEdit";
 
 const VOTE_STATE_LABELS = {
   open: "Vote ouvert",
@@ -6586,6 +6589,42 @@ export default function RegieEventPage() {
     });
   }, [selectedPoll]);
 
+  /** Stats antenne (même format que la consultation playlist). */
+  const activePilotageStatsOptions = useMemo(() => {
+    if (!activePoll) return [];
+    const opts = normalizePollOptions(activePoll?.options);
+    const totalVotesSafe = Math.max(
+      0,
+      Number(
+        activePoll?.voteCount ||
+          opts.reduce((acc, o) => acc + optionVoteCount(o), 0),
+      ),
+    );
+    return opts.map((o, i) => {
+      const voteCount = optionVoteCount(o);
+      const pctRaw = Number(o?.votePct);
+      const pct =
+        Number.isFinite(pctRaw) && pctRaw >= 0
+          ? pctRaw
+          : totalVotesSafe > 0
+            ? (voteCount / totalVotesSafe) * 100
+            : 0;
+      return {
+        id: String(o?.id || i),
+        label: String(o?.label || `Option ${i + 1}`),
+        voteCount,
+        pct: Math.max(0, Math.min(100, pct)),
+      };
+    });
+  }, [activePoll]);
+
+  /** Libellé régie après révélation publique uniquement. */
+  const activeQuizBonneReponseLabel = useMemo(() => {
+    if (!isQuizPoll(activePoll) || !activePoll?.quizRevealed) return null;
+    const saved = getSavedQuizCorrectAnswer(activePoll);
+    return saved.hasSaved ? saved.label : null;
+  }, [activePoll]);
+
   const handleSelectPlaylistPoll = useCallback((pollId) => {
     setSelectedPollId(String(pollId || "") || null);
   }, []);
@@ -8650,6 +8689,18 @@ export default function RegieEventPage() {
                       >
                         {activeQuestionTitle}
                       </h4>
+                      {activeQuizBonneReponseLabel ? (
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "0.88rem",
+                            fontWeight: 800,
+                            color: "#166534",
+                          }}
+                        >
+                          Bonne réponse : {activeQuizBonneReponseLabel}
+                        </p>
+                      ) : null}
                       <p
                         style={{
                           margin: 0,
@@ -8662,6 +8713,47 @@ export default function RegieEventPage() {
                           ? `${activeParticipationCount} ${activeParticipationUnit}`
                           : "Aucune question à l’antenne"}
                       </p>
+                      {activePilotageStatsOptions.length > 0 ? (
+                        <ul
+                          style={{
+                            margin: "0.15rem 0 0 0",
+                            padding: 0,
+                            listStyle: "none",
+                            display: "grid",
+                            gap: "0.28rem",
+                          }}
+                        >
+                          {activePilotageStatsOptions.map((opt) => (
+                            <li
+                              key={`pilotage-stat-${opt.id}`}
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                gap: "0.75rem",
+                                fontSize: "0.74rem",
+                                color: "#475569",
+                              }}
+                            >
+                              <span style={{ overflowWrap: "anywhere" }}>
+                                {opt.label}
+                              </span>
+                              <span
+                                style={{
+                                  flexShrink: 0,
+                                  fontWeight: 700,
+                                  color: "#1e293b",
+                                }}
+                              >
+                                {opt.voteCount} ·{" "}
+                                {Number(opt.pct).toLocaleString("fr-FR", {
+                                  maximumFractionDigits: 1,
+                                })}
+                                %
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
                     </div>
 
                     {primaryLiveActionLabel ? (

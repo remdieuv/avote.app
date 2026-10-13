@@ -48,6 +48,7 @@ import {
   getParticipantOfflineLabel,
   getParticipantResultsBlockTitle,
   getParticipantResultsOptionBadgeLabel,
+  getResultsLeadTieInfo,
   isParticipantVoteSessionOpen,
   mergePollJsonPreservingQuizReveal,
   resolveParticipantTopStripLabel,
@@ -1588,14 +1589,13 @@ export function PollExperience({
       )
     : 0;
 
-  const maxVotesResults =
-    showBlocResultatsEnDirect && pollOptions.length > 0
-      ? Math.max(
-          ...pollOptions.map(
-            (o) => Number(o.voteCount ?? o.votes ?? 0) || 0,
-          ),
-        )
-      : -1;
+  const leadTieInfo = showBlocResultatsEnDirect
+    ? getResultsLeadTieInfo(pollOptions)
+    : { maxVotes: 0, tiedCount: 0 };
+  const maxVotesResults = showBlocResultatsEnDirect
+    ? leadTieInfo.maxVotes
+    : -1;
+  const resultsLeadIsTie = leadTieInfo.tiedCount >= 2;
 
   const chronoVoteActif =
     voteOuvert &&
@@ -2940,6 +2940,7 @@ export function PollExperience({
                     quizRevealed: showQuizAnswerReveal,
                     isCorrect: Boolean(opt?.isCorrect),
                     isWinner,
+                    isTie: isWinner && resultsLeadIsTie,
                   });
                   const highlightRow = isWinner || isQuizCorrect;
                   const barWidthPct = resultsBarsAnimated
