@@ -110,8 +110,8 @@ test("page.jsx : éditeur réponses + Consulter", () => {
   assert.ok(src.includes("optionsBlockedReason"));
   assert.ok(src.includes('editActionLabel={playlistEditActionLabel}'));
   assert.ok(src.includes('playlistEditActionLabel = eventLocked ? "Consulter"'));
-  assert.ok(src.includes("validatePollOptionLabels"));
-  assert.ok(src.includes("options: optionsPayload"));
+  assert.ok(src.includes("buildRegiePollEditPayload"));
+  assert.ok(src.includes("assertPollEditOptionsPersisted"));
   assert.ok(src.includes("+ Ajouter une réponse"));
   assert.ok(src.includes("pollEditGuard.canEditOptions"));
   assert.ok(src.includes("Consulter la question"));

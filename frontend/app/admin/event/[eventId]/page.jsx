@@ -86,10 +86,11 @@ import {
   formatRegieOptionStatMeta,
   getRegieOptionStatBarStyles,
 } from "@/lib/regieOptionStats";
+import { pollTypeAllowsOptionEdit } from "@/lib/pollOptionsForm";
 import {
-  pollTypeAllowsOptionEdit,
-  validatePollOptionLabels,
-} from "@/lib/pollOptionsForm";
+  assertPollEditOptionsPersisted,
+  buildRegiePollEditPayload,
+} from "@/lib/regiePollEditPayload";
 
 const VOTE_STATE_LABELS = {
   open: "Vote ouvert",
@@ -4783,6 +4784,9 @@ export default function RegieEventPage() {
     /** @type {string[]} */ (["", ""]),
   );
   const [editLeadTriggerOrder, setEditLeadTriggerOrder] = useState(0);
+  const [editModalError, setEditModalError] = useState(
+    /** @type {string | null} */ (null),
+  );
 
   const loadPollAbortRef = useRef(null);
   const fetchEventGenerationRef = useRef(0);
@@ -5513,24 +5517,36 @@ export default function RegieEventPage() {
     [eventId],
   );
 
-  const openEditPollModal = useCallback((poll) => {
-    if (!poll) return;
-    setEditingPoll(poll);
-    setEditQuestionText(String(poll?.question || poll?.title || ""));
-    setEditContestPrize(String(poll?.contestPrize || ""));
-    setEditContestWinnerCount(normalizeContestWinnerCount(poll?.contestWinnerCount));
-    const opts = Array.isArray(poll?.options) ? poll.options : [];
-    const labels = opts.map((o) => String(o?.label ?? ""));
-    setEditOptionLabels(labels.length >= 2 ? labels : ["", ""]);
-    const triggerIdx = opts.findIndex(
-      (o) => String(o?.id || "") === String(poll?.leadTriggerOptionId || ""),
-    );
-    setEditLeadTriggerOrder(triggerIdx >= 0 ? triggerIdx : 0);
-    const correctIdx = opts.findIndex((o) => o?.isCorrect === true);
-    // Sélecteur : valeur enregistrée si connue, sinon 1re option (brouillon).
-    setEditQuizCorrectOrder(correctIdx >= 0 ? correctIdx : 0);
-    setEditPollModalOpen(true);
-  }, []);
+  const openEditPollModal = useCallback(
+    (poll) => {
+      if (!poll) return;
+      // Toujours partir du snapshot régie le plus frais (évite options périmées).
+      const live =
+        Array.isArray(eventData?.polls)
+          ? eventData.polls.find((p) => String(p.id) === String(poll.id))
+          : null;
+      const src = live || poll;
+      setEditingPoll(src);
+      setEditModalError(null);
+      setEditQuestionText(String(src?.question || src?.title || ""));
+      setEditContestPrize(String(src?.contestPrize || ""));
+      setEditContestWinnerCount(
+        normalizeContestWinnerCount(src?.contestWinnerCount),
+      );
+      const opts = Array.isArray(src?.options) ? src.options : [];
+      const labels = opts.map((o) => String(o?.label ?? ""));
+      setEditOptionLabels(labels.length >= 2 ? labels : ["", ""]);
+      const triggerIdx = opts.findIndex(
+        (o) => String(o?.id || "") === String(src?.leadTriggerOptionId || ""),
+      );
+      setEditLeadTriggerOrder(triggerIdx >= 0 ? triggerIdx : 0);
+      const correctIdx = opts.findIndex((o) => o?.isCorrect === true);
+      // Sélecteur : valeur enregistrée si connue, sinon 1re option (brouillon).
+      setEditQuizCorrectOrder(correctIdx >= 0 ? correctIdx : 0);
+      setEditPollModalOpen(true);
+    },
+    [eventData?.polls],
+  );
 
   /** @returns {Promise<boolean>} */
   async function postAction(path, successMessage = null) {
@@ -5637,80 +5653,35 @@ export default function RegieEventPage() {
   async function submitPollEdit() {
     const pollId = String(editingPoll?.id || "");
     if (!pollId) return;
-    const isContest = String(editingPoll?.type || "").toUpperCase() === "CONTEST_ENTRY";
-    const isQuiz = String(editingPoll?.type || "").toUpperCase() === "QUIZ";
-    const allowsOptionEdit = pollTypeAllowsOptionEdit(editingPoll?.type, {
-      leadEnabled: editingPoll?.leadEnabled,
-    });
-    const editGuard = getRegiePollEditGuardState({
+    // Compteurs / options les plus frais pour guards + payload.
+    const livePoll =
+      Array.isArray(eventData?.polls)
+        ? eventData.polls.find((p) => String(p.id) === pollId)
+        : null;
+    const pollForEdit = livePoll
+      ? { ...editingPoll, ...livePoll }
+      : editingPoll;
+    const built = buildRegiePollEditPayload({
+      poll: pollForEdit,
       isLocked: eventData?.isLocked,
       isLiveConsumed: eventData?.isLiveConsumed,
-      voteCount: editingPoll?.voteCount,
-      quizRevealed: editingPoll?.quizRevealed,
-      isQuiz,
-      allowsOptionEdit,
+      question: editQuestionText,
+      optionLabels: editOptionLabels,
+      quizCorrectOrder: editQuizCorrectOrder,
+      leadTriggerOrder: editLeadTriggerOrder,
+      contestPrize: editContestPrize,
+      contestWinnerCount: editContestWinnerCount,
+      normalizeContestWinnerCount,
     });
-    if (!editGuard.canEditSoftFields) {
-      setActionError(
-        editGuard.lockedReason || "Modification impossible pour cet événement.",
-      );
+    if (!built.ok || !built.payload) {
+      const msg = built.error || "Modification impossible.";
+      setEditModalError(msg);
+      setActionError(msg);
       return;
     }
-    const question = String(editQuestionText || "").trim();
-    if (!question) {
-      setActionError("Texte de question requis.");
-      return;
-    }
-    let optionsPayload = null;
-    if (editGuard.canEditOptions && allowsOptionEdit) {
-      const validated = validatePollOptionLabels(editOptionLabels);
-      if (!validated.ok) {
-        setActionError(validated.error || "Réponses invalides.");
-        return;
-      }
-      optionsPayload = validated.labels;
-      if (isQuiz) {
-        const max = Math.max(0, optionsPayload.length - 1);
-        const idx = Number(editQuizCorrectOrder);
-        if (!Number.isFinite(idx) || idx < 0 || idx > max) {
-          setActionError("Sélectionnez la bonne réponse du quiz.");
-          return;
-        }
-      }
-    } else if (isQuiz && editGuard.canEditQuizCorrect) {
-      const quizOpts = Array.isArray(editingPoll?.options)
-        ? editingPoll.options
-        : [];
-      const max = Math.max(0, quizOpts.length - 1);
-      const idx = Number(editQuizCorrectOrder);
-      if (!Number.isFinite(idx) || idx < 0 || idx > max || quizOpts.length < 2) {
-        setActionError("Sélectionnez la bonne réponse du quiz.");
-        return;
-      }
-    }
-    const payload = {
-      question,
-      ...(isContest
-        ? {
-            contestPrize: String(editContestPrize || "").trim() || null,
-            contestWinnerCount: normalizeContestWinnerCount(editContestWinnerCount),
-          }
-        : {}),
-      ...(optionsPayload
-        ? {
-            options: optionsPayload,
-            ...(Boolean(editingPoll?.leadEnabled)
-              ? { leadTriggerOrder: Number(editLeadTriggerOrder) || 0 }
-              : {}),
-            ...(isQuiz
-              ? { quizCorrectOrder: Number(editQuizCorrectOrder) }
-              : {}),
-          }
-        : isQuiz && editGuard.canEditQuizCorrect
-          ? { quizCorrectOrder: Number(editQuizCorrectOrder) }
-          : {}),
-    };
+    const payload = built.payload;
     setBusy(true);
+    setEditModalError(null);
     setActionError(null);
     try {
       const res = await adminFetch(
@@ -5725,13 +5696,58 @@ export default function RegieEventPage() {
       if (!res.ok) {
         throw new Error(mapApiError(body, res.status));
       }
+      if (Array.isArray(payload.options)) {
+        const persisted = assertPollEditOptionsPersisted(body, payload.options);
+        if (!persisted.ok) {
+          throw new Error(
+            persisted.error || "Les réponses n’ont pas été enregistrées.",
+          );
+        }
+      }
+      // Appliquer immédiatement la réponse serveur (évite course socket/refetch).
+      const nextOptions = Array.isArray(body?.options)
+        ? body.options
+        : null;
+      if (nextOptions) {
+        setEventData((prev) => {
+          if (!prev?.polls) return prev;
+          return {
+            ...prev,
+            polls: prev.polls.map((p) =>
+              String(p.id) === pollId
+                ? {
+                    ...p,
+                    question:
+                      typeof body.question === "string"
+                        ? body.question
+                        : p.question,
+                    title:
+                      typeof body.title === "string" ? body.title : p.title,
+                    options: nextOptions,
+                    leadTriggerOptionId:
+                      body.leadTriggerOptionId !== undefined
+                        ? body.leadTriggerOptionId
+                        : p.leadTriggerOptionId,
+                    quizRevealed:
+                      typeof body.quizRevealed === "boolean"
+                        ? body.quizRevealed
+                        : p.quizRevealed,
+                  }
+                : p,
+            ),
+          };
+        });
+      }
       setEditPollModalOpen(false);
       setEditingPoll(null);
+      setEditModalError(null);
       setToastNotif("Question modifiée");
       window.setTimeout(() => setToastNotif(null), 2800);
       await fetchEvent({ silent: true });
     } catch (e) {
-      setActionError(e?.message || "Modification impossible.");
+      const msg = e?.message || "Modification impossible.";
+      setEditModalError(msg);
+      setActionError(msg);
     } finally {
       setBusy(false);
     }
@@ -7379,6 +7395,23 @@ export default function RegieEventPage() {
                 }}
               >
                 {pollEditGuard.optionsBlockedReason}
+              </p>
+            ) : null}
+            {editModalError ? (
+              <p
+                role="alert"
+                style={{
+                  margin: "0.55rem 0 0 0",
+                  padding: "0.5rem 0.6rem",
+                  borderRadius: "8px",
+                  background: "#fef2f2",
+                  border: "1px solid #fecaca",
+                  fontSize: "0.78rem",
+                  fontWeight: 700,
+                  color: "#991b1b",
+                }}
+              >
+                {editModalError}
               </p>
             ) : null}
             <label

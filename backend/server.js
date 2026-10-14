@@ -58,6 +58,7 @@ const {
   pollPatchRequestsOptionsChange,
   validatePollOptionLabels,
 } = require("./lib/pollPatchGuards");
+const { replacePollOptions } = require("./lib/replacePollOptions");
 
 /** Anti double-clic rejeu TEST (sérialise par pollId). */
 const runReplayTestExclusive = createPollExclusiveQueue();
@@ -4715,33 +4716,21 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
         body.leadTriggerOrder,
         labels.length,
       );
-      await prisma.$transaction(async (tx) => {
-        await tx.poll.update({
-          where: { id: pollId },
-          data: { leadTriggerOptionId: null },
+      const createdOpts = await prisma.$transaction(async (tx) =>
+        replacePollOptions(tx, {
+          pollId,
+          labels,
+          isQuiz,
+          quizCorrectOrder,
+          leadEnabled: Boolean(poll.leadEnabled) || isContestEntry,
+          leadTriggerOrder,
+        }),
+      );
+      if (!Array.isArray(createdOpts) || createdOpts.length !== labels.length) {
+        return res.status(500).json({
+          error: "Échec de persistance des réponses.",
         });
-        await tx.pollOption.deleteMany({ where: { pollId } });
-        await tx.pollOption.createMany({
-          data: labels.map((label, order) => ({
-            pollId,
-            label,
-            order,
-            isCorrect: isQuiz ? order === quizCorrectOrder : false,
-          })),
-        });
-        if (Boolean(poll.leadEnabled) || isContestEntry) {
-          const createdOpts = await tx.pollOption.findMany({
-            where: { pollId },
-            orderBy: { order: "asc" },
-            select: { id: true },
-          });
-          const trigger = createdOpts[leadTriggerOrder] ?? createdOpts[0] ?? null;
-          await tx.poll.update({
-            where: { id: pollId },
-            data: { leadTriggerOptionId: trigger?.id ?? null },
-          });
-        }
-      });
+      }
       optionsUpdated = true;
       if (isQuiz) quizCorrectUpdated = true;
     } else if (isQuiz && wantsQuizCorrectChange) {

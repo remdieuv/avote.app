@@ -13,6 +13,7 @@
     "test:event-live-snapshot": "node scripts/test-event-live-snapshot.mjs",
     "test:start-real-reset": "node scripts/test-start-real-event-reset.mjs",
     "test:poll-patch-guards": "node scripts/test-poll-patch-guards.mjs",
+    "test:replace-poll-options": "node scripts/test-replace-poll-options.mjs",
     "postinstall": "prisma generate"
   },
   "keywords": [],
