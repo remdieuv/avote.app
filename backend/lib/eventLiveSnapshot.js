@@ -74,6 +74,13 @@ function buildEventLiveUpdatedPayload(event, pollJson, questionTimer) {
       ? String(event.screenDisplayState).toLowerCase()
       : null,
     activePollId: event.activePollId,
+    participantsLimit:
+      event.participantsLimit == null
+        ? null
+        : Number(event.participantsLimit),
+    eventPlanType: event.eventPlanType
+      ? String(event.eventPlanType)
+      : null,
     autoReveal: event.autoReveal,
     autoRevealDelaySec: event.autoRevealDelaySec,
     autoRevealShowResultsAt:

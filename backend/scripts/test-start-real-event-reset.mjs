@@ -153,6 +153,15 @@ test("Échec TX sans perte de crédit (contrat : conso après wipe, même transa
   assert.ok(noAct > 0 && noAct < wipe, "refuse sans crédit avant wipe");
 });
 
+test("Après start-real : emitEventLiveUpdated pour sync régie / participants", () => {
+  const src = readFileSync(join(here, "../server.js"), "utf8");
+  const idx = src.indexOf('app.post("/events/:eventId/start-real"');
+  const nextRoute = src.indexOf('app.post("/polls/:pollId/open"', idx + 1);
+  const block = src.slice(idx, nextRoute > idx ? nextRoute : idx + 12000);
+  assert.ok(block.includes("emitEventLiveUpdated(io, eventId)"));
+  assert.ok(block.includes("reset:"));
+});
+
 if (failed > 0) {
   console.error(`\n${failed} test(s) en échec`);
   process.exit(1);

@@ -19,6 +19,10 @@ import {
 import { AjouterQuestionLiveModal } from "@/components/AjouterQuestionLiveModal";
 import { LiveMicroLabel } from "@/components/admin/LiveMicroIcon";
 import { computeActivationBalance } from "@/lib/activationBalance";
+import {
+  shouldClearRegieEventLoadingAfterFetch,
+  shouldRenderRegieEventBody,
+} from "@/lib/regieEventLoad";
 import { getStartRealConfirmMessage } from "@/lib/startRealResetClient";
 import { adminFetch, apiBaseBrowser, SOCKET_URL as SOCKET } from "@/lib/config";
 import {
@@ -4736,6 +4740,7 @@ export default function RegieEventPage() {
   const [editQuizCorrectOrder, setEditQuizCorrectOrder] = useState(0);
 
   const loadPollAbortRef = useRef(null);
+  const fetchEventGenerationRef = useRef(0);
   const socketRef = useRef(null);
   const autoRotateRef = useRef(false);
   const pollIdRef = useRef(/** @type {string | null} */ (null));
@@ -4751,6 +4756,7 @@ export default function RegieEventPage() {
   const fetchEvent = useCallback(async (opts = {}) => {
     const silent = opts.silent === true;
     if (!eventId) return;
+    const generation = ++fetchEventGenerationRef.current;
     const ac = new AbortController();
     loadPollAbortRef.current?.abort();
     loadPollAbortRef.current = ac;
@@ -4764,6 +4770,12 @@ export default function RegieEventPage() {
         cache: "no-store",
         signal: ac.signal,
       });
+      if (
+        ac.signal.aborted ||
+        generation !== fetchEventGenerationRef.current
+      ) {
+        return;
+      }
       if (res.status === 404) {
         setEventData(null);
         setError("Événement introuvable.");
@@ -4771,14 +4783,27 @@ export default function RegieEventPage() {
       }
       if (!res.ok) throw new Error(`Erreur ${res.status}`);
       const data = await res.json();
-      if (ac.signal.aborted) return;
+      if (
+        ac.signal.aborted ||
+        generation !== fetchEventGenerationRef.current
+      ) {
+        return;
+      }
       setEventData(data);
     } catch (e) {
       if (e?.name === "AbortError") return;
+      if (generation !== fetchEventGenerationRef.current) return;
       setEventData(null);
       setError(e.message || "Chargement impossible.");
     } finally {
-      if (!ac.signal.aborted && !silent) {
+      // Silent ou non : la génération courante doit lever le spinner.
+      // Sinon un abort socket (join_event snapshot / start-real) laisse la régie vide.
+      if (
+        shouldClearRegieEventLoadingAfterFetch({
+          generation,
+          currentGeneration: fetchEventGenerationRef.current,
+        })
+      ) {
         setLoading(false);
       }
     }
@@ -5259,7 +5284,8 @@ export default function RegieEventPage() {
 
     function onLive(payload) {
       if (!payload || String(payload.eventId) !== String(eventId)) return;
-      loadPollAbortRef.current?.abort();
+      // N’abort plus le GET régie ici : le silent fetch suit ; abort+loading
+      // coincé vidait toute la page après start-real / join_event snapshot.
       setEventData((prev) =>
         prev
           ? {
@@ -5287,9 +5313,27 @@ export default function RegieEventPage() {
                 payload.autoRevealShowResultsAt !== undefined
                   ? payload.autoRevealShowResultsAt
                   : prev.autoRevealShowResultsAt,
+              isLiveConsumed:
+                typeof payload.isLiveConsumed === "boolean"
+                  ? payload.isLiveConsumed
+                  : prev.isLiveConsumed,
+              isLocked:
+                typeof payload.isLocked === "boolean"
+                  ? payload.isLocked
+                  : prev.isLocked,
+              eventPlanType:
+                payload.eventPlanType !== undefined
+                  ? payload.eventPlanType
+                  : prev.eventPlanType,
+              participantsLimit:
+                payload.participantsLimit != null
+                  ? payload.participantsLimit
+                  : prev.participantsLimit,
             }
           : prev,
       );
+      // Force clear spinner si un GET initial était encore « loading ».
+      setLoading(false);
       void fetchEvent({ silent: true });
     }
 
@@ -5920,7 +5964,7 @@ export default function RegieEventPage() {
 
   const liveState = eventData?.liveState ?? "—";
   const activePoll = eventData?.polls?.find(
-    (p) => p.id === eventData.activePollId,
+    (p) => p.id === eventData?.activePollId,
   );
   const liveResponsesOptions = useMemo(() => {
     const opts = normalizePollOptions(activePoll?.options);
@@ -7863,7 +7907,7 @@ export default function RegieEventPage() {
         </div>
       ) : null}
 
-      {!loading && eventData && (
+      {shouldRenderRegieEventBody({ eventData, loading }) && (
         <div
           style={
             desktop
