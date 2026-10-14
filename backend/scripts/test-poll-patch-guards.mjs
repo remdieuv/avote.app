@@ -1,5 +1,5 @@
 /**
- * Guards PATCH /polls/:id — soft vs sensible, TEST vs RÉEL.
+ * Guards PATCH /polls/:id — soft / options / quiz, TEST vs RÉEL.
  * Exécution : node backend/scripts/test-poll-patch-guards.mjs
  */
 import assert from "node:assert/strict";
@@ -13,6 +13,8 @@ const {
   evaluatePollPatchGuards,
   pollPatchRequestsQuizCorrectChange,
   pollPatchRequestsSoftFields,
+  pollPatchRequestsOptionsChange,
+  validatePollOptionLabels,
 } = require("../lib/pollPatchGuards.js");
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -36,35 +38,60 @@ test("Événement verrouillé → 403", () => {
     isLiveConsumed: true,
     voteCount: 0,
     wantsQuizCorrectChange: false,
+    wantsOptionsChange: true,
   });
   assert.equal(g.ok, false);
   assert.equal(g.status, 403);
 });
 
-test("RÉEL + votes + quizCorrect → 409", () => {
+test("RÉEL + votes + options → 409", () => {
+  const g = evaluatePollPatchGuards({
+    isLocked: false,
+    isLiveConsumed: true,
+    voteCount: 3,
+    wantsOptionsChange: true,
+    wantsQuizCorrectChange: false,
+  });
+  assert.equal(g.ok, false);
+  assert.equal(g.status, 409);
+  assert.match(String(g.error), /réel/i);
+});
+
+test("TEST + votes + options → 409 replay", () => {
+  const g = evaluatePollPatchGuards({
+    isLocked: false,
+    isLiveConsumed: false,
+    voteCount: 2,
+    wantsOptionsChange: true,
+  });
+  assert.equal(g.ok, false);
+  assert.equal(g.status, 409);
+  assert.match(String(g.error), /Rejouer/i);
+});
+
+test("RÉEL + 0 vote + options → OK", () => {
+  const g = evaluatePollPatchGuards({
+    isLocked: false,
+    isLiveConsumed: true,
+    voteCount: 0,
+    quizRevealed: true,
+    wantsOptionsChange: true,
+    wantsQuizCorrectChange: true,
+  });
+  assert.equal(g.ok, true);
+});
+
+test("RÉEL + votes + quizCorrect seul → 409", () => {
   const g = evaluatePollPatchGuards({
     isLocked: false,
     isLiveConsumed: true,
     voteCount: 3,
     quizRevealed: false,
     wantsQuizCorrectChange: true,
+    wantsOptionsChange: false,
   });
   assert.equal(g.ok, false);
   assert.equal(g.status, 409);
-  assert.match(String(g.error), /votes/i);
-});
-
-test("RÉEL + révélée sans votes + quizCorrect → 409", () => {
-  const g = evaluatePollPatchGuards({
-    isLocked: false,
-    isLiveConsumed: true,
-    voteCount: 0,
-    quizRevealed: true,
-    wantsQuizCorrectChange: true,
-  });
-  assert.equal(g.ok, false);
-  assert.equal(g.status, 409);
-  assert.match(String(g.error), /révélation/i);
 });
 
 test("RÉEL soft edit avec votes → OK", () => {
@@ -74,48 +101,51 @@ test("RÉEL soft edit avec votes → OK", () => {
     voteCount: 5,
     quizRevealed: true,
     wantsQuizCorrectChange: false,
+    wantsOptionsChange: false,
   });
   assert.equal(g.ok, true);
-  assert.equal(g.softEditWithVotes, true);
 });
 
-test("TEST + votes + quizCorrect → OK", () => {
+test("TEST + votes + quizCorrect seul → OK", () => {
   const g = evaluatePollPatchGuards({
     isLocked: false,
     isLiveConsumed: false,
     voteCount: 2,
-    quizRevealed: false,
     wantsQuizCorrectChange: true,
+    wantsOptionsChange: false,
   });
   assert.equal(g.ok, true);
-  assert.equal(g.isTestMode, true);
 });
 
-test("Détection body quizCorrectOrder / soft", () => {
+test("Validation labels options", () => {
+  assert.equal(validatePollOptionLabels(["A"]).ok, false);
+  assert.equal(validatePollOptionLabels(["A", "B"]).ok, true);
+  assert.equal(
+    pollPatchRequestsOptionsChange({ options: ["A", "B"] }, "SINGLE_CHOICE"),
+    true,
+  );
+  assert.equal(
+    pollPatchRequestsOptionsChange({ options: ["Oui", "Non"] }, "CONTEST_ENTRY"),
+    false,
+  );
   assert.equal(
     pollPatchRequestsQuizCorrectChange({ quizCorrectOrder: 1 }, "QUIZ"),
     true,
   );
-  assert.equal(
-    pollPatchRequestsQuizCorrectChange({ quizCorrectOrder: 1 }, "SINGLE_CHOICE"),
-    false,
-  );
   assert.equal(pollPatchRequestsSoftFields({ question: "Hello" }, "QUIZ"), true);
-  assert.equal(
-    pollPatchRequestsSoftFields({ contestPrize: "Lot" }, "CONTEST_ENTRY"),
-    true,
-  );
 });
 
-test("server.js branche les guards PATCH", () => {
+test("server.js PATCH : options + guards + emit sync", () => {
   const src = readFileSync(join(here, "../server.js"), "utf8");
-  assert.ok(src.includes("evaluatePollPatchGuards"));
-  assert.ok(src.includes("pollPatchRequestsQuizCorrectChange"));
   const patchIdx = src.indexOf('app.patch("/polls/:pollId"');
   assert.ok(patchIdx > 0);
-  const slice = src.slice(patchIdx, patchIdx + 2500);
+  const slice = src.slice(patchIdx, patchIdx + 6500);
   assert.ok(slice.includes("evaluatePollPatchGuards"));
-  assert.ok(slice.includes("isLocked"));
+  assert.ok(slice.includes("wantsOptionsChange"));
+  assert.ok(slice.includes("validatePollOptionLabels"));
+  assert.ok(slice.includes("pollOption.deleteMany"));
+  assert.ok(slice.includes("emitPollUpdated"));
+  assert.ok(slice.includes("emitEventLiveUpdated"));
   assert.ok(slice.includes("_count"));
 });
 

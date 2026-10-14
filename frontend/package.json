@@ -20,6 +20,7 @@
     "test:regie-chrono": "node scripts/test-regie-chrono-enabled.mjs",
     "test:regie-quiz-edit": "node scripts/test-regie-quiz-edit.mjs",
     "test:regie-poll-edit-guards": "node scripts/test-regie-poll-edit-guards.mjs",
+    "test:poll-options-form": "node scripts/test-poll-options-form.mjs",
     "test:regie-option-stats": "node scripts/test-regie-option-stats.mjs",
     "test:poll-patch-guards": "node ../backend/scripts/test-poll-patch-guards.mjs",
     "test:event-live-snapshot": "node ../backend/scripts/test-event-live-snapshot.mjs",

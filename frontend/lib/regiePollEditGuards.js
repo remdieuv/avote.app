@@ -18,6 +18,7 @@ function asNonNegInt(n) {
  *   voteCount?: unknown;
  *   quizRevealed?: unknown;
  *   isQuiz?: unknown;
+ *   allowsOptionEdit?: unknown;
  * }} [input]
  * @returns {{
  *   eventLocked: boolean;
@@ -25,11 +26,14 @@ function asNonNegInt(n) {
  *   inRealMode: boolean;
  *   voteCount: number;
  *   canEditSoftFields: boolean;
+ *   canEditOptions: boolean;
  *   canEditQuizCorrect: boolean;
  *   softWarning: string | null;
+ *   optionsBlockedReason: string | null;
  *   quizHint: string | null;
  *   quizBlockedReason: string | null;
  *   lockedReason: string | null;
+ *   editActionLabel: "Modifier" | "Consulter";
  * }}
  */
 export function getRegiePollEditGuardState(input = {}) {
@@ -39,6 +43,7 @@ export function getRegiePollEditGuardState(input = {}) {
   const voteCount = asNonNegInt(input.voteCount);
   const quizRevealed = Boolean(input.quizRevealed);
   const isQuiz = Boolean(input.isQuiz);
+  const allowsOptionEdit = input.allowsOptionEdit !== false;
 
   const lockedReason = eventLocked
     ? "Événement verrouillé : aucune modification n’est possible."
@@ -46,14 +51,33 @@ export function getRegiePollEditGuardState(input = {}) {
 
   const canEditSoftFields = !eventLocked;
 
+  let canEditOptions = !eventLocked && allowsOptionEdit && voteCount === 0;
+  let optionsBlockedReason = null;
+  if (!eventLocked && allowsOptionEdit && voteCount > 0) {
+    canEditOptions = false;
+    optionsBlockedReason = inTestMode
+      ? "Mode test : des votes existent. Utilisez « Rejouer cette question » avant de modifier les réponses."
+      : "Mode réel : les réponses ne peuvent plus être modifiées après des votes.";
+  } else if (!eventLocked && !allowsOptionEdit) {
+    optionsBlockedReason = "Les réponses de ce type de question ne sont pas modifiables ici.";
+  }
+
   let canEditQuizCorrect = !eventLocked && isQuiz;
   let quizBlockedReason = null;
   if (canEditQuizCorrect && inRealMode && (voteCount > 0 || quizRevealed)) {
-    canEditQuizCorrect = false;
-    quizBlockedReason =
-      voteCount > 0
-        ? "Mode réel : la bonne réponse est verrouillée car cette question a déjà reçu des votes."
-        : "Mode réel : la bonne réponse est verrouillée car elle a déjà été révélée.";
+    // Si on peut encore réécrire les options (0 vote), la bonne réponse suit les options.
+    if (!(canEditOptions && voteCount === 0)) {
+      canEditQuizCorrect = false;
+      quizBlockedReason =
+        voteCount > 0
+          ? "Mode réel : la bonne réponse est verrouillée car cette question a déjà reçu des votes."
+          : "Mode réel : la bonne réponse est verrouillée car elle a déjà été révélée.";
+    }
+  }
+  // Si options éditables, le sélecteur bonne réponse doit suivre les libellés brouillon.
+  if (canEditOptions && isQuiz) {
+    canEditQuizCorrect = true;
+    quizBlockedReason = null;
   }
 
   const softWarning =
@@ -66,7 +90,8 @@ export function getRegiePollEditGuardState(input = {}) {
     inTestMode &&
     isQuiz &&
     voteCount > 0 &&
-    canEditQuizCorrect
+    canEditQuizCorrect &&
+    !canEditOptions
       ? "Mode test : pour repartir à zéro avant de changer la bonne réponse, utilisez « Rejouer cette question »."
       : null;
 
@@ -76,10 +101,13 @@ export function getRegiePollEditGuardState(input = {}) {
     inRealMode,
     voteCount,
     canEditSoftFields,
+    canEditOptions,
     canEditQuizCorrect,
     softWarning,
+    optionsBlockedReason,
     quizHint,
     quizBlockedReason,
     lockedReason,
+    editActionLabel: eventLocked ? "Consulter" : "Modifier",
   };
 }

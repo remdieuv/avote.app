@@ -55,6 +55,8 @@ const {
 const {
   evaluatePollPatchGuards,
   pollPatchRequestsQuizCorrectChange,
+  pollPatchRequestsOptionsChange,
+  validatePollOptionLabels,
 } = require("./lib/pollPatchGuards");
 
 /** Anti double-clic rejeu TEST (sérialise par pollId). */
@@ -4623,6 +4625,8 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
       select: {
         id: true,
         type: true,
+        eventId: true,
+        leadEnabled: true,
         quizRevealed: true,
         options: { select: { id: true }, orderBy: { order: "asc" } },
         event: {
@@ -4639,12 +4643,14 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
       body,
       poll.type,
     );
+    const wantsOptionsChange = pollPatchRequestsOptionsChange(body, poll.type);
     const guard = evaluatePollPatchGuards({
       isLocked: poll.event?.isLocked,
       isLiveConsumed: poll.event?.isLiveConsumed,
       voteCount: poll._count?.votes ?? 0,
       quizRevealed: poll.quizRevealed,
       wantsQuizCorrectChange,
+      wantsOptionsChange,
     });
     if (!guard.ok) {
       return res.status(guard.status).json({ error: guard.error });
@@ -4675,8 +4681,70 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
         );
       }
     }
+
+    let optionsUpdated = false;
     let quizCorrectUpdated = false;
-    if (isQuiz && wantsQuizCorrectChange) {
+
+    if (wantsOptionsChange) {
+      // Garde-fou : ne jamais supprimer des options si des votes existent
+      // (onDelete Cascade sur Vote) — déjà bloqué par evaluatePollPatchGuards.
+      if ((poll._count?.votes ?? 0) > 0) {
+        return res.status(409).json({
+          error:
+            "Impossible de modifier les réponses : des votes existent déjà.",
+        });
+      }
+      const validated = validatePollOptionLabels(body.options);
+      if (!validated.ok) {
+        return res.status(400).json({ error: validated.error });
+      }
+      const labels = validated.labels;
+      let quizCorrectOrder = null;
+      if (isQuiz) {
+        quizCorrectOrder = normalizeQuizCorrectOrder(
+          body.quizCorrectOrder,
+          labels.length,
+        );
+        if (quizCorrectOrder == null) {
+          return res.status(400).json({
+            error: "QUIZ: une seule bonne réponse doit être définie.",
+          });
+        }
+      }
+      const leadTriggerOrder = normalizeLeadTriggerOrder(
+        body.leadTriggerOrder,
+        labels.length,
+      );
+      await prisma.$transaction(async (tx) => {
+        await tx.poll.update({
+          where: { id: pollId },
+          data: { leadTriggerOptionId: null },
+        });
+        await tx.pollOption.deleteMany({ where: { pollId } });
+        await tx.pollOption.createMany({
+          data: labels.map((label, order) => ({
+            pollId,
+            label,
+            order,
+            isCorrect: isQuiz ? order === quizCorrectOrder : false,
+          })),
+        });
+        if (Boolean(poll.leadEnabled) || isContestEntry) {
+          const createdOpts = await tx.pollOption.findMany({
+            where: { pollId },
+            orderBy: { order: "asc" },
+            select: { id: true },
+          });
+          const trigger = createdOpts[leadTriggerOrder] ?? createdOpts[0] ?? null;
+          await tx.poll.update({
+            where: { id: pollId },
+            data: { leadTriggerOptionId: trigger?.id ?? null },
+          });
+        }
+      });
+      optionsUpdated = true;
+      if (isQuiz) quizCorrectUpdated = true;
+    } else if (isQuiz && wantsQuizCorrectChange) {
       const quizCorrectOrder = normalizeQuizCorrectOrder(
         body.quizCorrectOrder,
         poll.options.length,
@@ -4705,7 +4773,11 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
       quizCorrectUpdated = true;
     }
 
-    if (Object.keys(data).length === 0 && !quizCorrectUpdated) {
+    if (
+      Object.keys(data).length === 0 &&
+      !quizCorrectUpdated &&
+      !optionsUpdated
+    ) {
       return res.status(400).json({ error: "Aucune modification détectée." });
     }
 
@@ -4718,6 +4790,11 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
     const full = await loadPollFull(pollId);
     if (!full) {
       return res.status(404).json({ error: "Sondage introuvable." });
+    }
+    // Sync régie / Screen / participants (texte + options).
+    await emitPollUpdated(io, pollId);
+    if (full.eventId) {
+      await emitEventLiveUpdated(io, full.eventId);
     }
     return res.json(pollToJson(full));
   } catch (e) {

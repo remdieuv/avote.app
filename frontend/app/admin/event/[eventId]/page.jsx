@@ -86,6 +86,10 @@ import {
   formatRegieOptionStatMeta,
   getRegieOptionStatBarStyles,
 } from "@/lib/regieOptionStats";
+import {
+  pollTypeAllowsOptionEdit,
+  validatePollOptionLabels,
+} from "@/lib/pollOptionsForm";
 
 const VOTE_STATE_LABELS = {
   open: "Vote ouvert",
@@ -407,6 +411,8 @@ function PollCard({
   onContestShortcut,
   onLeadShortcut,
   onEdit,
+  /** Libellé bouton édition — « Consulter » si événement verrouillé. */
+  editActionLabel = "Modifier",
   contestDrawSummary,
   desktop,
   compact = false,
@@ -530,15 +536,21 @@ function PollCard({
       Voir les leads
     </button>
   ) : null;
+  const editLabel =
+    String(editActionLabel || "Modifier").trim() || "Modifier";
   const editAction = (
     <button
       type="button"
       disabled={busy}
       onClick={() => onEdit?.(poll)}
       style={btnSecondaryAction(busy)}
-      title="Modifier cette question"
+      title={
+        editLabel === "Consulter"
+          ? "Consulter cette question (événement verrouillé)"
+          : "Modifier cette question"
+      }
     >
-      Modifier
+      {editLabel}
     </button>
   );
 
@@ -918,8 +930,13 @@ function PollCard({
                 padding: "0.38rem 0.5rem",
                 fontSize: "0.72rem",
               }}
+              title={
+                editLabel === "Consulter"
+                  ? "Consulter cette question (événement verrouillé)"
+                  : "Modifier cette question"
+              }
             >
-              Modifier
+              {editLabel}
             </button>
           ) : null}
         </div>
@@ -4762,6 +4779,10 @@ export default function RegieEventPage() {
   const [editContestPrize, setEditContestPrize] = useState("");
   const [editContestWinnerCount, setEditContestWinnerCount] = useState(1);
   const [editQuizCorrectOrder, setEditQuizCorrectOrder] = useState(0);
+  const [editOptionLabels, setEditOptionLabels] = useState(
+    /** @type {string[]} */ (["", ""]),
+  );
+  const [editLeadTriggerOrder, setEditLeadTriggerOrder] = useState(0);
 
   const loadPollAbortRef = useRef(null);
   const fetchEventGenerationRef = useRef(0);
@@ -5499,6 +5520,12 @@ export default function RegieEventPage() {
     setEditContestPrize(String(poll?.contestPrize || ""));
     setEditContestWinnerCount(normalizeContestWinnerCount(poll?.contestWinnerCount));
     const opts = Array.isArray(poll?.options) ? poll.options : [];
+    const labels = opts.map((o) => String(o?.label ?? ""));
+    setEditOptionLabels(labels.length >= 2 ? labels : ["", ""]);
+    const triggerIdx = opts.findIndex(
+      (o) => String(o?.id || "") === String(poll?.leadTriggerOptionId || ""),
+    );
+    setEditLeadTriggerOrder(triggerIdx >= 0 ? triggerIdx : 0);
     const correctIdx = opts.findIndex((o) => o?.isCorrect === true);
     // Sélecteur : valeur enregistrée si connue, sinon 1re option (brouillon).
     setEditQuizCorrectOrder(correctIdx >= 0 ? correctIdx : 0);
@@ -5610,12 +5637,18 @@ export default function RegieEventPage() {
   async function submitPollEdit() {
     const pollId = String(editingPoll?.id || "");
     if (!pollId) return;
+    const isContest = String(editingPoll?.type || "").toUpperCase() === "CONTEST_ENTRY";
+    const isQuiz = String(editingPoll?.type || "").toUpperCase() === "QUIZ";
+    const allowsOptionEdit = pollTypeAllowsOptionEdit(editingPoll?.type, {
+      leadEnabled: editingPoll?.leadEnabled,
+    });
     const editGuard = getRegiePollEditGuardState({
       isLocked: eventData?.isLocked,
       isLiveConsumed: eventData?.isLiveConsumed,
       voteCount: editingPoll?.voteCount,
       quizRevealed: editingPoll?.quizRevealed,
-      isQuiz: String(editingPoll?.type || "").toUpperCase() === "QUIZ",
+      isQuiz,
+      allowsOptionEdit,
     });
     if (!editGuard.canEditSoftFields) {
       setActionError(
@@ -5628,10 +5661,26 @@ export default function RegieEventPage() {
       setActionError("Texte de question requis.");
       return;
     }
-    const isContest = String(editingPoll?.type || "").toUpperCase() === "CONTEST_ENTRY";
-    const isQuiz = String(editingPoll?.type || "").toUpperCase() === "QUIZ";
-    const quizOpts = Array.isArray(editingPoll?.options) ? editingPoll.options : [];
-    if (isQuiz && editGuard.canEditQuizCorrect) {
+    let optionsPayload = null;
+    if (editGuard.canEditOptions && allowsOptionEdit) {
+      const validated = validatePollOptionLabels(editOptionLabels);
+      if (!validated.ok) {
+        setActionError(validated.error || "Réponses invalides.");
+        return;
+      }
+      optionsPayload = validated.labels;
+      if (isQuiz) {
+        const max = Math.max(0, optionsPayload.length - 1);
+        const idx = Number(editQuizCorrectOrder);
+        if (!Number.isFinite(idx) || idx < 0 || idx > max) {
+          setActionError("Sélectionnez la bonne réponse du quiz.");
+          return;
+        }
+      }
+    } else if (isQuiz && editGuard.canEditQuizCorrect) {
+      const quizOpts = Array.isArray(editingPoll?.options)
+        ? editingPoll.options
+        : [];
       const max = Math.max(0, quizOpts.length - 1);
       const idx = Number(editQuizCorrectOrder);
       if (!Number.isFinite(idx) || idx < 0 || idx > max || quizOpts.length < 2) {
@@ -5647,9 +5696,19 @@ export default function RegieEventPage() {
             contestWinnerCount: normalizeContestWinnerCount(editContestWinnerCount),
           }
         : {}),
-      ...(isQuiz && editGuard.canEditQuizCorrect
-        ? { quizCorrectOrder: Number(editQuizCorrectOrder) }
-        : {}),
+      ...(optionsPayload
+        ? {
+            options: optionsPayload,
+            ...(Boolean(editingPoll?.leadEnabled)
+              ? { leadTriggerOrder: Number(editLeadTriggerOrder) || 0 }
+              : {}),
+            ...(isQuiz
+              ? { quizCorrectOrder: Number(editQuizCorrectOrder) }
+              : {}),
+          }
+        : isQuiz && editGuard.canEditQuizCorrect
+          ? { quizCorrectOrder: Number(editQuizCorrectOrder) }
+          : {}),
     };
     setBusy(true);
     setActionError(null);
@@ -5665,30 +5724,6 @@ export default function RegieEventPage() {
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(mapApiError(body, res.status));
-      }
-      // Actualise le snapshot local (isCorrect) : pollToJson public peut omettre
-      // isCorrect tant que quizRevealed est false ; le GET admin le réconcilie après.
-      if (isQuiz && editingPoll) {
-        const savedOrder = Number(editQuizCorrectOrder);
-        const nextOpts = (Array.isArray(editingPoll.options)
-          ? editingPoll.options
-          : []
-        ).map((o, idx) => ({
-          ...o,
-          isCorrect: idx === savedOrder,
-        }));
-        setEditingPoll({ ...editingPoll, options: nextOpts });
-        setEventData((prev) => {
-          if (!prev?.polls) return prev;
-          return {
-            ...prev,
-            polls: prev.polls.map((p) =>
-              String(p.id) === pollId
-                ? { ...p, question, options: nextOpts, title: p.title }
-                : p,
-            ),
-          };
-        });
       }
       setEditPollModalOpen(false);
       setEditingPoll(null);
@@ -6067,6 +6102,7 @@ export default function RegieEventPage() {
         ["CLOSED", "ARCHIVED"].includes(String(p.status || "").toUpperCase()),
       ));
   const eventLocked = Boolean(eventData?.isLocked);
+  const playlistEditActionLabel = eventLocked ? "Consulter" : "Modifier";
   const inTestMode = eventData?.isLiveConsumed === false;
   const canStartReal = inTestMode && !eventLocked;
   const activationBalance = computeActivationBalance(eventCredits, activationsAvailable);
@@ -6870,6 +6906,7 @@ export default function RegieEventPage() {
             onContestShortcut={handleContestShortcut}
             onLeadShortcut={handleLeadShortcut}
             onEdit={openEditPollModal}
+            editActionLabel={playlistEditActionLabel}
             contestDrawSummary={pollDrawSummary[String(poll.id)]}
           />
         ))}
@@ -6955,10 +6992,19 @@ export default function RegieEventPage() {
   const quizCorrectEditStatus = useMemo(
     () =>
       getQuizCorrectAnswerEditStatus({
-        poll: editingPoll,
+        poll: {
+          options: editOptionLabels.map((label, i) => ({
+            label,
+            isCorrect: Boolean(
+              Array.isArray(editingPoll?.options)
+                ? editingPoll.options[i]?.isCorrect
+                : false,
+            ),
+          })),
+        },
         draftOrder: editQuizCorrectOrder,
       }),
-    [editingPoll, editQuizCorrectOrder],
+    [editingPoll, editQuizCorrectOrder, editOptionLabels],
   );
 
   const pollEditGuard = useMemo(
@@ -6969,6 +7015,9 @@ export default function RegieEventPage() {
         voteCount: editingPoll?.voteCount,
         quizRevealed: editingPoll?.quizRevealed,
         isQuiz: String(editingPoll?.type || "").toUpperCase() === "QUIZ",
+        allowsOptionEdit: pollTypeAllowsOptionEdit(editingPoll?.type, {
+          leadEnabled: editingPoll?.leadEnabled,
+        }),
       }),
     [
       eventData?.isLocked,
@@ -6976,6 +7025,7 @@ export default function RegieEventPage() {
       editingPoll?.voteCount,
       editingPoll?.quizRevealed,
       editingPoll?.type,
+      editingPoll?.leadEnabled,
     ],
   );
 
@@ -7273,10 +7323,15 @@ export default function RegieEventPage() {
                 letterSpacing: "0.06em",
               }}
             >
-              Modifier la question
+              {pollEditGuard.eventLocked
+                ? "Consulter la question"
+                : "Modifier la question"}
             </p>
             <p style={{ margin: "0.28rem 0 0 0", fontSize: "0.86rem", color: "#64748b" }}>
-              Type : <strong style={{ color: "#111827" }}>{editingPoll.type}</strong>
+              Type :{" "}
+              <strong style={{ color: "#111827" }}>{editingPoll.type}</strong>
+              {" · "}
+              non modifiable
             </p>
             {pollEditGuard.lockedReason ? (
               <p
@@ -7308,6 +7363,22 @@ export default function RegieEventPage() {
                 }}
               >
                 {pollEditGuard.softWarning}
+              </p>
+            ) : null}
+            {pollEditGuard.optionsBlockedReason ? (
+              <p
+                style={{
+                  margin: "0.55rem 0 0 0",
+                  padding: "0.5rem 0.6rem",
+                  borderRadius: "8px",
+                  background: "#fff7ed",
+                  border: "1px solid #fed7aa",
+                  fontSize: "0.78rem",
+                  fontWeight: 600,
+                  color: "#9a3412",
+                }}
+              >
+                {pollEditGuard.optionsBlockedReason}
               </p>
             ) : null}
             <label
@@ -7401,6 +7472,192 @@ export default function RegieEventPage() {
                 />
               </>
             ) : null}
+            {pollTypeAllowsOptionEdit(editingPoll?.type, {
+              leadEnabled: editingPoll?.leadEnabled,
+            }) ? (
+              <div style={{ marginTop: "0.85rem" }}>
+                <p
+                  style={{
+                    margin: "0 0 0.4rem 0",
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    color: "#64748b",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                  }}
+                >
+                  Réponses
+                </p>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.45rem",
+                    marginBottom: "0.55rem",
+                  }}
+                >
+                  {editOptionLabels.map((r, i) => (
+                    <div
+                      key={`edit-opt-${i}`}
+                      style={{
+                        display: "flex",
+                        gap: "0.35rem",
+                        alignItems: "center",
+                      }}
+                    >
+                      <input
+                        type="text"
+                        value={r}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditOptionLabels((prev) => {
+                            const next = [...prev];
+                            next[i] = val;
+                            return next;
+                          });
+                        }}
+                        disabled={busy || !pollEditGuard.canEditOptions}
+                        placeholder={`Réponse ${i + 1}`}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          padding: "0.4rem 0.5rem",
+                          borderRadius: "7px",
+                          border: "1px solid #cbd5e1",
+                          fontSize: "0.86rem",
+                          background: pollEditGuard.canEditOptions
+                            ? "#fff"
+                            : "#f8fafc",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        disabled={
+                          busy ||
+                          !pollEditGuard.canEditOptions ||
+                          editOptionLabels.length <= 2
+                        }
+                        onClick={() => {
+                          setEditOptionLabels((prev) => {
+                            if (prev.length <= 2) return prev;
+                            const next = prev.filter((_, idx) => idx !== i);
+                            setEditQuizCorrectOrder((cur) =>
+                              Math.min(cur, Math.max(0, next.length - 1)),
+                            );
+                            setEditLeadTriggerOrder((cur) =>
+                              Math.min(cur, Math.max(0, next.length - 1)),
+                            );
+                            return next;
+                          });
+                        }}
+                        style={{
+                          flexShrink: 0,
+                          padding: "0.35rem 0.5rem",
+                          fontSize: "0.72rem",
+                          fontWeight: 600,
+                          borderRadius: "6px",
+                          border: "1px solid #e2e8f0",
+                          background: "#f8fafc",
+                          color: "#64748b",
+                          cursor:
+                            busy ||
+                            !pollEditGuard.canEditOptions ||
+                            editOptionLabels.length <= 2
+                              ? "not-allowed"
+                              : "pointer",
+                        }}
+                      >
+                        Retirer
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  disabled={
+                    busy ||
+                    !pollEditGuard.canEditOptions ||
+                    editOptionLabels.length >= 32
+                  }
+                  onClick={() =>
+                    setEditOptionLabels((prev) =>
+                      prev.length >= 32 ? prev : [...prev, ""],
+                    )
+                  }
+                  style={{
+                    marginBottom: "0.55rem",
+                    padding: "0.4rem 0.65rem",
+                    fontSize: "0.78rem",
+                    fontWeight: 700,
+                    borderRadius: "8px",
+                    border: "1px dashed #94a3b8",
+                    background: "#f8fafc",
+                    color: "#475569",
+                    cursor:
+                      busy || !pollEditGuard.canEditOptions
+                        ? "not-allowed"
+                        : "pointer",
+                  }}
+                >
+                  + Ajouter une réponse
+                </button>
+                {Boolean(editingPoll?.leadEnabled) ? (
+                  <div
+                    style={{
+                      margin: "0.35rem 0 0.55rem 0",
+                      padding: "0.55rem 0.65rem",
+                      borderRadius: "8px",
+                      border: "1px solid #e2e8f0",
+                      background: "#f8fafc",
+                    }}
+                  >
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.74rem",
+                        fontWeight: 700,
+                        color: "#475569",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Déclencheur du formulaire
+                    </label>
+                    <select
+                      value={Math.min(
+                        Math.max(0, Number(editLeadTriggerOrder ?? 0)),
+                        Math.max(0, editOptionLabels.length - 1),
+                      )}
+                      onChange={(e) => {
+                        const n = Number(e.target.value);
+                        setEditLeadTriggerOrder(
+                          Number.isFinite(n) && n >= 0 ? n : 0,
+                        );
+                      }}
+                      disabled={busy || !pollEditGuard.canEditOptions}
+                      style={{
+                        width: "100%",
+                        boxSizing: "border-box",
+                        padding: "0.42rem 0.5rem",
+                        borderRadius: "7px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.84rem",
+                        background: "#fff",
+                      }}
+                    >
+                      {editOptionLabels.map((r, idx) => (
+                        <option key={`edit-lead-trigger-${idx}`} value={idx}>
+                          {`Option ${idx + 1}${
+                            String(r || "").trim()
+                              ? ` - ${String(r).trim()}`
+                              : ""
+                          }`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             {String(editingPoll?.type || "").toUpperCase() === "QUIZ" ? (
               <div
                 style={{
@@ -7425,12 +7682,7 @@ export default function RegieEventPage() {
                 <select
                   value={Math.min(
                     Math.max(0, Number(editQuizCorrectOrder ?? 0)),
-                    Math.max(
-                      0,
-                      (Array.isArray(editingPoll?.options)
-                        ? editingPoll.options.length
-                        : 1) - 1,
-                    ),
+                    Math.max(0, editOptionLabels.length - 1),
                   )}
                   onChange={(e) => {
                     const n = Number(e.target.value);
@@ -7452,14 +7704,11 @@ export default function RegieEventPage() {
                     opacity: pollEditGuard.canEditQuizCorrect ? 1 : 0.72,
                   }}
                 >
-                  {(Array.isArray(editingPoll?.options)
-                    ? editingPoll.options
-                    : []
-                  ).map((opt, idx) => (
-                    <option key={`edit-quiz-correct-${opt?.id || idx}`} value={idx}>
+                  {editOptionLabels.map((r, idx) => (
+                    <option key={`edit-quiz-correct-${idx}`} value={idx}>
                       {`Option ${idx + 1}${
-                        String(opt?.label || "").trim()
-                          ? ` - ${String(opt.label).trim()}`
+                        String(r || "").trim()
+                          ? ` - ${String(r).trim()}`
                           : ""
                       }`}
                     </option>
@@ -7554,33 +7803,26 @@ export default function RegieEventPage() {
                   cursor: busy ? "not-allowed" : "pointer",
                 }}
               >
-                Annuler
+                {pollEditGuard.eventLocked ? "Fermer" : "Annuler"}
               </button>
-              <button
-                type="button"
-                disabled={busy || !pollEditGuard.canEditSoftFields}
-                onClick={() => void submitPollEdit()}
-                style={{
-                  padding: "0.45rem 0.82rem",
-                  borderRadius: "9px",
-                  border: "1px solid #1d4ed8",
-                  background:
-                    busy || !pollEditGuard.canEditSoftFields
-                      ? "#f1f5f9"
-                      : "#2563eb",
-                  color:
-                    busy || !pollEditGuard.canEditSoftFields
-                      ? "#94a3b8"
-                      : "#fff",
-                  fontWeight: 800,
-                  cursor:
-                    busy || !pollEditGuard.canEditSoftFields
-                      ? "not-allowed"
-                      : "pointer",
-                }}
-              >
-                {busy ? "Enregistrement..." : "Enregistrer"}
-              </button>
+              {pollEditGuard.canEditSoftFields ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void submitPollEdit()}
+                  style={{
+                    padding: "0.45rem 0.82rem",
+                    borderRadius: "9px",
+                    border: "1px solid #1d4ed8",
+                    background: busy ? "#f1f5f9" : "#2563eb",
+                    color: busy ? "#94a3b8" : "#fff",
+                    fontWeight: 800,
+                    cursor: busy ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {busy ? "Enregistrement..." : "Enregistrer"}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
