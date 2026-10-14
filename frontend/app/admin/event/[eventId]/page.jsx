@@ -25,8 +25,10 @@ import {
 } from "@/lib/regieEventLoad";
 import {
   computeRegiePublicPreviewPhoneSize,
+  getRegiePublicPreviewFitMode,
   getRegiePublicPreviewPhoneFrameStyle,
   getRegiePublicPreviewPhoneStageStyle,
+  getRegiePublicPreviewShellStyle,
   getRegiePublicPreviewTitleFontSize,
 } from "@/lib/regiePublicPreview";
 import { getStartRealConfirmMessage } from "@/lib/startRealResetClient";
@@ -3522,10 +3524,15 @@ function RegiePublicPreviewPanel({
 }) {
   /** Responsive local — le panel est aussi monté hors de RegieEventPage (drawer mobile). */
   const desktop = useBreakpointMin(1024);
+  const fitMode = getRegiePublicPreviewFitMode(layout);
   const [iframeError, setIframeError] = useState(false);
   const stageRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const [phoneSize, setPhoneSize] = useState(() =>
-    computeRegiePublicPreviewPhoneSize(360, 640),
+    computeRegiePublicPreviewPhoneSize(
+      desktop ? 420 : 360,
+      desktop ? 900 : 640,
+      { mode: fitMode },
+    ),
   );
   const joinPath = `/join/${encodeURIComponent(slug)}`;
 
@@ -3536,42 +3543,26 @@ function RegiePublicPreviewPanel({
       const entry = entries[0];
       if (!entry) return;
       const { width, height } = entry.contentRect;
-      setPhoneSize(computeRegiePublicPreviewPhoneSize(width, height));
+      setPhoneSize(
+        computeRegiePublicPreviewPhoneSize(
+          width,
+          fitMode === "contain" ? height : Number.POSITIVE_INFINITY,
+          { mode: fitMode },
+        ),
+      );
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [fitMode]);
 
-  const shell =
-    layout === "drawer"
-      ? {
-          display: "flex",
-          flexDirection: "column",
-          height: "100%",
-          minHeight: 0,
-          flex: 1,
-        }
-      : layout === "beside"
-        ? {
-            flex: fused ? "0 0 40%" : "0 0 34%",
-            minWidth: "min(100%, 300px)",
-            maxWidth: "100%",
-            display: "flex",
-            flexDirection: "column",
-            minHeight: fused
-              ? "min(calc(100vh - 7rem), 860px)"
-              : "min(calc(100vh - 6rem), 920px)",
-            maxHeight: fused
-              ? "min(calc(100vh - 7rem), 860px)"
-              : "min(calc(100vh - 6rem), 920px)",
-          }
-        : {
-            width: "100%",
-            display: "flex",
-            flexDirection: "column",
-            minHeight: fused ? "min(640px, 72vh)" : "min(580px, 64vh)",
-            maxHeight: fused ? "min(860px, 82vh)" : "min(780px, 76vh)",
-          };
+  const shell = getRegiePublicPreviewShellStyle({
+    layout,
+    fused,
+    phoneHeight: phoneSize.height,
+  });
+  const stageStyle = getRegiePublicPreviewPhoneStageStyle({
+    naturalHeight: fitMode === "width",
+  });
 
   const openPreviewFull = () => {
     if (typeof window === "undefined") return;
@@ -3599,8 +3590,8 @@ function RegiePublicPreviewPanel({
     >
       <div
         style={{
-          flex: 1,
-          minHeight: 0,
+          flex: fitMode === "contain" ? 1 : "0 0 auto",
+          minHeight: fitMode === "contain" ? 0 : undefined,
           position: "relative",
           display: "flex",
           flexDirection: "column",
@@ -3764,7 +3755,7 @@ function RegiePublicPreviewPanel({
             ) : null}
           </div>
         </div>
-        <div ref={stageRef} style={getRegiePublicPreviewPhoneStageStyle()}>
+        <div ref={stageRef} style={stageStyle}>
           <div style={phoneFrameStyle}>
             {iframeError ? (
               <div
@@ -8516,6 +8507,8 @@ export default function RegieEventPage() {
                 alignItems: "stretch",
                 minWidth: 0,
                 ...liveExperienceShellStyle,
+                // Aperçu ~390×844 : ne pas clipper — la page régie scrolle.
+                overflow: desktop && previewJoinOpen ? "visible" : "hidden",
               }}
             >
               <div

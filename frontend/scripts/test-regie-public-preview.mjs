@@ -1,5 +1,5 @@
 /**
- * Aperçu public régie — cadre smartphone centré + non-régression desktop.
+ * Aperçu public régie — cadre smartphone lisible (~390 px desktop).
  * Exécution : node frontend/scripts/test-regie-public-preview.mjs
  */
 import assert from "node:assert/strict";
@@ -9,8 +9,10 @@ import { fileURLToPath } from "node:url";
 import {
   REGIE_PUBLIC_PREVIEW_PHONE_DESIGN,
   computeRegiePublicPreviewPhoneSize,
+  getRegiePublicPreviewFitMode,
   getRegiePublicPreviewPhoneFrameStyle,
   getRegiePublicPreviewPhoneStageStyle,
+  getRegiePublicPreviewShellStyle,
   getRegiePublicPreviewTitleFontSize,
 } from "../lib/regiePublicPreview.js";
 
@@ -34,58 +36,83 @@ test("Responsive titre desktop vs mobile", () => {
   assert.equal(getRegiePublicPreviewTitleFontSize(false), "0.84rem");
 });
 
-test("Taille téléphone : contain sans dépasser le design", () => {
-  const roomy = computeRegiePublicPreviewPhoneSize(800, 900);
-  assert.equal(roomy.width, REGIE_PUBLIC_PREVIEW_PHONE_DESIGN.width);
-  assert.equal(roomy.height, REGIE_PUBLIC_PREVIEW_PHONE_DESIGN.height);
+test("Fit mode : below/beside = width, drawer = contain", () => {
+  assert.equal(getRegiePublicPreviewFitMode("below"), "width");
+  assert.equal(getRegiePublicPreviewFitMode("beside"), "width");
+  assert.equal(getRegiePublicPreviewFitMode("drawer"), "contain");
+});
 
-  const narrow = computeRegiePublicPreviewPhoneSize(300, 900, { padX: 0, padY: 0 });
-  assert.ok(narrow.width <= 300);
+test("Desktop width-first : ~390 px même si hauteur stage faible", () => {
+  const desktop = computeRegiePublicPreviewPhoneSize(800, 280, {
+    mode: "width",
+    padX: 0,
+    padY: 0,
+  });
+  assert.equal(desktop.width, REGIE_PUBLIC_PREVIEW_PHONE_DESIGN.width);
+  assert.equal(desktop.height, REGIE_PUBLIC_PREVIEW_PHONE_DESIGN.height);
+
+  const mid = computeRegiePublicPreviewPhoneSize(420, 200, {
+    mode: "width",
+    padX: 24,
+    padY: 0,
+  });
+  assert.equal(mid.width, 390);
+  assert.equal(mid.height, 844);
+});
+
+test("Mobile width-first : s’adapte à la largeur disponible", () => {
+  const mobile = computeRegiePublicPreviewPhoneSize(320, 900, {
+    mode: "width",
+    padX: 24,
+    padY: 0,
+  });
+  assert.equal(mobile.width, 296);
   assert.ok(
-    Math.abs(narrow.width / narrow.height - 390 / 844) < 0.02,
-    "aspect ratio conservé",
+    Math.abs(mobile.width / mobile.height - 390 / 844) < 0.02,
+    "aspect conservé",
   );
+});
 
-  const short = computeRegiePublicPreviewPhoneSize(800, 400, { padX: 0, padY: 0 });
+test("Drawer contain : réduit si hauteur limitée", () => {
+  const short = computeRegiePublicPreviewPhoneSize(800, 400, {
+    mode: "contain",
+    padX: 0,
+    padY: 0,
+  });
   assert.ok(short.height <= 400);
   assert.ok(short.width < REGIE_PUBLIC_PREVIEW_PHONE_DESIGN.width);
-  assert.ok(
-    Math.abs(short.width / short.height - 390 / 844) < 0.02,
-    "aspect ratio sous contrainte hauteur",
-  );
 });
 
-test("Stage centré + cadre overflow hidden (scroll iframe)", () => {
-  const stage = getRegiePublicPreviewPhoneStageStyle();
-  assert.equal(stage.display, "flex");
+test("Shell below : pas de maxHeight (scroll régie)", () => {
+  const shell = getRegiePublicPreviewShellStyle({
+    layout: "below",
+    fused: true,
+    phoneHeight: 844,
+  });
+  assert.equal("maxHeight" in shell, false);
+  assert.ok(Number(shell.minHeight) >= 844);
+  const stage = getRegiePublicPreviewPhoneStageStyle({ naturalHeight: true });
+  assert.equal(stage.flex, "0 0 auto");
   assert.equal(stage.justifyContent, "center");
-  assert.equal(stage.alignItems, "center");
-
-  const frame = getRegiePublicPreviewPhoneFrameStyle({ width: 320, height: 693 });
-  assert.equal(frame.width, 320);
-  assert.equal(frame.height, 693);
-  assert.equal(frame.overflow, "hidden");
-  assert.equal(frame.position, "relative");
 });
 
-test("RegiePublicPreviewPanel : desktop défini + cadre smartphone", () => {
+test("Cadre overflow hidden + Agrandir source", () => {
+  const frame = getRegiePublicPreviewPhoneFrameStyle({ width: 390, height: 844 });
+  assert.equal(frame.width, 390);
+  assert.equal(frame.overflow, "hidden");
+
   const src = readFileSync(
     join(here, "../app/admin/event/[eventId]/page.jsx"),
     "utf8",
   );
   const start = src.indexOf("function RegiePublicPreviewPanel(");
-  assert.ok(start > 0);
   const end = src.indexOf("\nfunction ", start + 1);
-  const body = src.slice(start, end > start ? end : start + 8000);
-  assert.ok(body.includes("const desktop = useBreakpointMin(1024)"));
-  assert.ok(body.includes("computeRegiePublicPreviewPhoneSize"));
-  assert.ok(body.includes("getRegiePublicPreviewPhoneStageStyle"));
-  assert.ok(body.includes("getRegiePublicPreviewPhoneFrameStyle"));
-  assert.ok(body.includes("ResizeObserver"));
+  const body = src.slice(start, end > start ? end : start + 9000);
+  assert.ok(body.includes("getRegiePublicPreviewFitMode"));
+  assert.ok(body.includes('mode: fitMode'));
   assert.ok(body.includes("Agrandir"));
   assert.ok(body.includes("window.open"));
-  // Plus d’iframe full-bleed en haut à gauche via inset panel
-  assert.equal(body.includes("getRegiePublicPreviewFrameInset"), false);
+  assert.equal(body.includes("maxHeight: fused"), false);
 });
 
 if (failed > 0) {
