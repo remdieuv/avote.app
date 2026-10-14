@@ -24,7 +24,9 @@ import {
   shouldRenderRegieEventBody,
 } from "@/lib/regieEventLoad";
 import {
-  getRegiePublicPreviewFrameInset,
+  computeRegiePublicPreviewPhoneSize,
+  getRegiePublicPreviewPhoneFrameStyle,
+  getRegiePublicPreviewPhoneStageStyle,
   getRegiePublicPreviewTitleFontSize,
 } from "@/lib/regiePublicPreview";
 import { getStartRealConfirmMessage } from "@/lib/startRealResetClient";
@@ -3521,7 +3523,24 @@ function RegiePublicPreviewPanel({
   /** Responsive local — le panel est aussi monté hors de RegieEventPage (drawer mobile). */
   const desktop = useBreakpointMin(1024);
   const [iframeError, setIframeError] = useState(false);
+  const stageRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const [phoneSize, setPhoneSize] = useState(() =>
+    computeRegiePublicPreviewPhoneSize(360, 640),
+  );
   const joinPath = `/join/${encodeURIComponent(slug)}`;
+
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const { width, height } = entry.contentRect;
+      setPhoneSize(computeRegiePublicPreviewPhoneSize(width, height));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const shell =
     layout === "drawer"
@@ -3550,9 +3569,20 @@ function RegiePublicPreviewPanel({
             width: "100%",
             display: "flex",
             flexDirection: "column",
-            minHeight: fused ? "min(560px, 66vh)" : "min(520px, 58vh)",
-            maxHeight: fused ? "min(760px, 76vh)" : "min(700px, 70vh)",
+            minHeight: fused ? "min(640px, 72vh)" : "min(580px, 64vh)",
+            maxHeight: fused ? "min(860px, 82vh)" : "min(780px, 76vh)",
           };
+
+  const openPreviewFull = () => {
+    if (typeof window === "undefined") return;
+    window.open(
+      `${window.location.origin}${joinPath}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+  };
+
+  const phoneFrameStyle = getRegiePublicPreviewPhoneFrameStyle(phoneSize);
 
   return (
     <section
@@ -3572,6 +3602,8 @@ function RegiePublicPreviewPanel({
           flex: 1,
           minHeight: 0,
           position: "relative",
+          display: "flex",
+          flexDirection: "column",
           borderRadius: fused ? "32px" : "30px",
           overflow: "hidden",
           background:
@@ -3593,23 +3625,11 @@ function RegiePublicPreviewPanel({
           }}
         />
         <div
-          aria-hidden
           style={{
-            position: "absolute",
-            inset: 0,
-            borderRadius: fused ? "32px" : "30px",
-            border: "1px solid rgba(255,255,255,0.08)",
-            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
-            pointerEvents: "none",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            top: "0.95rem",
-            left: "1rem",
-            right: "1rem",
+            position: "relative",
             zIndex: 2,
+            flex: "0 0 auto",
+            padding: desktop ? "0.95rem 1.1rem 0.35rem" : "0.85rem 0.9rem 0.3rem",
             display: "flex",
             flexWrap: "wrap",
             alignItems: "flex-start",
@@ -3637,7 +3657,7 @@ function RegiePublicPreviewPanel({
                 lineHeight: 1.35,
               }}
             >
-              Vue participant en direct
+              Simulation smartphone — défilement dans l’aperçu
             </p>
             {eventId ? (
               <div
@@ -3711,13 +3731,7 @@ function RegiePublicPreviewPanel({
           >
             <button
               type="button"
-              onClick={() =>
-                window.open(
-                  `${window.location.origin}${joinPath}`,
-                  "_blank",
-                  "noopener,noreferrer",
-                )
-              }
+              onClick={openPreviewFull}
               style={{
                 ...btnGhost,
                 fontSize: "0.72rem",
@@ -3750,66 +3764,64 @@ function RegiePublicPreviewPanel({
             ) : null}
           </div>
         </div>
-        {iframeError ? (
-          <div
-            style={{
-              position: "absolute",
-              inset: getRegiePublicPreviewFrameInset(desktop),
-              padding: "1.4rem",
-              textAlign: "center",
-              color: "#94a3b8",
-              fontSize: "0.85rem",
-              borderRadius: "24px",
-              border: "1px solid rgba(255,255,255,0.08)",
-              background: "rgba(15,23,42,0.55)",
-              boxSizing: "border-box",
-            }}
-          >
-            <p style={{ margin: "0 0 0.75rem 0", fontWeight: 600 }}>
-              Impossible de charger l’aperçu.
-            </p>
-            <button
-              type="button"
-              onClick={() =>
-                window.open(
-                  `${window.location.origin}${joinPath}`,
-                  "_blank",
-                  "noopener,noreferrer",
-                )
-              }
-              style={{
-                ...btnGhost,
-                fontSize: "0.78rem",
-                background: "rgba(255,255,255,0.08)",
-                color: "#e2e8f0",
-                borderColor: "rgba(255,255,255,0.12)",
-                boxShadow: "none",
-              }}
-            >
-              Ouvrir /join dans un nouvel onglet
-            </button>
+        <div ref={stageRef} style={getRegiePublicPreviewPhoneStageStyle()}>
+          <div style={phoneFrameStyle}>
+            {iframeError ? (
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  padding: "1.4rem",
+                  textAlign: "center",
+                  color: "#94a3b8",
+                  fontSize: "0.85rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxSizing: "border-box",
+                  background: "rgba(15,23,42,0.92)",
+                }}
+              >
+                <p style={{ margin: "0 0 0.75rem 0", fontWeight: 600 }}>
+                  Impossible de charger l’aperçu.
+                </p>
+                <button
+                  type="button"
+                  onClick={openPreviewFull}
+                  style={{
+                    ...btnGhost,
+                    fontSize: "0.78rem",
+                    background: "rgba(255,255,255,0.08)",
+                    color: "#e2e8f0",
+                    borderColor: "rgba(255,255,255,0.12)",
+                    boxShadow: "none",
+                  }}
+                >
+                  Ouvrir /join dans un nouvel onglet
+                </button>
+              </div>
+            ) : (
+              <iframe
+                key={slug}
+                title={`Aperçu salle ${slug}`}
+                src={joinPath}
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                onLoad={() => setIframeError(false)}
+                onError={() => setIframeError(true)}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  border: "none",
+                  display: "block",
+                  background: "#0f172a",
+                }}
+              />
+            )}
           </div>
-        ) : (
-          <iframe
-            key={slug}
-            title={`Aperçu salle ${slug}`}
-            src={joinPath}
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-            onLoad={() => setIframeError(false)}
-            onError={() => setIframeError(true)}
-            style={{
-              position: "absolute",
-              inset: getRegiePublicPreviewFrameInset(desktop),
-              width: "auto",
-              height: "auto",
-              border: "none",
-              display: "block",
-              borderRadius: "24px",
-              background: "#0f172a",
-              boxShadow: "0 22px 48px rgba(2, 6, 23, 0.34)",
-            }}
-          />
-        )}
+        </div>
       </div>
     </section>
   );
