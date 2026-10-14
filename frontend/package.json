@@ -22,6 +22,7 @@
     "test:event-live-snapshot": "node ../backend/scripts/test-event-live-snapshot.mjs",
     "test:start-real-reset": "node scripts/test-start-real-reset-client.mjs && node ../backend/scripts/test-start-real-event-reset.mjs",
     "test:regie-event-load": "node scripts/test-regie-event-load.mjs",
+    "test:regie-public-preview": "node scripts/test-regie-public-preview.mjs",
     "test:test-mode-parity": "node scripts/test-test-mode-live-parity.mjs",
     "test:test-mode-replay": "node scripts/test-test-mode-replay-poll.mjs",
     "test:lot4": "npm run test:test-mode-parity && npm run test:test-mode-replay",

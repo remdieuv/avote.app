@@ -23,6 +23,10 @@ import {
   shouldClearRegieEventLoadingAfterFetch,
   shouldRenderRegieEventBody,
 } from "@/lib/regieEventLoad";
+import {
+  getRegiePublicPreviewFrameInset,
+  getRegiePublicPreviewTitleFontSize,
+} from "@/lib/regiePublicPreview";
 import { getStartRealConfirmMessage } from "@/lib/startRealResetClient";
 import { adminFetch, apiBaseBrowser, SOCKET_URL as SOCKET } from "@/lib/config";
 import {
@@ -3503,6 +3507,7 @@ const LEADS_LAST_SEEN_LS_PREFIX = "avote_leads_seen_at_";
  *   newLeadCount?: number;
  *   layout: "beside" | "below" | "drawer";
  *   onHide?: () => void;
+ *   fused?: boolean;
  * }} props
  */
 function RegiePublicPreviewPanel({
@@ -3513,6 +3518,8 @@ function RegiePublicPreviewPanel({
   onHide,
   fused = false,
 }) {
+  /** Responsive local — le panel est aussi monté hors de RegieEventPage (drawer mobile). */
+  const desktop = useBreakpointMin(1024);
   const [iframeError, setIframeError] = useState(false);
   const joinPath = `/join/${encodeURIComponent(slug)}`;
 
@@ -3614,7 +3621,7 @@ function RegiePublicPreviewPanel({
             <p
               style={{
                 margin: 0,
-                fontSize: desktop ? "0.94rem" : "0.84rem",
+                fontSize: getRegiePublicPreviewTitleFontSize(desktop),
                 fontWeight: 800,
                 color: "#f8fafc",
                 letterSpacing: "-0.02em",
@@ -3747,7 +3754,7 @@ function RegiePublicPreviewPanel({
           <div
             style={{
               position: "absolute",
-              inset: desktop ? "5.4rem 1rem 1rem" : "6rem 0.8rem 0.8rem",
+              inset: getRegiePublicPreviewFrameInset(desktop),
               padding: "1.4rem",
               textAlign: "center",
               color: "#94a3b8",
@@ -3792,7 +3799,7 @@ function RegiePublicPreviewPanel({
             onError={() => setIframeError(true)}
             style={{
               position: "absolute",
-              inset: desktop ? "5.4rem 1rem 1rem" : "6rem 0.8rem 0.8rem",
+              inset: getRegiePublicPreviewFrameInset(desktop),
               width: "auto",
               height: "auto",
               border: "none",
