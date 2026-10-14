@@ -10,6 +10,7 @@
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "test:contest-replace": "node scripts/test-contest-winner-replace.mjs",
+    "test:event-live-snapshot": "node scripts/test-event-live-snapshot.mjs",
     "postinstall": "prisma generate"
   },
   "keywords": [],

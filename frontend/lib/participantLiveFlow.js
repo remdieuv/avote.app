@@ -218,6 +218,16 @@ export function shouldPollFetchEventMetaBranding(input = {}) {
 }
 
 /**
+ * Après `loadPoll` : lever le spinner si cette génération est encore la courante.
+ * Inclut les fetches `silent` — un silent qui abort le GET initial ne doit pas
+ * laisser « Chargement... » bloqué jusqu’à une action régie / snapshot socket.
+ * @param {{ generation?: number; currentGeneration?: number }} input
+ */
+export function shouldClearPollLoadingAfterFetch(input = {}) {
+  return Number(input.generation) === Number(input.currentGeneration);
+}
+
+/**
  * Fiche résultats standalone `/p` : afficher les barres pour une question CLOSE
  * (historique salle, lien direct, événement terminé) — sans fuite avant RESULTS live.
  *

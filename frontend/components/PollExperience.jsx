@@ -52,6 +52,7 @@ import {
   isParticipantVoteSessionOpen,
   mergePollJsonPreservingQuizReveal,
   resolveParticipantTopStripLabel,
+  shouldClearPollLoadingAfterFetch,
   shouldPollApplyParentPollSnapshot,
   shouldPollFetchEventMetaBranding,
   shouldPollOpenOwnSocket,
@@ -751,7 +752,14 @@ export function PollExperience({
             "Impossible de charger le sondage (API sur le port 4000 ?)",
         );
       } finally {
-        if (!silent && generation === loadPollGenerationRef.current) {
+        // Silent ou non : la génération courante doit toujours lever le spinner.
+        // Sinon un load silent (bump Join) qui abort le 1er GET laisse « Chargement... ».
+        if (
+          shouldClearPollLoadingAfterFetch({
+            generation,
+            currentGeneration: loadPollGenerationRef.current,
+          })
+        ) {
           setLoading(false);
         }
       }

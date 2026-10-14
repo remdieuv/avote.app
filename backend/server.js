@@ -40,6 +40,10 @@ const {
   getReplayTestPollDeletionPlan,
   buildReplayTestPollEventPatch,
 } = require("./lib/testModeReplayPoll");
+const {
+  shouldIncludePollInEventLivePayload,
+  buildEventLiveUpdatedPayload,
+} = require("./lib/eventLiveSnapshot");
 
 /** Anti double-clic rejeu TEST (sérialise par pollId). */
 const runReplayTestExclusive = createPollExclusiveQueue();
@@ -810,71 +814,61 @@ async function repairStaleVotingLiveState(event) {
   }
 }
 
-/** @param {import("socket.io").Server} io */
-async function emitEventLiveUpdated(io, eventId) {
+/**
+ * Charge l’état live courant (axes + poll si visible) pour emit socket.
+ * @returns {Promise<{ payload: object; activePollId: string | null; pollJson: object | null } | null>}
+ */
+async function loadEventLiveUpdatedBundle(eventId) {
   const event = await prisma.event.findUnique({
     where: { id: eventId },
   });
-  if (!event) return;
+  if (!event) return null;
   await repairStaleVotingLiveState(event);
 
   let pollJson = null;
   if (event.activePollId) {
     const poll = await loadPollFull(event.activePollId);
-    if (poll) {
-      const vs = String(event.voteState).toUpperCase();
-      const ds = String(event.displayState).toUpperCase();
-      const openActive = vs === "OPEN" && poll.status === "ACTIVE";
-      const sceneQuestionOrResults =
-        ds === "QUESTION" || ds === "RESULTS";
-      /** Ex. fin de chrono : vote CLOSED, poll CLOSED, display WAITING — le public garde le contexte */
-      const voteTerminePollEncoreAffiche =
-        vs === "CLOSED" &&
-        String(poll.status).toUpperCase() === "CLOSED" &&
-        String(poll.id) === String(event.activePollId);
-      /**
-       * LOT-5 — Suivante / PRÉPARÉ : poll ACTIVE × WAITING × vote CLOSED.
-       * Inclure le poll pour que Join mette à jour activePollStatus (évite CLOSED stale).
-       */
-      const preparedActiveAntenna =
-        vs === "CLOSED" &&
-        ds === "WAITING" &&
-        String(poll.status).toUpperCase() === "ACTIVE" &&
-        String(poll.id) === String(event.activePollId);
-      if (
-        openActive ||
-        sceneQuestionOrResults ||
-        voteTerminePollEncoreAffiche ||
-        preparedActiveAntenna
-      ) {
-        pollJson = pollToJson(poll);
-      }
+    if (poll && shouldIncludePollInEventLivePayload(event, poll)) {
+      pollJson = pollToJson(poll);
     }
   }
 
-  io.to(roomPourEvent(eventId)).emit("event_live_updated", {
-    eventId: event.id,
-    slug: event.slug,
-    isLiveConsumed: event.isLiveConsumed,
-    isLocked: event.isLocked,
-    liveState: event.liveState.toLowerCase(),
-    voteState: String(event.voteState).toLowerCase(),
-    displayState: String(event.displayState).toLowerCase(),
-    screenDisplayState: event.screenDisplayState
-      ? String(event.screenDisplayState).toLowerCase()
-      : null,
+  return {
+    payload: buildEventLiveUpdatedPayload(
+      event,
+      pollJson,
+      questionTimerSnapshot(event),
+    ),
     activePollId: event.activePollId,
-    autoReveal: event.autoReveal,
-    autoRevealDelaySec: event.autoRevealDelaySec,
-    autoRevealShowResultsAt:
-      event.autoRevealShowResultsAt?.toISOString() ?? null,
-    questionTimer: questionTimerSnapshot(event),
-    poll: pollJson,
-  });
+    pollJson,
+  };
+}
 
-  if (event.activePollId && pollJson) {
-    io.to(roomPourPoll(event.activePollId)).emit("poll_updated", pollJson);
+/** @param {import("socket.io").Server} io */
+async function emitEventLiveUpdated(io, eventId) {
+  const bundle = await loadEventLiveUpdatedBundle(eventId);
+  if (!bundle) return;
+
+  io.to(roomPourEvent(eventId)).emit("event_live_updated", bundle.payload);
+
+  if (bundle.activePollId && bundle.pollJson) {
+    io.to(roomPourPoll(bundle.activePollId)).emit(
+      "poll_updated",
+      bundle.pollJson,
+    );
   }
+}
+
+/**
+ * Snapshot live au join / reconnect : socket joignant uniquement
+ * (pas de broadcast room, pas de poll_updated aux autres).
+ * @param {import("socket.io").Socket} socket
+ * @param {string} eventId
+ */
+async function emitEventLiveSnapshotToSocket(socket, eventId) {
+  const bundle = await loadEventLiveUpdatedBundle(eventId);
+  if (!bundle) return;
+  socket.emit("event_live_updated", bundle.payload);
 }
 
 /**
@@ -6862,6 +6856,8 @@ io.on("connection", (socket) => {
   socket.on("join_event", (rawEventId) => {
     const id = String(rawEventId);
     socket.join(roomPourEvent(id));
+    /** Nouveau participant / reconnect : état courant sans action régisseur. */
+    void emitEventLiveSnapshotToSocket(socket, id);
     void emitScreenCountToAdmins(io, id);
     void emitAllScreenPresenceToAdmins(io, id);
   });
