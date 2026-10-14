@@ -81,6 +81,11 @@ import {
   getQuizCorrectAnswerEditStatus,
   getSavedQuizCorrectAnswer,
 } from "@/lib/regieQuizEdit";
+import { getRegiePollEditGuardState } from "@/lib/regiePollEditGuards";
+import {
+  formatRegieOptionStatMeta,
+  getRegieOptionStatBarStyles,
+} from "@/lib/regieOptionStats";
 
 const VOTE_STATE_LABELS = {
   open: "Vote ouvert",
@@ -3499,6 +3504,72 @@ const btnGhost = {
   boxShadow: "0 8px 18px rgba(15, 23, 42, 0.04)",
 };
 
+/**
+ * Liste stats régie : barres horizontales, ordre stable (pas de tri votes).
+ * @param {{
+ *   options: Array<{ id: string; label: string; voteCount: number; pct: number; showBonneReponse?: boolean }>;
+ *   keyPrefix?: string;
+ * }} props
+ */
+function RegieOptionStatsList({ options, keyPrefix = "opt-stat" }) {
+  if (!Array.isArray(options) || options.length === 0) return null;
+  return (
+    <div style={{ display: "grid", gap: "0.4rem", marginTop: "0.35rem" }}>
+      {options.map((opt) => {
+        const bar = getRegieOptionStatBarStyles({
+          pct: opt.pct,
+          highlight: Boolean(opt.showBonneReponse),
+        });
+        return (
+          <div key={`${keyPrefix}-${opt.id}`} style={{ display: "grid", gap: "0.2rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+              <span
+                style={{
+                  flex: 1,
+                  fontSize: "0.78rem",
+                  fontWeight: 700,
+                  color: "#0f172a",
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {opt.label}
+                {opt.showBonneReponse ? (
+                  <span
+                    style={{
+                      marginLeft: "0.4rem",
+                      fontSize: "0.66rem",
+                      fontWeight: 800,
+                      color: "#166534",
+                      background: "#dcfce7",
+                      borderRadius: "999px",
+                      padding: "0.1rem 0.4rem",
+                    }}
+                  >
+                    Bonne réponse
+                  </span>
+                ) : null}
+              </span>
+              <span
+                style={{
+                  flexShrink: 0,
+                  fontSize: "0.74rem",
+                  fontWeight: 800,
+                  color: "#334155",
+                }}
+              >
+                {formatRegieOptionStatMeta(opt)}
+              </span>
+            </div>
+            <div style={bar.track}>
+              <div style={bar.fill} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 const REGIE_PREVIEW_JOIN_LS_PREFIX = "avote_regie_preview_join_";
 /** Colonne gauche réduite (desktop) — persistant par événement */
 const REGIE_LEFT_COLLAPSED_LS_PREFIX = "avote_regie_left_collapsed_";
@@ -5539,6 +5610,19 @@ export default function RegieEventPage() {
   async function submitPollEdit() {
     const pollId = String(editingPoll?.id || "");
     if (!pollId) return;
+    const editGuard = getRegiePollEditGuardState({
+      isLocked: eventData?.isLocked,
+      isLiveConsumed: eventData?.isLiveConsumed,
+      voteCount: editingPoll?.voteCount,
+      quizRevealed: editingPoll?.quizRevealed,
+      isQuiz: String(editingPoll?.type || "").toUpperCase() === "QUIZ",
+    });
+    if (!editGuard.canEditSoftFields) {
+      setActionError(
+        editGuard.lockedReason || "Modification impossible pour cet événement.",
+      );
+      return;
+    }
     const question = String(editQuestionText || "").trim();
     if (!question) {
       setActionError("Texte de question requis.");
@@ -5547,7 +5631,7 @@ export default function RegieEventPage() {
     const isContest = String(editingPoll?.type || "").toUpperCase() === "CONTEST_ENTRY";
     const isQuiz = String(editingPoll?.type || "").toUpperCase() === "QUIZ";
     const quizOpts = Array.isArray(editingPoll?.options) ? editingPoll.options : [];
-    if (isQuiz) {
+    if (isQuiz && editGuard.canEditQuizCorrect) {
       const max = Math.max(0, quizOpts.length - 1);
       const idx = Number(editQuizCorrectOrder);
       if (!Number.isFinite(idx) || idx < 0 || idx > max || quizOpts.length < 2) {
@@ -5563,7 +5647,9 @@ export default function RegieEventPage() {
             contestWinnerCount: normalizeContestWinnerCount(editContestWinnerCount),
           }
         : {}),
-      ...(isQuiz ? { quizCorrectOrder: Number(editQuizCorrectOrder) } : {}),
+      ...(isQuiz && editGuard.canEditQuizCorrect
+        ? { quizCorrectOrder: Number(editQuizCorrectOrder) }
+        : {}),
     };
     setBusy(true);
     setActionError(null);
@@ -6559,6 +6645,8 @@ export default function RegieEventPage() {
   const selectedConsultOptions = useMemo(() => {
     if (!selectedPoll) return [];
     const opts = normalizePollOptions(selectedPoll?.options);
+    const quizRevealed = Boolean(selectedPoll?.quizRevealed);
+    const isQuiz = String(selectedPoll?.type || "").toUpperCase() === "QUIZ";
     const totalVotesSafe = Math.max(
       0,
       Number(
@@ -6566,6 +6654,7 @@ export default function RegieEventPage() {
           opts.reduce((acc, o) => acc + optionVoteCount(o), 0),
       ),
     );
+    // Ordre stable (option.order API) — pas de tri par votes.
     return opts.map((o, i) => {
       const voteCount = optionVoteCount(o);
       const pctRaw = Number(o?.votePct);
@@ -6580,6 +6669,7 @@ export default function RegieEventPage() {
         label: String(o?.label || `Option ${i + 1}`),
         voteCount,
         pct: Math.max(0, Math.min(100, pct)),
+        showBonneReponse: isQuiz && quizRevealed && Boolean(o?.isCorrect),
       };
     });
   }, [selectedPoll]);
@@ -6588,6 +6678,8 @@ export default function RegieEventPage() {
   const activePilotageStatsOptions = useMemo(() => {
     if (!activePoll) return [];
     const opts = normalizePollOptions(activePoll?.options);
+    const quizRevealed = Boolean(activePoll?.quizRevealed);
+    const isQuiz = String(activePoll?.type || "").toUpperCase() === "QUIZ";
     const totalVotesSafe = Math.max(
       0,
       Number(
@@ -6595,6 +6687,7 @@ export default function RegieEventPage() {
           opts.reduce((acc, o) => acc + optionVoteCount(o), 0),
       ),
     );
+    // Ordre stable (option.order API) — pas de tri par votes.
     return opts.map((o, i) => {
       const voteCount = optionVoteCount(o);
       const pctRaw = Number(o?.votePct);
@@ -6609,6 +6702,7 @@ export default function RegieEventPage() {
         label: String(o?.label || `Option ${i + 1}`),
         voteCount,
         pct: Math.max(0, Math.min(100, pct)),
+        showBonneReponse: isQuiz && quizRevealed && Boolean(o?.isCorrect),
       };
     });
   }, [activePoll]);
@@ -6865,6 +6959,24 @@ export default function RegieEventPage() {
         draftOrder: editQuizCorrectOrder,
       }),
     [editingPoll, editQuizCorrectOrder],
+  );
+
+  const pollEditGuard = useMemo(
+    () =>
+      getRegiePollEditGuardState({
+        isLocked: eventData?.isLocked,
+        isLiveConsumed: eventData?.isLiveConsumed,
+        voteCount: editingPoll?.voteCount,
+        quizRevealed: editingPoll?.quizRevealed,
+        isQuiz: String(editingPoll?.type || "").toUpperCase() === "QUIZ",
+      }),
+    [
+      eventData?.isLocked,
+      eventData?.isLiveConsumed,
+      editingPoll?.voteCount,
+      editingPoll?.quizRevealed,
+      editingPoll?.type,
+    ],
   );
 
   /** Panneau Régler : durée + Confirmer + Réinitialiser uniquement. */
@@ -7166,6 +7278,38 @@ export default function RegieEventPage() {
             <p style={{ margin: "0.28rem 0 0 0", fontSize: "0.86rem", color: "#64748b" }}>
               Type : <strong style={{ color: "#111827" }}>{editingPoll.type}</strong>
             </p>
+            {pollEditGuard.lockedReason ? (
+              <p
+                style={{
+                  margin: "0.55rem 0 0 0",
+                  padding: "0.5rem 0.6rem",
+                  borderRadius: "8px",
+                  background: "#fef2f2",
+                  border: "1px solid #fecaca",
+                  fontSize: "0.78rem",
+                  fontWeight: 600,
+                  color: "#991b1b",
+                }}
+              >
+                {pollEditGuard.lockedReason}
+              </p>
+            ) : null}
+            {pollEditGuard.softWarning ? (
+              <p
+                style={{
+                  margin: "0.55rem 0 0 0",
+                  padding: "0.5rem 0.6rem",
+                  borderRadius: "8px",
+                  background: "#fffbeb",
+                  border: "1px solid #fde68a",
+                  fontSize: "0.78rem",
+                  fontWeight: 600,
+                  color: "#92400e",
+                }}
+              >
+                {pollEditGuard.softWarning}
+              </p>
+            ) : null}
             <label
               style={{
                 display: "block",
@@ -7180,7 +7324,7 @@ export default function RegieEventPage() {
             <textarea
               value={editQuestionText}
               onChange={(e) => setEditQuestionText(e.target.value)}
-              disabled={busy}
+              disabled={busy || !pollEditGuard.canEditSoftFields}
               rows={3}
               style={{
                 width: "100%",
@@ -7211,7 +7355,7 @@ export default function RegieEventPage() {
                   type="text"
                   value={editContestPrize}
                   onChange={(e) => setEditContestPrize(e.target.value)}
-                  disabled={busy}
+                  disabled={busy || !pollEditGuard.canEditSoftFields}
                   style={{
                     width: "100%",
                     boxSizing: "border-box",
@@ -7244,7 +7388,7 @@ export default function RegieEventPage() {
                       normalizeContestWinnerCount(e.target.value),
                     )
                   }
-                  disabled={busy}
+                  disabled={busy || !pollEditGuard.canEditSoftFields}
                   style={{
                     width: "100%",
                     boxSizing: "border-box",
@@ -7294,7 +7438,7 @@ export default function RegieEventPage() {
                       Number.isFinite(n) && n >= 0 ? n : 0,
                     );
                   }}
-                  disabled={busy}
+                  disabled={busy || !pollEditGuard.canEditQuizCorrect}
                   style={{
                     width: "100%",
                     boxSizing: "border-box",
@@ -7302,7 +7446,10 @@ export default function RegieEventPage() {
                     borderRadius: "7px",
                     border: "1px solid #86efac",
                     fontSize: "0.84rem",
-                    background: "#fff",
+                    background: pollEditGuard.canEditQuizCorrect
+                      ? "#fff"
+                      : "#f8fafc",
+                    opacity: pollEditGuard.canEditQuizCorrect ? 1 : 0.72,
                   }}
                 >
                   {(Array.isArray(editingPoll?.options)
@@ -7318,6 +7465,30 @@ export default function RegieEventPage() {
                     </option>
                   ))}
                 </select>
+                {pollEditGuard.quizBlockedReason ? (
+                  <p
+                    style={{
+                      margin: "0.45rem 0 0 0",
+                      fontSize: "0.74rem",
+                      fontWeight: 700,
+                      color: "#991b1b",
+                    }}
+                  >
+                    {pollEditGuard.quizBlockedReason}
+                  </p>
+                ) : null}
+                {pollEditGuard.quizHint ? (
+                  <p
+                    style={{
+                      margin: "0.35rem 0 0 0",
+                      fontSize: "0.74rem",
+                      fontWeight: 600,
+                      color: "#92400e",
+                    }}
+                  >
+                    {pollEditGuard.quizHint}
+                  </p>
+                ) : null}
                 <p
                   style={{
                     margin: "0.45rem 0 0 0",
@@ -7332,7 +7503,8 @@ export default function RegieEventPage() {
                     ? `Bonne réponse enregistrée : ${quizCorrectEditStatus.savedLabel}`
                     : "Aucune bonne réponse enregistrée"}
                 </p>
-                {quizCorrectEditStatus.draftPending &&
+                {pollEditGuard.canEditQuizCorrect &&
+                quizCorrectEditStatus.draftPending &&
                 quizCorrectEditStatus.draftLabel ? (
                   <p
                     style={{
@@ -7386,16 +7558,25 @@ export default function RegieEventPage() {
               </button>
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy || !pollEditGuard.canEditSoftFields}
                 onClick={() => void submitPollEdit()}
                 style={{
                   padding: "0.45rem 0.82rem",
                   borderRadius: "9px",
                   border: "1px solid #1d4ed8",
-                  background: busy ? "#f1f5f9" : "#2563eb",
-                  color: busy ? "#94a3b8" : "#fff",
+                  background:
+                    busy || !pollEditGuard.canEditSoftFields
+                      ? "#f1f5f9"
+                      : "#2563eb",
+                  color:
+                    busy || !pollEditGuard.canEditSoftFields
+                      ? "#94a3b8"
+                      : "#fff",
                   fontWeight: 800,
-                  cursor: busy ? "not-allowed" : "pointer",
+                  cursor:
+                    busy || !pollEditGuard.canEditSoftFields
+                      ? "not-allowed"
+                      : "pointer",
                 }}
               >
                 {busy ? "Enregistrement..." : "Enregistrer"}
@@ -8599,45 +8780,10 @@ export default function RegieEventPage() {
                         {(selectedPoll?.voteCount ?? 0) !== 1 ? "s" : ""}
                       </p>
                       {selectedConsultOptions.length > 0 ? (
-                        <ul
-                          style={{
-                            margin: "0.55rem 0 0 0",
-                            padding: 0,
-                            listStyle: "none",
-                            display: "grid",
-                            gap: "0.28rem",
-                          }}
-                        >
-                          {selectedConsultOptions.map((opt) => (
-                            <li
-                              key={opt.id}
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                gap: "0.75rem",
-                                fontSize: "0.74rem",
-                                color: "#475569",
-                              }}
-                            >
-                              <span style={{ overflowWrap: "anywhere" }}>
-                                {opt.label}
-                              </span>
-                              <span
-                                style={{
-                                  flexShrink: 0,
-                                  fontWeight: 700,
-                                  color: "#1e293b",
-                                }}
-                              >
-                                {opt.voteCount} ·{" "}
-                                {Number(opt.pct).toLocaleString("fr-FR", {
-                                  maximumFractionDigits: 1,
-                                })}
-                                %
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
+                        <RegieOptionStatsList
+                          options={selectedConsultOptions}
+                          keyPrefix="consult-stat"
+                        />
                       ) : null}
                     </div>
                   </div>
@@ -8711,45 +8857,10 @@ export default function RegieEventPage() {
                           : "Aucune question à l’antenne"}
                       </p>
                       {activePilotageStatsOptions.length > 0 ? (
-                        <ul
-                          style={{
-                            margin: "0.15rem 0 0 0",
-                            padding: 0,
-                            listStyle: "none",
-                            display: "grid",
-                            gap: "0.28rem",
-                          }}
-                        >
-                          {activePilotageStatsOptions.map((opt) => (
-                            <li
-                              key={`pilotage-stat-${opt.id}`}
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                gap: "0.75rem",
-                                fontSize: "0.74rem",
-                                color: "#475569",
-                              }}
-                            >
-                              <span style={{ overflowWrap: "anywhere" }}>
-                                {opt.label}
-                              </span>
-                              <span
-                                style={{
-                                  flexShrink: 0,
-                                  fontWeight: 700,
-                                  color: "#1e293b",
-                                }}
-                              >
-                                {opt.voteCount} ·{" "}
-                                {Number(opt.pct).toLocaleString("fr-FR", {
-                                  maximumFractionDigits: 1,
-                                })}
-                                %
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
+                        <RegieOptionStatsList
+                          options={activePilotageStatsOptions}
+                          keyPrefix="pilotage-stat"
+                        />
                       ) : null}
                     </div>
 

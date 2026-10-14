@@ -52,6 +52,10 @@ const {
   shouldPerformStartRealRuntimeReset,
   startRealResetAppliesToPlan,
 } = require("./lib/startRealEventReset");
+const {
+  evaluatePollPatchGuards,
+  pollPatchRequestsQuizCorrectChange,
+} = require("./lib/pollPatchGuards");
 
 /** Anti double-clic rejeu TEST (sérialise par pollId). */
 const runReplayTestExclusive = createPollExclusiveQueue();
@@ -4619,11 +4623,31 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
       select: {
         id: true,
         type: true,
+        quizRevealed: true,
         options: { select: { id: true }, orderBy: { order: "asc" } },
+        event: {
+          select: { isLocked: true, isLiveConsumed: true },
+        },
+        _count: { select: { votes: true } },
       },
     });
     if (!poll) {
       return res.status(404).json({ error: "Sondage introuvable." });
+    }
+
+    const wantsQuizCorrectChange = pollPatchRequestsQuizCorrectChange(
+      body,
+      poll.type,
+    );
+    const guard = evaluatePollPatchGuards({
+      isLocked: poll.event?.isLocked,
+      isLiveConsumed: poll.event?.isLiveConsumed,
+      voteCount: poll._count?.votes ?? 0,
+      quizRevealed: poll.quizRevealed,
+      wantsQuizCorrectChange,
+    });
+    if (!guard.ok) {
+      return res.status(guard.status).json({ error: guard.error });
     }
 
     /** @type {import("@prisma/client").Prisma.PollUpdateInput} */
@@ -4652,7 +4676,7 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
       }
     }
     let quizCorrectUpdated = false;
-    if (isQuiz && Object.prototype.hasOwnProperty.call(body, "quizCorrectOrder")) {
+    if (isQuiz && wantsQuizCorrectChange) {
       const quizCorrectOrder = normalizeQuizCorrectOrder(
         body.quizCorrectOrder,
         poll.options.length,
