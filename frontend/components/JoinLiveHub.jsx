@@ -39,6 +39,14 @@ import {
 } from "@/lib/liveStateVisual";
 import { ExperienceHeader } from "@/components/navigation/ExperienceHeader";
 import { PollExperience } from "@/components/PollExperience";
+import {
+  leadDraftStorageKey,
+  leadSubmittedStorageKey,
+} from "@/lib/leadContestLiveFlow";
+import {
+  clearParticipantRepetitionMarkers,
+  shouldClearParticipantMarkersOnStartReal,
+} from "@/lib/startRealResetClient";
 import { getOrCreateVoterSessionId } from "@/lib/votes/voter-session";
 
 /**
@@ -163,6 +171,10 @@ export function JoinLiveHub({ slug }) {
   const [socketOnline, setSocketOnline] = useState(/** @type {boolean | null} */ (null));
   /** Bump pour sync PollExperience embedded (un seul socket Join). */
   const [liveSyncRevision, setLiveSyncRevision] = useState(0);
+  /** Remount Poll après clear localStorage TEST→RÉEL. */
+  const [storageResetRevision, setStorageResetRevision] = useState(0);
+  const prevIsLiveConsumedRef = useRef(/** @type {boolean | null} */ (null));
+  const pastPollIdsRef = useRef(/** @type {string[]} */ ([]));
   /** Snapshot `poll_updated` relayé (peers) — même io Join, pas de 2ᵉ socket. */
   const [embeddedPollSnapshot, setEmbeddedPollSnapshot] = useState(
     /** @type {object | null} */ (null),
@@ -260,8 +272,10 @@ export function JoinLiveHub({ slug }) {
       axes.isLocked != null ? Boolean(axes.isLocked) : Boolean(data.isLocked),
     );
     if (typeof data.isLiveConsumed === "boolean") {
+      prevIsLiveConsumedRef.current = data.isLiveConsumed;
       setIsLiveConsumed(data.isLiveConsumed);
     } else if (typeof axes.isLiveConsumed === "boolean") {
+      prevIsLiveConsumedRef.current = axes.isLiveConsumed;
       setIsLiveConsumed(axes.isLiveConsumed);
     }
     setEventId(data.id ?? null);
@@ -309,19 +323,20 @@ export function JoinLiveHub({ slug }) {
       setPollsProgress(null);
     }
     if (Array.isArray(data.pastPolls)) {
-      setPastPolls(
-        data.pastPolls
-          .filter(
-            (x) =>
-              x &&
-              typeof x.id === "string" &&
-              x.id.trim() &&
-              typeof x.label === "string" &&
-              x.label.trim(),
-          )
-          .map((x) => ({ id: x.id.trim(), label: x.label.trim() })),
-      );
+      const nextPast = data.pastPolls
+        .filter(
+          (x) =>
+            x &&
+            typeof x.id === "string" &&
+            x.id.trim() &&
+            typeof x.label === "string" &&
+            x.label.trim(),
+        )
+        .map((x) => ({ id: x.id.trim(), label: x.label.trim() }));
+      pastPollIdsRef.current = nextPast.map((p) => p.id);
+      setPastPolls(nextPast);
     } else {
+      pastPollIdsRef.current = [];
       setPastPolls([]);
     }
 
@@ -628,6 +643,33 @@ export function JoinLiveHub({ slug }) {
           setEmbeddedPollSnapshot(null);
         }
         if (typeof payload?.isLiveConsumed === "boolean") {
+          if (
+            shouldClearParticipantMarkersOnStartReal({
+              wasTestMode: prevIsLiveConsumedRef.current === false,
+              isLiveConsumedNow: payload.isLiveConsumed,
+            })
+          ) {
+            const pollIds = [
+              activePollIdRef.current,
+              ...pastPollIdsRef.current,
+              payload?.poll?.id,
+              payload?.activePollId,
+            ];
+            clearParticipantRepetitionMarkers({
+              pollIds,
+              voterSessionId: getOrCreateVoterSessionId(),
+              localStorage:
+                typeof window !== "undefined" ? window.localStorage : null,
+              sessionStorage:
+                typeof window !== "undefined" ? window.sessionStorage : null,
+              leadDraftKeyFn: leadDraftStorageKey,
+              leadSubmittedKeyFn: leadSubmittedStorageKey,
+            });
+            pastPollIdsRef.current = [];
+            setPastPolls([]);
+            setStorageResetRevision((n) => n + 1);
+          }
+          prevIsLiveConsumedRef.current = payload.isLiveConsumed;
           setIsLiveConsumed(payload.isLiveConsumed);
         }
       }
@@ -1413,7 +1455,7 @@ export function JoinLiveHub({ slug }) {
             }}
           >
             <PollExperience
-              key={`room-poll-${activePollId || "live"}`}
+              key={`room-poll-${activePollId || "live"}-sr${storageResetRevision}`}
               getPollUrl={getPollUrlForRoom}
               titrePage={eventTitle || "Salle live"}
               slugPublic={slug}

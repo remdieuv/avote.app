@@ -11,6 +11,7 @@
     "db:seed": "prisma db seed",
     "test:contest-replace": "node scripts/test-contest-winner-replace.mjs",
     "test:event-live-snapshot": "node scripts/test-event-live-snapshot.mjs",
+    "test:start-real-reset": "node scripts/test-start-real-event-reset.mjs",
     "postinstall": "prisma generate"
   },
   "keywords": [],

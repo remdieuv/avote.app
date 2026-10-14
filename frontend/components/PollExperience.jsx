@@ -79,6 +79,12 @@ import {
   shouldShowLeadCaptureForm,
 } from "@/lib/leadContestLiveFlow";
 import {
+  clearParticipantRepetitionMarkers,
+  shouldClearParticipantMarkersOnStartReal,
+  votedOptionsLocalStorageKey,
+  votedPollLocalStorageKey,
+} from "@/lib/startRealResetClient";
+import {
   buildJoinPollCardSurfaces,
   getLiveStateVisualTokens,
   mergeCardBorderWithAccent,
@@ -101,11 +107,11 @@ function formatNotationMoyenneUneDecimale(x) {
 
 /** @param {string} pollId */
 function cleVotePourPoll(pollId) {
-  return `avote_voted_poll_${pollId}`;
+  return votedPollLocalStorageKey(pollId);
 }
 /** @param {string} pollId */
 function cleOptionsVotePourPoll(pollId) {
-  return `avote_voted_options_poll_${pollId}`;
+  return votedOptionsLocalStorageKey(pollId);
 }
 
 function contestEligibleCountFromPoll(poll) {
@@ -360,6 +366,7 @@ export function PollExperience({
   const [socketOnline, setSocketOnline] = useState(/** @type {boolean | null} */ (null));
   /** FULL local après LIMIT_REACHED / EVENT_LOCKED sur vote */
   const [roomFullLocal, setRoomFullLocal] = useState(false);
+  const prevIsLiveConsumedPollRef = useRef(/** @type {boolean | null} */ (null));
 
   const eventMode = useEventMode(poll);
   const eventModeFromSocket = useEventMode(eventModeUi);
@@ -917,6 +924,33 @@ export function PollExperience({
       setLiveScene(normalizeLiveScene(eventAxes.liveState));
 
       if (eventAxes.isLiveConsumed != null || eventAxes.isLocked != null) {
+        if (typeof eventAxes.isLiveConsumed === "boolean") {
+          if (
+            shouldClearParticipantMarkersOnStartReal({
+              wasTestMode: prevIsLiveConsumedPollRef.current === false,
+              isLiveConsumedNow: eventAxes.isLiveConsumed,
+            })
+          ) {
+            clearParticipantRepetitionMarkers({
+              pollIds: [pollId, payload?.poll?.id, payload?.activePollId],
+              voterSessionId: getOrCreateVoterSessionId(),
+              localStorage:
+                typeof window !== "undefined" ? window.localStorage : null,
+              sessionStorage:
+                typeof window !== "undefined" ? window.sessionStorage : null,
+              leadDraftKeyFn: leadDraftStorageKey,
+              leadSubmittedKeyFn: leadSubmittedStorageKey,
+            });
+            setMerciPourVote(false);
+            setADejaVoteEnStockage(false);
+            setVotedOptionIdsEnStockage([]);
+            setSelectedOptionId(null);
+            setSelectedOptionIds([]);
+            setLeadSuccess(false);
+            setShowLeadForm(false);
+          }
+          prevIsLiveConsumedPollRef.current = eventAxes.isLiveConsumed;
+        }
         setEventModeUi((prev) => ({
           isLiveConsumed:
             eventAxes.isLiveConsumed != null

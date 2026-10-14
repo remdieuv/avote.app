@@ -44,6 +44,14 @@ const {
   shouldIncludePollInEventLivePayload,
   buildEventLiveUpdatedPayload,
 } = require("./lib/eventLiveSnapshot");
+const {
+  resolveFirstPlayablePollId,
+  buildStartRealEventResetPatch,
+  buildStartRealPollStatusUpdates,
+  getStartRealDeletionScope,
+  shouldPerformStartRealRuntimeReset,
+  startRealResetAppliesToPlan,
+} = require("./lib/startRealEventReset");
 
 /** Anti double-clic rejeu TEST (sérialise par pollId). */
 const runReplayTestExclusive = createPollExclusiveQueue();
@@ -3478,11 +3486,12 @@ app.post("/events/:eventId/finish", requireAuth, async (req, res) => {
 
 /**
  * Régie : démarrer le mode réel (consomme une EventActivation FUN/EVENT, ou reliquat eventCredits).
+ * TX atomique : wipe runtime TEST + reset Q1 PRÉPARÉ + consommation crédit.
  */
 app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
   const { eventId } = req.params;
   const planType = normalizeStartRealPlanType(req.body?.planType);
-  if (!planType) {
+  if (!planType || !startRealResetAppliesToPlan(planType)) {
     return res.status(400).json({
       error: "INVALID_PLAN_TYPE",
       message: "planType requis : FUN ou EVENT.",
@@ -3502,6 +3511,8 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
           isLocked: true,
           consumedAt: true,
           participantsLimit: true,
+          screenDisplayState: true,
+          questionTimerTotalSec: true,
         },
       });
       if (!event || String(event.userId || "") !== String(req.userId || "")) {
@@ -3515,6 +3526,12 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
         throw err;
       }
       if (event.isLiveConsumed) {
+        const err = new Error("EVENT_ALREADY_CONSUMED");
+        err.code = "EVENT_ALREADY_CONSUMED";
+        throw err;
+      }
+      // Garde pure : wipe uniquement false→true (déjà couvert ci-dessus).
+      if (!shouldPerformStartRealRuntimeReset({ isLiveConsumed: event.isLiveConsumed })) {
         const err = new Error("EVENT_ALREADY_CONSUMED");
         err.code = "EVENT_ALREADY_CONSUMED";
         throw err;
@@ -3545,10 +3562,6 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
       let usedLegacyCredits = false;
 
       if (activation) {
-        await tx.eventActivation.update({
-          where: { id: activation.id },
-          data: { consumedAt: new Date() },
-        });
         participantsLimit = Math.max(
           1,
           Math.trunc(Number(activation.participantsLimit || participantsLimit)),
@@ -3565,6 +3578,70 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
         throw err;
       }
 
+      const polls = await tx.poll.findMany({
+        where: { eventId },
+        select: { id: true, order: true, status: true, type: true },
+        orderBy: { order: "asc" },
+      });
+      const pollIds = polls.map((p) => p.id);
+      const firstPollId = resolveFirstPlayablePollId(polls);
+      const deletionScope = getStartRealDeletionScope({ eventId, pollIds });
+
+      let deletedWinners = 0;
+      let deletedDraws = 0;
+      let deletedLeads = 0;
+      let deletedVotes = 0;
+
+      if (deletionScope.deleteContestWinnersWhere) {
+        deletedWinners = (
+          await tx.contestDrawWinner.deleteMany({
+            where: deletionScope.deleteContestWinnersWhere,
+          })
+        ).count;
+      }
+      if (deletionScope.deleteContestDrawsWhere) {
+        deletedDraws = (
+          await tx.contestDraw.deleteMany({
+            where: deletionScope.deleteContestDrawsWhere,
+          })
+        ).count;
+      }
+      if (deletionScope.deleteLeadsWhere) {
+        deletedLeads = (
+          await tx.leadCapture.deleteMany({
+            where: deletionScope.deleteLeadsWhere,
+          })
+        ).count;
+      }
+      if (deletionScope.deleteVotesWhere) {
+        deletedVotes = (
+          await tx.vote.deleteMany({
+            where: deletionScope.deleteVotesWhere,
+          })
+        ).count;
+      }
+
+      await tx.poll.updateMany({
+        where: { eventId, status: { not: "ARCHIVED" } },
+        data: { quizRevealed: false },
+      });
+
+      const statusUpdates = buildStartRealPollStatusUpdates(polls, firstPollId);
+      for (const row of statusUpdates) {
+        await tx.poll.update({
+          where: { id: row.id },
+          data: { status: row.status },
+        });
+      }
+
+      // Consommation crédit APRÈS le wipe — même TX : échec wipe ⇒ pas de débit.
+      if (activation) {
+        await tx.eventActivation.update({
+          where: { id: activation.id },
+          data: { consumedAt: new Date() },
+        });
+      }
+
       let remainingCredits = creditsBefore;
       if (creditsBefore > 0) {
         remainingCredits = creditsBefore - 1;
@@ -3574,6 +3651,12 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
         });
       }
 
+      const resetPatch = buildStartRealEventResetPatch({
+        firstPollId,
+        screenDisplayState: event.screenDisplayState,
+        questionTimerTotalSec: event.questionTimerTotalSec,
+      });
+
       const updatedEvent = await tx.event.update({
         where: { id: eventId },
         data: {
@@ -3582,6 +3665,7 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
           isLocked: false,
           participantsLimit,
           eventPlanType: appliedPlanType,
+          ...resetPatch,
         },
         select: {
           id: true,
@@ -3590,6 +3674,14 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
           isLocked: true,
           participantsLimit: true,
           eventPlanType: true,
+          activePollId: true,
+          liveState: true,
+          voteState: true,
+          displayState: true,
+          questionTimerTotalSec: true,
+          questionTimerAccumulatedSec: true,
+          questionTimerStartedAt: true,
+          questionTimerIsPaused: true,
         },
       });
       return {
@@ -3597,8 +3689,16 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
         remainingCredits,
         usedLegacyCredits,
         planType: appliedPlanType,
+        reset: {
+          activePollId: firstPollId,
+          deletedVotes,
+          deletedLeads,
+          deletedContestDraws: deletedDraws,
+          deletedContestWinners: deletedWinners,
+        },
       };
     });
+    clearAutoRevealTimer(eventId);
     const activationsAvailable = await countAvailableActivationsByPlan(req.userId);
     await emitEventLiveUpdated(io, eventId);
     return res.json({
@@ -3608,6 +3708,7 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
       activationsAvailable,
       planType: result.planType,
       usedLegacyCredits: result.usedLegacyCredits,
+      reset: result.reset,
     });
   } catch (e) {
     if (e?.code === "EVENT_NOT_FOUND") {

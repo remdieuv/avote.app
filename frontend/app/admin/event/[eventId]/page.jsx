@@ -19,6 +19,7 @@ import {
 import { AjouterQuestionLiveModal } from "@/components/AjouterQuestionLiveModal";
 import { LiveMicroLabel } from "@/components/admin/LiveMicroIcon";
 import { computeActivationBalance } from "@/lib/activationBalance";
+import { getStartRealConfirmMessage } from "@/lib/startRealResetClient";
 import { adminFetch, apiBaseBrowser, SOCKET_URL as SOCKET } from "@/lib/config";
 import {
   LANDING_PHOTO_TOO_HEAVY_MESSAGE,
@@ -5494,11 +5495,8 @@ export default function RegieEventPage() {
   /** @param {"FUN" | "EVENT"} planType */
   async function startRealLive(planType) {
     if (!eventId || !canStartReal) return;
-    const planLabel = planType === "FUN" ? "FUN (100 participants max)" : "EVENT (500 participants max)";
     if (typeof window !== "undefined") {
-      const ok = window.confirm(
-        `Passer en live réel avec la formule ${planType} ?\n\n1 activation sera consommée (${planLabel}). Les données de la répétition (votes, leads, tirages) sont conservées ; les totaux RESULTS ne seront plus masqués et les exports seront disponibles.`,
-      );
+      const ok = window.confirm(getStartRealConfirmMessage(planType));
       if (!ok) return;
     }
     setStartRealPlanModalOpen(false);

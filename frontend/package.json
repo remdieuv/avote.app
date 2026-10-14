@@ -20,6 +20,7 @@
     "test:regie-chrono": "node scripts/test-regie-chrono-enabled.mjs",
     "test:regie-quiz-edit": "node scripts/test-regie-quiz-edit.mjs",
     "test:event-live-snapshot": "node ../backend/scripts/test-event-live-snapshot.mjs",
+    "test:start-real-reset": "node scripts/test-start-real-reset-client.mjs && node ../backend/scripts/test-start-real-event-reset.mjs",
     "test:test-mode-parity": "node scripts/test-test-mode-live-parity.mjs",
     "test:test-mode-replay": "node scripts/test-test-mode-replay-poll.mjs",
     "test:lot4": "npm run test:test-mode-parity && npm run test:test-mode-replay",

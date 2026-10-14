@@ -101,20 +101,20 @@ test("Masque RESULTS TEST conservé (arbitrage documenté, pas de régression A0
   assert.equal(real.b, 25, "RÉEL non masqué");
 });
 
-test("Politique données TEST — audit (pas de reset inventé)", () => {
+test("Politique données TEST — start-real wipe + rejeu par question", () => {
   const audit = getTestModeDataPolicyAudit();
   assert.equal(audit.votesPersistedAfterRepetition, true);
   assert.equal(audit.leadsPersistedAfterRepetition, true);
   assert.equal(audit.contestWinnersPersistedAfterRepetition, true);
-  assert.equal(audit.startRealClearsVotes, false);
-  assert.equal(audit.startRealClearsLeads, false);
+  assert.equal(audit.startRealClearsVotes, true);
+  assert.equal(audit.startRealClearsLeads, true);
   assert.equal(audit.publicResultsMaskedInTest, true);
   assert.equal(audit.exportsBlockedInTest, true);
-  assert.equal(audit.resetRepetitionImplemented, false);
+  assert.equal(audit.resetRepetitionImplemented, true);
   assert.ok(audit.arbitrationNotes.length >= 3);
   assert.ok(
-    audit.arbitrationNotes.some((n) => /rejeu|reset/i.test(n)),
-    "note rejeu / reset documentée",
+    audit.arbitrationNotes.some((n) => /start-real|activation réelle|TEST→RÉEL/i.test(n)),
+    "note wipe start-real documentée",
   );
 });
 
