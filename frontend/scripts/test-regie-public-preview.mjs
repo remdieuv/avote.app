@@ -109,10 +109,13 @@ test("Cadre overflow hidden + Agrandir source", () => {
   const end = src.indexOf("\nfunction ", start + 1);
   const body = src.slice(start, end > start ? end : start + 9000);
   assert.ok(body.includes("getRegiePublicPreviewFitMode"));
-  assert.ok(body.includes('mode: fitMode'));
+  assert.ok(body.includes("mode: fitMode"));
   assert.ok(body.includes("Agrandir"));
   assert.ok(body.includes("window.open"));
-  assert.equal(body.includes("maxHeight: fused"), false);
+  assert.ok(
+    src.includes('overflow: desktop && previewJoinOpen ? "visible"'),
+    "shell live ne clippe pas l’aperçu — scroll régie",
+  );
 });
 
 if (failed > 0) {
