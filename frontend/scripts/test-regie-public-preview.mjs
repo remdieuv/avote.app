@@ -111,11 +111,31 @@ test("Cadre overflow hidden + Agrandir source", () => {
   assert.ok(body.includes("getRegiePublicPreviewFitMode"));
   assert.ok(body.includes("mode: fitMode"));
   assert.ok(body.includes("Agrandir"));
+  assert.ok(body.includes("Masquer"));
+  assert.ok(body.includes("Ce que voit votre audience"));
   assert.ok(body.includes("window.open"));
   assert.ok(
     src.includes('overflow: desktop && previewJoinOpen ? "visible"'),
     "shell live ne clippe pas l’aperçu — scroll régie",
   );
+});
+
+test("Panneau aperçu : plus de liens Leads / Stats / Salle / Landing", () => {
+  const src = readFileSync(
+    join(here, "../app/admin/event/[eventId]/page.jsx"),
+    "utf8",
+  );
+  const start = src.indexOf("function RegiePublicPreviewPanel(");
+  const end = src.indexOf("\nfunction ", start + 1);
+  const body = src.slice(start, end > start ? end : start + 9000);
+  assert.equal(body.includes("/leads"), false);
+  assert.equal(body.includes("/analytics"), false);
+  assert.equal(body.includes("/live"), false);
+  assert.equal(body.includes("/landing"), false);
+  assert.equal(body.includes(">Leads"), false);
+  assert.equal(body.includes("Statistiques"), false);
+  assert.equal(body.includes("Salle live"), false);
+  assert.equal(body.includes(">Landing"), false);
 });
 
 if (failed > 0) {

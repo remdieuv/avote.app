@@ -3516,6 +3516,7 @@ const LEADS_LAST_SEEN_LS_PREFIX = "avote_leads_seen_at_";
  */
 function RegiePublicPreviewPanel({
   slug,
+  // eventId / newLeadCount : conservés pour compat appelants (liens retirés du panneau).
   eventId: _eventId,
   newLeadCount: _newLeadCount = 0,
   layout,
