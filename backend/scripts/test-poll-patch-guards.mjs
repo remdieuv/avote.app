@@ -142,8 +142,8 @@ test("server.js PATCH : options + guards + emit sync", () => {
   const slice = src.slice(patchIdx, patchIdx + 6500);
   assert.ok(slice.includes("evaluatePollPatchGuards"));
   assert.ok(slice.includes("wantsOptionsChange"));
-  assert.ok(slice.includes("validatePollOptionLabels"));
-  assert.ok(slice.includes("replacePollOptions"));
+  assert.ok(slice.includes("applyPollOptionsPatch"));
+  assert.ok(slice.includes("resolvePatchOptionsRequest"));
   assert.ok(slice.includes("emitPollUpdated"));
   assert.ok(slice.includes("emitEventLiveUpdated"));
   assert.ok(slice.includes("_count"));

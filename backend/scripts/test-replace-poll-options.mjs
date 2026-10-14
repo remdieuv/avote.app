@@ -113,13 +113,19 @@ await test("3 → 4 réponses persistées puis relecture", async () => {
   await prisma.event.delete({ where: { id: ev.id } });
 });
 
-await test("server.js appelle replacePollOptions (pas createMany)", () => {
+await test("server.js appelle applyPollOptionsPatch (pas createMany)", () => {
   const src = readFileSync(join(here, "../server.js"), "utf8");
   const patchIdx = src.indexOf('app.patch("/polls/:pollId"');
   assert.ok(patchIdx > 0);
   const slice = src.slice(patchIdx, patchIdx + 6500);
-  assert.ok(slice.includes("replacePollOptions"));
+  assert.ok(slice.includes("applyPollOptionsPatch"));
   assert.equal(slice.includes("createMany"), false);
+  const applySrc = readFileSync(
+    join(here, "../lib/applyPollOptionsPatch.js"),
+    "utf8",
+  );
+  assert.ok(applySrc.includes("replacePollOptions"));
+  assert.ok(applySrc.includes("pollOption.findMany"));
 });
 
 await prisma.$disconnect();

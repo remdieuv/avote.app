@@ -55,10 +55,11 @@ const {
 const {
   evaluatePollPatchGuards,
   pollPatchRequestsQuizCorrectChange,
-  pollPatchRequestsOptionsChange,
-  validatePollOptionLabels,
 } = require("./lib/pollPatchGuards");
-const { replacePollOptions } = require("./lib/replacePollOptions");
+const {
+  resolvePatchOptionsRequest,
+  applyPollOptionsPatch,
+} = require("./lib/applyPollOptionsPatch");
 
 /** Anti double-clic rejeu TEST (sérialise par pollId). */
 const runReplayTestExclusive = createPollExclusiveQueue();
@@ -4644,7 +4645,13 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
       body,
       poll.type,
     );
-    const wantsOptionsChange = pollPatchRequestsOptionsChange(body, poll.type);
+    const optionsReq = resolvePatchOptionsRequest(body, poll.type);
+    if (optionsReq.invalidShape) {
+      return res.status(400).json({
+        error: "options doit être un tableau de libellés.",
+      });
+    }
+    const wantsOptionsChange = optionsReq.requested;
     const guard = evaluatePollPatchGuards({
       isLocked: poll.event?.isLocked,
       isLiveConsumed: poll.event?.isLiveConsumed,
@@ -4695,16 +4702,11 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
             "Impossible de modifier les réponses : des votes existent déjà.",
         });
       }
-      const validated = validatePollOptionLabels(body.options);
-      if (!validated.ok) {
-        return res.status(400).json({ error: validated.error });
-      }
-      const labels = validated.labels;
       let quizCorrectOrder = null;
       if (isQuiz) {
         quizCorrectOrder = normalizeQuizCorrectOrder(
           body.quizCorrectOrder,
-          labels.length,
+          Array.isArray(optionsReq.options) ? optionsReq.options.length : 0,
         );
         if (quizCorrectOrder == null) {
           return res.status(400).json({
@@ -4714,22 +4716,18 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
       }
       const leadTriggerOrder = normalizeLeadTriggerOrder(
         body.leadTriggerOrder,
-        labels.length,
+        Array.isArray(optionsReq.options) ? optionsReq.options.length : 0,
       );
-      const createdOpts = await prisma.$transaction(async (tx) =>
-        replacePollOptions(tx, {
-          pollId,
-          labels,
-          isQuiz,
-          quizCorrectOrder,
-          leadEnabled: Boolean(poll.leadEnabled) || isContestEntry,
-          leadTriggerOrder,
-        }),
-      );
-      if (!Array.isArray(createdOpts) || createdOpts.length !== labels.length) {
-        return res.status(500).json({
-          error: "Échec de persistance des réponses.",
-        });
+      const applied = await applyPollOptionsPatch(prisma, {
+        pollId,
+        labelsRaw: optionsReq.options || [],
+        isQuiz,
+        quizCorrectOrder,
+        leadEnabled: Boolean(poll.leadEnabled) || isContestEntry,
+        leadTriggerOrder,
+      });
+      if (!applied.ok) {
+        return res.status(applied.status).json({ error: applied.error });
       }
       optionsUpdated = true;
       if (isQuiz) quizCorrectUpdated = true;
