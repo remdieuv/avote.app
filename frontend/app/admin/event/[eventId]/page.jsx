@@ -3516,12 +3516,14 @@ const LEADS_LAST_SEEN_LS_PREFIX = "avote_leads_seen_at_";
  */
 function RegiePublicPreviewPanel({
   slug,
-  eventId,
-  newLeadCount = 0,
+  eventId: _eventId,
+  newLeadCount: _newLeadCount = 0,
   layout,
   onHide,
   fused = false,
 }) {
+  void _eventId;
+  void _newLeadCount;
   /** Responsive local — le panel est aussi monté hors de RegieEventPage (drawer mobile). */
   const desktop = useBreakpointMin(1024);
   const fitMode = getRegiePublicPreviewFitMode(layout);
@@ -3650,66 +3652,6 @@ function RegiePublicPreviewPanel({
             >
               Simulation smartphone — défilement dans l’aperçu
             </p>
-            {eventId ? (
-              <div
-                style={{
-                  marginTop: "0.42rem",
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "0.5rem 0.75rem",
-                  alignItems: "center",
-                }}
-              >
-                <Link
-                  href={`/admin/event/${encodeURIComponent(eventId)}/leads`}
-                  style={{
-                    fontSize: "0.68rem",
-                    fontWeight: 700,
-                    color: "rgba(220,252,231,0.82)",
-                    textDecoration: "none",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  Leads{newLeadCount > 0 ? ` (${newLeadCount > 99 ? "99+" : newLeadCount})` : ""}
-                </Link>
-                <Link
-                  href={`/admin/event/${encodeURIComponent(eventId)}/analytics`}
-                  style={{
-                    fontSize: "0.68rem",
-                    fontWeight: 700,
-                    color: "rgba(219,234,254,0.78)",
-                    textDecoration: "none",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  Statistiques
-                </Link>
-                <Link
-                  href={`/admin/events/${encodeURIComponent(eventId)}/live`}
-                  style={{
-                    fontSize: "0.68rem",
-                    fontWeight: 700,
-                    color: "rgba(219,234,254,0.78)",
-                    textDecoration: "none",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  Salle live
-                </Link>
-                <Link
-                  href={`/admin/events/${encodeURIComponent(eventId)}/landing`}
-                  style={{
-                    fontSize: "0.68rem",
-                    fontWeight: 700,
-                    color: "rgba(237,233,254,0.82)",
-                    textDecoration: "none",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  Landing
-                </Link>
-              </div>
-            ) : null}
           </div>
           <div
             style={{
