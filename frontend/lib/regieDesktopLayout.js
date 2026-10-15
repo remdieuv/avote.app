@@ -68,6 +68,39 @@ export function isRegieConsultSelectionOnly(selectedPollId, activePollId) {
 }
 
 /**
+ * Bandeau consultation du pilotage (réutilise eventFinished existant).
+ * Événement terminé : libellé fixe, pas de « Retour au direct ».
+ * @param {{
+ *   eventFinished?: boolean;
+ *   selectedQuestionNumberLabel?: string | null;
+ *   activeQuestionIndex?: number;
+ *   totalQuestions?: number;
+ * }} [input]
+ * @returns {{ title: string; showReturnToLive: boolean }}
+ */
+export function getRegieConsultBannerState(input = {}) {
+  if (input.eventFinished === true) {
+    return {
+      title: "Événement terminé",
+      showReturnToLive: false,
+    };
+  }
+  const qLabel = input.selectedQuestionNumberLabel || "une question";
+  const antennaLabel =
+    typeof input.activeQuestionIndex === "number" &&
+    input.activeQuestionIndex >= 0
+      ? getRegieQuestionNumberLabel(
+          input.activeQuestionIndex,
+          input.totalQuestions ?? 0,
+        )
+      : "l’antenne";
+  return {
+    title: `Vous consultez ${qLabel} — le direct reste sur ${antennaLabel}.`,
+    showReturnToLive: true,
+  };
+}
+
+/**
  * Statut métier de la carte question (pas ACTIVE / CLOSED bruts).
  * @param {{
  *   pollStatus?: string | null;

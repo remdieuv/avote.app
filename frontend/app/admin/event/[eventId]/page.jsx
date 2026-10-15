@@ -65,6 +65,7 @@ import {
   getRegiePrimaryLiveAction,
   getRegiePrimaryLiveActionLabel,
   getRegieQuestionNumberLabel,
+  getRegieConsultBannerState,
   isRegieConsultSelectionOnly,
   sortPollsByPlaylistOrder,
 } from "@/lib/regieDesktopLayout";
@@ -6866,6 +6867,12 @@ export default function RegieEventPage() {
     selectedQuestionIndex >= 0
       ? getRegieQuestionNumberLabel(selectedQuestionIndex, pollsOrdonnes.length)
       : null;
+  const consultBannerState = getRegieConsultBannerState({
+    eventFinished,
+    selectedQuestionNumberLabel,
+    activeQuestionIndex,
+    totalQuestions,
+  });
   const selectedStatusLabel = selectedPoll
     ? getRegiePollStatusLabel({
         pollStatus: selectedPoll.status,
@@ -9260,10 +9267,15 @@ export default function RegieEventPage() {
                       marginTop: "0.85rem",
                       padding: "0.95rem 1rem",
                       borderRadius: "18px",
-                      border: "1px solid rgba(245, 158, 11, 0.35)",
-                      background:
-                        "linear-gradient(180deg, rgba(255, 251, 235, 0.98) 0%, rgba(255,255,255,0.99) 100%)",
-                      boxShadow: "0 12px 28px rgba(180, 83, 9, 0.06)",
+                      border: eventFinished
+                        ? "1px solid rgba(148, 163, 184, 0.35)"
+                        : "1px solid rgba(245, 158, 11, 0.35)",
+                      background: eventFinished
+                        ? "linear-gradient(180deg, rgba(248, 250, 252, 0.98) 0%, rgba(255,255,255,0.99) 100%)"
+                        : "linear-gradient(180deg, rgba(255, 251, 235, 0.98) 0%, rgba(255,255,255,0.99) 100%)",
+                      boxShadow: eventFinished
+                        ? "0 12px 28px rgba(15, 23, 42, 0.04)"
+                        : "0 12px 28px rgba(180, 83, 9, 0.06)",
                       display: "grid",
                       gap: "0.7rem",
                     }}
@@ -9273,40 +9285,34 @@ export default function RegieEventPage() {
                         margin: 0,
                         fontSize: "0.86rem",
                         fontWeight: 700,
-                        color: "#92400e",
+                        color: eventFinished ? "#334155" : "#92400e",
                         lineHeight: 1.4,
                       }}
                     >
-                      Vous consultez {selectedQuestionNumberLabel || "une question"} — le
-                      direct reste sur{" "}
-                      {activeQuestionIndex >= 0
-                        ? getRegieQuestionNumberLabel(
-                            activeQuestionIndex,
-                            totalQuestions,
-                          )
-                        : "l’antenne"}
-                      .
+                      {consultBannerState.title}
                     </p>
-                    <button
-                      type="button"
-                      onClick={returnToLiveAntenna}
-                      style={{
-                        width: "100%",
-                        minHeight: "3.1rem",
-                        padding: "0.75rem 1rem",
-                        borderRadius: "14px",
-                        border: "1px solid #0d9488",
-                        background:
-                          "linear-gradient(180deg, #14b8a6 0%, #0d9488 100%)",
-                        color: "#fff",
-                        fontWeight: 800,
-                        fontSize: "0.95rem",
-                        cursor: "pointer",
-                        boxShadow: "0 14px 28px rgba(13, 148, 136, 0.18)",
-                      }}
-                    >
-                      Retour au direct
-                    </button>
+                    {consultBannerState.showReturnToLive ? (
+                      <button
+                        type="button"
+                        onClick={returnToLiveAntenna}
+                        style={{
+                          width: "100%",
+                          minHeight: "3.1rem",
+                          padding: "0.75rem 1rem",
+                          borderRadius: "14px",
+                          border: "1px solid #0d9488",
+                          background:
+                            "linear-gradient(180deg, #14b8a6 0%, #0d9488 100%)",
+                          color: "#fff",
+                          fontWeight: 800,
+                          fontSize: "0.95rem",
+                          cursor: "pointer",
+                          boxShadow: "0 14px 28px rgba(13, 148, 136, 0.18)",
+                        }}
+                      >
+                        Retour au direct
+                      </button>
+                    ) : null}
                     <div>
                       <p
                         style={{
