@@ -38,7 +38,7 @@ export function resolveOpenPollTimerTotalSec(_input = {}) {
 }
 
 /**
- * Audit lecture seule — politique données TEST actuelle (pas d’implémentation reset).
+ * Audit lecture seule — politique données TEST / passage RÉEL.
  * @returns {{
  *   votesPersistedAfterRepetition: boolean;
  *   leadsPersistedAfterRepetition: boolean;
@@ -53,35 +53,34 @@ export function resolveOpenPollTimerTotalSec(_input = {}) {
  */
 export function getTestModeDataPolicyAudit() {
   return {
-    /** Votes / réponses restent en base après une répétition (pas de wipe). */
+    /** Pendant la répétition TEST, votes restent en base (hors rejeu 1 question). */
     votesPersistedAfterRepetition: true,
-    /** Leads CRM restent consultables après répétition. */
+    /** Pendant la répétition TEST, leads restent consultables. */
     leadsPersistedAfterRepetition: true,
-    /** Gagnants concours restent en base. */
+    /** Pendant la répétition TEST, gagnants restent en base. */
     contestWinnersPersistedAfterRepetition: true,
     /**
-     * `POST /events/:id/start-real` bascule `isLiveConsumed` uniquement —
-     * ne supprime ni votes, ni leads, ni gagnants.
+     * `POST /events/:id/start-real` : wipe votes/leads/tirages + reset Q1
+     * dans la même TX que la consommation d’activation (une seule fois).
      */
-    startRealClearsVotes: false,
-    startRealClearsLeads: false,
+    startRealClearsVotes: true,
+    startRealClearsLeads: true,
     /**
      * En TEST + RESULTS, `pollToJson` bucketise les totaux publics (≥10).
-     * Divergence connue vs RÉEL — arbitrage produit avant suppression.
      */
     publicResultsMaskedInTest: true,
     /** Exports analytics CSV refusés en TEST (403). */
     exportsBlockedInTest: true,
     /**
-     * Reset global « répétition entière » : toujours non implémenté.
-     * Rejeu **par question** : voir `testModeReplayPoll.js` (MODE TEST).
+     * Reset global répétition : via start-real (pas d’endpoint wipe séparé).
+     * Rejeu **par question** : `testModeReplayPoll.js` (MODE TEST uniquement).
      */
-    resetRepetitionImplemented: false,
+    resetRepetitionImplemented: true,
     arbitrationNotes: [
       "Masque RESULTS TEST (bucket /10) : fidélité vs obscurcissement — arbitrage requis.",
       "Exports bloqués en TEST : conserver tant que pricing / usage non tranché.",
-      "Rejeu par question (MODE TEST) implémenté ; reset global répétition non spécifié.",
-      "Passage TEST→RÉEL conserve les données de répétition (risque de mélange stats) — arbitrage si wipe souhaité.",
+      "Rejeu par question (MODE TEST) inchangé ; reset global = première activation réelle.",
+      "Passage TEST→RÉEL efface les données de répétition (atomique avec le crédit).",
     ],
   };
 }

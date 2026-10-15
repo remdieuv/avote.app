@@ -68,6 +68,39 @@ export function isRegieConsultSelectionOnly(selectedPollId, activePollId) {
 }
 
 /**
+ * Bandeau consultation du pilotage (réutilise eventFinished existant).
+ * Événement terminé : libellé fixe, pas de « Retour au direct ».
+ * @param {{
+ *   eventFinished?: boolean;
+ *   selectedQuestionNumberLabel?: string | null;
+ *   activeQuestionIndex?: number;
+ *   totalQuestions?: number;
+ * }} [input]
+ * @returns {{ title: string; showReturnToLive: boolean }}
+ */
+export function getRegieConsultBannerState(input = {}) {
+  if (input.eventFinished === true) {
+    return {
+      title: "Événement terminé",
+      showReturnToLive: false,
+    };
+  }
+  const qLabel = input.selectedQuestionNumberLabel || "une question";
+  const antennaLabel =
+    typeof input.activeQuestionIndex === "number" &&
+    input.activeQuestionIndex >= 0
+      ? getRegieQuestionNumberLabel(
+          input.activeQuestionIndex,
+          input.totalQuestions ?? 0,
+        )
+      : "l’antenne";
+  return {
+    title: `Vous consultez ${qLabel} — le direct reste sur ${antennaLabel}.`,
+    showReturnToLive: true,
+  };
+}
+
+/**
  * Statut métier de la carte question (pas ACTIVE / CLOSED bruts).
  * @param {{
  *   pollStatus?: string | null;
@@ -185,26 +218,67 @@ export function getRegiePrimaryLiveAction(input = {}) {
 }
 
 /**
- * Libellés FR des CTA Pilotage.
+ * Libellés FR des CTA Pilotage (maquette régie simplifiée — un seul bouton visible).
  * @param {ReturnType<typeof getRegiePrimaryLiveAction>} action
  */
 export function getRegiePrimaryLiveActionLabel(action) {
   switch (action) {
     case "open":
-      return "Ouvrir";
+      return "Ouvrir le vote";
     case "close":
-      return "Fermer";
+      return "Fermer le vote";
     case "show-results":
       return "Afficher les résultats";
     case "draw":
       return "Tirer au sort";
     case "next":
-      return "Suivante";
+      return "Question suivante";
     case "finish":
       return "Terminer l’événement";
     default:
       return "";
   }
+}
+
+/**
+ * Libellé d’étape métier affiché au centre (pas de jargon Prisma).
+ * @param {{
+ *   voteState?: string | null;
+ *   displayState?: string | null;
+ *   pollStatus?: string | null;
+ *   pollType?: string | null;
+ *   leadEnabled?: boolean | null;
+ *   eventFinished?: boolean;
+ * }} input
+ */
+export function getRegiePilotageStepLabel(input = {}) {
+  if (input.eventFinished === true) return "Événement terminé";
+  const vs = String(input.voteState ?? "").toLowerCase();
+  const ds = String(input.displayState ?? "").toLowerCase();
+  const ps = String(input.pollStatus ?? "").toUpperCase();
+  const contest = isRegieContestPoll({
+    type: input.pollType,
+    leadEnabled: input.leadEnabled,
+  });
+  const lead = isRegieLeadPoll({
+    type: input.pollType,
+    leadEnabled: input.leadEnabled,
+  });
+  if (vs === "open") return "Vote ouvert";
+  if (ds === "results") {
+    if (contest) return "Tirage";
+    if (lead) return "Collecte fermée";
+    return "Résultats affichés";
+  }
+  if (ps === "CLOSED") {
+    if (contest) return "Prêt pour le tirage";
+    if (lead) return "Collecte fermée";
+    return "Vote fermé";
+  }
+  if (ps === "ACTIVE" || ps === "DRAFT" || ps === "SCHEDULED" || ps === "") {
+    return "Question prête";
+  }
+  return "Prêt";
 }
 
 /**
@@ -276,7 +350,7 @@ export function getRegieOpenVoteButtonCopy(input = {}) {
     };
   }
   return {
-    label: "Ouvrir",
+    label: "Ouvrir le vote",
     title: "Ouvre le vote sur la question à l’antenne (aucune donnée effacée).",
     isReopenWithoutWipe: false,
   };

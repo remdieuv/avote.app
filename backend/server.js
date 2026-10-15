@@ -40,6 +40,40 @@ const {
   getReplayTestPollDeletionPlan,
   buildReplayTestPollEventPatch,
 } = require("./lib/testModeReplayPoll");
+const {
+  shouldIncludePollInEventLivePayload,
+  buildEventLiveUpdatedPayload,
+} = require("./lib/eventLiveSnapshot");
+const {
+  resolveFirstPlayablePollId,
+  buildStartRealEventResetPatch,
+  buildStartRealPollStatusUpdates,
+  getStartRealDeletionScope,
+  shouldPerformStartRealRuntimeReset,
+  startRealResetAppliesToPlan,
+} = require("./lib/startRealEventReset");
+const {
+  evaluatePollPatchGuards,
+  pollPatchRequestsQuizCorrectChange,
+} = require("./lib/pollPatchGuards");
+const {
+  resolvePatchOptionsRequest,
+  applyPollOptionsPatch,
+} = require("./lib/applyPollOptionsPatch");
+const {
+  evaluatePlaylistReorderGuards,
+  evaluatePlaylistDeleteGuards,
+  computeReorderByDirection,
+  validateFullPollOrder,
+} = require("./lib/playlistPollGuards");
+const { applyEventPollsReorder } = require("./lib/reorderEventPolls");
+const { applyEventPollDelete } = require("./lib/deleteEventPoll");
+const {
+  evaluateSkipPollGuards,
+  resolveSkipPollPlaylist,
+  isContestPoll: isSkipContestPoll,
+  isContestQuotaReached,
+} = require("./lib/skipEventPoll");
 
 /** Anti double-clic rejeu TEST (sérialise par pollId). */
 const runReplayTestExclusive = createPollExclusiveQueue();
@@ -322,7 +356,33 @@ function screenDisplayStateForLiveTransition(currentScreenDisplayState, intent) 
  * @param {{ type?: string | null; leadEnabled?: boolean | null } | null} [activePoll]
  * @returns {Record<string, unknown>}
  */
+/**
+ * Quiz déjà projeté en RESULTS pendant un vote encore ouvert : à la fermeture,
+ * révéler sans exposer prématurément (pendant OPEN).
+ * @param {{ type?: string | null; quizRevealed?: boolean | null } | null | undefined} poll
+ * @param {{ displayState?: string | null } | null | undefined} event
+ */
+function shouldRevealQuizOnCloseAfterLiveResults(poll, event) {
+  return (
+    String(poll?.type || "").toUpperCase() === "QUIZ" &&
+    poll?.quizRevealed !== true &&
+    String(event?.displayState || "").toUpperCase() === "RESULTS"
+  );
+}
+
 function buildEventDataAfterVoteClose(event, activePoll = null) {
+  /** Quiz : Afficher (live) puis Fermer → garder RESULTS + révéler côté poll. */
+  if (shouldRevealQuizOnCloseAfterLiveResults(activePoll, event)) {
+    return {
+      voteState: "CLOSED",
+      displayState: "RESULTS",
+      liveState: "RESULTS",
+      screenDisplayState: "RESULTS",
+      ...QUESTION_TIMER_RESET,
+      autoRevealShowResultsAt: null,
+    };
+  }
+
   const delaySec = [3, 5, 10].includes(event?.autoRevealDelaySec)
     ? event.autoRevealDelaySec
     : 5;
@@ -784,71 +844,61 @@ async function repairStaleVotingLiveState(event) {
   }
 }
 
-/** @param {import("socket.io").Server} io */
-async function emitEventLiveUpdated(io, eventId) {
+/**
+ * Charge l’état live courant (axes + poll si visible) pour emit socket.
+ * @returns {Promise<{ payload: object; activePollId: string | null; pollJson: object | null } | null>}
+ */
+async function loadEventLiveUpdatedBundle(eventId) {
   const event = await prisma.event.findUnique({
     where: { id: eventId },
   });
-  if (!event) return;
+  if (!event) return null;
   await repairStaleVotingLiveState(event);
 
   let pollJson = null;
   if (event.activePollId) {
     const poll = await loadPollFull(event.activePollId);
-    if (poll) {
-      const vs = String(event.voteState).toUpperCase();
-      const ds = String(event.displayState).toUpperCase();
-      const openActive = vs === "OPEN" && poll.status === "ACTIVE";
-      const sceneQuestionOrResults =
-        ds === "QUESTION" || ds === "RESULTS";
-      /** Ex. fin de chrono : vote CLOSED, poll CLOSED, display WAITING — le public garde le contexte */
-      const voteTerminePollEncoreAffiche =
-        vs === "CLOSED" &&
-        String(poll.status).toUpperCase() === "CLOSED" &&
-        String(poll.id) === String(event.activePollId);
-      /**
-       * LOT-5 — Suivante / PRÉPARÉ : poll ACTIVE × WAITING × vote CLOSED.
-       * Inclure le poll pour que Join mette à jour activePollStatus (évite CLOSED stale).
-       */
-      const preparedActiveAntenna =
-        vs === "CLOSED" &&
-        ds === "WAITING" &&
-        String(poll.status).toUpperCase() === "ACTIVE" &&
-        String(poll.id) === String(event.activePollId);
-      if (
-        openActive ||
-        sceneQuestionOrResults ||
-        voteTerminePollEncoreAffiche ||
-        preparedActiveAntenna
-      ) {
-        pollJson = pollToJson(poll);
-      }
+    if (poll && shouldIncludePollInEventLivePayload(event, poll)) {
+      pollJson = pollToJson(poll);
     }
   }
 
-  io.to(roomPourEvent(eventId)).emit("event_live_updated", {
-    eventId: event.id,
-    slug: event.slug,
-    isLiveConsumed: event.isLiveConsumed,
-    isLocked: event.isLocked,
-    liveState: event.liveState.toLowerCase(),
-    voteState: String(event.voteState).toLowerCase(),
-    displayState: String(event.displayState).toLowerCase(),
-    screenDisplayState: event.screenDisplayState
-      ? String(event.screenDisplayState).toLowerCase()
-      : null,
+  return {
+    payload: buildEventLiveUpdatedPayload(
+      event,
+      pollJson,
+      questionTimerSnapshot(event),
+    ),
     activePollId: event.activePollId,
-    autoReveal: event.autoReveal,
-    autoRevealDelaySec: event.autoRevealDelaySec,
-    autoRevealShowResultsAt:
-      event.autoRevealShowResultsAt?.toISOString() ?? null,
-    questionTimer: questionTimerSnapshot(event),
-    poll: pollJson,
-  });
+    pollJson,
+  };
+}
 
-  if (event.activePollId && pollJson) {
-    io.to(roomPourPoll(event.activePollId)).emit("poll_updated", pollJson);
+/** @param {import("socket.io").Server} io */
+async function emitEventLiveUpdated(io, eventId) {
+  const bundle = await loadEventLiveUpdatedBundle(eventId);
+  if (!bundle) return;
+
+  io.to(roomPourEvent(eventId)).emit("event_live_updated", bundle.payload);
+
+  if (bundle.activePollId && bundle.pollJson) {
+    io.to(roomPourPoll(bundle.activePollId)).emit(
+      "poll_updated",
+      bundle.pollJson,
+    );
   }
+}
+
+/**
+ * Snapshot live au join / reconnect : socket joignant uniquement
+ * (pas de broadcast room, pas de poll_updated aux autres).
+ * @param {import("socket.io").Socket} socket
+ * @param {string} eventId
+ */
+async function emitEventLiveSnapshotToSocket(socket, eventId) {
+  const bundle = await loadEventLiveUpdatedBundle(eventId);
+  if (!bundle) return;
+  socket.emit("event_live_updated", bundle.payload);
 }
 
 /**
@@ -932,21 +982,36 @@ async function fermerVoteSiChronoEpuise(io, eventId) {
   /** < 1 s : tolère décalage horloge client/serveur */
   if (!snap || snap.remainingSec >= 1) return false;
 
+  const activePollMeta = await prisma.poll.findUnique({
+    where: { id: activeId },
+    select: { type: true, leadEnabled: true, quizRevealed: true },
+  });
+  if (!activePollMeta) return false;
+
+  const revealQuizAfterLiveResults = shouldRevealQuizOnCloseAfterLiveResults(
+    activePollMeta,
+    event,
+  );
+
   const closed = await prisma.poll.updateMany({
     where: {
       id: activeId,
       eventId,
       status: "ACTIVE",
     },
-    data: { status: "CLOSED" },
+    data: {
+      status: "CLOSED",
+      ...(revealQuizAfterLiveResults ? { quizRevealed: true } : {}),
+    },
   });
   if (closed.count === 0) return false;
 
-  const activePollMeta = await prisma.poll.findUnique({
-    where: { id: activeId },
-    select: { type: true, leadEnabled: true },
+  const dataReveil = buildEventDataAfterVoteClose(event, {
+    ...activePollMeta,
+    quizRevealed: revealQuizAfterLiveResults
+      ? true
+      : activePollMeta.quizRevealed,
   });
-  const dataReveil = buildEventDataAfterVoteClose(event, activePollMeta);
   const delaySec = [3, 5, 10].includes(event.autoRevealDelaySec)
     ? event.autoRevealDelaySec
     : 5;
@@ -2306,13 +2371,19 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
         voteCount: p._count.votes,
         options: (p.options || []).map((option) => {
           const n = optionVoteCounts[option.id] || 0;
-          return {
+          /** Régie (auth propriétaire) : isCorrect pour Modifier / badge après révélation.
+           *  Public `/p` et sockets restent gated par quizRevealed dans pollToJson. */
+          const base = {
             id: option.id,
             label: option.label,
             order: option.order,
             votes: n,
             voteCount: n,
           };
+          if (String(p.type || "").toUpperCase() === "QUIZ") {
+            return { ...base, isCorrect: Boolean(option.isCorrect) };
+          }
+          return base;
         }),
       })),
       landingPhotos: (event.landingPhotos || []).map((ph) => ({
@@ -2923,6 +2994,37 @@ app.post("/events/:eventId/question-timer", requireAuth, async (req, res) => {
         where: { id: eventId },
         data: { ...QUESTION_TIMER_RESET },
       });
+    } else if (action === "enable" || action === "arm") {
+      // Arme le chrono (durée configurée) sans le démarrer — régie simplifiée.
+      const totalParsed =
+        typeof totalSecBrut === "number"
+          ? Math.floor(totalSecBrut)
+          : parseInt(String(totalSecBrut ?? ""), 10);
+      if (
+        !Number.isFinite(totalParsed) ||
+        totalParsed < 1 ||
+        totalParsed > QUESTION_TIMER_SEC_MAX
+      ) {
+        return res.status(400).json({
+          error: `Durée invalide : indique totalSec entre 1 et ${QUESTION_TIMER_SEC_MAX} (1 s à 90 jours).`,
+        });
+      }
+      const running =
+        !event.questionTimerIsPaused && event.questionTimerStartedAt != null;
+      if (running) {
+        return res.status(400).json({
+          error: "Mettez le chrono en pause avant de modifier la durée.",
+        });
+      }
+      await prisma.event.update({
+        where: { id: eventId },
+        data: {
+          questionTimerTotalSec: totalParsed,
+          questionTimerAccumulatedSec: 0,
+          questionTimerStartedAt: null,
+          questionTimerIsPaused: true,
+        },
+      });
     } else if (action === "pause") {
       if (
         !event.questionTimerStartedAt ||
@@ -2950,26 +3052,75 @@ app.post("/events/:eventId/question-timer", requireAuth, async (req, res) => {
         typeof totalSecBrut === "number"
           ? Math.floor(totalSecBrut)
           : parseInt(String(totalSecBrut ?? ""), 10);
-      const pausedEnAttente =
-        event.questionTimerIsPaused &&
-        event.questionTimerTotalSec != null &&
-        event.questionTimerStartedAt == null;
-      if (pausedEnAttente) {
-        const reste =
-          event.questionTimerTotalSec -
-          (event.questionTimerAccumulatedSec ?? 0);
-        if (reste <= 0) {
+      // Compat : { action:"start", arm:true } ou running:false = activer sans démarrer.
+      const armOnly =
+        body.arm === true ||
+        body.startPaused === true ||
+        body.running === false;
+      if (armOnly) {
+        if (
+          !Number.isFinite(totalParsed) ||
+          totalParsed < 1 ||
+          totalParsed > QUESTION_TIMER_SEC_MAX
+        ) {
           return res.status(400).json({
-            error: "Temps écoulé. Réinitialise ou définis une nouvelle durée.",
+            error: `Durée invalide : indique totalSec entre 1 et ${QUESTION_TIMER_SEC_MAX} (1 s à 90 jours).`,
+          });
+        }
+        const runningNow =
+          !event.questionTimerIsPaused && event.questionTimerStartedAt != null;
+        if (runningNow) {
+          return res.status(400).json({
+            error: "Mettez le chrono en pause avant de modifier la durée.",
           });
         }
         await prisma.event.update({
           where: { id: eventId },
           data: {
-            questionTimerStartedAt: new Date(),
-            questionTimerIsPaused: false,
+            questionTimerTotalSec: totalParsed,
+            questionTimerAccumulatedSec: 0,
+            questionTimerStartedAt: null,
+            questionTimerIsPaused: true,
           },
         });
+      } else {
+      const pausedEnAttente =
+        event.questionTimerIsPaused &&
+        event.questionTimerTotalSec != null &&
+        event.questionTimerStartedAt == null;
+      if (pausedEnAttente) {
+        const accumulated = event.questionTimerAccumulatedSec ?? 0;
+        // Chrono armé (enable) jamais lancé : autorise une nouvelle durée via totalSec.
+        if (
+          accumulated === 0 &&
+          Number.isFinite(totalParsed) &&
+          totalParsed >= 1 &&
+          totalParsed <= QUESTION_TIMER_SEC_MAX
+        ) {
+          await prisma.event.update({
+            where: { id: eventId },
+            data: {
+              questionTimerTotalSec: totalParsed,
+              questionTimerAccumulatedSec: 0,
+              questionTimerStartedAt: new Date(),
+              questionTimerIsPaused: false,
+            },
+          });
+        } else {
+          const reste = event.questionTimerTotalSec - accumulated;
+          if (reste <= 0) {
+            return res.status(400).json({
+              error: "Temps écoulé. Réinitialise ou définis une nouvelle durée.",
+            });
+          }
+          await prisma.event.update({
+            where: { id: eventId },
+            data: {
+              questionTimerStartedAt: new Date(),
+              questionTimerIsPaused: false,
+            },
+          });
+        }
       } else {
         if (
           !Number.isFinite(totalParsed) ||
@@ -2990,9 +3141,10 @@ app.post("/events/:eventId/question-timer", requireAuth, async (req, res) => {
           },
         });
       }
+      } // end !armOnly
     } else {
       return res.status(400).json({
-        error: 'action attendue : "start", "pause" ou "reset".',
+        error: 'action attendue : "enable", "arm", "start", "pause" ou "reset".',
       });
     }
 
@@ -3313,6 +3465,104 @@ app.post("/events/:eventId/next-poll", requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * POST /events/:eventId/skip-poll — « Passer cette question ».
+ * Même transition d’antenne que next-poll (passerAuSondageSuivant) :
+ * pas de publication résultats, pas d’effacement de votes, pas de gagnant fictif.
+ * Dernière question → 409 LAST_QUESTION (le client propose finish).
+ */
+app.post("/events/:eventId/skip-poll", requireAuth, async (req, res) => {
+  const { eventId } = req.params;
+  try {
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true,
+        isLocked: true,
+        liveState: true,
+        voteState: true,
+        activePollId: true,
+        polls: {
+          orderBy: { order: "asc" },
+          select: {
+            id: true,
+            order: true,
+            status: true,
+            type: true,
+            contestWinnerCount: true,
+          },
+        },
+      },
+    });
+    if (!event) {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+
+    const playlist = resolveSkipPollPlaylist(event.polls, event.activePollId);
+    const activePoll = playlist.hasActive
+      ? event.polls.find((p) => String(p.id) === String(event.activePollId))
+      : null;
+    const isContest = isSkipContestPoll(activePoll || {});
+    let contestQuotaReached = true;
+    if (isContest && activePoll?.id) {
+      const activeWinners = await prisma.contestDrawWinner.count({
+        where: { pollId: activePoll.id, status: STATUS_ACTIVE },
+      });
+      contestQuotaReached = isContestQuotaReached({
+        contestWinnerCount: activePoll.contestWinnerCount,
+        totalWinners: activeWinners,
+      });
+    }
+
+    const body = req.body ?? {};
+    const guard = evaluateSkipPollGuards({
+      isLocked: event.isLocked,
+      eventFinished:
+        String(event.liveState || "").toUpperCase() === "FINISHED",
+      hasActivePoll: playlist.hasActive,
+      hasNextPoll: playlist.hasNext,
+      voteState: event.voteState,
+      confirmOpenVote: body.confirmOpenVote === true,
+      isContest,
+      contestQuotaReached,
+      confirmAbandonDraw: body.confirmAbandonDraw === true,
+    });
+    if (!guard.ok) {
+      return res.status(guard.status).json({
+        error: guard.error,
+        code: guard.code,
+        requiresFinish: guard.requiresFinish,
+        needsConfirmOpenVote: guard.needsConfirmOpenVote,
+        needsConfirmAbandonDraw: guard.needsConfirmAbandonDraw,
+      });
+    }
+
+    const result = await passerAuSondageSuivant(eventId);
+    if (!result.ok) {
+      return res.status(result.code || 404).json({ error: result.message });
+    }
+
+    await emitEventLiveUpdated(io, eventId);
+    return res.json({
+      ok: true,
+      skipped: true,
+      finished: Boolean(result.finished),
+      prepared: Boolean(result.prepared),
+      activePollId: result.activePollId ?? null,
+      votesPreserved: true,
+      winnersCreated: false,
+    });
+  } catch (e) {
+    console.error("events/:eventId/skip-poll", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
 app.post("/events/:eventId/finish", requireAuth, async (req, res) => {
   const { eventId } = req.params;
   try {
@@ -3356,11 +3606,12 @@ app.post("/events/:eventId/finish", requireAuth, async (req, res) => {
 
 /**
  * Régie : démarrer le mode réel (consomme une EventActivation FUN/EVENT, ou reliquat eventCredits).
+ * TX atomique : wipe runtime TEST + reset Q1 PRÉPARÉ + consommation crédit.
  */
 app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
   const { eventId } = req.params;
   const planType = normalizeStartRealPlanType(req.body?.planType);
-  if (!planType) {
+  if (!planType || !startRealResetAppliesToPlan(planType)) {
     return res.status(400).json({
       error: "INVALID_PLAN_TYPE",
       message: "planType requis : FUN ou EVENT.",
@@ -3380,6 +3631,8 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
           isLocked: true,
           consumedAt: true,
           participantsLimit: true,
+          screenDisplayState: true,
+          questionTimerTotalSec: true,
         },
       });
       if (!event || String(event.userId || "") !== String(req.userId || "")) {
@@ -3393,6 +3646,12 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
         throw err;
       }
       if (event.isLiveConsumed) {
+        const err = new Error("EVENT_ALREADY_CONSUMED");
+        err.code = "EVENT_ALREADY_CONSUMED";
+        throw err;
+      }
+      // Garde pure : wipe uniquement false→true (déjà couvert ci-dessus).
+      if (!shouldPerformStartRealRuntimeReset({ isLiveConsumed: event.isLiveConsumed })) {
         const err = new Error("EVENT_ALREADY_CONSUMED");
         err.code = "EVENT_ALREADY_CONSUMED";
         throw err;
@@ -3423,10 +3682,6 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
       let usedLegacyCredits = false;
 
       if (activation) {
-        await tx.eventActivation.update({
-          where: { id: activation.id },
-          data: { consumedAt: new Date() },
-        });
         participantsLimit = Math.max(
           1,
           Math.trunc(Number(activation.participantsLimit || participantsLimit)),
@@ -3443,6 +3698,70 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
         throw err;
       }
 
+      const polls = await tx.poll.findMany({
+        where: { eventId },
+        select: { id: true, order: true, status: true, type: true },
+        orderBy: { order: "asc" },
+      });
+      const pollIds = polls.map((p) => p.id);
+      const firstPollId = resolveFirstPlayablePollId(polls);
+      const deletionScope = getStartRealDeletionScope({ eventId, pollIds });
+
+      let deletedWinners = 0;
+      let deletedDraws = 0;
+      let deletedLeads = 0;
+      let deletedVotes = 0;
+
+      if (deletionScope.deleteContestWinnersWhere) {
+        deletedWinners = (
+          await tx.contestDrawWinner.deleteMany({
+            where: deletionScope.deleteContestWinnersWhere,
+          })
+        ).count;
+      }
+      if (deletionScope.deleteContestDrawsWhere) {
+        deletedDraws = (
+          await tx.contestDraw.deleteMany({
+            where: deletionScope.deleteContestDrawsWhere,
+          })
+        ).count;
+      }
+      if (deletionScope.deleteLeadsWhere) {
+        deletedLeads = (
+          await tx.leadCapture.deleteMany({
+            where: deletionScope.deleteLeadsWhere,
+          })
+        ).count;
+      }
+      if (deletionScope.deleteVotesWhere) {
+        deletedVotes = (
+          await tx.vote.deleteMany({
+            where: deletionScope.deleteVotesWhere,
+          })
+        ).count;
+      }
+
+      await tx.poll.updateMany({
+        where: { eventId, status: { not: "ARCHIVED" } },
+        data: { quizRevealed: false },
+      });
+
+      const statusUpdates = buildStartRealPollStatusUpdates(polls, firstPollId);
+      for (const row of statusUpdates) {
+        await tx.poll.update({
+          where: { id: row.id },
+          data: { status: row.status },
+        });
+      }
+
+      // Consommation crédit APRÈS le wipe — même TX : échec wipe ⇒ pas de débit.
+      if (activation) {
+        await tx.eventActivation.update({
+          where: { id: activation.id },
+          data: { consumedAt: new Date() },
+        });
+      }
+
       let remainingCredits = creditsBefore;
       if (creditsBefore > 0) {
         remainingCredits = creditsBefore - 1;
@@ -3452,6 +3771,12 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
         });
       }
 
+      const resetPatch = buildStartRealEventResetPatch({
+        firstPollId,
+        screenDisplayState: event.screenDisplayState,
+        questionTimerTotalSec: event.questionTimerTotalSec,
+      });
+
       const updatedEvent = await tx.event.update({
         where: { id: eventId },
         data: {
@@ -3460,6 +3785,7 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
           isLocked: false,
           participantsLimit,
           eventPlanType: appliedPlanType,
+          ...resetPatch,
         },
         select: {
           id: true,
@@ -3468,6 +3794,14 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
           isLocked: true,
           participantsLimit: true,
           eventPlanType: true,
+          activePollId: true,
+          liveState: true,
+          voteState: true,
+          displayState: true,
+          questionTimerTotalSec: true,
+          questionTimerAccumulatedSec: true,
+          questionTimerStartedAt: true,
+          questionTimerIsPaused: true,
         },
       });
       return {
@@ -3475,8 +3809,16 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
         remainingCredits,
         usedLegacyCredits,
         planType: appliedPlanType,
+        reset: {
+          activePollId: firstPollId,
+          deletedVotes,
+          deletedLeads,
+          deletedContestDraws: deletedDraws,
+          deletedContestWinners: deletedWinners,
+        },
       };
     });
+    clearAutoRevealTimer(eventId);
     const activationsAvailable = await countAvailableActivationsByPlan(req.userId);
     await emitEventLiveUpdated(io, eventId);
     return res.json({
@@ -3486,6 +3828,7 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
       activationsAvailable,
       planType: result.planType,
       usedLegacyCredits: result.usedLegacyCredits,
+      reset: result.reset,
     });
   } catch (e) {
     if (e?.code === "EVENT_NOT_FOUND") {
@@ -3609,9 +3952,17 @@ app.post("/polls/:pollId/close", requireAuth, async (req, res) => {
       return res.status(404).json({ error: "Sondage introuvable." });
     }
 
+    const revealQuizAfterLiveResults = shouldRevealQuizOnCloseAfterLiveResults(
+      poll,
+      poll.event,
+    );
+
     await prisma.poll.update({
       where: { id: poll.id },
-      data: { status: "CLOSED" },
+      data: {
+        status: "CLOSED",
+        ...(revealQuizAfterLiveResults ? { quizRevealed: true } : {}),
+      },
     });
 
     /**
@@ -3619,12 +3970,16 @@ app.post("/polls/:pollId/close", requireAuth, async (req, res) => {
      * vote CLOSED + display WAITING + live WAITING + reset chrono.
      * Ne force pas RESULTS ; efface un screenDisplayState RESULTS collant.
      * LOT-2 : skip auto-reveal Lead / Concours.
+     * Quiz déjà en RESULTS (live) : garde RESULTS + quizRevealed (voir helper).
      */
     let majEvent =
       poll.event.activePollId === poll.id
         ? buildEventDataAfterVoteClose(poll.event, {
             type: poll.type,
             leadEnabled: poll.leadEnabled,
+            quizRevealed: revealQuizAfterLiveResults
+              ? true
+              : poll.quizRevealed,
           })
         : {};
 
@@ -3640,6 +3995,9 @@ app.post("/polls/:pollId/close", requireAuth, async (req, res) => {
           })
         : await prisma.event.findUnique({ where: { id: poll.eventId } });
 
+    if (revealQuizAfterLiveResults) {
+      await emitPollUpdated(io, poll.id);
+    }
     await emitEventLiveUpdated(io, poll.eventId);
 
     if (
@@ -4368,6 +4726,200 @@ app.get("/polls/:pollId", async (req, res) => {
   }
 });
 
+/**
+ * PATCH /events/:eventId/polls/reorder
+ * Body: { pollIds: string[] } OU { pollId, direction: "up"|"down" }
+ * Ne modifie jamais activePollId.
+ */
+app.patch("/events/:eventId/polls/reorder", requireAuth, async (req, res) => {
+  const { eventId } = req.params;
+  try {
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, isLocked: true, activePollId: true },
+    });
+    if (!event) {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+    const reorderGuard = evaluatePlaylistReorderGuards({
+      isLocked: event.isLocked,
+    });
+    if (!reorderGuard.ok) {
+      return res.status(reorderGuard.status).json({ error: reorderGuard.error });
+    }
+
+    const body = req.body ?? {};
+    const existing = await prisma.poll.findMany({
+      where: { eventId },
+      orderBy: { order: "asc" },
+      select: { id: true },
+    });
+    const currentIds = existing.map((p) => p.id);
+
+    /** @type {string[]} */
+    let nextIds;
+    if (Array.isArray(body.pollIds)) {
+      const validated = validateFullPollOrder(currentIds, body.pollIds);
+      if (!validated.ok) {
+        return res.status(400).json({ error: validated.error });
+      }
+      nextIds = validated.pollIds;
+    } else if (typeof body.pollId === "string" && body.direction != null) {
+      const moved = computeReorderByDirection(
+        currentIds,
+        body.pollId,
+        body.direction,
+      );
+      if (!moved.ok) {
+        return res.status(400).json({ error: moved.error });
+      }
+      nextIds = moved.pollIds;
+    } else {
+      return res.status(400).json({
+        error:
+          'Fournis "pollIds" (tableau) ou "pollId" + "direction" ("up"|"down").',
+      });
+    }
+
+    const applied = await applyEventPollsReorder(prisma, {
+      eventId,
+      pollIdsOrdered: nextIds,
+    });
+    if (!applied.ok) {
+      return res.status(applied.status).json({ error: applied.error });
+    }
+
+    // Garantie : activePollId inchangé (réordonnancement pur).
+    const after = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { activePollId: true },
+    });
+    if (
+      String(after?.activePollId || "") !== String(event.activePollId || "")
+    ) {
+      await prisma.event.update({
+        where: { id: eventId },
+        data: { activePollId: event.activePollId },
+      });
+    }
+
+    await emitEventLiveUpdated(io, eventId);
+    return res.json({
+      ok: true,
+      activePollId: event.activePollId,
+      polls: applied.polls,
+    });
+  } catch (e) {
+    console.error("patch /events/:eventId/polls/reorder", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/**
+ * DELETE /polls/:pollId
+ * Body optionnel : { confirmWipeTestData: true } (TEST + votes).
+ * Refuse antenne / verrouillé / RÉEL avec votes ou historique.
+ */
+app.delete("/polls/:pollId", requireAuth, async (req, res) => {
+  const { pollId } = req.params;
+  try {
+    const pOwn = await assertPollOwnedBy(pollId, req.userId);
+    if (!pOwn.ok) {
+      return res.status(pOwn.status).json({ error: "Sondage introuvable." });
+    }
+    const poll = await prisma.poll.findUnique({
+      where: { id: pollId },
+      select: {
+        id: true,
+        eventId: true,
+        status: true,
+        quizRevealed: true,
+        event: {
+          select: {
+            id: true,
+            isLocked: true,
+            isLiveConsumed: true,
+            activePollId: true,
+          },
+        },
+        _count: {
+          select: {
+            votes: true,
+            leads: true,
+            contestDraws: true,
+            contestWinners: true,
+          },
+        },
+      },
+    });
+    if (!poll || !poll.event) {
+      return res.status(404).json({ error: "Sondage introuvable." });
+    }
+
+    const body = req.body ?? {};
+    const wipeQuery = String(req.query?.confirmWipeTestData || "")
+      .toLowerCase()
+      .trim();
+    const confirmWipeTestData =
+      body.confirmWipeTestData === true ||
+      wipeQuery === "1" ||
+      wipeQuery === "true";
+    const deleteGuard = evaluatePlaylistDeleteGuards({
+      isLocked: poll.event.isLocked,
+      isLiveConsumed: poll.event.isLiveConsumed,
+      isActivePoll: String(poll.event.activePollId || "") === String(poll.id),
+      voteCount: poll._count?.votes ?? 0,
+      status: poll.status,
+      leadsCount: poll._count?.leads ?? 0,
+      contestDrawsCount: poll._count?.contestDraws ?? 0,
+      contestWinnersCount: poll._count?.contestWinners ?? 0,
+      quizRevealed: poll.quizRevealed,
+      confirmWipeTestData,
+    });
+    if (!deleteGuard.ok) {
+      return res.status(deleteGuard.status).json({
+        error: deleteGuard.error,
+        requiresWipeConfirm: deleteGuard.requiresWipeConfirm,
+      });
+    }
+
+    const activeBefore = poll.event.activePollId;
+    const applied = await applyEventPollDelete(prisma, {
+      eventId: poll.eventId,
+      pollId: poll.id,
+    });
+    if (!applied.ok) {
+      return res.status(applied.status).json({ error: applied.error });
+    }
+
+    const after = await prisma.event.findUnique({
+      where: { id: poll.eventId },
+      select: { activePollId: true },
+    });
+    if (String(after?.activePollId || "") !== String(activeBefore || "")) {
+      await prisma.event.update({
+        where: { id: poll.eventId },
+        data: { activePollId: activeBefore },
+      });
+    }
+
+    await emitEventLiveUpdated(io, poll.eventId);
+    return res.json({
+      ok: true,
+      deletedPollId: applied.deletedPollId,
+      activePollId: activeBefore,
+      polls: applied.polls,
+    });
+  } catch (e) {
+    console.error("delete /polls/:pollId", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
 app.patch("/polls/:pollId", requireAuth, async (req, res) => {
   const { pollId } = req.params;
   try {
@@ -4381,11 +4933,41 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
       select: {
         id: true,
         type: true,
+        eventId: true,
+        leadEnabled: true,
+        quizRevealed: true,
         options: { select: { id: true }, orderBy: { order: "asc" } },
+        event: {
+          select: { isLocked: true, isLiveConsumed: true },
+        },
+        _count: { select: { votes: true } },
       },
     });
     if (!poll) {
       return res.status(404).json({ error: "Sondage introuvable." });
+    }
+
+    const wantsQuizCorrectChange = pollPatchRequestsQuizCorrectChange(
+      body,
+      poll.type,
+    );
+    const optionsReq = resolvePatchOptionsRequest(body, poll.type);
+    if (optionsReq.invalidShape) {
+      return res.status(400).json({
+        error: "options doit être un tableau de libellés.",
+      });
+    }
+    const wantsOptionsChange = optionsReq.requested;
+    const guard = evaluatePollPatchGuards({
+      isLocked: poll.event?.isLocked,
+      isLiveConsumed: poll.event?.isLiveConsumed,
+      voteCount: poll._count?.votes ?? 0,
+      quizRevealed: poll.quizRevealed,
+      wantsQuizCorrectChange,
+      wantsOptionsChange,
+    });
+    if (!guard.ok) {
+      return res.status(guard.status).json({ error: guard.error });
     }
 
     /** @type {import("@prisma/client").Prisma.PollUpdateInput} */
@@ -4413,8 +4995,49 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
         );
       }
     }
+
+    let optionsUpdated = false;
     let quizCorrectUpdated = false;
-    if (isQuiz && Object.prototype.hasOwnProperty.call(body, "quizCorrectOrder")) {
+
+    if (wantsOptionsChange) {
+      // Garde-fou : ne jamais supprimer des options si des votes existent
+      // (onDelete Cascade sur Vote) — déjà bloqué par evaluatePollPatchGuards.
+      if ((poll._count?.votes ?? 0) > 0) {
+        return res.status(409).json({
+          error:
+            "Impossible de modifier les réponses : des votes existent déjà.",
+        });
+      }
+      let quizCorrectOrder = null;
+      if (isQuiz) {
+        quizCorrectOrder = normalizeQuizCorrectOrder(
+          body.quizCorrectOrder,
+          Array.isArray(optionsReq.options) ? optionsReq.options.length : 0,
+        );
+        if (quizCorrectOrder == null) {
+          return res.status(400).json({
+            error: "QUIZ: une seule bonne réponse doit être définie.",
+          });
+        }
+      }
+      const leadTriggerOrder = normalizeLeadTriggerOrder(
+        body.leadTriggerOrder,
+        Array.isArray(optionsReq.options) ? optionsReq.options.length : 0,
+      );
+      const applied = await applyPollOptionsPatch(prisma, {
+        pollId,
+        labelsRaw: optionsReq.options || [],
+        isQuiz,
+        quizCorrectOrder,
+        leadEnabled: Boolean(poll.leadEnabled) || isContestEntry,
+        leadTriggerOrder,
+      });
+      if (!applied.ok) {
+        return res.status(applied.status).json({ error: applied.error });
+      }
+      optionsUpdated = true;
+      if (isQuiz) quizCorrectUpdated = true;
+    } else if (isQuiz && wantsQuizCorrectChange) {
       const quizCorrectOrder = normalizeQuizCorrectOrder(
         body.quizCorrectOrder,
         poll.options.length,
@@ -4443,7 +5066,11 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
       quizCorrectUpdated = true;
     }
 
-    if (Object.keys(data).length === 0 && !quizCorrectUpdated) {
+    if (
+      Object.keys(data).length === 0 &&
+      !quizCorrectUpdated &&
+      !optionsUpdated
+    ) {
       return res.status(400).json({ error: "Aucune modification détectée." });
     }
 
@@ -4456,6 +5083,11 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
     const full = await loadPollFull(pollId);
     if (!full) {
       return res.status(404).json({ error: "Sondage introuvable." });
+    }
+    // Sync régie / Screen / participants (texte + options).
+    await emitPollUpdated(io, pollId);
+    if (full.eventId) {
+      await emitEventLiveUpdated(io, full.eventId);
     }
     return res.json(pollToJson(full));
   } catch (e) {
@@ -6719,6 +7351,8 @@ io.on("connection", (socket) => {
   socket.on("join_event", (rawEventId) => {
     const id = String(rawEventId);
     socket.join(roomPourEvent(id));
+    /** Nouveau participant / reconnect : état courant sans action régisseur. */
+    void emitEventLiveSnapshotToSocket(socket, id);
     void emitScreenCountToAdmins(io, id);
     void emitAllScreenPresenceToAdmins(io, id);
   });

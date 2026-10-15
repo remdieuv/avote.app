@@ -8,11 +8,30 @@ import { io } from "socket.io-client";
 import {
   QUESTION_TIMER_MAX_SEC,
   decomposeTimerSeconds,
+  formatCountdownCompact,
   formatCountdownVerbose,
+  getRegieChronoControlFlags,
+  getRegieChronoControlMode,
+  getRegieChronoEnabledLabel,
+  getRegieChronoRunningHint,
+  isRegieChronoEnabled,
 } from "@/lib/chronoFormat";
 import { AjouterQuestionLiveModal } from "@/components/AjouterQuestionLiveModal";
 import { LiveMicroLabel } from "@/components/admin/LiveMicroIcon";
 import { computeActivationBalance } from "@/lib/activationBalance";
+import {
+  shouldClearRegieEventLoadingAfterFetch,
+  shouldRenderRegieEventBody,
+} from "@/lib/regieEventLoad";
+import {
+  computeRegiePublicPreviewPhoneSize,
+  getRegiePublicPreviewFitMode,
+  getRegiePublicPreviewPhoneFrameStyle,
+  getRegiePublicPreviewPhoneStageStyle,
+  getRegiePublicPreviewShellStyle,
+  getRegiePublicPreviewTitleFontSize,
+} from "@/lib/regiePublicPreview";
+import { getStartRealConfirmMessage } from "@/lib/startRealResetClient";
 import { adminFetch, apiBaseBrowser, SOCKET_URL as SOCKET } from "@/lib/config";
 import {
   LANDING_PHOTO_TOO_HEAVY_MESSAGE,
@@ -39,12 +58,14 @@ import {
   REGIE_ZONE_PILOTAGE,
   REGIE_ZONE_PROJECTION_AVANCEE,
   getRegieAllowedLiveActions,
+  getRegiePilotageStepLabel,
   getRegiePollStatusLabel,
   getRegiePollTypeLabel,
   getRegieOpenVoteButtonCopy,
   getRegiePrimaryLiveAction,
   getRegiePrimaryLiveActionLabel,
   getRegieQuestionNumberLabel,
+  getRegieConsultBannerState,
   isRegieConsultSelectionOnly,
   sortPollsByPlaylistOrder,
 } from "@/lib/regieDesktopLayout";
@@ -57,6 +78,25 @@ import {
   getReplayTestPollBlockedLabel,
   getReplayTestPollConfirmMessage,
 } from "@/lib/testModeReplayPoll";
+import {
+  getQuizCorrectAnswerEditStatus,
+  getSavedQuizCorrectAnswer,
+} from "@/lib/regieQuizEdit";
+import { getRegiePollEditGuardState } from "@/lib/regiePollEditGuards";
+import { getRegiePlaylistActionState } from "@/lib/regiePlaylistGuards";
+import {
+  formatRegieOptionStatMeta,
+  getRegieOptionStatBarStyles,
+} from "@/lib/regieOptionStats";
+import { pollTypeAllowsOptionEdit } from "@/lib/pollOptionsForm";
+import {
+  assertPollEditOptionsPersisted,
+  buildRegiePollEditPayload,
+} from "@/lib/regiePollEditPayload";
+import {
+  buildSkipPollRequestBody,
+  getRegieSkipQuestionState,
+} from "@/lib/regieSkipQuestion";
 
 const VOTE_STATE_LABELS = {
   open: "Vote ouvert",
@@ -378,6 +418,8 @@ function PollCard({
   onContestShortcut,
   onLeadShortcut,
   onEdit,
+  /** Libellé bouton édition — « Consulter » si événement verrouillé. */
+  editActionLabel = "Modifier",
   contestDrawSummary,
   desktop,
   compact = false,
@@ -391,6 +433,14 @@ function PollCard({
   onSelect = null,
   /** Libellé « Question N/Total » (ordre playlist). */
   questionNumberLabel = null,
+  /** Étape 3 — réordonner / supprimer (playlist gauche). */
+  playlistIndex = 0,
+  playlistTotal = 0,
+  isLocked = false,
+  isLiveConsumed = null,
+  onMoveUp = null,
+  onMoveDown = null,
+  onDelete = null,
 }) {
   const statusLabel = getRegiePollStatusLabel({
     pollStatus: poll.status,
@@ -501,17 +551,137 @@ function PollCard({
       Voir les leads
     </button>
   ) : null;
+  const editLabel =
+    String(editActionLabel || "Modifier").trim() || "Modifier";
   const editAction = (
     <button
       type="button"
       disabled={busy}
       onClick={() => onEdit?.(poll)}
       style={btnSecondaryAction(busy)}
-      title="Modifier cette question"
+      title={
+        editLabel === "Consulter"
+          ? "Consulter cette question (événement verrouillé)"
+          : "Modifier cette question"
+      }
     >
-      Modifier
+      {editLabel}
     </button>
   );
+
+  const playlistActions = getRegiePlaylistActionState({
+    isLocked,
+    isLiveConsumed,
+    isActivePoll: isActive,
+    indexZeroBased: playlistIndex,
+    totalPolls: playlistTotal,
+    voteCount: poll.voteCount,
+    status: poll.status,
+    leadsCount: poll.leadsCount ?? poll.leads?.length,
+    contestDrawsCount: poll.contestDrawsCount,
+    contestWinnersCount: poll.contestWinnersCount,
+    quizRevealed: poll.quizRevealed,
+  });
+  const showPlaylistManage =
+    typeof onMoveUp === "function" ||
+    typeof onMoveDown === "function" ||
+    typeof onDelete === "function";
+  const playlistManageRow = showPlaylistManage ? (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        alignItems: "center",
+        gap: "0.28rem",
+        marginTop: compact ? "0.28rem" : "0.35rem",
+      }}
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+    >
+      <button
+        type="button"
+        disabled={busy || !playlistActions.canMoveUp}
+        onClick={() => onMoveUp?.(poll.id)}
+        title={
+          playlistActions.reorderBlockedReason ||
+          (playlistActions.canMoveUp
+            ? "Monter dans la playlist"
+            : "Déjà en première position")
+        }
+        aria-label="Monter la question"
+        style={{
+          width: "1.7rem",
+          height: "1.7rem",
+          padding: 0,
+          borderRadius: "8px",
+          border: "1px solid #cbd5e1",
+          background: busy || !playlistActions.canMoveUp ? "#f8fafc" : "#ffffff",
+          color: busy || !playlistActions.canMoveUp ? "#94a3b8" : "#334155",
+          fontSize: "0.72rem",
+          fontWeight: 800,
+          cursor: busy || !playlistActions.canMoveUp ? "not-allowed" : "pointer",
+          lineHeight: 1,
+        }}
+      >
+        ↑
+      </button>
+      <button
+        type="button"
+        disabled={busy || !playlistActions.canMoveDown}
+        onClick={() => onMoveDown?.(poll.id)}
+        title={
+          playlistActions.reorderBlockedReason ||
+          (playlistActions.canMoveDown
+            ? "Descendre dans la playlist"
+            : "Déjà en dernière position")
+        }
+        aria-label="Descendre la question"
+        style={{
+          width: "1.7rem",
+          height: "1.7rem",
+          padding: 0,
+          borderRadius: "8px",
+          border: "1px solid #cbd5e1",
+          background:
+            busy || !playlistActions.canMoveDown ? "#f8fafc" : "#ffffff",
+          color: busy || !playlistActions.canMoveDown ? "#94a3b8" : "#334155",
+          fontSize: "0.72rem",
+          fontWeight: 800,
+          cursor:
+            busy || !playlistActions.canMoveDown ? "not-allowed" : "pointer",
+          lineHeight: 1,
+        }}
+      >
+        ↓
+      </button>
+      <button
+        type="button"
+        disabled={busy || !playlistActions.canDelete}
+        onClick={() => onDelete?.(poll, playlistActions)}
+        title={
+          playlistActions.deleteBlockedReason ||
+          (playlistActions.requiresWipeConfirm
+            ? "Supprimer (remise à zéro des votes test requise)"
+            : "Supprimer cette question")
+        }
+        style={{
+          marginLeft: "auto",
+          padding: "0.22rem 0.45rem",
+          borderRadius: "8px",
+          border: "1px solid transparent",
+          background: "transparent",
+          color: busy || !playlistActions.canDelete ? "#94a3b8" : "#9f1239",
+          fontSize: "0.64rem",
+          fontWeight: 650,
+          cursor: busy || !playlistActions.canDelete ? "not-allowed" : "pointer",
+          textDecoration: "underline",
+          textUnderlineOffset: "2px",
+        }}
+      >
+        Supprimer
+      </button>
+    </div>
+  ) : null;
 
   const metaRow = (
     <div
@@ -889,10 +1059,16 @@ function PollCard({
                 padding: "0.38rem 0.5rem",
                 fontSize: "0.72rem",
               }}
+              title={
+                editLabel === "Consulter"
+                  ? "Consulter cette question (événement verrouillé)"
+                  : "Modifier cette question"
+              }
             >
-              Modifier
+              {editLabel}
             </button>
           ) : null}
+          {playlistManageRow}
         </div>
       </div>
     );
@@ -926,6 +1102,7 @@ function PollCard({
           <div style={{ flex: "1 1 220px", minWidth: 0 }}>
             {metaRow}
             {titre}
+            {playlistManageRow}
           </div>
           <div
             style={{
@@ -2969,7 +3146,9 @@ function BlocOverlayStreamPresets({ slug, onCopied }) {
 /** Liens participant / vote — version compacte pour colonne partage */
 function LiensDiffusionCompact({ slug }) {
   const [clientPret, setClientPret] = useState(false);
-  const [copied, setCopied] = useState(/** @type {null | "join" | "vote"} */ (null));
+  const [copied, setCopied] = useState(
+    /** @type {null | "join" | "vote" | "screen" | "overlay"} */ (null),
+  );
 
   useEffect(() => {
     if (typeof window !== "undefined") setClientPret(true);
@@ -2984,13 +3163,15 @@ function LiensDiffusionCompact({ slug }) {
   const enc = encodeURIComponent(slug);
   const pathJoin = `/join/${enc}`;
   const pathVote = `/p/${enc}`;
+  const pathScreen = `/screen/${enc}`;
+  const pathOverlay = `/overlay/${enc}`;
 
   const linkAct = {
     fontSize: "0.68rem",
     fontWeight: 700,
-    color: "#7c3aed",
-    background: "rgba(139, 92, 246, 0.08)",
-    border: "1px solid rgba(167, 139, 250, 0.22)",
+    color: "#0f766e",
+    background: "rgba(13, 148, 136, 0.08)",
+    border: "1px solid rgba(13, 148, 136, 0.22)",
     padding: "0.28rem 0.55rem",
     borderRadius: "999px",
     cursor: "pointer",
@@ -3012,7 +3193,7 @@ function LiensDiffusionCompact({ slug }) {
     if (url) window.open(url, "_blank", "noopener,noreferrer");
   }
 
-  /** @param {{ titre: string; path: string; k: "join" | "vote"; hint: string; openLabel?: string; copyLabel?: string }} p */
+  /** @param {{ titre: string; path: string; k: string; hint: string; openLabel?: string; copyLabel?: string }} p */
   function cell(p) {
     const abs = clientPret ? lienDiffusionAbsolu(p.path) : "";
     const openLabel = p.openLabel ?? "Ouvrir";
@@ -3078,13 +3259,31 @@ function LiensDiffusionCompact({ slug }) {
       className="liens-partage-grid"
     >
       {cell({
-        titre: "Entrée participant",
+        titre: "Lien participant",
         path: pathJoin,
         k: "join",
         hint: pathJoin,
+        openLabel: "Ouvrir",
+        copyLabel: "Copier",
       })}
       {cell({
-        titre: "Vote direct",
+        titre: "Screen (salle)",
+        path: pathScreen,
+        k: "screen",
+        hint: pathScreen,
+        openLabel: "Ouvrir",
+        copyLabel: "Copier",
+      })}
+      {cell({
+        titre: "Overlay OBS",
+        path: pathOverlay,
+        k: "overlay",
+        hint: pathOverlay,
+        openLabel: "Ouvrir",
+        copyLabel: "Copier",
+      })}
+      {cell({
+        titre: "Vote /p (deep-link)",
         path: pathVote,
         k: "vote",
         hint: pathVote,
@@ -3314,21 +3513,10 @@ function SidebarPartageDroit({
             Partage & accès
           </h2>
           <p style={{ margin: 0, fontSize: "0.66rem", color: "#64748b", lineHeight: 1.35 }}>
-            QR et liens pour votre audience
-          </p>
-          <p
-            style={{
-              margin: "0.28rem 0 0 0",
-              fontSize: "0.64rem",
-              color: "#64748b",
-              lineHeight: 1.35,
-            }}
-          >
-            Écran = salle / TV · Overlay = fond transparent OBS
+            QR, salle, Screen et Overlay OBS
           </p>
         </div>
       ) : null}
-      <BlocOverlayStreamPresets slug={slug} onCopied={onOverlayCopied} />
       <PanneauQrParticipant
         slug={slug}
         liveState={liveState}
@@ -3337,58 +3525,9 @@ function SidebarPartageDroit({
         embedded
         sceneBadge={sceneBadge}
       />
-      <section
-        style={{
-          border: PREMIUM_BORDER,
-          borderRadius: "16px",
-          background: "rgba(255,255,255,0.78)",
-          padding: "0.78rem 0.82rem",
-          boxShadow: "0 12px 24px rgba(15, 23, 42, 0.05)",
-        }}
-      >
-        <p
-          style={{
-            margin: 0,
-            fontSize: "0.82rem",
-            fontWeight: 800,
-            color: "#0f172a",
-            letterSpacing: "-0.01em",
-          }}
-        >
-          Galerie live
-        </p>
-        <p style={{ margin: "0.3rem 0 0 0", fontSize: "0.74rem", color: "#64748b", lineHeight: 1.35 }}>
-          Ajoutez des photos en direct pendant l’événement.
-        </p>
-        <button
-          type="button"
-          disabled={landingPhotoUploading}
-          onClick={() => onQuickLandingPhoto?.()}
-          style={{
-            marginTop: "0.62rem",
-            width: "100%",
-            minHeight: "2.2rem",
-            padding: "0.45rem 0.68rem",
-            borderRadius: "12px",
-            border: "1px solid rgba(251, 146, 60, 0.22)",
-            background: "linear-gradient(180deg, rgba(255,247,237,0.98) 0%, rgba(255,237,213,0.9) 100%)",
-            color: "#9a3412",
-            fontSize: "0.8rem",
-            fontWeight: 800,
-            cursor: landingPhotoUploading ? "not-allowed" : "pointer",
-          }}
-        >
-          {landingPhotoUploadLabel}
-        </button>
-        <p style={{ margin: "0.42rem 0 0 0", fontSize: "0.7rem", color: "#64748b", fontWeight: 600 }}>
-          {landingPhotosCount} photo{landingPhotosCount > 1 ? "s" : ""} publiée
-          {landingPhotosCount > 1 ? "s" : ""}
-        </p>
-      </section>
-      <CopierLienEcranLeger slug={slug} />
       <div
         style={{
-          paddingTop: "0.55rem",
+          paddingTop: "0.35rem",
         }}
       >
         <p
@@ -3401,15 +3540,99 @@ function SidebarPartageDroit({
             color: "#64748b",
           }}
         >
-          Liens utiles
+          Liens participant · Screen · Overlay
         </p>
         <LiensDiffusionCompact slug={slug} />
       </div>
-      <SectionPartageLandingEvenement
-        slug={slug}
-        landingEnabled={Boolean(landingEnabled)}
-        eventId={eventId}
-      />
+      <details
+        style={{
+          border: PREMIUM_BORDER,
+          borderRadius: "14px",
+          background: "rgba(255,255,255,0.78)",
+          padding: "0.65rem 0.75rem",
+        }}
+      >
+        <summary
+          style={{
+            cursor: "pointer",
+            fontWeight: 800,
+            fontSize: "0.76rem",
+            color: "#0f172a",
+            listStyle: "none",
+          }}
+        >
+          Options avancées
+        </summary>
+        <div style={{ marginTop: "0.65rem", display: "grid", gap: "0.65rem" }}>
+          <BlocOverlayStreamPresets slug={slug} onCopied={onOverlayCopied} />
+          <section
+            style={{
+              border: PREMIUM_BORDER,
+              borderRadius: "14px",
+              background: "rgba(255,255,255,0.9)",
+              padding: "0.7rem 0.75rem",
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontSize: "0.78rem",
+                fontWeight: 800,
+                color: "#0f172a",
+              }}
+            >
+              Galerie live
+            </p>
+            <p
+              style={{
+                margin: "0.28rem 0 0 0",
+                fontSize: "0.72rem",
+                color: "#64748b",
+                lineHeight: 1.35,
+              }}
+            >
+              Ajoutez des photos en direct pendant l’événement.
+            </p>
+            <button
+              type="button"
+              disabled={landingPhotoUploading}
+              onClick={() => onQuickLandingPhoto?.()}
+              style={{
+                marginTop: "0.55rem",
+                width: "100%",
+                minHeight: "2.1rem",
+                padding: "0.4rem 0.65rem",
+                borderRadius: "12px",
+                border: "1px solid rgba(251, 146, 60, 0.22)",
+                background:
+                  "linear-gradient(180deg, rgba(255,247,237,0.98) 0%, rgba(255,237,213,0.9) 100%)",
+                color: "#9a3412",
+                fontSize: "0.78rem",
+                fontWeight: 800,
+                cursor: landingPhotoUploading ? "not-allowed" : "pointer",
+              }}
+            >
+              {landingPhotoUploadLabel}
+            </button>
+            <p
+              style={{
+                margin: "0.38rem 0 0 0",
+                fontSize: "0.68rem",
+                color: "#64748b",
+                fontWeight: 600,
+              }}
+            >
+              {landingPhotosCount} photo{landingPhotosCount > 1 ? "s" : ""}{" "}
+              publiée{landingPhotosCount > 1 ? "s" : ""}
+            </p>
+          </section>
+          <SectionPartageLandingEvenement
+            slug={slug}
+            landingEnabled={Boolean(landingEnabled)}
+            eventId={eventId}
+          />
+        </div>
+      </details>
     </aside>
   );
 }
@@ -3429,6 +3652,72 @@ const btnGhost = {
   boxShadow: "0 8px 18px rgba(15, 23, 42, 0.04)",
 };
 
+/**
+ * Liste stats régie : barres horizontales, ordre stable (pas de tri votes).
+ * @param {{
+ *   options: Array<{ id: string; label: string; voteCount: number; pct: number; showBonneReponse?: boolean }>;
+ *   keyPrefix?: string;
+ * }} props
+ */
+function RegieOptionStatsList({ options, keyPrefix = "opt-stat" }) {
+  if (!Array.isArray(options) || options.length === 0) return null;
+  return (
+    <div style={{ display: "grid", gap: "0.4rem", marginTop: "0.35rem" }}>
+      {options.map((opt) => {
+        const bar = getRegieOptionStatBarStyles({
+          pct: opt.pct,
+          highlight: Boolean(opt.showBonneReponse),
+        });
+        return (
+          <div key={`${keyPrefix}-${opt.id}`} style={{ display: "grid", gap: "0.2rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+              <span
+                style={{
+                  flex: 1,
+                  fontSize: "0.78rem",
+                  fontWeight: 700,
+                  color: "#0f172a",
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {opt.label}
+                {opt.showBonneReponse ? (
+                  <span
+                    style={{
+                      marginLeft: "0.4rem",
+                      fontSize: "0.66rem",
+                      fontWeight: 800,
+                      color: "#166534",
+                      background: "#dcfce7",
+                      borderRadius: "999px",
+                      padding: "0.1rem 0.4rem",
+                    }}
+                  >
+                    Bonne réponse
+                  </span>
+                ) : null}
+              </span>
+              <span
+                style={{
+                  flexShrink: 0,
+                  fontSize: "0.74rem",
+                  fontWeight: 800,
+                  color: "#334155",
+                }}
+              >
+                {formatRegieOptionStatMeta(opt)}
+              </span>
+            </div>
+            <div style={bar.track}>
+              <div style={bar.fill} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 const REGIE_PREVIEW_JOIN_LS_PREFIX = "avote_regie_preview_join_";
 /** Colonne gauche réduite (desktop) — persistant par événement */
 const REGIE_LEFT_COLLAPSED_LS_PREFIX = "avote_regie_left_collapsed_";
@@ -3441,49 +3730,72 @@ const LEADS_LAST_SEEN_LS_PREFIX = "avote_leads_seen_at_";
  *   newLeadCount?: number;
  *   layout: "beside" | "below" | "drawer";
  *   onHide?: () => void;
+ *   fused?: boolean;
  * }} props
  */
 function RegiePublicPreviewPanel({
   slug,
-  eventId,
-  newLeadCount = 0,
+  // eventId / newLeadCount : conservés pour compat appelants (liens retirés du panneau).
+  eventId: _eventId,
+  newLeadCount: _newLeadCount = 0,
   layout,
   onHide,
   fused = false,
 }) {
+  void _eventId;
+  void _newLeadCount;
+  /** Responsive local — le panel est aussi monté hors de RegieEventPage (drawer mobile). */
+  const desktop = useBreakpointMin(1024);
+  const fitMode = getRegiePublicPreviewFitMode(layout);
   const [iframeError, setIframeError] = useState(false);
+  const stageRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const [phoneSize, setPhoneSize] = useState(() =>
+    computeRegiePublicPreviewPhoneSize(
+      desktop ? 420 : 360,
+      desktop ? 900 : 640,
+      { mode: fitMode },
+    ),
+  );
   const joinPath = `/join/${encodeURIComponent(slug)}`;
 
-  const shell =
-    layout === "drawer"
-      ? {
-          display: "flex",
-          flexDirection: "column",
-          height: "100%",
-          minHeight: 0,
-          flex: 1,
-        }
-      : layout === "beside"
-        ? {
-            flex: fused ? "0 0 40%" : "0 0 34%",
-            minWidth: "min(100%, 300px)",
-            maxWidth: "100%",
-            display: "flex",
-            flexDirection: "column",
-            minHeight: fused
-              ? "min(calc(100vh - 7rem), 860px)"
-              : "min(calc(100vh - 6rem), 920px)",
-            maxHeight: fused
-              ? "min(calc(100vh - 7rem), 860px)"
-              : "min(calc(100vh - 6rem), 920px)",
-          }
-        : {
-            width: "100%",
-            display: "flex",
-            flexDirection: "column",
-            minHeight: fused ? "min(560px, 66vh)" : "min(520px, 58vh)",
-            maxHeight: fused ? "min(760px, 76vh)" : "min(700px, 70vh)",
-          };
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const { width, height } = entry.contentRect;
+      setPhoneSize(
+        computeRegiePublicPreviewPhoneSize(
+          width,
+          fitMode === "contain" ? height : Number.POSITIVE_INFINITY,
+          { mode: fitMode },
+        ),
+      );
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fitMode]);
+
+  const shell = getRegiePublicPreviewShellStyle({
+    layout,
+    fused,
+    phoneHeight: phoneSize.height,
+  });
+  const stageStyle = getRegiePublicPreviewPhoneStageStyle({
+    naturalHeight: fitMode === "width",
+  });
+
+  const openPreviewFull = () => {
+    if (typeof window === "undefined") return;
+    window.open(
+      `${window.location.origin}${joinPath}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+  };
+
+  const phoneFrameStyle = getRegiePublicPreviewPhoneFrameStyle(phoneSize);
 
   return (
     <section
@@ -3500,9 +3812,11 @@ function RegiePublicPreviewPanel({
     >
       <div
         style={{
-          flex: 1,
-          minHeight: 0,
+          flex: fitMode === "contain" ? 1 : "0 0 auto",
+          minHeight: fitMode === "contain" ? 0 : undefined,
           position: "relative",
+          display: "flex",
+          flexDirection: "column",
           borderRadius: fused ? "32px" : "30px",
           overflow: "hidden",
           background:
@@ -3524,23 +3838,11 @@ function RegiePublicPreviewPanel({
           }}
         />
         <div
-          aria-hidden
           style={{
-            position: "absolute",
-            inset: 0,
-            borderRadius: fused ? "32px" : "30px",
-            border: "1px solid rgba(255,255,255,0.08)",
-            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
-            pointerEvents: "none",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            top: "0.95rem",
-            left: "1rem",
-            right: "1rem",
+            position: "relative",
             zIndex: 2,
+            flex: "0 0 auto",
+            padding: desktop ? "0.95rem 1.1rem 0.35rem" : "0.85rem 0.9rem 0.3rem",
             display: "flex",
             flexWrap: "wrap",
             alignItems: "flex-start",
@@ -3552,7 +3854,7 @@ function RegiePublicPreviewPanel({
             <p
               style={{
                 margin: 0,
-                fontSize: desktop ? "0.94rem" : "0.84rem",
+                fontSize: getRegiePublicPreviewTitleFontSize(desktop),
                 fontWeight: 800,
                 color: "#f8fafc",
                 letterSpacing: "-0.02em",
@@ -3568,68 +3870,8 @@ function RegiePublicPreviewPanel({
                 lineHeight: 1.35,
               }}
             >
-              Vue participant en direct
+              Simulation smartphone — défilement dans l’aperçu
             </p>
-            {eventId ? (
-              <div
-                style={{
-                  marginTop: "0.42rem",
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "0.5rem 0.75rem",
-                  alignItems: "center",
-                }}
-              >
-                <Link
-                  href={`/admin/event/${encodeURIComponent(eventId)}/leads`}
-                  style={{
-                    fontSize: "0.68rem",
-                    fontWeight: 700,
-                    color: "rgba(220,252,231,0.82)",
-                    textDecoration: "none",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  Leads{newLeadCount > 0 ? ` (${newLeadCount > 99 ? "99+" : newLeadCount})` : ""}
-                </Link>
-                <Link
-                  href={`/admin/event/${encodeURIComponent(eventId)}/analytics`}
-                  style={{
-                    fontSize: "0.68rem",
-                    fontWeight: 700,
-                    color: "rgba(219,234,254,0.78)",
-                    textDecoration: "none",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  Statistiques
-                </Link>
-                <Link
-                  href={`/admin/events/${encodeURIComponent(eventId)}/live`}
-                  style={{
-                    fontSize: "0.68rem",
-                    fontWeight: 700,
-                    color: "rgba(219,234,254,0.78)",
-                    textDecoration: "none",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  Salle live
-                </Link>
-                <Link
-                  href={`/admin/events/${encodeURIComponent(eventId)}/landing`}
-                  style={{
-                    fontSize: "0.68rem",
-                    fontWeight: 700,
-                    color: "rgba(237,233,254,0.82)",
-                    textDecoration: "none",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  Landing
-                </Link>
-              </div>
-            ) : null}
           </div>
           <div
             style={{
@@ -3642,13 +3884,7 @@ function RegiePublicPreviewPanel({
           >
             <button
               type="button"
-              onClick={() =>
-                window.open(
-                  `${window.location.origin}${joinPath}`,
-                  "_blank",
-                  "noopener,noreferrer",
-                )
-              }
+              onClick={openPreviewFull}
               style={{
                 ...btnGhost,
                 fontSize: "0.72rem",
@@ -3681,66 +3917,64 @@ function RegiePublicPreviewPanel({
             ) : null}
           </div>
         </div>
-        {iframeError ? (
-          <div
-            style={{
-              position: "absolute",
-              inset: desktop ? "5.4rem 1rem 1rem" : "6rem 0.8rem 0.8rem",
-              padding: "1.4rem",
-              textAlign: "center",
-              color: "#94a3b8",
-              fontSize: "0.85rem",
-              borderRadius: "24px",
-              border: "1px solid rgba(255,255,255,0.08)",
-              background: "rgba(15,23,42,0.55)",
-              boxSizing: "border-box",
-            }}
-          >
-            <p style={{ margin: "0 0 0.75rem 0", fontWeight: 600 }}>
-              Impossible de charger l’aperçu.
-            </p>
-            <button
-              type="button"
-              onClick={() =>
-                window.open(
-                  `${window.location.origin}${joinPath}`,
-                  "_blank",
-                  "noopener,noreferrer",
-                )
-              }
-              style={{
-                ...btnGhost,
-                fontSize: "0.78rem",
-                background: "rgba(255,255,255,0.08)",
-                color: "#e2e8f0",
-                borderColor: "rgba(255,255,255,0.12)",
-                boxShadow: "none",
-              }}
-            >
-              Ouvrir /join dans un nouvel onglet
-            </button>
+        <div ref={stageRef} style={stageStyle}>
+          <div style={phoneFrameStyle}>
+            {iframeError ? (
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  padding: "1.4rem",
+                  textAlign: "center",
+                  color: "#94a3b8",
+                  fontSize: "0.85rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxSizing: "border-box",
+                  background: "rgba(15,23,42,0.92)",
+                }}
+              >
+                <p style={{ margin: "0 0 0.75rem 0", fontWeight: 600 }}>
+                  Impossible de charger l’aperçu.
+                </p>
+                <button
+                  type="button"
+                  onClick={openPreviewFull}
+                  style={{
+                    ...btnGhost,
+                    fontSize: "0.78rem",
+                    background: "rgba(255,255,255,0.08)",
+                    color: "#e2e8f0",
+                    borderColor: "rgba(255,255,255,0.12)",
+                    boxShadow: "none",
+                  }}
+                >
+                  Ouvrir /join dans un nouvel onglet
+                </button>
+              </div>
+            ) : (
+              <iframe
+                key={slug}
+                title={`Aperçu salle ${slug}`}
+                src={joinPath}
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                onLoad={() => setIframeError(false)}
+                onError={() => setIframeError(true)}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  border: "none",
+                  display: "block",
+                  background: "#0f172a",
+                }}
+              />
+            )}
           </div>
-        ) : (
-          <iframe
-            key={slug}
-            title={`Aperçu salle ${slug}`}
-            src={joinPath}
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-            onLoad={() => setIframeError(false)}
-            onError={() => setIframeError(true)}
-            style={{
-              position: "absolute",
-              inset: desktop ? "5.4rem 1rem 1rem" : "6rem 0.8rem 0.8rem",
-              width: "auto",
-              height: "auto",
-              border: "none",
-              display: "block",
-              borderRadius: "24px",
-              background: "#0f172a",
-              boxShadow: "0 22px 48px rgba(2, 6, 23, 0.34)",
-            }}
-          />
-        )}
+        </div>
       </div>
     </section>
   );
@@ -4613,6 +4847,8 @@ export default function RegieEventPage() {
   const [previewJoinOpen, setPreviewJoinOpen] = useState(false);
   const [mobileJoinPreviewOpen, setMobileJoinPreviewOpen] = useState(false);
   const [liveAnswersOpen, setLiveAnswersOpen] = useState(false);
+  /** Chrono : panneau « Régler » replié (régie simplifiée). */
+  const [chronoReglerOpen, setChronoReglerOpen] = useState(false);
   const [landingPhotoUploadPhase, setLandingPhotoUploadPhase] = useState(
     /** @type {null | "optimizing" | "uploading"} */ (null),
   );
@@ -4673,8 +4909,17 @@ export default function RegieEventPage() {
   const [editQuestionText, setEditQuestionText] = useState("");
   const [editContestPrize, setEditContestPrize] = useState("");
   const [editContestWinnerCount, setEditContestWinnerCount] = useState(1);
+  const [editQuizCorrectOrder, setEditQuizCorrectOrder] = useState(0);
+  const [editOptionLabels, setEditOptionLabels] = useState(
+    /** @type {string[]} */ (["", ""]),
+  );
+  const [editLeadTriggerOrder, setEditLeadTriggerOrder] = useState(0);
+  const [editModalError, setEditModalError] = useState(
+    /** @type {string | null} */ (null),
+  );
 
   const loadPollAbortRef = useRef(null);
+  const fetchEventGenerationRef = useRef(0);
   const socketRef = useRef(null);
   const autoRotateRef = useRef(false);
   const pollIdRef = useRef(/** @type {string | null} */ (null));
@@ -4690,6 +4935,7 @@ export default function RegieEventPage() {
   const fetchEvent = useCallback(async (opts = {}) => {
     const silent = opts.silent === true;
     if (!eventId) return;
+    const generation = ++fetchEventGenerationRef.current;
     const ac = new AbortController();
     loadPollAbortRef.current?.abort();
     loadPollAbortRef.current = ac;
@@ -4703,6 +4949,12 @@ export default function RegieEventPage() {
         cache: "no-store",
         signal: ac.signal,
       });
+      if (
+        ac.signal.aborted ||
+        generation !== fetchEventGenerationRef.current
+      ) {
+        return;
+      }
       if (res.status === 404) {
         setEventData(null);
         setError("Événement introuvable.");
@@ -4710,14 +4962,27 @@ export default function RegieEventPage() {
       }
       if (!res.ok) throw new Error(`Erreur ${res.status}`);
       const data = await res.json();
-      if (ac.signal.aborted) return;
+      if (
+        ac.signal.aborted ||
+        generation !== fetchEventGenerationRef.current
+      ) {
+        return;
+      }
       setEventData(data);
     } catch (e) {
       if (e?.name === "AbortError") return;
+      if (generation !== fetchEventGenerationRef.current) return;
       setEventData(null);
       setError(e.message || "Chargement impossible.");
     } finally {
-      if (!ac.signal.aborted && !silent) {
+      // Silent ou non : la génération courante doit lever le spinner.
+      // Sinon un abort socket (join_event snapshot / start-real) laisse la régie vide.
+      if (
+        shouldClearRegieEventLoadingAfterFetch({
+          generation,
+          currentGeneration: fetchEventGenerationRef.current,
+        })
+      ) {
         setLoading(false);
       }
     }
@@ -5198,7 +5463,8 @@ export default function RegieEventPage() {
 
     function onLive(payload) {
       if (!payload || String(payload.eventId) !== String(eventId)) return;
-      loadPollAbortRef.current?.abort();
+      // N’abort plus le GET régie ici : le silent fetch suit ; abort+loading
+      // coincé vidait toute la page après start-real / join_event snapshot.
       setEventData((prev) =>
         prev
           ? {
@@ -5226,9 +5492,27 @@ export default function RegieEventPage() {
                 payload.autoRevealShowResultsAt !== undefined
                   ? payload.autoRevealShowResultsAt
                   : prev.autoRevealShowResultsAt,
+              isLiveConsumed:
+                typeof payload.isLiveConsumed === "boolean"
+                  ? payload.isLiveConsumed
+                  : prev.isLiveConsumed,
+              isLocked:
+                typeof payload.isLocked === "boolean"
+                  ? payload.isLocked
+                  : prev.isLocked,
+              eventPlanType:
+                payload.eventPlanType !== undefined
+                  ? payload.eventPlanType
+                  : prev.eventPlanType,
+              participantsLimit:
+                payload.participantsLimit != null
+                  ? payload.participantsLimit
+                  : prev.participantsLimit,
             }
           : prev,
       );
+      // Force clear spinner si un GET initial était encore « loading ».
+      setLoading(false);
       void fetchEvent({ silent: true });
     }
 
@@ -5252,6 +5536,10 @@ export default function RegieEventPage() {
             return {
               ...p,
               options: opts,
+              quizRevealed:
+                typeof data.quizRevealed === "boolean"
+                  ? data.quizRevealed
+                  : p.quizRevealed,
               voteCount: opts.reduce((a, o) => a + optionVoteCount(o), 0),
               contestWinnersCount:
                 data.contestWinnersCount != null
@@ -5359,14 +5647,36 @@ export default function RegieEventPage() {
     [eventId],
   );
 
-  const openEditPollModal = useCallback((poll) => {
-    if (!poll) return;
-    setEditingPoll(poll);
-    setEditQuestionText(String(poll?.question || poll?.title || ""));
-    setEditContestPrize(String(poll?.contestPrize || ""));
-    setEditContestWinnerCount(normalizeContestWinnerCount(poll?.contestWinnerCount));
-    setEditPollModalOpen(true);
-  }, []);
+  const openEditPollModal = useCallback(
+    (poll) => {
+      if (!poll) return;
+      // Toujours partir du snapshot régie le plus frais (évite options périmées).
+      const live =
+        Array.isArray(eventData?.polls)
+          ? eventData.polls.find((p) => String(p.id) === String(poll.id))
+          : null;
+      const src = live || poll;
+      setEditingPoll(src);
+      setEditModalError(null);
+      setEditQuestionText(String(src?.question || src?.title || ""));
+      setEditContestPrize(String(src?.contestPrize || ""));
+      setEditContestWinnerCount(
+        normalizeContestWinnerCount(src?.contestWinnerCount),
+      );
+      const opts = Array.isArray(src?.options) ? src.options : [];
+      const labels = opts.map((o) => String(o?.label ?? ""));
+      setEditOptionLabels(labels.length >= 2 ? labels : ["", ""]);
+      const triggerIdx = opts.findIndex(
+        (o) => String(o?.id || "") === String(src?.leadTriggerOptionId || ""),
+      );
+      setEditLeadTriggerOrder(triggerIdx >= 0 ? triggerIdx : 0);
+      const correctIdx = opts.findIndex((o) => o?.isCorrect === true);
+      // Sélecteur : valeur enregistrée si connue, sinon 1re option (brouillon).
+      setEditQuizCorrectOrder(correctIdx >= 0 ? correctIdx : 0);
+      setEditPollModalOpen(true);
+    },
+    [eventData?.polls],
+  );
 
   /** @returns {Promise<boolean>} */
   async function postAction(path, successMessage = null) {
@@ -5426,11 +5736,8 @@ export default function RegieEventPage() {
   /** @param {"FUN" | "EVENT"} planType */
   async function startRealLive(planType) {
     if (!eventId || !canStartReal) return;
-    const planLabel = planType === "FUN" ? "FUN (100 participants max)" : "EVENT (500 participants max)";
     if (typeof window !== "undefined") {
-      const ok = window.confirm(
-        `Passer en live réel avec la formule ${planType} ?\n\n1 activation sera consommée (${planLabel}). Les données de la répétition (votes, leads, tirages) sont conservées ; les totaux RESULTS ne seront plus masqués et les exports seront disponibles.`,
-      );
+      const ok = window.confirm(getStartRealConfirmMessage(planType));
       if (!ok) return;
     }
     setStartRealPlanModalOpen(false);
@@ -5476,22 +5783,35 @@ export default function RegieEventPage() {
   async function submitPollEdit() {
     const pollId = String(editingPoll?.id || "");
     if (!pollId) return;
-    const question = String(editQuestionText || "").trim();
-    if (!question) {
-      setActionError("Texte de question requis.");
+    // Compteurs / options les plus frais pour guards + payload.
+    const livePoll =
+      Array.isArray(eventData?.polls)
+        ? eventData.polls.find((p) => String(p.id) === pollId)
+        : null;
+    const pollForEdit = livePoll
+      ? { ...editingPoll, ...livePoll }
+      : editingPoll;
+    const built = buildRegiePollEditPayload({
+      poll: pollForEdit,
+      isLocked: eventData?.isLocked,
+      isLiveConsumed: eventData?.isLiveConsumed,
+      question: editQuestionText,
+      optionLabels: editOptionLabels,
+      quizCorrectOrder: editQuizCorrectOrder,
+      leadTriggerOrder: editLeadTriggerOrder,
+      contestPrize: editContestPrize,
+      contestWinnerCount: editContestWinnerCount,
+      normalizeContestWinnerCount,
+    });
+    if (!built.ok || !built.payload) {
+      const msg = built.error || "Modification impossible.";
+      setEditModalError(msg);
+      setActionError(msg);
       return;
     }
-    const isContest = String(editingPoll?.type || "").toUpperCase() === "CONTEST_ENTRY";
-    const payload = {
-      question,
-      ...(isContest
-        ? {
-            contestPrize: String(editContestPrize || "").trim() || null,
-            contestWinnerCount: normalizeContestWinnerCount(editContestWinnerCount),
-          }
-        : {}),
-    };
+    const payload = built.payload;
     setBusy(true);
+    setEditModalError(null);
     setActionError(null);
     try {
       const res = await adminFetch(
@@ -5506,39 +5826,97 @@ export default function RegieEventPage() {
       if (!res.ok) {
         throw new Error(mapApiError(body, res.status));
       }
+      if (Array.isArray(payload.options)) {
+        const persisted = assertPollEditOptionsPersisted(body, payload.options);
+        if (!persisted.ok) {
+          throw new Error(
+            persisted.error || "Les réponses n’ont pas été enregistrées.",
+          );
+        }
+      }
+      // Appliquer immédiatement la réponse serveur (évite course socket/refetch).
+      const nextOptions = Array.isArray(body?.options)
+        ? body.options
+        : null;
+      if (nextOptions) {
+        setEventData((prev) => {
+          if (!prev?.polls) return prev;
+          return {
+            ...prev,
+            polls: prev.polls.map((p) =>
+              String(p.id) === pollId
+                ? {
+                    ...p,
+                    question:
+                      typeof body.question === "string"
+                        ? body.question
+                        : p.question,
+                    title:
+                      typeof body.title === "string" ? body.title : p.title,
+                    options: nextOptions,
+                    leadTriggerOptionId:
+                      body.leadTriggerOptionId !== undefined
+                        ? body.leadTriggerOptionId
+                        : p.leadTriggerOptionId,
+                    quizRevealed:
+                      typeof body.quizRevealed === "boolean"
+                        ? body.quizRevealed
+                        : p.quizRevealed,
+                  }
+                : p,
+            ),
+          };
+        });
+      }
       setEditPollModalOpen(false);
       setEditingPoll(null);
+      setEditModalError(null);
       setToastNotif("Question modifiée");
       window.setTimeout(() => setToastNotif(null), 2800);
       await fetchEvent({ silent: true });
     } catch (e) {
-      setActionError(e?.message || "Modification impossible.");
+      const msg = e?.message || "Modification impossible.";
+      setEditModalError(msg);
+      setActionError(msg);
     } finally {
       setBusy(false);
     }
+  }
+
+  /**
+   * Appel brut question-timer (sans busy UI) — pour chaîner enable / start / pause.
+   * @param {Record<string, unknown>} body
+   */
+  async function requestQuestionTimer(body) {
+    const res = await adminFetch(
+      `${apiBaseBrowser()}/events/${eventId}/question-timer`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+    const out = await res.json().catch(() => ({}));
+    return { res, out };
+  }
+
+  /** @param {unknown} questionTimer */
+  function applyQuestionTimerToState(questionTimer) {
+    if (questionTimer === undefined) return;
+    setEventData((prev) =>
+      prev ? { ...prev, questionTimer } : prev,
+    );
   }
 
   async function postQuestionTimer(body) {
     setBusy(true);
     setActionError(null);
     try {
-      const res = await adminFetch(
-        `${apiBaseBrowser()}/events/${eventId}/question-timer`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        },
-      );
-      const out = await res.json().catch(() => ({}));
+      const { res, out } = await requestQuestionTimer(body);
       if (!res.ok) {
         throw new Error(mapApiError(out, res.status));
       }
-      if (out.questionTimer !== undefined) {
-        setEventData((prev) =>
-          prev ? { ...prev, questionTimer: out.questionTimer } : prev,
-        );
-      }
+      applyQuestionTimerToState(out.questionTimer);
       const action =
         typeof body?.action === "string" ? body.action.trim().toLowerCase() : "";
       if (action === "pause" && out.questionTimer) {
@@ -5558,11 +5936,133 @@ export default function RegieEventPage() {
         setChronoSeconds(0);
       }
       await fetchEvent({ silent: true });
+      return true;
     } catch (e) {
       setActionError(e.message || "Action chrono échouée.");
+      return false;
     } finally {
       setBusy(false);
     }
+  }
+
+  /**
+   * Arme une durée sur le chrono serveur sans démarrer le compte à rebours.
+   * 1) `enable` (backend à jour)
+   * 2) sinon `start` + `pause` (backend sans enable)
+   * @param {number} totalSec
+   * @param {{ stopIfRunning?: boolean }} [opts]
+   */
+  async function activateQuestionTimer(totalSec, opts = {}) {
+    const stopIfRunning = opts.stopIfRunning === true;
+    setBusy(true);
+    setActionError(null);
+    try {
+      if (stopIfRunning) {
+        const runningNow =
+          eventData?.questionTimer?.running === true &&
+          eventData?.questionTimer?.isPaused !== true;
+        if (runningNow) {
+          const paused = await requestQuestionTimer({ action: "pause" });
+          if (!paused.res.ok) {
+            throw new Error(mapApiError(paused.out, paused.res.status));
+          }
+          applyQuestionTimerToState(paused.out.questionTimer);
+        }
+      }
+
+      let { res, out } = await requestQuestionTimer({
+        action: "enable",
+        totalSec,
+      });
+      if (res.ok) {
+        applyQuestionTimerToState(out.questionTimer);
+        const x = decomposeTimerSeconds(totalSec);
+        setChronoDays(x.days);
+        setChronoHours(x.hours);
+        setChronoMinutes(x.minutes);
+        setChronoSeconds(x.seconds);
+        await fetchEvent({ silent: true });
+        return true;
+      }
+
+      const errMsg = String(out?.error || out?.message || "");
+      const enableUnsupported =
+        res.status === 400 && /action attendue/i.test(errMsg);
+
+      if (!enableUnsupported) {
+        throw new Error(mapApiError(out, res.status));
+      }
+
+      // Backend sans "enable" : start puis pause immédiate → état Actif / arrêté.
+      ({ res, out } = await requestQuestionTimer({
+        action: "start",
+        totalSec,
+        arm: true,
+      }));
+      if (!res.ok) {
+        throw new Error(mapApiError(out, res.status));
+      }
+      applyQuestionTimerToState(out.questionTimer);
+
+      if (out?.questionTimer?.running === true) {
+        ({ res, out } = await requestQuestionTimer({ action: "pause" }));
+        if (!res.ok) {
+          throw new Error(mapApiError(out, res.status));
+        }
+        applyQuestionTimerToState(out.questionTimer);
+      }
+
+      const x = decomposeTimerSeconds(totalSec);
+      setChronoDays(x.days);
+      setChronoHours(x.hours);
+      setChronoMinutes(x.minutes);
+      setChronoSeconds(x.seconds);
+
+      await fetchEvent({ silent: true });
+      return true;
+    } catch (e) {
+      setActionError(e.message || "Activation du chrono échouée.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Confirmer la durée du panneau Régler (sans démarrer). */
+  async function confirmChronoSelection() {
+    const total = presetChronoSec;
+    if (total < 1) {
+      setActionError("Indique au moins 1 seconde.");
+      return false;
+    }
+    if (total > QUESTION_TIMER_MAX_SEC) {
+      setActionError(
+        `Durée max. ${Math.floor(QUESTION_TIMER_MAX_SEC / 86400)} jours (réglage API).`,
+      );
+      return false;
+    }
+    if (
+      eventData?.questionTimer?.running === true &&
+      eventData?.questionTimer?.isPaused !== true
+    ) {
+      setActionError("Mettez le chrono en pause avant de modifier la durée.");
+      return false;
+    }
+    return activateQuestionTimer(total);
+  }
+
+  /**
+   * Réinitialiser (panneau) : durée configurée, arrêt du décompte, chrono reste actif.
+   */
+  async function reinitialiserChronoSelection() {
+    const configured =
+      typeof eventData?.questionTimer?.totalSec === "number" &&
+      eventData.questionTimer.totalSec > 0
+        ? eventData.questionTimer.totalSec
+        : presetChronoSec > 0
+          ? presetChronoSec
+          : 120;
+    return activateQuestionTimer(configured, { stopIfRunning: true });
   }
 
   async function postContestDraw(pollId) {
@@ -5684,10 +6184,12 @@ export default function RegieEventPage() {
 
   const liveState = eventData?.liveState ?? "—";
   const activePoll = eventData?.polls?.find(
-    (p) => p.id === eventData.activePollId,
+    (p) => p.id === eventData?.activePollId,
   );
   const liveResponsesOptions = useMemo(() => {
     const opts = normalizePollOptions(activePoll?.options);
+    const quizRevealed = Boolean(activePoll?.quizRevealed);
+    const isQuiz = String(activePoll?.type || "").toUpperCase() === "QUIZ";
     const totalVotesSafe = Math.max(
       0,
       Number(
@@ -5705,11 +6207,13 @@ export default function RegieEventPage() {
             : totalVotesSafe > 0
               ? (voteCount / totalVotesSafe) * 100
               : 0;
+        const isCorrect = Boolean(o?.isCorrect);
         return {
           id: String(o?.id || i),
           label: String(o?.label || `Option ${i + 1}`),
           voteCount,
           pct: Math.max(0, Math.min(100, pct)),
+          showBonneReponse: isQuiz && quizRevealed && isCorrect,
         };
       })
       .sort((a, b) => b.voteCount - a.voteCount);
@@ -5744,6 +6248,7 @@ export default function RegieEventPage() {
         ["CLOSED", "ARCHIVED"].includes(String(p.status || "").toUpperCase()),
       ));
   const eventLocked = Boolean(eventData?.isLocked);
+  const playlistEditActionLabel = eventLocked ? "Consulter" : "Modifier";
   const inTestMode = eventData?.isLiveConsumed === false;
   const canStartReal = inTestMode && !eventLocked;
   const activationBalance = computeActivationBalance(eventCredits, activationsAvailable);
@@ -5890,7 +6395,38 @@ export default function RegieEventPage() {
     pollStatus: activePoll?.status,
   });
   const canGoNext = canGoNextBase && allowedLiveActions.next;
+  const skipQuestionState = getRegieSkipQuestionState({
+    isLocked: eventLocked,
+    eventFinished,
+    busy,
+    hasActivePoll: Boolean(activePollIdJs),
+    hasNextPoll: hasNextPollAfterActive,
+    voteState: voteStateUi,
+    pollType: activePoll?.type,
+    leadEnabled: activePoll?.leadEnabled,
+    contestQuotaReached,
+  });
   const primaryLiveActionLabel = getRegiePrimaryLiveActionLabel(primaryLiveAction);
+  const pilotageStepLabel = getRegiePilotageStepLabel({
+    voteState: voteStateUi,
+    displayState: projectionDisplayStateUi,
+    pollStatus: activePoll?.status,
+    pollType: activePoll?.type,
+    leadEnabled: activePoll?.leadEnabled,
+    eventFinished,
+  });
+  const activeParticipationCount = Math.max(0, Number(activePoll?.voteCount || 0));
+  const activeParticipationUnit = isContestPoll(activePoll)
+    ? activeParticipationCount === 1
+      ? "inscrit"
+      : "inscrits"
+    : isLeadPoll(activePoll)
+      ? activeParticipationCount === 1
+        ? "lead"
+        : "leads"
+      : activeParticipationCount === 1
+        ? "vote"
+        : "votes";
   const antennaStatusLabel = activePoll
     ? getRegiePollStatusLabel({
         pollStatus: activePoll.status,
@@ -5903,6 +6439,27 @@ export default function RegieEventPage() {
     : eventFinished
       ? "Terminée"
       : "—";
+  const canRunPrimaryDraw =
+    Boolean(activePollIdJs) &&
+    !busy &&
+    !eventFinished &&
+    !eventLocked &&
+    allowedLiveActions.draw &&
+    !contestEligibleLoading &&
+    contestEligibleCount > 0 &&
+    !contestEligibleError &&
+    !contestQuotaReached &&
+    voteStateUi !== "open";
+  const primaryActionEnabledBase =
+    !busy &&
+    ((primaryLiveAction === "open" && canOpenVote) ||
+      (primaryLiveAction === "close" && canCloseVote) ||
+      (primaryLiveAction === "show-results" && canShowResultsForActive) ||
+      (primaryLiveAction === "draw" && canRunPrimaryDraw) ||
+      (primaryLiveAction === "next" && canGoNext) ||
+      (primaryLiveAction === "finish" &&
+        !eventFinished &&
+        allowedLiveActions.finish));
   const canShowQuestionQuick =
     canManageActivePoll && String(projectionDisplayStateUi || "").toLowerCase() !== "question";
   const canShowResultsQuick =
@@ -6186,6 +6743,123 @@ export default function RegieEventPage() {
     selectedPollId,
     eventData?.activePollId,
   );
+  const primaryActionEnabled =
+    !selectedIsConsultOnly && primaryActionEnabledBase;
+  const returnToLiveAntenna = useCallback(() => {
+    const ap = eventData?.activePollId ? String(eventData.activePollId) : null;
+    if (ap) setSelectedPollId(ap);
+  }, [eventData?.activePollId]);
+  const runPrimaryLiveAction = useCallback(async () => {
+    if (selectedIsConsultOnly || !primaryLiveAction || busy) return;
+    if (primaryLiveAction === "open") {
+      if (!activePollIdJs || !canOpenVote) return;
+      await postAction(`/polls/${activePollIdJs}/open`, "Vote ouvert");
+      return;
+    }
+    if (primaryLiveAction === "close") {
+      if (!activePollIdJs || !canCloseVote) return;
+      await postAction(`/polls/${activePollIdJs}/close`, "Vote ferme");
+      return;
+    }
+    if (primaryLiveAction === "show-results") {
+      if (!activePollIdJs || !canShowResultsForActive) return;
+      await postAction(
+        `/polls/${activePollIdJs}/show-results`,
+        "Resultats affiches",
+      );
+      return;
+    }
+    if (primaryLiveAction === "draw") {
+      if (!canRunPrimaryDraw) return;
+      setContestDrawModalOpen(true);
+      return;
+    }
+    if (primaryLiveAction === "next") {
+      if (!canGoNext) return;
+      await postAction(
+        `/events/${eventId}/next-poll`,
+        "Question suivante diffusee",
+      );
+      return;
+    }
+    if (primaryLiveAction === "finish") {
+      if (typeof window === "undefined") return;
+      const ok = window.confirm(
+        "Terminer l’événement maintenant ? Cette action clôture l’événement.",
+      );
+      if (!ok) return;
+      const confirmWord = window.prompt(
+        "Confirmation de sécurité : tapez TERMINER pour confirmer.",
+        "",
+      );
+      if (String(confirmWord || "").trim().toUpperCase() !== "TERMINER") return;
+      await postAction(`/events/${eventId}/finish`, "Evenement termine");
+    }
+  }, [
+    selectedIsConsultOnly,
+    primaryLiveAction,
+    busy,
+    activePollIdJs,
+    canOpenVote,
+    canCloseVote,
+    canShowResultsForActive,
+    canRunPrimaryDraw,
+    canGoNext,
+    eventId,
+    postAction,
+  ]);
+
+  const handleSkipQuestion = useCallback(async () => {
+    if (!eventId || !skipQuestionState.canSkip) return;
+    if (typeof window === "undefined") return;
+
+    if (skipQuestionState.isLastQuestion) {
+      const ok = window.confirm(
+        skipQuestionState.finishConfirmMessage ||
+          "C’est la dernière question. Terminer l’événement maintenant ?",
+      );
+      if (!ok) return;
+      const confirmWord = window.prompt(
+        "Confirmation de sécurité : tapez TERMINER pour confirmer.",
+        "",
+      );
+      if (String(confirmWord || "").trim().toUpperCase() !== "TERMINER") return;
+      await postAction(`/events/${eventId}/finish`, "Evenement termine");
+      return;
+    }
+
+    const ok = window.confirm(
+      skipQuestionState.confirmMessage ||
+        "Passer cette question et préparer la suivante ?",
+    );
+    if (!ok) return;
+
+    setAutoRotate(false);
+    setBusy(true);
+    setActionError(null);
+    try {
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/skip-poll`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(buildSkipPollRequestBody(skipQuestionState)),
+        },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(mapApiError(body, res.status));
+      }
+      await fetchEvent({ silent: true });
+      setToastNotif("Question passee");
+      window.setTimeout(() => setToastNotif(null), 2200);
+    } catch (e) {
+      setActionError(e.message || "Impossible de passer cette question.");
+    } finally {
+      setBusy(false);
+    }
+  }, [eventId, skipQuestionState, postAction, fetchEvent]);
+
   const selectedQuestionIndex = pollsOrdonnes.findIndex(
     (p) => String(p.id) === String(selectedPollId || ""),
   );
@@ -6193,6 +6867,12 @@ export default function RegieEventPage() {
     selectedQuestionIndex >= 0
       ? getRegieQuestionNumberLabel(selectedQuestionIndex, pollsOrdonnes.length)
       : null;
+  const consultBannerState = getRegieConsultBannerState({
+    eventFinished,
+    selectedQuestionNumberLabel,
+    activeQuestionIndex,
+    totalQuestions,
+  });
   const selectedStatusLabel = selectedPoll
     ? getRegiePollStatusLabel({
         pollStatus: selectedPoll.status,
@@ -6216,6 +6896,8 @@ export default function RegieEventPage() {
   const selectedConsultOptions = useMemo(() => {
     if (!selectedPoll) return [];
     const opts = normalizePollOptions(selectedPoll?.options);
+    const quizRevealed = Boolean(selectedPoll?.quizRevealed);
+    const isQuiz = String(selectedPoll?.type || "").toUpperCase() === "QUIZ";
     const totalVotesSafe = Math.max(
       0,
       Number(
@@ -6223,6 +6905,7 @@ export default function RegieEventPage() {
           opts.reduce((acc, o) => acc + optionVoteCount(o), 0),
       ),
     );
+    // Ordre stable (option.order API) — pas de tri par votes.
     return opts.map((o, i) => {
       const voteCount = optionVoteCount(o);
       const pctRaw = Number(o?.votePct);
@@ -6237,13 +6920,131 @@ export default function RegieEventPage() {
         label: String(o?.label || `Option ${i + 1}`),
         voteCount,
         pct: Math.max(0, Math.min(100, pct)),
+        showBonneReponse: isQuiz && quizRevealed && Boolean(o?.isCorrect),
       };
     });
   }, [selectedPoll]);
 
+  /** Stats antenne (même format que la consultation playlist). */
+  const activePilotageStatsOptions = useMemo(() => {
+    if (!activePoll) return [];
+    const opts = normalizePollOptions(activePoll?.options);
+    const quizRevealed = Boolean(activePoll?.quizRevealed);
+    const isQuiz = String(activePoll?.type || "").toUpperCase() === "QUIZ";
+    const totalVotesSafe = Math.max(
+      0,
+      Number(
+        activePoll?.voteCount ||
+          opts.reduce((acc, o) => acc + optionVoteCount(o), 0),
+      ),
+    );
+    // Ordre stable (option.order API) — pas de tri par votes.
+    return opts.map((o, i) => {
+      const voteCount = optionVoteCount(o);
+      const pctRaw = Number(o?.votePct);
+      const pct =
+        Number.isFinite(pctRaw) && pctRaw >= 0
+          ? pctRaw
+          : totalVotesSafe > 0
+            ? (voteCount / totalVotesSafe) * 100
+            : 0;
+      return {
+        id: String(o?.id || i),
+        label: String(o?.label || `Option ${i + 1}`),
+        voteCount,
+        pct: Math.max(0, Math.min(100, pct)),
+        showBonneReponse: isQuiz && quizRevealed && Boolean(o?.isCorrect),
+      };
+    });
+  }, [activePoll]);
+
+  /** Libellé régie après révélation publique uniquement. */
+  const activeQuizBonneReponseLabel = useMemo(() => {
+    if (!isQuizPoll(activePoll) || !activePoll?.quizRevealed) return null;
+    const saved = getSavedQuizCorrectAnswer(activePoll);
+    return saved.hasSaved ? saved.label : null;
+  }, [activePoll]);
+
   const handleSelectPlaylistPoll = useCallback((pollId) => {
     setSelectedPollId(String(pollId || "") || null);
   }, []);
+
+  const handlePlaylistMove = useCallback(
+    async (pollId, direction) => {
+      if (!eventId || busy || eventLocked) return;
+      setAutoRotate(false);
+      setBusy(true);
+      setActionError(null);
+      try {
+        const res = await adminFetch(
+          `${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/polls/reorder`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pollId, direction }),
+          },
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(mapApiError(body, res.status));
+        }
+        await fetchEvent({ silent: true });
+      } catch (e) {
+        setActionError(e.message || "Réordonnancement échoué.");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [eventId, busy, eventLocked, fetchEvent],
+  );
+
+  const handlePlaylistDelete = useCallback(
+    async (poll, actions) => {
+      if (!poll?.id || busy || eventLocked) return;
+      if (actions && actions.canDelete === false) return;
+      if (typeof window === "undefined") return;
+      const confirmMsg =
+        (actions && actions.deleteConfirmMessage) ||
+        "Supprimer cette question de la playlist ?";
+      const ok = window.confirm(confirmMsg);
+      if (!ok) return;
+      const confirmWipeTestData = Boolean(actions?.requiresWipeConfirm);
+      setAutoRotate(false);
+      setBusy(true);
+      setActionError(null);
+      const pid = String(poll.id);
+      try {
+        const res = await adminFetch(
+          `${apiBaseBrowser()}/polls/${encodeURIComponent(pid)}`,
+          {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ confirmWipeTestData }),
+          },
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(mapApiError(body, res.status));
+        }
+        setSelectedPollId((prev) =>
+          String(prev || "") === pid ? null : prev,
+        );
+        setPollDrawSummary((prev) => {
+          const next = { ...prev };
+          delete next[pid];
+          return next;
+        });
+        await fetchEvent({ silent: true });
+        setToastNotif("Question supprimée");
+        window.setTimeout(() => setToastNotif(null), 2200);
+      } catch (e) {
+        setActionError(e.message || "Suppression échouée.");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy, eventLocked, fetchEvent],
+  );
 
   const selectedReplayGate = canOfferReplayTestPoll({
     isTestMode: inTestMode,
@@ -6397,7 +7198,15 @@ export default function RegieEventPage() {
             onContestShortcut={handleContestShortcut}
             onLeadShortcut={handleLeadShortcut}
             onEdit={openEditPollModal}
+            editActionLabel={playlistEditActionLabel}
             contestDrawSummary={pollDrawSummary[String(poll.id)]}
+            playlistIndex={index}
+            playlistTotal={pollsOrdonnes.length}
+            isLocked={eventLocked}
+            isLiveConsumed={eventData?.isLiveConsumed}
+            onMoveUp={(id) => handlePlaylistMove(id, "up")}
+            onMoveDown={(id) => handlePlaylistMove(id, "down")}
+            onDelete={handlePlaylistDelete}
           />
         ))}
       </div>
@@ -6409,40 +7218,43 @@ export default function RegieEventPage() {
     chronoHours * 3600 +
     chronoMinutes * 60 +
     chronoSeconds;
-  const secondesAfficheGrand =
+  /** État réel API uniquement — pas de second flag UI. */
+  const chronoEnabled = isRegieChronoEnabled(tm);
+  const chronoEnabledLabel = getRegieChronoEnabledLabel(tm);
+  const chronoRunningHint = getRegieChronoRunningHint(tm);
+  const chronoControlMode = getRegieChronoControlMode(tm);
+  const chronoControls = getRegieChronoControlFlags(chronoControlMode);
+  /** Durée « live » seulement si le chrono est armé/actif côté serveur. */
+  const secondesChronoActif =
     secondesChrono !== null
       ? secondesChrono
-      : tm && typeof tm.remainingSec === "number"
+      : chronoEnabled && typeof tm?.remainingSec === "number"
         ? tm.remainingSec
-        : presetChronoSec > 0
-          ? presetChronoSec
-          : null;
+        : null;
+  /** Durée affichée : réelle si actif, sinon preset (référence grisée). */
+  const secondesAfficheGrand =
+    secondesChronoActif !== null
+      ? secondesChronoActif
+      : presetChronoSec > 0
+        ? presetChronoSec
+        : null;
   const texteGrandChrono =
     secondesAfficheGrand !== null
       ? formatCountdownVerbose(secondesAfficheGrand)
       : "—";
-  const legendeChrono = tm?.running && !tm?.isPaused
-    ? inTestMode
-      ? "Compte à rebours (MODE TEST)"
-      : "Compte à rebours sur l’écran"
-    : tm?.isPaused
-      ? "En pause"
-      : tm
-        ? "Arrêté — prêt à relancer"
-        : "Durée réglée avant lancement";
-  const chronoEtatLiveTexte = useMemo(() => {
-    if (secondesAfficheGrand == null) return "00:00";
-    const total = Math.max(0, Math.floor(secondesAfficheGrand));
-    const d = Math.floor(total / 86400);
-    const h = Math.floor((total % 86400) / 3600);
-    const m = Math.floor((total % 3600) / 60);
-    const s = total % 60;
-    if (d > 0) return `${d}j ${String(h).padStart(2, "0")}h`;
-    if (h > 0) {
-      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-    }
-    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  }, [secondesAfficheGrand]);
+  const legendeChrono = !chronoEnabled
+    ? "Chrono inactif — activez-le pour l’utiliser"
+    : tm?.running && !tm?.isPaused
+      ? inTestMode
+        ? "Compte à rebours (MODE TEST)"
+        : "Compte à rebours sur l’écran"
+      : tm?.isPaused
+        ? "En pause — prêt à lancer"
+        : "Arrêté — prêt à relancer";
+  const chronoEtatLiveTexte = useMemo(
+    () => formatCountdownCompact(secondesAfficheGrand),
+    [secondesAfficheGrand],
+  );
 
   const chronoAffichageLong = texteGrandChrono.includes(" j ");
 
@@ -6458,101 +7270,67 @@ export default function RegieEventPage() {
     opacity: busy ? 0.55 : 1,
   };
 
+  const chronoInputStyle = {
+    display: "block",
+    width: "3.1rem",
+    marginTop: "0.2rem",
+    padding: "0.22rem 0.28rem",
+    borderRadius: "6px",
+    border: "1px solid #d8b4fe",
+    background: "#faf5ff",
+    fontSize: "0.78rem",
+  };
+  const chronoLabelStyle = {
+    fontSize: "0.65rem",
+    fontWeight: 700,
+    color: "#64748b",
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+  };
+
+  const quizCorrectEditStatus = useMemo(
+    () =>
+      getQuizCorrectAnswerEditStatus({
+        poll: {
+          options: editOptionLabels.map((label, i) => ({
+            label,
+            isCorrect: Boolean(
+              Array.isArray(editingPoll?.options)
+                ? editingPoll.options[i]?.isCorrect
+                : false,
+            ),
+          })),
+        },
+        draftOrder: editQuizCorrectOrder,
+      }),
+    [editingPoll, editQuizCorrectOrder, editOptionLabels],
+  );
+
+  const pollEditGuard = useMemo(
+    () =>
+      getRegiePollEditGuardState({
+        isLocked: eventData?.isLocked,
+        isLiveConsumed: eventData?.isLiveConsumed,
+        voteCount: editingPoll?.voteCount,
+        quizRevealed: editingPoll?.quizRevealed,
+        isQuiz: String(editingPoll?.type || "").toUpperCase() === "QUIZ",
+        allowsOptionEdit: pollTypeAllowsOptionEdit(editingPoll?.type, {
+          leadEnabled: editingPoll?.leadEnabled,
+        }),
+      }),
+    [
+      eventData?.isLocked,
+      eventData?.isLiveConsumed,
+      editingPoll?.voteCount,
+      editingPoll?.quizRevealed,
+      editingPoll?.type,
+      editingPoll?.leadEnabled,
+    ],
+  );
+
+  /** Panneau Régler : durée + Confirmer + Réinitialiser uniquement. */
   const chronoProjectionInner = (
-    <>
-      <div style={{ textAlign: "center", marginBottom: "0.85rem" }}>
-        <p
-          style={{
-            margin: 0,
-            fontSize: chronoAffichageLong
-              ? desktop
-                ? "1.55rem"
-                : "1.35rem"
-              : desktop
-                ? "2.75rem"
-                : "2.4rem",
-            fontWeight: 800,
-            fontFamily: "ui-monospace, monospace",
-            letterSpacing: "-0.04em",
-            color: "#3b0764",
-            lineHeight: 1.05,
-            fontVariantNumeric: "tabular-nums",
-            wordBreak: "break-word",
-          }}
-        >
-          {texteGrandChrono}
-        </p>
-        <p
-          style={{
-            margin: "0.4rem 0 0 0",
-            fontSize: "0.74rem",
-            color: "#6b21a8",
-            fontWeight: 600,
-            opacity: 0.95,
-          }}
-        >
-          {legendeChrono}
-        </p>
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          justifyContent: "center",
-          gap: "0.5rem",
-          marginBottom: "0.85rem",
-        }}
-      >
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => {
-            const total = presetChronoSec;
-            if (total < 1) {
-              setActionError("Indique au moins 1 seconde.");
-              return;
-            }
-            if (total > QUESTION_TIMER_MAX_SEC) {
-              setActionError(
-                `Durée max. ${Math.floor(QUESTION_TIMER_MAX_SEC / 86400)} jours (réglage API).`,
-              );
-              return;
-            }
-            void postQuestionTimer({ action: "start", totalSec: total });
-          }}
-          style={{
-            padding: "0.48rem 1.15rem",
-            fontSize: "0.84rem",
-            fontWeight: 700,
-            borderRadius: "10px",
-            border: "1px solid #5b21b6",
-            background: busy ? "#c4b5fd" : "linear-gradient(180deg, #7c3aed 0%, #6d28d9 100%)",
-            color: "#fff",
-            cursor: busy ? "not-allowed" : "pointer",
-            boxShadow: busy ? "none" : "0 2px 10px rgba(109, 40, 217, 0.3)",
-          }}
-        >
-          Lancer
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void postQuestionTimer({ action: "pause" })}
-          style={chronoBtnOutline}
-        >
-          Pause
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void postQuestionTimer({ action: "reset" })}
-          style={chronoBtnOutline}
-        >
-          Réinitialiser
-        </button>
-      </div>
-
+    <div style={{ display: "grid", gap: "0.85rem" }}>
       <div
         style={{
           display: "flex",
@@ -6560,19 +7338,9 @@ export default function RegieEventPage() {
           justifyContent: "center",
           alignItems: "flex-end",
           gap: "0.65rem 1rem",
-          paddingTop: "0.65rem",
-          borderTop: "1px solid rgba(196, 181, 253, 0.6)",
         }}
       >
-        <label
-          style={{
-            fontSize: "0.65rem",
-            fontWeight: 700,
-            color: "#64748b",
-            letterSpacing: "0.04em",
-            textTransform: "uppercase",
-          }}
-        >
+        <label style={chronoLabelStyle}>
           Jours
           <input
             type="number"
@@ -6585,27 +7353,10 @@ export default function RegieEventPage() {
                 Math.min(90, Math.max(0, parseInt(e.target.value, 10) || 0)),
               )
             }
-            style={{
-              display: "block",
-              width: "3.1rem",
-              marginTop: "0.2rem",
-              padding: "0.22rem 0.28rem",
-              borderRadius: "6px",
-              border: "1px solid #d8b4fe",
-              background: "#faf5ff",
-              fontSize: "0.78rem",
-            }}
+            style={chronoInputStyle}
           />
         </label>
-        <label
-          style={{
-            fontSize: "0.65rem",
-            fontWeight: 700,
-            color: "#64748b",
-            letterSpacing: "0.04em",
-            textTransform: "uppercase",
-          }}
-        >
+        <label style={chronoLabelStyle}>
           Heures
           <input
             type="number"
@@ -6618,28 +7369,11 @@ export default function RegieEventPage() {
                 Math.min(23, Math.max(0, parseInt(e.target.value, 10) || 0)),
               )
             }
-            style={{
-              display: "block",
-              width: "3.1rem",
-              marginTop: "0.2rem",
-              padding: "0.22rem 0.28rem",
-              borderRadius: "6px",
-              border: "1px solid #d8b4fe",
-              background: "#faf5ff",
-              fontSize: "0.78rem",
-            }}
+            style={chronoInputStyle}
           />
         </label>
-        <label
-          style={{
-            fontSize: "0.65rem",
-            fontWeight: 700,
-            color: "#64748b",
-            letterSpacing: "0.04em",
-            textTransform: "uppercase",
-          }}
-        >
-          Min.
+        <label style={chronoLabelStyle}>
+          Minutes
           <input
             type="number"
             min={0}
@@ -6651,28 +7385,11 @@ export default function RegieEventPage() {
                 Math.min(59, Math.max(0, parseInt(e.target.value, 10) || 0)),
               )
             }
-            style={{
-              display: "block",
-              width: "3.1rem",
-              marginTop: "0.2rem",
-              padding: "0.22rem 0.28rem",
-              borderRadius: "6px",
-              border: "1px solid #d8b4fe",
-              background: "#faf5ff",
-              fontSize: "0.78rem",
-            }}
+            style={chronoInputStyle}
           />
         </label>
-        <label
-          style={{
-            fontSize: "0.65rem",
-            fontWeight: 700,
-            color: "#64748b",
-            letterSpacing: "0.04em",
-            textTransform: "uppercase",
-          }}
-        >
-          Sec.
+        <label style={chronoLabelStyle}>
+          Secondes
           <input
             type="number"
             min={0}
@@ -6684,32 +7401,61 @@ export default function RegieEventPage() {
                 Math.min(59, Math.max(0, parseInt(e.target.value, 10) || 0)),
               )
             }
-            style={{
-              display: "block",
-              width: "3.1rem",
-              marginTop: "0.2rem",
-              padding: "0.22rem 0.28rem",
-              borderRadius: "6px",
-              border: "1px solid #d8b4fe",
-              background: "#faf5ff",
-              fontSize: "0.78rem",
-            }}
+            style={chronoInputStyle}
           />
         </label>
-        <span
-          style={{
-            fontSize: "0.6rem",
-            color: "#94a3b8",
-            fontWeight: 500,
-            maxWidth: "10rem",
-            lineHeight: 1.35,
-            paddingBottom: "0.12rem",
-          }}
-        >
-          Max. {Math.floor(QUESTION_TIMER_MAX_SEC / 86400)} j côté serveur.
-        </span>
       </div>
-    </>
+      <p
+        style={{
+          margin: 0,
+          textAlign: "center",
+          fontSize: "0.68rem",
+          color: "#94a3b8",
+          fontWeight: 500,
+        }}
+      >
+        Max. {Math.floor(QUESTION_TIMER_MAX_SEC / 86400)} j — la durée n’est
+        appliquée qu’après confirmation.
+      </p>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "center",
+          gap: "0.5rem",
+        }}
+      >
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void confirmChronoSelection()}
+          style={{
+            padding: "0.48rem 1rem",
+            fontSize: "0.82rem",
+            fontWeight: 800,
+            borderRadius: "10px",
+            border: "1px solid #0d9488",
+            background: busy
+              ? "#99f6e4"
+              : "linear-gradient(180deg, #14b8a6 0%, #0d9488 100%)",
+            color: "#fff",
+            cursor: busy ? "not-allowed" : "pointer",
+          }}
+          title="Applique la durée sur le chrono serveur sans démarrer le décompte."
+        >
+          Confirmer la sélection
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void reinitialiserChronoSelection()}
+          style={chronoBtnOutline}
+          title="Remet la durée configurée et arrête le décompte, sans désactiver."
+        >
+          Réinitialiser
+        </button>
+      </div>
+    </div>
   );
 
   if (!eventId) {
@@ -6876,11 +7622,81 @@ export default function RegieEventPage() {
                 letterSpacing: "0.06em",
               }}
             >
-              Modifier la question
+              {pollEditGuard.eventLocked
+                ? "Consulter la question"
+                : "Modifier la question"}
             </p>
             <p style={{ margin: "0.28rem 0 0 0", fontSize: "0.86rem", color: "#64748b" }}>
-              Type : <strong style={{ color: "#111827" }}>{editingPoll.type}</strong>
+              Type :{" "}
+              <strong style={{ color: "#111827" }}>{editingPoll.type}</strong>
+              {" · "}
+              non modifiable
             </p>
+            {pollEditGuard.lockedReason ? (
+              <p
+                style={{
+                  margin: "0.55rem 0 0 0",
+                  padding: "0.5rem 0.6rem",
+                  borderRadius: "8px",
+                  background: "#fef2f2",
+                  border: "1px solid #fecaca",
+                  fontSize: "0.78rem",
+                  fontWeight: 600,
+                  color: "#991b1b",
+                }}
+              >
+                {pollEditGuard.lockedReason}
+              </p>
+            ) : null}
+            {pollEditGuard.softWarning ? (
+              <p
+                style={{
+                  margin: "0.55rem 0 0 0",
+                  padding: "0.5rem 0.6rem",
+                  borderRadius: "8px",
+                  background: "#fffbeb",
+                  border: "1px solid #fde68a",
+                  fontSize: "0.78rem",
+                  fontWeight: 600,
+                  color: "#92400e",
+                }}
+              >
+                {pollEditGuard.softWarning}
+              </p>
+            ) : null}
+            {pollEditGuard.optionsBlockedReason ? (
+              <p
+                style={{
+                  margin: "0.55rem 0 0 0",
+                  padding: "0.5rem 0.6rem",
+                  borderRadius: "8px",
+                  background: "#fff7ed",
+                  border: "1px solid #fed7aa",
+                  fontSize: "0.78rem",
+                  fontWeight: 600,
+                  color: "#9a3412",
+                }}
+              >
+                {pollEditGuard.optionsBlockedReason}
+              </p>
+            ) : null}
+            {editModalError ? (
+              <p
+                role="alert"
+                style={{
+                  margin: "0.55rem 0 0 0",
+                  padding: "0.5rem 0.6rem",
+                  borderRadius: "8px",
+                  background: "#fef2f2",
+                  border: "1px solid #fecaca",
+                  fontSize: "0.78rem",
+                  fontWeight: 700,
+                  color: "#991b1b",
+                }}
+              >
+                {editModalError}
+              </p>
+            ) : null}
             <label
               style={{
                 display: "block",
@@ -6895,7 +7711,7 @@ export default function RegieEventPage() {
             <textarea
               value={editQuestionText}
               onChange={(e) => setEditQuestionText(e.target.value)}
-              disabled={busy}
+              disabled={busy || !pollEditGuard.canEditSoftFields}
               rows={3}
               style={{
                 width: "100%",
@@ -6926,7 +7742,7 @@ export default function RegieEventPage() {
                   type="text"
                   value={editContestPrize}
                   onChange={(e) => setEditContestPrize(e.target.value)}
-                  disabled={busy}
+                  disabled={busy || !pollEditGuard.canEditSoftFields}
                   style={{
                     width: "100%",
                     boxSizing: "border-box",
@@ -6959,7 +7775,7 @@ export default function RegieEventPage() {
                       normalizeContestWinnerCount(e.target.value),
                     )
                   }
-                  disabled={busy}
+                  disabled={busy || !pollEditGuard.canEditSoftFields}
                   style={{
                     width: "100%",
                     boxSizing: "border-box",
@@ -6971,6 +7787,314 @@ export default function RegieEventPage() {
                   }}
                 />
               </>
+            ) : null}
+            {pollTypeAllowsOptionEdit(editingPoll?.type, {
+              leadEnabled: editingPoll?.leadEnabled,
+            }) ? (
+              <div style={{ marginTop: "0.85rem" }}>
+                <p
+                  style={{
+                    margin: "0 0 0.4rem 0",
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    color: "#64748b",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                  }}
+                >
+                  Réponses
+                </p>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.45rem",
+                    marginBottom: "0.55rem",
+                  }}
+                >
+                  {editOptionLabels.map((r, i) => (
+                    <div
+                      key={`edit-opt-${i}`}
+                      style={{
+                        display: "flex",
+                        gap: "0.35rem",
+                        alignItems: "center",
+                      }}
+                    >
+                      <input
+                        type="text"
+                        value={r}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditOptionLabels((prev) => {
+                            const next = [...prev];
+                            next[i] = val;
+                            return next;
+                          });
+                        }}
+                        disabled={busy || !pollEditGuard.canEditOptions}
+                        placeholder={`Réponse ${i + 1}`}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          padding: "0.4rem 0.5rem",
+                          borderRadius: "7px",
+                          border: "1px solid #cbd5e1",
+                          fontSize: "0.86rem",
+                          background: pollEditGuard.canEditOptions
+                            ? "#fff"
+                            : "#f8fafc",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        disabled={
+                          busy ||
+                          !pollEditGuard.canEditOptions ||
+                          editOptionLabels.length <= 2
+                        }
+                        onClick={() => {
+                          setEditOptionLabels((prev) => {
+                            if (prev.length <= 2) return prev;
+                            const next = prev.filter((_, idx) => idx !== i);
+                            setEditQuizCorrectOrder((cur) =>
+                              Math.min(cur, Math.max(0, next.length - 1)),
+                            );
+                            setEditLeadTriggerOrder((cur) =>
+                              Math.min(cur, Math.max(0, next.length - 1)),
+                            );
+                            return next;
+                          });
+                        }}
+                        style={{
+                          flexShrink: 0,
+                          padding: "0.35rem 0.5rem",
+                          fontSize: "0.72rem",
+                          fontWeight: 600,
+                          borderRadius: "6px",
+                          border: "1px solid #e2e8f0",
+                          background: "#f8fafc",
+                          color: "#64748b",
+                          cursor:
+                            busy ||
+                            !pollEditGuard.canEditOptions ||
+                            editOptionLabels.length <= 2
+                              ? "not-allowed"
+                              : "pointer",
+                        }}
+                      >
+                        Retirer
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  disabled={
+                    busy ||
+                    !pollEditGuard.canEditOptions ||
+                    editOptionLabels.length >= 32
+                  }
+                  onClick={() =>
+                    setEditOptionLabels((prev) =>
+                      prev.length >= 32 ? prev : [...prev, ""],
+                    )
+                  }
+                  style={{
+                    marginBottom: "0.55rem",
+                    padding: "0.4rem 0.65rem",
+                    fontSize: "0.78rem",
+                    fontWeight: 700,
+                    borderRadius: "8px",
+                    border: "1px dashed #94a3b8",
+                    background: "#f8fafc",
+                    color: "#475569",
+                    cursor:
+                      busy || !pollEditGuard.canEditOptions
+                        ? "not-allowed"
+                        : "pointer",
+                  }}
+                >
+                  + Ajouter une réponse
+                </button>
+                {Boolean(editingPoll?.leadEnabled) ? (
+                  <div
+                    style={{
+                      margin: "0.35rem 0 0.55rem 0",
+                      padding: "0.55rem 0.65rem",
+                      borderRadius: "8px",
+                      border: "1px solid #e2e8f0",
+                      background: "#f8fafc",
+                    }}
+                  >
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.74rem",
+                        fontWeight: 700,
+                        color: "#475569",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Déclencheur du formulaire
+                    </label>
+                    <select
+                      value={Math.min(
+                        Math.max(0, Number(editLeadTriggerOrder ?? 0)),
+                        Math.max(0, editOptionLabels.length - 1),
+                      )}
+                      onChange={(e) => {
+                        const n = Number(e.target.value);
+                        setEditLeadTriggerOrder(
+                          Number.isFinite(n) && n >= 0 ? n : 0,
+                        );
+                      }}
+                      disabled={busy || !pollEditGuard.canEditOptions}
+                      style={{
+                        width: "100%",
+                        boxSizing: "border-box",
+                        padding: "0.42rem 0.5rem",
+                        borderRadius: "7px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.84rem",
+                        background: "#fff",
+                      }}
+                    >
+                      {editOptionLabels.map((r, idx) => (
+                        <option key={`edit-lead-trigger-${idx}`} value={idx}>
+                          {`Option ${idx + 1}${
+                            String(r || "").trim()
+                              ? ` - ${String(r).trim()}`
+                              : ""
+                          }`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {String(editingPoll?.type || "").toUpperCase() === "QUIZ" ? (
+              <div
+                style={{
+                  marginTop: "0.7rem",
+                  padding: "0.55rem 0.65rem",
+                  borderRadius: "8px",
+                  border: "1px solid #dcfce7",
+                  background: "#f0fdf4",
+                }}
+              >
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.74rem",
+                    fontWeight: 700,
+                    color: "#166534",
+                    marginBottom: "0.35rem",
+                  }}
+                >
+                  Bonne réponse
+                </label>
+                <select
+                  value={Math.min(
+                    Math.max(0, Number(editQuizCorrectOrder ?? 0)),
+                    Math.max(0, editOptionLabels.length - 1),
+                  )}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    setEditQuizCorrectOrder(
+                      Number.isFinite(n) && n >= 0 ? n : 0,
+                    );
+                  }}
+                  disabled={busy || !pollEditGuard.canEditQuizCorrect}
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    padding: "0.42rem 0.5rem",
+                    borderRadius: "7px",
+                    border: "1px solid #86efac",
+                    fontSize: "0.84rem",
+                    background: pollEditGuard.canEditQuizCorrect
+                      ? "#fff"
+                      : "#f8fafc",
+                    opacity: pollEditGuard.canEditQuizCorrect ? 1 : 0.72,
+                  }}
+                >
+                  {editOptionLabels.map((r, idx) => (
+                    <option key={`edit-quiz-correct-${idx}`} value={idx}>
+                      {`Option ${idx + 1}${
+                        String(r || "").trim()
+                          ? ` - ${String(r).trim()}`
+                          : ""
+                      }`}
+                    </option>
+                  ))}
+                </select>
+                {pollEditGuard.quizBlockedReason ? (
+                  <p
+                    style={{
+                      margin: "0.45rem 0 0 0",
+                      fontSize: "0.74rem",
+                      fontWeight: 700,
+                      color: "#991b1b",
+                    }}
+                  >
+                    {pollEditGuard.quizBlockedReason}
+                  </p>
+                ) : null}
+                {pollEditGuard.quizHint ? (
+                  <p
+                    style={{
+                      margin: "0.35rem 0 0 0",
+                      fontSize: "0.74rem",
+                      fontWeight: 600,
+                      color: "#92400e",
+                    }}
+                  >
+                    {pollEditGuard.quizHint}
+                  </p>
+                ) : null}
+                <p
+                  style={{
+                    margin: "0.45rem 0 0 0",
+                    fontSize: "0.78rem",
+                    fontWeight: 700,
+                    color: quizCorrectEditStatus.hasSaved
+                      ? "#166534"
+                      : "#b45309",
+                  }}
+                >
+                  {quizCorrectEditStatus.hasSaved
+                    ? `Bonne réponse enregistrée : ${quizCorrectEditStatus.savedLabel}`
+                    : "Aucune bonne réponse enregistrée"}
+                </p>
+                {pollEditGuard.canEditQuizCorrect &&
+                quizCorrectEditStatus.draftPending &&
+                quizCorrectEditStatus.draftLabel ? (
+                  <p
+                    style={{
+                      margin: "0.25rem 0 0 0",
+                      fontSize: "0.74rem",
+                      fontWeight: 600,
+                      color: "#b45309",
+                    }}
+                  >
+                    {quizCorrectEditStatus.hasSaved
+                      ? `Modification non enregistrée : ${quizCorrectEditStatus.draftLabel}`
+                      : `Sélection en cours (non enregistrée) : ${quizCorrectEditStatus.draftLabel}`}
+                  </p>
+                ) : null}
+                <p
+                  style={{
+                    margin: "0.35rem 0 0 0",
+                    fontSize: "0.72rem",
+                    color: "#64748b",
+                  }}
+                >
+                  Visible sur Screen et participants seulement après « Afficher
+                  les résultats » (vote fermé).
+                </p>
+              </div>
             ) : null}
             <div
               style={{
@@ -6995,24 +8119,26 @@ export default function RegieEventPage() {
                   cursor: busy ? "not-allowed" : "pointer",
                 }}
               >
-                Annuler
+                {pollEditGuard.eventLocked ? "Fermer" : "Annuler"}
               </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void submitPollEdit()}
-                style={{
-                  padding: "0.45rem 0.82rem",
-                  borderRadius: "9px",
-                  border: "1px solid #1d4ed8",
-                  background: busy ? "#f1f5f9" : "#2563eb",
-                  color: busy ? "#94a3b8" : "#fff",
-                  fontWeight: 800,
-                  cursor: busy ? "not-allowed" : "pointer",
-                }}
-              >
-                {busy ? "Enregistrement..." : "Enregistrer"}
-              </button>
+              {pollEditGuard.canEditSoftFields ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void submitPollEdit()}
+                  style={{
+                    padding: "0.45rem 0.82rem",
+                    borderRadius: "9px",
+                    border: "1px solid #1d4ed8",
+                    background: busy ? "#f1f5f9" : "#2563eb",
+                    color: busy ? "#94a3b8" : "#fff",
+                    fontWeight: 800,
+                    cursor: busy ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {busy ? "Enregistrement..." : "Enregistrer"}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
@@ -7473,7 +8599,7 @@ export default function RegieEventPage() {
         </div>
       ) : null}
 
-      {!loading && eventData && (
+      {shouldRenderRegieEventBody({ eventData, loading }) && (
         <div
           style={
             desktop
@@ -7982,6 +9108,7 @@ export default function RegieEventPage() {
                       gap: "0.16rem",
                       justifyItems: desktop ? "end" : "start",
                       textAlign: desktop ? "right" : "left",
+                      opacity: chronoEnabled ? 1 : 0.55,
                     }}
                   >
                     <p
@@ -8002,7 +9129,9 @@ export default function RegieEventPage() {
                         fontSize: desktop ? "1.85rem" : "1.28rem",
                         fontWeight: 800,
                         lineHeight: 1.02,
-                        color: "#f5f3ff",
+                        color: chronoEnabled
+                          ? "#f5f3ff"
+                          : "rgba(226, 232, 240, 0.42)",
                         fontFamily: "ui-monospace, monospace",
                         fontVariantNumeric: "tabular-nums",
                         letterSpacing: "-0.03em",
@@ -8010,12 +9139,20 @@ export default function RegieEventPage() {
                     >
                       {chronoEtatLiveTexte}
                     </p>
-                    <p style={{ margin: 0, fontSize: "0.7rem", color: "rgba(224, 231, 255, 0.72)" }}>
-                      {tm?.running && !tm?.isPaused
-                        ? "en cours"
-                        : tm?.isPaused
-                          ? "en pause"
-                          : "prêt"}
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "0.7rem",
+                        fontWeight: 700,
+                        color: chronoEnabled
+                          ? "rgba(224, 231, 255, 0.78)"
+                          : "rgba(226, 232, 240, 0.45)",
+                      }}
+                    >
+                      {chronoEnabledLabel}
+                      {chronoEnabled && chronoRunningHint
+                        ? ` · ${chronoRunningHint}`
+                        : ""}
                     </p>
                     <button
                       type="button"
@@ -8052,6 +9189,8 @@ export default function RegieEventPage() {
                 alignItems: "stretch",
                 minWidth: 0,
                 ...liveExperienceShellStyle,
+                // Aperçu ~390×844 : ne pas clipper — la page régie scrolle.
+                overflow: desktop && previewJoinOpen ? "visible" : "hidden",
               }}
             >
               <div
@@ -8122,397 +9261,652 @@ export default function RegieEventPage() {
                   </p>
                 </div>
 
-                {selectedPoll &&
-                (selectedIsConsultOnly || (inTestMode && canReplaySelected)) ? (
+                {selectedIsConsultOnly ? (
                   <div
                     style={{
                       marginTop: "0.85rem",
-                      padding: "0.85rem 0.95rem",
-                      borderRadius: "16px",
-                      border: "1px solid rgba(245, 158, 11, 0.35)",
-                      background:
-                        "linear-gradient(180deg, rgba(255, 251, 235, 0.95) 0%, rgba(255,255,255,0.98) 100%)",
-                      boxShadow: "0 10px 22px rgba(180, 83, 9, 0.06)",
+                      padding: "0.95rem 1rem",
+                      borderRadius: "18px",
+                      border: eventFinished
+                        ? "1px solid rgba(148, 163, 184, 0.35)"
+                        : "1px solid rgba(245, 158, 11, 0.35)",
+                      background: eventFinished
+                        ? "linear-gradient(180deg, rgba(248, 250, 252, 0.98) 0%, rgba(255,255,255,0.99) 100%)"
+                        : "linear-gradient(180deg, rgba(255, 251, 235, 0.98) 0%, rgba(255,255,255,0.99) 100%)",
+                      boxShadow: eventFinished
+                        ? "0 12px 28px rgba(15, 23, 42, 0.04)"
+                        : "0 12px 28px rgba(180, 83, 9, 0.06)",
+                      display: "grid",
+                      gap: "0.7rem",
                     }}
                   >
                     <p
                       style={{
                         margin: 0,
-                        fontSize: "0.62rem",
-                        fontWeight: 800,
-                        letterSpacing: "0.08em",
-                        textTransform: "uppercase",
-                        color: "#92400e",
+                        fontSize: "0.86rem",
+                        fontWeight: 700,
+                        color: eventFinished ? "#334155" : "#92400e",
+                        lineHeight: 1.4,
                       }}
                     >
-                      {selectedIsConsultOnly
-                        ? `Consultation — ${selectedQuestionNumberLabel}`
-                        : `Question jouée — ${selectedQuestionNumberLabel}`}
+                      {consultBannerState.title}
                     </p>
-                    <p
-                      style={{
-                        margin: "0.35rem 0 0 0",
-                        fontSize: "1rem",
-                        fontWeight: 800,
-                        color: "#111827",
-                        lineHeight: 1.3,
-                      }}
-                    >
-                      {selectedTitle}
-                    </p>
-                    <p style={{ margin: "0.3rem 0 0 0", fontSize: "0.78rem", color: "#64748b" }}>
-                      Type : <strong style={{ color: "#334155" }}>{selectedTypeLabel}</strong>
-                      {" · "}
-                      Statut : <strong style={{ color: "#334155" }}>{selectedStatusLabel}</strong>
-                      {" · "}
-                      <strong style={{ color: "#334155" }}>
-                        {selectedPoll.voteCount ?? 0}
-                      </strong>{" "}
-                      vote{(selectedPoll.voteCount ?? 0) !== 1 ? "s" : ""}
-                      {" · "}
-                      {selectedIsConsultOnly
-                        ? "Aucune rediffusion"
-                        : "Antenne — rejeu TEST possible"}
-                    </p>
-                    {selectedConsultOptions.length > 0 ? (
-                      <ul
+                    {consultBannerState.showReturnToLive ? (
+                      <button
+                        type="button"
+                        onClick={returnToLiveAntenna}
                         style={{
-                          margin: "0.55rem 0 0 0",
-                          padding: 0,
-                          listStyle: "none",
-                          display: "grid",
-                          gap: "0.28rem",
+                          width: "100%",
+                          minHeight: "3.1rem",
+                          padding: "0.75rem 1rem",
+                          borderRadius: "14px",
+                          border: "1px solid #0d9488",
+                          background:
+                            "linear-gradient(180deg, #14b8a6 0%, #0d9488 100%)",
+                          color: "#fff",
+                          fontWeight: 800,
+                          fontSize: "0.95rem",
+                          cursor: "pointer",
+                          boxShadow: "0 14px 28px rgba(13, 148, 136, 0.18)",
                         }}
                       >
-                        {selectedConsultOptions.map((opt) => (
-                          <li
-                            key={opt.id}
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              gap: "0.75rem",
-                              fontSize: "0.74rem",
-                              color: "#475569",
-                            }}
-                          >
-                            <span style={{ overflowWrap: "anywhere" }}>{opt.label}</span>
-                            <span style={{ flexShrink: 0, fontWeight: 700, color: "#1e293b" }}>
-                              {opt.voteCount} ·{" "}
-                              {Number(opt.pct).toLocaleString("fr-FR", {
-                                maximumFractionDigits: 1,
-                              })}
-                              %
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
+                        Retour au direct
+                      </button>
                     ) : null}
-                    {inTestMode ? (
-                      <div style={{ marginTop: "0.75rem" }}>
-                        <button
-                          type="button"
-                          disabled={!canReplaySelected || busy}
-                          onClick={() => void handleReplaySelectedTestPoll()}
-                          title={
-                            canReplaySelected
-                              ? "Efface les données TEST de cette question puis la remet en attente d’ouverture."
-                              : getReplayTestPollBlockedLabel(selectedReplayGate.reason)
-                          }
-                          style={{
-                            width: "100%",
-                            minHeight: "2.6rem",
-                            padding: "0.55rem 0.85rem",
-                            fontSize: "0.82rem",
-                            fontWeight: 800,
-                            borderRadius: "12px",
-                            border: canReplaySelected
-                              ? "1px solid #f59e0b"
-                              : "1px solid #e2e8f0",
-                            background: canReplaySelected
-                              ? "linear-gradient(180deg, #fef3c7 0%, #fde68a 100%)"
-                              : "#f8fafc",
-                            color: canReplaySelected ? "#92400e" : "#94a3b8",
-                            cursor:
-                              !canReplaySelected || busy ? "not-allowed" : "pointer",
-                            opacity: !canReplaySelected || busy ? 0.6 : 1,
-                          }}
-                        >
-                          Rejouer la question
-                        </button>
-                        <p
-                          style={{
-                            margin: "0.4rem 0 0 0",
-                            fontSize: "0.68rem",
-                            color: "#a16207",
-                            lineHeight: 1.35,
-                          }}
-                        >
-                          MODE TEST uniquement — confirmation avant suppression des
-                          données de cette question.
-                        </p>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                <div
-                  style={{
-                    marginTop: "0.95rem",
-                    display: "grid",
-                    gridTemplateColumns: desktop ? "repeat(3, minmax(0, 1fr))" : "1fr",
-                    gap: desktop ? "0.85rem" : "0.75rem",
-                    alignItems: "stretch",
-                    minWidth: 0,
-                  }}
-                >
-                  <div style={liveFunctionCardStyle}>
-                    <div style={{ display: "grid", gap: "0.28rem" }}>
-                      <p style={liveFunctionCardTitleStyle}>Participation</p>
-                      <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", lineHeight: 1.35 }}>
-                        {antennaStatusLabel === "En attente d'ouverture"
-                          ? "En attente d'ouverture"
-                          : primaryLiveActionLabel
-                            ? `Action : ${primaryLiveActionLabel}`
-                            : "Ouvrir / fermer / afficher"}
-                      </p>
-                    </div>
-                    <div style={{ display: "grid", gap: "0.55rem", flex: 1 }}>
-                            <button
-                              type="button"
-                              disabled={!canOpenVote}
-                              title={openVoteButtonCopy.title}
-                              onClick={async () => {
-                                if (!activePollIdJs || !canOpenVote) return;
-                                await postAction(`/polls/${activePollIdJs}/open`, "Vote ouvert");
-                              }}
-                              style={{
-                                ...btnGhost,
-                                minHeight: "3rem",
-                                width: "100%",
-                                padding: "0.72rem 0.9rem",
-                                borderColor: canOpenVote ? "#22c55e" : "#e2e8f0",
-                                background:
-                                  primaryLiveAction === "open" && canOpenVote
-                                    ? "linear-gradient(180deg, #dcfce7 0%, #bbf7d0 100%)"
-                                    : canOpenVote
-                                      ? "#f0fdf4"
-                                      : "#f8fafc",
-                                color: canOpenVote ? "#166534" : "#94a3b8",
-                                fontWeight: 800,
-                                fontSize: "0.86rem",
-                                boxShadow:
-                                  primaryLiveAction === "open" && canOpenVote
-                                    ? "0 14px 24px rgba(34, 197, 94, 0.12)"
-                                    : "none",
-                                opacity: canOpenVote ? 1 : 0.55,
-                              }}
-                            >
-                              {openVoteButtonCopy.label}
-                            </button>
-                            <button
-                              type="button"
-                              disabled={!canCloseVote}
-                              onClick={async () => {
-                                if (!activePollIdJs || !canCloseVote) return;
-                                await postAction(`/polls/${activePollIdJs}/close`, "Vote ferme");
-                              }}
-                              style={{
-                                ...btnGhost,
-                                minHeight: "3rem",
-                                width: "100%",
-                                padding: "0.72rem 0.9rem",
-                                borderColor: canCloseVote ? "#fca5a5" : "#e2e8f0",
-                                background:
-                                  primaryLiveAction === "close" && canCloseVote
-                                    ? "#fff5f5"
-                                    : "#f8fafc",
-                                color: canCloseVote ? "#b91c1c" : "#94a3b8",
-                                fontWeight: 800,
-                                fontSize: "0.86rem",
-                                boxShadow:
-                                  canCloseVote
-                                    ? "0 12px 22px rgba(239, 68, 68, 0.08)"
-                                    : "none",
-                                opacity: canCloseVote ? 1 : 0.55,
-                              }}
-                            >
-                              Fermer
-                            </button>
-                            {canShowResultsForActive || primaryLiveAction === "show-results" ? (
-                              <button
-                                type="button"
-                                disabled={!canShowResultsForActive}
-                                onClick={async () => {
-                                  if (!activePollIdJs || !canShowResultsForActive) return;
-                                  await postAction(
-                                    `/polls/${activePollIdJs}/show-results`,
-                                    "Resultats affiches",
-                                  );
-                                }}
-                                title={
-                                  !canShowResultsForActive
-                                    ? "Disponible après fermeture du vote (pas après « Suivante »)."
-                                    : isQuizPoll(activePoll)
-                                      ? "Affiche les résultats finaux. Si le vote est fermé, révèle aussi la bonne réponse."
-                                      : "Affiche les résultats finaux à la salle et à l’écran."
-                                }
-                                style={{
-                                  ...btnGhost,
-                                  minHeight: "3rem",
-                                  width: "100%",
-                                  padding: "0.72rem 0.9rem",
-                                  borderColor: canShowResultsForActive ? "#93c5fd" : "#e2e8f0",
-                                  background: canShowResultsForActive
-                                    ? "linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%)"
-                                    : "#f8fafc",
-                                  color: canShowResultsForActive ? "#1e3a8a" : "#94a3b8",
-                                  fontWeight: 800,
-                                  fontSize: "0.86rem",
-                                  boxShadow: canShowResultsForActive
-                                    ? "0 12px 22px rgba(37, 99, 235, 0.10)"
-                                    : "none",
-                                  opacity: canShowResultsForActive ? 1 : 0.55,
-                                }}
-                              >
-                                Afficher les résultats
-                              </button>
-                            ) : null}
-                          </div>
-                          <p style={{ margin: 0, fontSize: "0.74rem", color: "#64748b", lineHeight: 1.35 }}>
-                            Antenne : <strong style={{ color: "#111827" }}>{antennaStatusLabel}</strong>
-                            {" · "}
-                            Vote : <strong style={{ color: "#111827" }}>{voteLabel}</strong>
-                          </p>
-                    {shouldScheduleAutoRevealForPoll({
-                      pollType: activePoll?.type,
-                      leadEnabled: activePoll?.leadEnabled,
-                    }) ? (
-                    <RegieAutoRevealCard
-                      embedded
-                      embeddedDividerAbove={false}
-                      eventId={eventId}
-                      autoReveal={Boolean(eventData?.autoReveal)}
-                      autoRevealDelaySec={eventData?.autoRevealDelaySec ?? 5}
-                      onSaved={() => fetchEvent({ silent: true })}
-                    />
-                    ) : null}
-                  </div>
-
-                  <div style={liveFunctionCardStyle}>
-                    <div style={{ display: "grid", gap: "0.28rem" }}>
-                      <p style={liveFunctionCardTitleStyle}>Progression</p>
-                      <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", lineHeight: 1.35 }}>
-                        {primaryLiveAction === "next" || primaryLiveAction === "finish"
-                          ? `Action : ${primaryLiveActionLabel}`
-                          : "Avancement du live"}
-                      </p>
-                    </div>
-                    <div style={{ display: "grid", gap: "0.35rem", flex: 1 }}>
-                      <p style={{ margin: 0, fontSize: "0.88rem", fontWeight: 800, color: "#111827" }}>
-                        {questionProgressSummary}
-                      </p>
+                    <div>
                       <p
                         style={{
                           margin: 0,
-                          fontSize: "0.76rem",
-                          color: "#475569",
-                          lineHeight: 1.35,
+                          fontSize: "1.05rem",
+                          fontWeight: 800,
+                          color: "#111827",
+                          lineHeight: 1.3,
+                        }}
+                      >
+                        {selectedTitle}
+                      </p>
+                      <p
+                        style={{
+                          margin: "0.35rem 0 0 0",
+                          fontSize: "0.78rem",
+                          color: "#64748b",
+                        }}
+                      >
+                        {selectedTypeLabel} · {selectedStatusLabel} ·{" "}
+                        {selectedPoll?.voteCount ?? 0} vote
+                        {(selectedPoll?.voteCount ?? 0) !== 1 ? "s" : ""}
+                      </p>
+                      {selectedConsultOptions.length > 0 ? (
+                        <RegieOptionStatsList
+                          options={selectedConsultOptions}
+                          keyPrefix="consult-stat"
+                        />
+                      ) : null}
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      marginTop: "0.95rem",
+                      padding: desktop ? "1.15rem 1.25rem" : "1rem",
+                      borderRadius: "20px",
+                      border: "1px solid rgba(15, 23, 42, 0.08)",
+                      background:
+                        "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.96) 100%)",
+                      boxShadow: "0 18px 40px rgba(15, 23, 42, 0.05)",
+                      display: "grid",
+                      gap: "1rem",
+                      minWidth: 0,
+                    }}
+                  >
+                    <div style={{ display: "grid", gap: "0.35rem" }}>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          color: "#64748b",
+                          letterSpacing: "0.02em",
+                        }}
+                      >
+                        {questionProgressSummary}
+                        {activePoll
+                          ? ` · ${getRegiePollTypeLabel(activePoll)}`
+                          : ""}
+                        {" · "}
+                        {pilotageStepLabel}
+                      </p>
+                      <h4
+                        style={{
+                          margin: 0,
+                          fontSize: desktop ? "1.35rem" : "1.12rem",
+                          fontWeight: 800,
+                          color: "#0f172a",
+                          letterSpacing: "-0.02em",
+                          lineHeight: 1.25,
                           overflowWrap: "anywhere",
                         }}
                       >
                         {activeQuestionTitle}
+                      </h4>
+                      {activeQuizBonneReponseLabel ? (
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "0.88rem",
+                            fontWeight: 800,
+                            color: "#166534",
+                          }}
+                        >
+                          Bonne réponse : {activeQuizBonneReponseLabel}
+                        </p>
+                      ) : null}
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "0.92rem",
+                          fontWeight: 700,
+                          color: "#334155",
+                        }}
+                      >
+                        {activePoll
+                          ? `${activeParticipationCount} ${activeParticipationUnit}`
+                          : "Aucune question à l’antenne"}
                       </p>
+                      {activePilotageStatsOptions.length > 0 ? (
+                        <RegieOptionStatsList
+                          options={activePilotageStatsOptions}
+                          keyPrefix="pilotage-stat"
+                        />
+                      ) : null}
                     </div>
-                    <div style={{ display: "grid", gap: "0.5rem", marginTop: "auto" }}>
+
+                    {primaryLiveActionLabel ? (
                       <button
                         type="button"
-                        disabled={!canGoNext}
-                        onClick={() =>
-                          void postAction(`/events/${eventId}/next-poll`, "Question suivante diffusee")
+                        disabled={!primaryActionEnabled}
+                        onClick={() => void runPrimaryLiveAction()}
+                        title={
+                          primaryLiveAction === "open"
+                            ? openVoteButtonCopy.title
+                            : primaryLiveAction === "show-results"
+                              ? isQuizPoll(activePoll)
+                                ? "Affiche les résultats finaux. Si le vote est fermé, révèle aussi la bonne réponse."
+                                : "Affiche les résultats finaux à la salle et à l’écran."
+                              : primaryLiveAction === "next"
+                                ? "Prépare la question suivante sans ouvrir le vote."
+                                : primaryLiveAction === "draw"
+                                  ? "Ouvre le tirage au sort pour cette question concours."
+                                  : undefined
                         }
                         style={{
-                          ...btnDanger(!canGoNext),
                           width: "100%",
-                          minHeight: "2.95rem",
-                          padding: "0.65rem 0.85rem",
-                          fontSize: "0.84rem",
-                          border: "1px solid #8b5cf6",
-                          background: canGoNext
-                            ? primaryLiveAction === "next"
-                              ? "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)"
-                              : "linear-gradient(180deg, #a78bfa 0%, #8b5cf6 100%)"
-                            : "#ede9fe",
-                          color: canGoNext ? "#fff" : "#6d28d9",
+                          maxWidth: desktop ? "28rem" : "100%",
+                          margin: "0.15rem auto 0",
+                          minHeight: "3.4rem",
+                          padding: "0.85rem 1.25rem",
+                          borderRadius: "16px",
+                          border:
+                            primaryLiveAction === "close"
+                              ? "1px solid #e11d48"
+                              : primaryLiveAction === "finish"
+                                ? "1px solid #be123c"
+                                : primaryLiveAction === "open"
+                                  ? "1px solid #059669"
+                                  : "1px solid #0d9488",
+                          background: !primaryActionEnabled
+                            ? "#f1f5f9"
+                            : primaryLiveAction === "close"
+                              ? "linear-gradient(180deg, #fb7185 0%, #e11d48 100%)"
+                              : primaryLiveAction === "finish"
+                                ? "linear-gradient(180deg, #fb7185 0%, #be123c 100%)"
+                                : primaryLiveAction === "open"
+                                  ? "linear-gradient(180deg, #34d399 0%, #059669 100%)"
+                                  : "linear-gradient(180deg, #2dd4bf 0%, #0d9488 100%)",
+                          color: primaryActionEnabled ? "#fff" : "#94a3b8",
                           fontWeight: 800,
-                          boxShadow:
-                            canGoNext && primaryLiveAction === "next"
-                              ? "0 14px 24px rgba(124, 58, 237, 0.16)"
-                              : "none",
-                          opacity: canGoNext ? 1 : 0.55,
+                          fontSize: desktop ? "1.05rem" : "0.95rem",
+                          letterSpacing: "0.01em",
+                          cursor: primaryActionEnabled ? "pointer" : "not-allowed",
+                          boxShadow: primaryActionEnabled
+                            ? "0 16px 32px rgba(13, 148, 136, 0.18)"
+                            : "none",
+                          opacity: primaryActionEnabled ? 1 : 0.65,
                         }}
-                        title="Prépare la question suivante sans ouvrir le vote (commande explicite)."
                       >
-                        Suivante
+                        {primaryLiveActionLabel}
                       </button>
+                    ) : (
+                      <p
+                        style={{
+                          margin: 0,
+                          textAlign: "center",
+                          fontSize: "0.88rem",
+                          color: "#64748b",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {eventFinished
+                          ? "Événement terminé — plus d’action live."
+                          : "Aucune action disponible."}
+                      </p>
+                    )}
+
+                    <div
+                      id="regie-chrono-panel"
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                        gap: "0.45rem 0.75rem",
+                        paddingTop: "0.15rem",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          color: "#64748b",
+                        }}
+                      >
+                        Chrono
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "0.72rem",
+                          fontWeight: 800,
+                          letterSpacing: "0.04em",
+                          textTransform: "uppercase",
+                          color: chronoEnabled ? "#0f766e" : "#94a3b8",
+                        }}
+                      >
+                        {chronoEnabledLabel}
+                      </span>
+                      <span
+                        style={{
+                          fontFamily: "ui-monospace, monospace",
+                          fontVariantNumeric: "tabular-nums",
+                          fontWeight: 800,
+                          fontSize: "1.05rem",
+                          color: chronoEnabled ? "#0f172a" : "#94a3b8",
+                          letterSpacing: "-0.02em",
+                          opacity: chronoEnabled ? 1 : 0.7,
+                        }}
+                      >
+                        {chronoEtatLiveTexte}
+                      </span>
+                      {chronoControls.activer ? (
+                        <button
+                          type="button"
+                          disabled={busy || presetChronoSec < 1}
+                          onClick={() => {
+                            if (presetChronoSec < 1) {
+                              setActionError("Indique au moins 1 seconde.");
+                              return;
+                            }
+                            if (presetChronoSec > QUESTION_TIMER_MAX_SEC) {
+                              setActionError(
+                                `Durée max. ${Math.floor(QUESTION_TIMER_MAX_SEC / 86400)} jours (réglage API).`,
+                              );
+                              return;
+                            }
+                            void activateQuestionTimer(presetChronoSec);
+                          }}
+                          style={{
+                            ...btnGhost,
+                            minHeight: "1.9rem",
+                            padding: "0.2rem 0.55rem",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            borderColor: "rgba(13, 148, 136, 0.35)",
+                            background: "rgba(13, 148, 136, 0.08)",
+                            color: "#0f766e",
+                          }}
+                          title="Active le chrono avec la durée réglée, sans le démarrer."
+                        >
+                          Activer
+                        </button>
+                      ) : null}
+                      {chronoControls.demarrer ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => {
+                            const total =
+                              typeof tm?.totalSec === "number" && tm.totalSec > 0
+                                ? tm.totalSec
+                                : presetChronoSec;
+                            if (total < 1) {
+                              setActionError("Indique au moins 1 seconde.");
+                              return;
+                            }
+                            void postQuestionTimer({
+                              action: "start",
+                              totalSec: total,
+                            });
+                          }}
+                          style={{
+                            ...btnGhost,
+                            minHeight: "1.9rem",
+                            padding: "0.2rem 0.55rem",
+                            fontSize: "0.72rem",
+                            fontWeight: 800,
+                            borderColor: "rgba(13, 148, 136, 0.45)",
+                            background:
+                              "linear-gradient(180deg, #14b8a6 0%, #0d9488 100%)",
+                            color: "#fff",
+                          }}
+                          title="Démarre le compte à rebours sur le chrono serveur."
+                        >
+                          Démarrer
+                        </button>
+                      ) : null}
+                      {chronoControls.reprendre ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void postQuestionTimer({ action: "start" })
+                          }
+                          style={{
+                            ...btnGhost,
+                            minHeight: "1.9rem",
+                            padding: "0.2rem 0.55rem",
+                            fontSize: "0.72rem",
+                            fontWeight: 800,
+                            borderColor: "rgba(13, 148, 136, 0.45)",
+                            background:
+                              "linear-gradient(180deg, #14b8a6 0%, #0d9488 100%)",
+                            color: "#fff",
+                          }}
+                          title="Reprend le compte à rebours en pause."
+                        >
+                          Reprendre
+                        </button>
+                      ) : null}
+                      {chronoControls.pause ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void postQuestionTimer({ action: "pause" })
+                          }
+                          style={{
+                            ...btnGhost,
+                            minHeight: "1.9rem",
+                            padding: "0.2rem 0.55rem",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                          }}
+                          title="Mettre le chrono en pause"
+                        >
+                          Pause
+                        </button>
+                      ) : null}
+                      {chronoControls.desactiver ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void postQuestionTimer({ action: "reset" })
+                          }
+                          style={{
+                            ...btnGhost,
+                            minHeight: "1.9rem",
+                            padding: "0.2rem 0.55rem",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            borderColor: "rgba(148, 163, 184, 0.45)",
+                            color: "#475569",
+                          }}
+                          title="Désactive le chrono (aucune durée armée côté serveur)."
+                        >
+                          Désactiver
+                        </button>
+                      ) : null}
+                      {chronoControls.regler ? (
+                        <button
+                          type="button"
+                          onClick={() => setChronoReglerOpen((v) => !v)}
+                          style={{
+                            ...btnGhost,
+                            minHeight: "1.9rem",
+                            padding: "0.2rem 0.55rem",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            borderColor: "rgba(15, 23, 42, 0.12)",
+                          }}
+                        >
+                          {chronoReglerOpen ? "Masquer" : "Régler"}
+                        </button>
+                      ) : null}
+                    </div>
+                    {chronoReglerOpen ? (
+                      <div
+                        style={{
+                          padding: "0.75rem",
+                          borderRadius: "14px",
+                          border: "1px solid rgba(196, 181, 253, 0.35)",
+                          background: "rgba(250, 245, 255, 0.55)",
+                        }}
+                      >
+                        {chronoProjectionInner}
+                      </div>
+                    ) : null}
+
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "0.45rem 0.85rem",
+                        alignItems: "center",
+                      }}
+                    >
                       <button
                         type="button"
-                        disabled={busy || eventFinished || !allowedLiveActions.finish}
-                        onClick={async () => {
-                          if (typeof window === "undefined") return;
-                          const ok = window.confirm(
-                            "Terminer l’événement maintenant ? Cette action clôture l’événement.",
-                          );
-                          if (!ok) return;
-                          const confirmWord = window.prompt(
-                            "Confirmation de sécurité : tapez TERMINER pour confirmer.",
-                            "",
-                          );
-                          if (String(confirmWord || "").trim().toUpperCase() !== "TERMINER") return;
-                          await postAction(`/events/${eventId}/finish`, "Evenement termine");
-                        }}
+                        disabled={!skipQuestionState.canSkip}
+                        onClick={() => void handleSkipQuestion()}
+                        title={
+                          skipQuestionState.blockedReason ||
+                          (skipQuestionState.isLastQuestion
+                            ? "Dernière question : propose de terminer l’événement"
+                            : "Passe à la question suivante sans publier les résultats")
+                        }
                         style={{
-                          ...btnFinish(busy || eventFinished),
-                          width: "100%",
-                          minHeight: "2.35rem",
-                          padding: "0.45rem 0.75rem",
-                          fontSize: "0.76rem",
-                          border:
-                            primaryLiveAction === "finish"
-                              ? "1px solid #e11d48"
-                              : "1px solid #fda4af",
-                          background:
-                            busy || eventFinished
-                              ? "#fff1f2"
-                              : primaryLiveAction === "finish"
-                                ? "linear-gradient(180deg, #ffe4e6 0%, #fecdd3 100%)"
-                                : "#fffafb",
-                          color: busy || eventFinished ? "#9f1239" : "#be123c",
-                          fontWeight: primaryLiveAction === "finish" ? 800 : 700,
+                          background: "transparent",
+                          border: "none",
+                          padding: 0,
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          color: skipQuestionState.canSkip
+                            ? "#0f766e"
+                            : "#94a3b8",
+                          cursor: skipQuestionState.canSkip
+                            ? "pointer"
+                            : "not-allowed",
+                          textDecoration: "underline",
+                          textUnderlineOffset: "3px",
                         }}
                       >
-                        Terminer
+                        {skipQuestionState.buttonLabel}
                       </button>
+                      {primaryLiveAction !== "finish" ? (
+                        <button
+                          type="button"
+                          disabled={busy || eventFinished || !allowedLiveActions.finish}
+                          onClick={async () => {
+                            if (typeof window === "undefined") return;
+                            const ok = window.confirm(
+                              "Terminer l’événement maintenant ? Cette action clôture l’événement.",
+                            );
+                            if (!ok) return;
+                            const confirmWord = window.prompt(
+                              "Confirmation de sécurité : tapez TERMINER pour confirmer.",
+                              "",
+                            );
+                            if (
+                              String(confirmWord || "").trim().toUpperCase() !==
+                              "TERMINER"
+                            )
+                              return;
+                            await postAction(
+                              `/events/${eventId}/finish`,
+                              "Evenement termine",
+                            );
+                          }}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            padding: 0,
+                            fontSize: "0.78rem",
+                            fontWeight: 700,
+                            color:
+                              busy || eventFinished ? "#94a3b8" : "#be123c",
+                            cursor:
+                              busy || eventFinished ? "not-allowed" : "pointer",
+                            textDecoration: "underline",
+                            textUnderlineOffset: "3px",
+                          }}
+                        >
+                          Terminer l’événement
+                        </button>
+                      ) : null}
                     </div>
-                  </div>
 
-                  <div
-                    id="regie-chrono-panel"
-                    style={{
-                      ...liveFunctionCardStyle,
-                      background:
-                        "linear-gradient(180deg, rgba(250,245,255,0.72) 0%, rgba(255,255,255,0.97) 100%)",
-                      borderColor: "rgba(196, 181, 253, 0.22)",
-                    }}
-                  >
-                    <div style={{ display: "grid", gap: "0.28rem" }}>
-                      <p style={liveFunctionCardTitleStyle}>Chrono</p>
-                      <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", lineHeight: 1.35 }}>
-                        Rythme du live
-                      </p>
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>{chronoProjectionInner}</div>
+                    <details
+                      style={{
+                        borderTop: "1px solid rgba(15, 23, 42, 0.06)",
+                        paddingTop: "0.75rem",
+                      }}
+                    >
+                      <summary
+                        style={{
+                          cursor: "pointer",
+                          fontWeight: 800,
+                          fontSize: "0.82rem",
+                          color: "#0f172a",
+                          listStyle: "none",
+                        }}
+                      >
+                        Options avancées
+                      </summary>
+                      <div
+                        style={{
+                          marginTop: "0.75rem",
+                          display: "grid",
+                          gap: "0.75rem",
+                        }}
+                      >
+                        {shouldScheduleAutoRevealForPoll({
+                          pollType: activePoll?.type,
+                          leadEnabled: activePoll?.leadEnabled,
+                        }) ? (
+                          <RegieAutoRevealCard
+                            embedded
+                            embeddedDividerAbove={false}
+                            eventId={eventId}
+                            autoReveal={Boolean(eventData?.autoReveal)}
+                            autoRevealDelaySec={
+                              eventData?.autoRevealDelaySec ?? 5
+                            }
+                            onSaved={() => fetchEvent({ silent: true })}
+                          />
+                        ) : null}
+                        {canOpenVote &&
+                        openVoteButtonCopy.isReopenWithoutWipe ? (
+                          <button
+                            type="button"
+                            disabled={!canOpenVote}
+                            title={openVoteButtonCopy.title}
+                            onClick={async () => {
+                              if (!activePollIdJs || !canOpenVote) return;
+                              await postAction(
+                                `/polls/${activePollIdJs}/open`,
+                                "Vote ouvert",
+                              );
+                            }}
+                            style={{
+                              ...btnGhost,
+                              width: "100%",
+                              minHeight: "2.4rem",
+                              fontWeight: 700,
+                              fontSize: "0.8rem",
+                            }}
+                          >
+                            {openVoteButtonCopy.label}
+                          </button>
+                        ) : null}
+                        {inTestMode ? (
+                          <div>
+                            <button
+                              type="button"
+                              disabled={!canReplaySelected || busy}
+                              onClick={() => void handleReplaySelectedTestPoll()}
+                              title={
+                                canReplaySelected
+                                  ? "Efface les données TEST de cette question puis la remet en attente d’ouverture."
+                                  : getReplayTestPollBlockedLabel(
+                                      selectedReplayGate.reason,
+                                    )
+                              }
+                              style={{
+                                width: "100%",
+                                minHeight: "2.4rem",
+                                padding: "0.5rem 0.75rem",
+                                fontSize: "0.8rem",
+                                fontWeight: 800,
+                                borderRadius: "12px",
+                                border: canReplaySelected
+                                  ? "1px solid #f59e0b"
+                                  : "1px solid #e2e8f0",
+                                background: canReplaySelected
+                                  ? "linear-gradient(180deg, #fef3c7 0%, #fde68a 100%)"
+                                  : "#f8fafc",
+                                color: canReplaySelected ? "#92400e" : "#94a3b8",
+                                cursor:
+                                  !canReplaySelected || busy
+                                    ? "not-allowed"
+                                    : "pointer",
+                                opacity: !canReplaySelected || busy ? 0.6 : 1,
+                              }}
+                            >
+                              Rejouer la question
+                            </button>
+                            <p
+                              style={{
+                                margin: "0.35rem 0 0 0",
+                                fontSize: "0.68rem",
+                                color: "#a16207",
+                                lineHeight: 1.35,
+                              }}
+                            >
+                              MODE TEST — confirmation avant suppression des
+                              données de cette question.
+                            </p>
+                          </div>
+                        ) : null}
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "0.72rem",
+                            color: "#64748b",
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          Antenne :{" "}
+                          <strong style={{ color: "#111827" }}>
+                            {antennaStatusLabel}
+                          </strong>
+                          {" · "}
+                          Vote :{" "}
+                          <strong style={{ color: "#111827" }}>
+                            {voteLabel}
+                          </strong>
+                        </p>
+                      </div>
+                    </details>
                   </div>
-                </div>
+                )}
 
               </section>
 
@@ -8552,6 +9946,21 @@ export default function RegieEventPage() {
                           <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
                             <span style={{ flex: 1, fontSize: "0.78rem", fontWeight: 700, color: "#0f172a" }}>
                               {opt.label}
+                              {opt.showBonneReponse ? (
+                                <span
+                                  style={{
+                                    marginLeft: "0.4rem",
+                                    fontSize: "0.66rem",
+                                    fontWeight: 800,
+                                    color: "#166534",
+                                    background: "#dcfce7",
+                                    borderRadius: "999px",
+                                    padding: "0.1rem 0.4rem",
+                                  }}
+                                >
+                                  Bonne réponse
+                                </span>
+                              ) : null}
                             </span>
                             <span style={{ fontSize: "0.74rem", fontWeight: 800, color: "#334155" }}>
                               {opt.voteCount} · {Number(opt.pct).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}%
@@ -8563,7 +9972,7 @@ export default function RegieEventPage() {
                                 width: `${Math.max(0, Math.min(100, opt.pct))}%`,
                                 height: "100%",
                                 borderRadius: "999px",
-                                background: "#2563eb",
+                                background: opt.showBonneReponse ? "#16a34a" : "#2563eb",
                               }}
                             />
                           </div>
@@ -8692,13 +10101,35 @@ export default function RegieEventPage() {
                           <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
                             <span style={{ flex: 1, fontSize: "0.78rem", fontWeight: 700, color: "#0f172a" }}>
                               {opt.label}
+                              {opt.showBonneReponse ? (
+                                <span
+                                  style={{
+                                    marginLeft: "0.35rem",
+                                    fontSize: "0.64rem",
+                                    fontWeight: 800,
+                                    color: "#166534",
+                                    background: "#dcfce7",
+                                    borderRadius: "999px",
+                                    padding: "0.08rem 0.35rem",
+                                  }}
+                                >
+                                  Bonne réponse
+                                </span>
+                              ) : null}
                             </span>
                             <span style={{ fontSize: "0.72rem", fontWeight: 800, color: "#334155" }}>
                               {opt.voteCount} · {Number(opt.pct).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}%
                             </span>
                           </div>
                           <div style={{ height: "7px", borderRadius: "999px", background: "#dbeafe", overflow: "hidden" }}>
-                            <div style={{ width: `${Math.max(0, Math.min(100, opt.pct))}%`, height: "100%", borderRadius: "999px", background: "#2563eb" }} />
+                            <div
+                              style={{
+                                width: `${Math.max(0, Math.min(100, opt.pct))}%`,
+                                height: "100%",
+                                borderRadius: "999px",
+                                background: opt.showBonneReponse ? "#16a34a" : "#2563eb",
+                              }}
+                            />
                           </div>
                         </div>
                       ))}
@@ -8791,63 +10222,80 @@ export default function RegieEventPage() {
                   {contestEligibleError}
                 </p>
               ) : null}
+              {primaryLiveAction === "draw" ? (
+                <p
+                  style={{
+                    margin: "0.55rem 0 0 0",
+                    fontSize: "0.76rem",
+                    color: "#6d28d9",
+                    fontWeight: 700,
+                  }}
+                >
+                  Utilisez le bouton principal « Tirer au sort » ci-dessus.
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  disabled={
+                    busy ||
+                    contestEligibleLoading ||
+                    contestEligibleCount <= 0 ||
+                    !!contestEligibleError ||
+                    contestQuotaReached ||
+                    voteStateUi === "open" ||
+                    selectedIsConsultOnly
+                  }
+                  onClick={() => setContestDrawModalOpen(true)}
+                  title={
+                    voteStateUi === "open"
+                      ? "Fermez d’abord les participations avant de tirer au sort."
+                      : undefined
+                  }
+                  style={{
+                    marginTop: "0.6rem",
+                    padding: "0.45rem 0.8rem",
+                    borderRadius: "9px",
+                    border: "1px solid #7c3aed",
+                    background:
+                      busy ||
+                      contestEligibleLoading ||
+                      contestEligibleCount <= 0 ||
+                      !!contestEligibleError ||
+                      contestQuotaReached ||
+                      voteStateUi === "open" ||
+                      selectedIsConsultOnly
+                        ? "#f8fafc"
+                        : "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)",
+                    color:
+                      busy ||
+                      contestEligibleLoading ||
+                      contestEligibleCount <= 0 ||
+                      !!contestEligibleError ||
+                      contestQuotaReached ||
+                      voteStateUi === "open" ||
+                      selectedIsConsultOnly
+                        ? "#94a3b8"
+                        : "#fff",
+                    fontSize: "0.8rem",
+                    fontWeight: 700,
+                    cursor:
+                      busy ||
+                      contestEligibleLoading ||
+                      contestEligibleCount <= 0 ||
+                      !!contestEligibleError ||
+                      contestQuotaReached ||
+                      voteStateUi === "open" ||
+                      selectedIsConsultOnly
+                        ? "not-allowed"
+                        : "pointer",
+                  }}
+                >
+                  Tirer au sort
+                </button>
+              )}
               <button
                 type="button"
-                disabled={
-                  busy ||
-                  contestEligibleLoading ||
-                  contestEligibleCount <= 0 ||
-                  !!contestEligibleError ||
-                  contestQuotaReached ||
-                  voteStateUi === "open"
-                }
-                onClick={() => setContestDrawModalOpen(true)}
-                title={
-                  voteStateUi === "open"
-                    ? "Fermez d’abord les participations avant de tirer au sort."
-                    : undefined
-                }
-                style={{
-                  marginTop: "0.6rem",
-                  padding: "0.45rem 0.8rem",
-                  borderRadius: "9px",
-                  border: "1px solid #7c3aed",
-                  background:
-                    busy ||
-                    contestEligibleLoading ||
-                    contestEligibleCount <= 0 ||
-                    !!contestEligibleError ||
-                    contestQuotaReached ||
-                    voteStateUi === "open"
-                      ? "#f8fafc"
-                      : "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)",
-                  color:
-                    busy ||
-                    contestEligibleLoading ||
-                    contestEligibleCount <= 0 ||
-                    !!contestEligibleError ||
-                    contestQuotaReached ||
-                    voteStateUi === "open"
-                      ? "#94a3b8"
-                      : "#fff",
-                  fontSize: "0.8rem",
-                  fontWeight: 700,
-                  cursor:
-                    busy ||
-                    contestEligibleLoading ||
-                    contestEligibleCount <= 0 ||
-                    !!contestEligibleError ||
-                    contestQuotaReached ||
-                    voteStateUi === "open"
-                      ? "not-allowed"
-                      : "pointer",
-                }}
-              >
-                Tirer au sort
-              </button>
-              <button
-                type="button"
-                disabled={busy || !canReplaceContestWinner}
+                disabled={busy || !canReplaceContestWinner || selectedIsConsultOnly}
                 onClick={() => {
                   const firstActive = activeContestWinnersOnly[0];
                   setContestReplaceWinnerId(
@@ -8857,15 +10305,24 @@ export default function RegieEventPage() {
                 }}
                 style={{
                   marginTop: "0.45rem",
-                  marginLeft: "0.45rem",
+                  marginLeft: primaryLiveAction === "draw" ? 0 : "0.45rem",
                   padding: "0.45rem 0.8rem",
                   borderRadius: "9px",
                   border: "1px solid #c4b5fd",
-                  background: busy || !canReplaceContestWinner ? "#f8fafc" : "#fff",
-                  color: busy || !canReplaceContestWinner ? "#94a3b8" : "#5b21b6",
+                  background:
+                    busy || !canReplaceContestWinner || selectedIsConsultOnly
+                      ? "#f8fafc"
+                      : "#fff",
+                  color:
+                    busy || !canReplaceContestWinner || selectedIsConsultOnly
+                      ? "#94a3b8"
+                      : "#5b21b6",
                   fontSize: "0.8rem",
                   fontWeight: 700,
-                  cursor: busy || !canReplaceContestWinner ? "not-allowed" : "pointer",
+                  cursor:
+                    busy || !canReplaceContestWinner || selectedIsConsultOnly
+                      ? "not-allowed"
+                      : "pointer",
                 }}
               >
                 Remplacer un gagnant

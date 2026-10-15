@@ -3,6 +3,9 @@
  * Exécution : node frontend/scripts/test-regie-desktop-layout.mjs
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   REGIE_ZONE_PARTAGE,
   REGIE_ZONE_PILOTAGE,
@@ -14,10 +17,15 @@ import {
   getRegiePollTypeLabel,
   getRegiePrimaryLiveAction,
   getRegiePrimaryLiveActionLabel,
+  getRegiePilotageStepLabel,
+  getRegieConsultBannerState,
   getRegieQuestionNumberLabel,
   isRegieConsultSelectionOnly,
   sortPollsByPlaylistOrder,
 } from "../lib/regieDesktopLayout.js";
+
+const here = dirname(fileURLToPath(import.meta.url));
+
 
 let failed = 0;
 /** @param {string} name @param {() => void} fn */
@@ -78,6 +86,46 @@ test("Sélection playlist ≠ antenne (consultation seule)", () => {
   assert.equal(isRegieConsultSelectionOnly("q1", "q1"), false);
   assert.equal(isRegieConsultSelectionOnly(null, "q1"), false);
   assert.equal(isRegieConsultSelectionOnly("q2", null), true);
+});
+
+test("Bandeau consultation : terminé → Événement terminé, pas de Retour", () => {
+  const finished = getRegieConsultBannerState({
+    eventFinished: true,
+    selectedQuestionNumberLabel: "Question 3/3",
+    activeQuestionIndex: -1,
+    totalQuestions: 3,
+  });
+  assert.equal(finished.title, "Événement terminé");
+  assert.equal(finished.showReturnToLive, false);
+
+  const live = getRegieConsultBannerState({
+    eventFinished: false,
+    selectedQuestionNumberLabel: "Question 3/3",
+    activeQuestionIndex: 0,
+    totalQuestions: 3,
+  });
+  assert.match(live.title, /Vous consultez Question 3\/3/);
+  assert.match(live.title, /Question 1\/3/);
+  assert.equal(live.showReturnToLive, true);
+
+  const liveNoAntenna = getRegieConsultBannerState({
+    eventFinished: false,
+    selectedQuestionNumberLabel: "Question 2/3",
+    activeQuestionIndex: -1,
+    totalQuestions: 3,
+  });
+  assert.match(liveNoAntenna.title, /l’antenne/);
+  assert.equal(liveNoAntenna.showReturnToLive, true);
+});
+
+test("page.jsx : bandeau terminé via getRegieConsultBannerState", () => {
+  const src = readFileSync(
+    join(here, "../app/admin/event/[eventId]/page.jsx"),
+    "utf8",
+  );
+  assert.ok(src.includes("getRegieConsultBannerState"));
+  assert.ok(src.includes("consultBannerState.title"));
+  assert.ok(src.includes("consultBannerState.showReturnToLive"));
 });
 
 test("Statuts métier carte question", () => {
@@ -151,7 +199,16 @@ test("CTA primaire — WAITING préparée → Ouvrir (pas Afficher)", () => {
     "open",
     "Après Suivante : ACTIVE × WAITING → Ouvrir",
   );
-  assert.equal(getRegiePrimaryLiveActionLabel("open"), "Ouvrir");
+  assert.equal(getRegiePrimaryLiveActionLabel("open"), "Ouvrir le vote");
+  assert.equal(
+    getRegiePilotageStepLabel({
+      voteState: "closed",
+      displayState: "waiting",
+      pollStatus: "ACTIVE",
+      pollType: "SINGLE_CHOICE",
+    }),
+    "Question prête",
+  );
   const allowedPrepared = getRegieAllowedLiveActions({
     hasActivePoll: true,
     voteState: "closed",
@@ -178,7 +235,15 @@ test("CTA primaire — VOTING → Fermer", () => {
     }),
     "close",
   );
-  assert.equal(getRegiePrimaryLiveActionLabel("close"), "Fermer");
+  assert.equal(getRegiePrimaryLiveActionLabel("close"), "Fermer le vote");
+  assert.equal(
+    getRegiePilotageStepLabel({
+      voteState: "open",
+      pollStatus: "ACTIVE",
+      pollType: "QUIZ",
+    }),
+    "Vote ouvert",
+  );
   const allowedVoting = getRegieAllowedLiveActions({
     hasActivePoll: true,
     voteState: "open",
@@ -252,7 +317,7 @@ test("CTA primaire — RESULTS → Suivante ou Terminer", () => {
     }),
     "next",
   );
-  assert.equal(getRegiePrimaryLiveActionLabel("next"), "Suivante");
+  assert.equal(getRegiePrimaryLiveActionLabel("next"), "Question suivante");
   assert.equal(
     getRegiePrimaryLiveAction({
       hasActivePoll: true,
@@ -301,13 +366,68 @@ test("CTA — événement terminé / sans antenne", () => {
 
 test("LOT-5 — Ouvrir vs Rouvrir (sans wipe) vs Rejouer TEST", () => {
   const prepared = getRegieOpenVoteButtonCopy({ pollStatus: "ACTIVE" });
-  assert.equal(prepared.label, "Ouvrir");
+  assert.equal(prepared.label, "Ouvrir le vote");
   assert.equal(prepared.isReopenWithoutWipe, false);
   const closed = getRegieOpenVoteButtonCopy({ pollStatus: "CLOSED" });
   assert.equal(closed.label, "Rouvrir le vote");
   assert.equal(closed.isReopenWithoutWipe, true);
   assert.match(closed.title, /sans effacer/i);
   assert.match(closed.title, /Rejouer/i);
+});
+
+test("Régie simplifiée — libellés d’étape + CTA unique par type", () => {
+  assert.equal(
+    getRegiePilotageStepLabel({
+      voteState: "closed",
+      displayState: "waiting",
+      pollStatus: "CLOSED",
+      pollType: "SINGLE_CHOICE",
+    }),
+    "Vote fermé",
+  );
+  assert.equal(
+    getRegiePilotageStepLabel({
+      voteState: "closed",
+      displayState: "waiting",
+      pollStatus: "CLOSED",
+      pollType: "SINGLE_CHOICE",
+      leadEnabled: true,
+    }),
+    "Collecte fermée",
+  );
+  assert.equal(
+    getRegiePilotageStepLabel({
+      voteState: "closed",
+      displayState: "waiting",
+      pollStatus: "CLOSED",
+      pollType: "CONTEST_ENTRY",
+    }),
+    "Prêt pour le tirage",
+  );
+  assert.equal(
+    getRegiePilotageStepLabel({
+      voteState: "closed",
+      displayState: "results",
+      pollStatus: "CLOSED",
+      pollType: "QUIZ",
+    }),
+    "Résultats affichés",
+  );
+  assert.equal(getRegiePrimaryLiveActionLabel("finish"), "Terminer l’événement");
+  // Impossible de passer à Suivante pendant un vote
+  const voting = getRegieAllowedLiveActions({
+    hasActivePoll: true,
+    voteState: "open",
+    pollStatus: "ACTIVE",
+    pollType: "MULTIPLE_CHOICE",
+  });
+  assert.equal(voting.next, false);
+  assert.equal(getRegiePrimaryLiveAction({
+    hasActivePoll: true,
+    voteState: "open",
+    pollStatus: "ACTIVE",
+    pollType: "MULTIPLE_CHOICE",
+  }), "close");
 });
 
 if (failed > 0) {

@@ -10,6 +10,13 @@
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "test:contest-replace": "node scripts/test-contest-winner-replace.mjs",
+    "test:event-live-snapshot": "node scripts/test-event-live-snapshot.mjs",
+    "test:start-real-reset": "node scripts/test-start-real-event-reset.mjs",
+    "test:poll-patch-guards": "node scripts/test-poll-patch-guards.mjs",
+    "test:replace-poll-options": "node scripts/test-replace-poll-options.mjs",
+    "test:patch-poll-options-http": "node scripts/test-patch-poll-options-http.mjs",
+    "test:playlist-poll-guards": "node scripts/test-playlist-poll-guards.mjs",
+    "test:skip-event-poll": "node scripts/test-skip-event-poll.mjs",
     "postinstall": "prisma generate"
   },
   "keywords": [],

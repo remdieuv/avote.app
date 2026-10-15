@@ -218,6 +218,16 @@ export function shouldPollFetchEventMetaBranding(input = {}) {
 }
 
 /**
+ * Après `loadPoll` : lever le spinner si cette génération est encore la courante.
+ * Inclut les fetches `silent` — un silent qui abort le GET initial ne doit pas
+ * laisser « Chargement... » bloqué jusqu’à une action régie / snapshot socket.
+ * @param {{ generation?: number; currentGeneration?: number }} input
+ */
+export function shouldClearPollLoadingAfterFetch(input = {}) {
+  return Number(input.generation) === Number(input.currentGeneration);
+}
+
+/**
  * Fiche résultats standalone `/p` : afficher les barres pour une question CLOSE
  * (historique salle, lien direct, événement terminé) — sans fuite avant RESULTS live.
  *
@@ -384,6 +394,26 @@ export function shouldRevealQuizWhenShowingResults(input = {}) {
 }
 
 /**
+ * Afficher (RESULTS) puis Fermer : révéler le Quiz sans l’avoir exposé pendant
+ * le vote ouvert. Ne s’applique pas au parcours Fermer → Afficher (déjà couvert
+ * par `shouldRevealQuizWhenShowingResults`).
+ *
+ * @param {{
+ *   pollType?: string | null;
+ *   quizRevealed?: boolean;
+ *   displayState?: string | null;
+ * }} input
+ * @returns {boolean}
+ */
+export function shouldRevealQuizWhenClosingAfterLiveResults(input = {}) {
+  return (
+    String(input.pollType ?? "").toUpperCase() === "QUIZ" &&
+    input.quizRevealed !== true &&
+    String(input.displayState ?? "").toUpperCase() === "RESULTS"
+  );
+}
+
+/**
  * Contrat unique bouton manuel « Afficher les résultats » et affichage automatique
  * après délai. Auto et manuel doivent produire les mêmes effets (pas deux chemins).
  * `screenDisplayState: RESULTS` uniquement au moment Afficher/auto — les transitions
@@ -455,20 +485,40 @@ export function resolveNextPollPrepareEventPatch() {
 /**
  * LOT-1 / LOT-2 — Fermer (manuel ou chrono) : axes Salle + clear sticky Screen RESULTS.
  * Auto-reveal skip Lead CRM / Concours.
+ * Quiz déjà en RESULTS (affichés pendant vote ouvert) : garde RESULTS + révèle.
  *
  * @param {{
  *   autoReveal?: boolean;
  *   screenDisplayState?: string | null;
+ *   displayState?: string | null;
  *   pollType?: string | null;
  *   leadEnabled?: boolean | null;
+ *   quizRevealed?: boolean;
  * }} [input]
  */
 export function resolveEventPatchAfterVoteClose(input = {}) {
+  const type = String(input.pollType ?? "").toUpperCase();
+  const revealQuizAfterLiveResults =
+    shouldRevealQuizWhenClosingAfterLiveResults({
+      pollType: type,
+      quizRevealed: input.quizRevealed,
+      displayState: input.displayState,
+    });
+  if (revealQuizAfterLiveResults) {
+    return {
+      voteState: "CLOSED",
+      displayState: "RESULTS",
+      liveState: "RESULTS",
+      screenDisplayState: "RESULTS",
+      schedulesAutoReveal: false,
+      revealQuiz: true,
+    };
+  }
+
   const screenDisplayState = resolveScreenDisplayAfterLiveTransition(
     input.screenDisplayState,
     "close",
   );
-  const type = String(input.pollType ?? "").toUpperCase();
   const leadCrm =
     input.leadEnabled === true && type !== "CONTEST_ENTRY";
   const skipAuto =
@@ -479,6 +529,7 @@ export function resolveEventPatchAfterVoteClose(input = {}) {
     displayState: "WAITING",
     liveState: "WAITING",
     schedulesAutoReveal: input.autoReveal === true && !skipAuto,
+    revealQuiz: false,
   };
   if (screenDisplayState !== undefined) {
     patch.screenDisplayState = screenDisplayState;
@@ -710,9 +761,30 @@ export function countParticipantVoteConfirmedSurfaces(input = {}) {
 }
 
 /**
+ * Nombre d’options à égalité en tête (votes = max, max > 0).
+ * @param {Array<{ voteCount?: unknown; votes?: unknown } | null | undefined> | null | undefined} options
+ * @returns {{ maxVotes: number; tiedCount: number }}
+ */
+export function getResultsLeadTieInfo(options) {
+  const opts = Array.isArray(options) ? options : [];
+  let maxVotes = 0;
+  for (const o of opts) {
+    const n = Number(o?.voteCount ?? o?.votes ?? 0) || 0;
+    if (n > maxVotes) maxVotes = n;
+  }
+  if (maxVotes <= 0) return { maxVotes: 0, tiedCount: 0 };
+  let tiedCount = 0;
+  for (const o of opts) {
+    const n = Number(o?.voteCount ?? o?.votes ?? 0) || 0;
+    if (n === maxVotes) tiedCount += 1;
+  }
+  return { maxVotes, tiedCount };
+}
+
+/**
  * Badge option résultats (Salle / Screen) — vocabulaire par type :
- * - Sondage : « En tête » pour la/les réponses les plus votées
- * - Quiz : « Plus votée » pour la/les plus votées ; « Bonne réponse » si correcte révélée
+ * - Sondage : « En tête » (seule en tête) ou « Égalité » (plusieurs)
+ * - Quiz : « Plus votée » / « Égalité » ; « Bonne réponse » si correcte révélée
  * - Concours (personnes tirées) : « Gagnant » reste hors de ce helper
  * @param {{
  *   voteOuvert?: boolean;
@@ -720,6 +792,7 @@ export function countParticipantVoteConfirmedSurfaces(input = {}) {
  *   quizRevealed?: boolean;
  *   isCorrect?: boolean;
  *   isWinner?: boolean;
+ *   isTie?: boolean;
  * }} input
  * @returns {string | null}
  */
@@ -732,6 +805,7 @@ export function getParticipantResultsOptionBadgeLabel(input = {}) {
     return "Bonne réponse";
   }
   if (input.isWinner !== true) return null;
+  if (input.isTie === true) return "Égalité";
   // Quiz : populaire ≠ correct — ne jamais dire « Gagnant » sur une option.
   if (input.isQuiz === true) return "Plus votée";
   // Sondage classique (SINGLE / MULTIPLE / LEAD…) : leader = « En tête ».

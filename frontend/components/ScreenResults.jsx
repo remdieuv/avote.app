@@ -14,7 +14,10 @@ import {
   formatScreenQuestionProgressLabel,
   getScreenDiffusionLabel,
 } from "@/lib/diffusionUx";
-import { getParticipantResultsOptionBadgeLabel } from "@/lib/participantLiveFlow";
+import {
+  getParticipantResultsOptionBadgeLabel,
+  getResultsLeadTieInfo,
+} from "@/lib/participantLiveFlow";
 import { isLeadCrmPoll } from "@/lib/leadContestLiveFlow";
 import { formatTestModeVoteCountLabel } from "@/lib/testModeResultsMask";
 import { API_URL } from "@/lib/config";
@@ -539,12 +542,9 @@ function ScreenResultsChoixClassiques({
     (sum, o) => sum + (Number(o.voteCount ?? o.votes ?? 0) || 0),
     0,
   );
-  const maxVotes =
-    pollOptions.length > 0
-      ? Math.max(
-          ...pollOptions.map((o) => Number(o.voteCount ?? o.votes ?? 0) || 0),
-        )
-      : -1;
+  const leadTieInfo = getResultsLeadTieInfo(pollOptions);
+  const maxVotes = pollOptions.length > 0 ? leadTieInfo.maxVotes : -1;
+  const resultsLeadIsTie = leadTieInfo.tiedCount >= 2;
 
   const optionsSorted = [...pollOptions].sort(
     (a, b) =>
@@ -779,6 +779,7 @@ function ScreenResultsChoixClassiques({
               quizRevealed,
               isCorrect: Boolean(opt?.isCorrect),
               isWinner,
+              isTie: isWinner && resultsLeadIsTie,
             });
             const fillW = barFillPct(percentRaw);
 

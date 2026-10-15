@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { adminFetch } from "@/lib/config";
+import { validatePollOptionLabels } from "@/lib/pollOptionsForm";
 
 const CONTEST_DEFAULT_QUESTION = "Souhaitez-vous participer au tirage au sort ?";
 const CONTEST_DEFAULT_OPTIONS = ["Oui", "Non"];
@@ -128,13 +129,14 @@ export function AjouterQuestionLiveModal({
     async (launchNow) => {
       if (!eventId) return;
       const q = question.trim();
-      const opts = reponses.map((x) => x.trim()).filter(Boolean);
+      const validated = validatePollOptionLabels(reponses);
+      const opts = validated.labels;
       if (!q) {
         setErreur("Saisissez le texte de la question.");
         return;
       }
-      if (opts.length < 2) {
-        setErreur("Ajoutez au moins deux réponses non vides.");
+      if (!validated.ok) {
+        setErreur(validated.error || "Réponses invalides.");
         return;
       }
       if (pollType === "QUIZ") {

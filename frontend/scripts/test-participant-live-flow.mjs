@@ -25,6 +25,7 @@ import {
   getParticipantFullLabel,
   getParticipantOfflineLabel,
   getParticipantResultsOptionBadgeLabel,
+  getResultsLeadTieInfo,
   isParticipantRoomFull,
   resolveEventLandingPhase,
   resolveJoinHistoriqueQuestions,
@@ -34,6 +35,7 @@ import {
   shouldEmbedPollSurfaceInRoom,
   shouldJoinApplySocketLiveAxesImmediately,
   shouldJoinSocketJoinActivePoll,
+  shouldClearPollLoadingAfterFetch,
   shouldPollApplyParentPollSnapshot,
   shouldPollFetchEventMetaBranding,
   shouldPollOpenOwnSocket,
@@ -48,6 +50,7 @@ import {
   getParticipantResultsBlockTitle,
   shouldRevealQuizAnswerToParticipant,
   shouldRevealQuizWhenShowingResults,
+  shouldRevealQuizWhenClosingAfterLiveResults,
   resolveShowResultsEventPatch,
   resolveScreenDisplayAfterLiveTransition,
   resolveNextPollPrepareEventPatch,
@@ -320,6 +323,37 @@ test("embedded : pas de 2ᵉ socket ni bandeau OFFLINE ni meta branding", () => 
   assert.equal(shouldPollOpenOwnSocket({ embedded: true }), false);
   assert.equal(shouldPollRenderOfflineBanner({ embedded: true }), false);
   assert.equal(shouldPollFetchEventMetaBranding({ embedded: true }), false);
+});
+
+test("loadPoll : silent courant lève le spinner (race join)", () => {
+  // silent gen=2 remplace non-silent gen=1 → seul 2 clear
+  assert.equal(
+    shouldClearPollLoadingAfterFetch({ generation: 1, currentGeneration: 2 }),
+    false,
+  );
+  assert.equal(
+    shouldClearPollLoadingAfterFetch({ generation: 2, currentGeneration: 2 }),
+    true,
+  );
+  // silent ou non : même règle (pas de gate !silent)
+  assert.equal(
+    shouldClearPollLoadingAfterFetch({ generation: 3, currentGeneration: 3 }),
+    true,
+  );
+});
+
+test("PollExperience source : finally clear loading sans gate !silent", () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(
+    join(here, "../components/PollExperience.jsx"),
+    "utf8",
+  );
+  assert.ok(src.includes("shouldClearPollLoadingAfterFetch"));
+  assert.equal(
+    /finally\s*\{\s*if\s*\(\s*!silent\s*&&/.test(src),
+    false,
+    "finally ne doit plus conditionner setLoading(false) à !silent",
+  );
 });
 
 test("A3. peer votes : Join join_poll sur même io, Poll embed sans 2ᵉ socket", () => {
@@ -624,6 +658,67 @@ test("Régie. Afficher les résultats — Quiz révélé seulement si vote ferm�
     }),
     false,
   );
+});
+
+test("Régie. Afficher puis Fermer — révèle Quiz sans exposition prématurée", () => {
+  assert.equal(
+    shouldRevealQuizWhenClosingAfterLiveResults({
+      pollType: "QUIZ",
+      quizRevealed: false,
+      displayState: "RESULTS",
+    }),
+    true,
+    "Fermer après RESULTS live → révèle",
+  );
+  assert.equal(
+    shouldRevealQuizWhenClosingAfterLiveResults({
+      pollType: "QUIZ",
+      quizRevealed: false,
+      displayState: "QUESTION",
+    }),
+    false,
+    "Fermer sans RESULTS préalable → pas de révélation (parcours Fermer→Afficher)",
+  );
+  assert.equal(
+    shouldRevealQuizWhenClosingAfterLiveResults({
+      pollType: "QUIZ",
+      quizRevealed: true,
+      displayState: "RESULTS",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldRevealQuizWhenClosingAfterLiveResults({
+      pollType: "SINGLE_CHOICE",
+      quizRevealed: false,
+      displayState: "RESULTS",
+    }),
+    false,
+  );
+
+  const closeAfterLiveQuiz = resolveEventPatchAfterVoteClose({
+    pollType: "QUIZ",
+    quizRevealed: false,
+    displayState: "RESULTS",
+    screenDisplayState: "RESULTS",
+    autoReveal: true,
+  });
+  assert.equal(closeAfterLiveQuiz.voteState, "CLOSED");
+  assert.equal(closeAfterLiveQuiz.displayState, "RESULTS");
+  assert.equal(closeAfterLiveQuiz.liveState, "RESULTS");
+  assert.equal(closeAfterLiveQuiz.screenDisplayState, "RESULTS");
+  assert.equal(closeAfterLiveQuiz.schedulesAutoReveal, false);
+  assert.equal(closeAfterLiveQuiz.revealQuiz, true);
+
+  const closeNormalQuiz = resolveEventPatchAfterVoteClose({
+    pollType: "QUIZ",
+    quizRevealed: false,
+    displayState: "QUESTION",
+    screenDisplayState: "QUESTION",
+    autoReveal: false,
+  });
+  assert.equal(closeNormalQuiz.displayState, "WAITING");
+  assert.equal(closeNormalQuiz.revealQuiz, false);
 });
 
 test("LOT-1. Afficher manuel = auto — RESULTS momentané, pas sticky", () => {
@@ -1157,6 +1252,71 @@ test("Finition. Badges RESULTS : sondage=En tête · Quiz=Plus votée/Bonne rép
     "Quiz non révélé : Plus votée, pas Bonne réponse",
   );
   assert.equal(formatTestModeVoteCountLabel(2), "2 votes");
+});
+
+test("Égalité en tête → badge Égalité (Salle / Screen)", () => {
+  const tied = [
+    { label: "A", votes: 1 },
+    { label: "B", votes: 1 },
+    { label: "C", votes: 0 },
+  ];
+  const info = getResultsLeadTieInfo(tied);
+  assert.equal(info.maxVotes, 1);
+  assert.equal(info.tiedCount, 2);
+  assert.equal(
+    getParticipantResultsOptionBadgeLabel({
+      isQuiz: false,
+      isWinner: true,
+      isTie: true,
+    }),
+    "Égalité",
+    "Sondage à égalité → Égalité (pas un seul En tête)",
+  );
+  assert.equal(
+    getParticipantResultsOptionBadgeLabel({
+      isQuiz: true,
+      quizRevealed: false,
+      isCorrect: false,
+      isWinner: true,
+      isTie: true,
+    }),
+    "Égalité",
+    "Quiz non révélé à égalité → Égalité",
+  );
+  assert.equal(
+    getParticipantResultsOptionBadgeLabel({
+      isQuiz: true,
+      quizRevealed: true,
+      isCorrect: true,
+      isWinner: true,
+      isTie: true,
+    }),
+    "Bonne réponse",
+    "Bonne réponse prime sur Égalité",
+  );
+  assert.equal(
+    getParticipantResultsOptionBadgeLabel({
+      isQuiz: true,
+      quizRevealed: true,
+      isCorrect: false,
+      isWinner: true,
+      isTie: true,
+    }),
+    "Égalité",
+  );
+  assert.equal(
+    getParticipantResultsOptionBadgeLabel({
+      isQuiz: false,
+      isWinner: true,
+      isTie: false,
+    }),
+    "En tête",
+    "Seul en tête → En tête",
+  );
+  assert.deepEqual(getResultsLeadTieInfo([{ votes: 3 }, { votes: 1 }]), {
+    maxVotes: 3,
+    tiedCount: 1,
+  });
 });
 
 test("G15. JoinLiveHub source : pas de triple Merci FINISHED", () => {

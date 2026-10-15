@@ -48,9 +48,11 @@ import {
   getParticipantOfflineLabel,
   getParticipantResultsBlockTitle,
   getParticipantResultsOptionBadgeLabel,
+  getResultsLeadTieInfo,
   isParticipantVoteSessionOpen,
   mergePollJsonPreservingQuizReveal,
   resolveParticipantTopStripLabel,
+  shouldClearPollLoadingAfterFetch,
   shouldPollApplyParentPollSnapshot,
   shouldPollFetchEventMetaBranding,
   shouldPollOpenOwnSocket,
@@ -77,6 +79,12 @@ import {
   shouldShowLeadCaptureForm,
 } from "@/lib/leadContestLiveFlow";
 import {
+  clearParticipantRepetitionMarkers,
+  shouldClearParticipantMarkersOnStartReal,
+  votedOptionsLocalStorageKey,
+  votedPollLocalStorageKey,
+} from "@/lib/startRealResetClient";
+import {
   buildJoinPollCardSurfaces,
   getLiveStateVisualTokens,
   mergeCardBorderWithAccent,
@@ -99,11 +107,11 @@ function formatNotationMoyenneUneDecimale(x) {
 
 /** @param {string} pollId */
 function cleVotePourPoll(pollId) {
-  return `avote_voted_poll_${pollId}`;
+  return votedPollLocalStorageKey(pollId);
 }
 /** @param {string} pollId */
 function cleOptionsVotePourPoll(pollId) {
-  return `avote_voted_options_poll_${pollId}`;
+  return votedOptionsLocalStorageKey(pollId);
 }
 
 function contestEligibleCountFromPoll(poll) {
@@ -358,6 +366,7 @@ export function PollExperience({
   const [socketOnline, setSocketOnline] = useState(/** @type {boolean | null} */ (null));
   /** FULL local après LIMIT_REACHED / EVENT_LOCKED sur vote */
   const [roomFullLocal, setRoomFullLocal] = useState(false);
+  const prevIsLiveConsumedPollRef = useRef(/** @type {boolean | null} */ (null));
 
   const eventMode = useEventMode(poll);
   const eventModeFromSocket = useEventMode(eventModeUi);
@@ -750,7 +759,14 @@ export function PollExperience({
             "Impossible de charger le sondage (API sur le port 4000 ?)",
         );
       } finally {
-        if (!silent && generation === loadPollGenerationRef.current) {
+        // Silent ou non : la génération courante doit toujours lever le spinner.
+        // Sinon un load silent (bump Join) qui abort le 1er GET laisse « Chargement... ».
+        if (
+          shouldClearPollLoadingAfterFetch({
+            generation,
+            currentGeneration: loadPollGenerationRef.current,
+          })
+        ) {
           setLoading(false);
         }
       }
@@ -908,6 +924,33 @@ export function PollExperience({
       setLiveScene(normalizeLiveScene(eventAxes.liveState));
 
       if (eventAxes.isLiveConsumed != null || eventAxes.isLocked != null) {
+        if (typeof eventAxes.isLiveConsumed === "boolean") {
+          if (
+            shouldClearParticipantMarkersOnStartReal({
+              wasTestMode: prevIsLiveConsumedPollRef.current === false,
+              isLiveConsumedNow: eventAxes.isLiveConsumed,
+            })
+          ) {
+            clearParticipantRepetitionMarkers({
+              pollIds: [pollId, payload?.poll?.id, payload?.activePollId],
+              voterSessionId: getOrCreateVoterSessionId(),
+              localStorage:
+                typeof window !== "undefined" ? window.localStorage : null,
+              sessionStorage:
+                typeof window !== "undefined" ? window.sessionStorage : null,
+              leadDraftKeyFn: leadDraftStorageKey,
+              leadSubmittedKeyFn: leadSubmittedStorageKey,
+            });
+            setMerciPourVote(false);
+            setADejaVoteEnStockage(false);
+            setVotedOptionIdsEnStockage([]);
+            setSelectedOptionId(null);
+            setSelectedOptionIds([]);
+            setLeadSuccess(false);
+            setShowLeadForm(false);
+          }
+          prevIsLiveConsumedPollRef.current = eventAxes.isLiveConsumed;
+        }
         setEventModeUi((prev) => ({
           isLiveConsumed:
             eventAxes.isLiveConsumed != null
@@ -1588,14 +1631,13 @@ export function PollExperience({
       )
     : 0;
 
-  const maxVotesResults =
-    showBlocResultatsEnDirect && pollOptions.length > 0
-      ? Math.max(
-          ...pollOptions.map(
-            (o) => Number(o.voteCount ?? o.votes ?? 0) || 0,
-          ),
-        )
-      : -1;
+  const leadTieInfo = showBlocResultatsEnDirect
+    ? getResultsLeadTieInfo(pollOptions)
+    : { maxVotes: 0, tiedCount: 0 };
+  const maxVotesResults = showBlocResultatsEnDirect
+    ? leadTieInfo.maxVotes
+    : -1;
+  const resultsLeadIsTie = leadTieInfo.tiedCount >= 2;
 
   const chronoVoteActif =
     voteOuvert &&
@@ -2940,6 +2982,7 @@ export function PollExperience({
                     quizRevealed: showQuizAnswerReveal,
                     isCorrect: Boolean(opt?.isCorrect),
                     isWinner,
+                    isTie: isWinner && resultsLeadIsTie,
                   });
                   const highlightRow = isWinner || isQuizCorrect;
                   const barWidthPct = resultsBarsAnimated
