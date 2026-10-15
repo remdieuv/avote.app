@@ -60,6 +60,14 @@ const {
   resolvePatchOptionsRequest,
   applyPollOptionsPatch,
 } = require("./lib/applyPollOptionsPatch");
+const {
+  evaluatePlaylistReorderGuards,
+  evaluatePlaylistDeleteGuards,
+  computeReorderByDirection,
+  validateFullPollOrder,
+} = require("./lib/playlistPollGuards");
+const { applyEventPollsReorder } = require("./lib/reorderEventPolls");
+const { applyEventPollDelete } = require("./lib/deleteEventPoll");
 
 /** Anti double-clic rejeu TEST (sérialise par pollId). */
 const runReplayTestExclusive = createPollExclusiveQueue();
@@ -4611,6 +4619,200 @@ app.get("/polls/:pollId", async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/**
+ * PATCH /events/:eventId/polls/reorder
+ * Body: { pollIds: string[] } OU { pollId, direction: "up"|"down" }
+ * Ne modifie jamais activePollId.
+ */
+app.patch("/events/:eventId/polls/reorder", requireAuth, async (req, res) => {
+  const { eventId } = req.params;
+  try {
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, isLocked: true, activePollId: true },
+    });
+    if (!event) {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+    const reorderGuard = evaluatePlaylistReorderGuards({
+      isLocked: event.isLocked,
+    });
+    if (!reorderGuard.ok) {
+      return res.status(reorderGuard.status).json({ error: reorderGuard.error });
+    }
+
+    const body = req.body ?? {};
+    const existing = await prisma.poll.findMany({
+      where: { eventId },
+      orderBy: { order: "asc" },
+      select: { id: true },
+    });
+    const currentIds = existing.map((p) => p.id);
+
+    /** @type {string[]} */
+    let nextIds;
+    if (Array.isArray(body.pollIds)) {
+      const validated = validateFullPollOrder(currentIds, body.pollIds);
+      if (!validated.ok) {
+        return res.status(400).json({ error: validated.error });
+      }
+      nextIds = validated.pollIds;
+    } else if (typeof body.pollId === "string" && body.direction != null) {
+      const moved = computeReorderByDirection(
+        currentIds,
+        body.pollId,
+        body.direction,
+      );
+      if (!moved.ok) {
+        return res.status(400).json({ error: moved.error });
+      }
+      nextIds = moved.pollIds;
+    } else {
+      return res.status(400).json({
+        error:
+          'Fournis "pollIds" (tableau) ou "pollId" + "direction" ("up"|"down").',
+      });
+    }
+
+    const applied = await applyEventPollsReorder(prisma, {
+      eventId,
+      pollIdsOrdered: nextIds,
+    });
+    if (!applied.ok) {
+      return res.status(applied.status).json({ error: applied.error });
+    }
+
+    // Garantie : activePollId inchangé (réordonnancement pur).
+    const after = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { activePollId: true },
+    });
+    if (
+      String(after?.activePollId || "") !== String(event.activePollId || "")
+    ) {
+      await prisma.event.update({
+        where: { id: eventId },
+        data: { activePollId: event.activePollId },
+      });
+    }
+
+    await emitEventLiveUpdated(io, eventId);
+    return res.json({
+      ok: true,
+      activePollId: event.activePollId,
+      polls: applied.polls,
+    });
+  } catch (e) {
+    console.error("patch /events/:eventId/polls/reorder", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/**
+ * DELETE /polls/:pollId
+ * Body optionnel : { confirmWipeTestData: true } (TEST + votes).
+ * Refuse antenne / verrouillé / RÉEL avec votes ou historique.
+ */
+app.delete("/polls/:pollId", requireAuth, async (req, res) => {
+  const { pollId } = req.params;
+  try {
+    const pOwn = await assertPollOwnedBy(pollId, req.userId);
+    if (!pOwn.ok) {
+      return res.status(pOwn.status).json({ error: "Sondage introuvable." });
+    }
+    const poll = await prisma.poll.findUnique({
+      where: { id: pollId },
+      select: {
+        id: true,
+        eventId: true,
+        status: true,
+        quizRevealed: true,
+        event: {
+          select: {
+            id: true,
+            isLocked: true,
+            isLiveConsumed: true,
+            activePollId: true,
+          },
+        },
+        _count: {
+          select: {
+            votes: true,
+            leads: true,
+            contestDraws: true,
+            contestWinners: true,
+          },
+        },
+      },
+    });
+    if (!poll || !poll.event) {
+      return res.status(404).json({ error: "Sondage introuvable." });
+    }
+
+    const body = req.body ?? {};
+    const wipeQuery = String(req.query?.confirmWipeTestData || "")
+      .toLowerCase()
+      .trim();
+    const confirmWipeTestData =
+      body.confirmWipeTestData === true ||
+      wipeQuery === "1" ||
+      wipeQuery === "true";
+    const deleteGuard = evaluatePlaylistDeleteGuards({
+      isLocked: poll.event.isLocked,
+      isLiveConsumed: poll.event.isLiveConsumed,
+      isActivePoll: String(poll.event.activePollId || "") === String(poll.id),
+      voteCount: poll._count?.votes ?? 0,
+      status: poll.status,
+      leadsCount: poll._count?.leads ?? 0,
+      contestDrawsCount: poll._count?.contestDraws ?? 0,
+      contestWinnersCount: poll._count?.contestWinners ?? 0,
+      quizRevealed: poll.quizRevealed,
+      confirmWipeTestData,
+    });
+    if (!deleteGuard.ok) {
+      return res.status(deleteGuard.status).json({
+        error: deleteGuard.error,
+        requiresWipeConfirm: deleteGuard.requiresWipeConfirm,
+      });
+    }
+
+    const activeBefore = poll.event.activePollId;
+    const applied = await applyEventPollDelete(prisma, {
+      eventId: poll.eventId,
+      pollId: poll.id,
+    });
+    if (!applied.ok) {
+      return res.status(applied.status).json({ error: applied.error });
+    }
+
+    const after = await prisma.event.findUnique({
+      where: { id: poll.eventId },
+      select: { activePollId: true },
+    });
+    if (String(after?.activePollId || "") !== String(activeBefore || "")) {
+      await prisma.event.update({
+        where: { id: poll.eventId },
+        data: { activePollId: activeBefore },
+      });
+    }
+
+    await emitEventLiveUpdated(io, poll.eventId);
+    return res.json({
+      ok: true,
+      deletedPollId: applied.deletedPollId,
+      activePollId: activeBefore,
+      polls: applied.polls,
+    });
+  } catch (e) {
+    console.error("delete /polls/:pollId", e);
+    return res.status(500).json({ error: "Erreur serveur." });
   }
 });
 

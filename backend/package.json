@@ -15,6 +15,7 @@
     "test:poll-patch-guards": "node scripts/test-poll-patch-guards.mjs",
     "test:replace-poll-options": "node scripts/test-replace-poll-options.mjs",
     "test:patch-poll-options-http": "node scripts/test-patch-poll-options-http.mjs",
+    "test:playlist-poll-guards": "node scripts/test-playlist-poll-guards.mjs",
     "postinstall": "prisma generate"
   },
   "keywords": [],

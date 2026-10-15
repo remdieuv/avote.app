@@ -82,6 +82,7 @@ import {
   getSavedQuizCorrectAnswer,
 } from "@/lib/regieQuizEdit";
 import { getRegiePollEditGuardState } from "@/lib/regiePollEditGuards";
+import { getRegiePlaylistActionState } from "@/lib/regiePlaylistGuards";
 import {
   formatRegieOptionStatMeta,
   getRegieOptionStatBarStyles,
@@ -427,6 +428,14 @@ function PollCard({
   onSelect = null,
   /** Libellé « Question N/Total » (ordre playlist). */
   questionNumberLabel = null,
+  /** Étape 3 — réordonner / supprimer (playlist gauche). */
+  playlistIndex = 0,
+  playlistTotal = 0,
+  isLocked = false,
+  isLiveConsumed = null,
+  onMoveUp = null,
+  onMoveDown = null,
+  onDelete = null,
 }) {
   const statusLabel = getRegiePollStatusLabel({
     pollStatus: poll.status,
@@ -554,6 +563,120 @@ function PollCard({
       {editLabel}
     </button>
   );
+
+  const playlistActions = getRegiePlaylistActionState({
+    isLocked,
+    isLiveConsumed,
+    isActivePoll: isActive,
+    indexZeroBased: playlistIndex,
+    totalPolls: playlistTotal,
+    voteCount: poll.voteCount,
+    status: poll.status,
+    leadsCount: poll.leadsCount ?? poll.leads?.length,
+    contestDrawsCount: poll.contestDrawsCount,
+    contestWinnersCount: poll.contestWinnersCount,
+    quizRevealed: poll.quizRevealed,
+  });
+  const showPlaylistManage =
+    typeof onMoveUp === "function" ||
+    typeof onMoveDown === "function" ||
+    typeof onDelete === "function";
+  const playlistManageRow = showPlaylistManage ? (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        alignItems: "center",
+        gap: "0.28rem",
+        marginTop: compact ? "0.28rem" : "0.35rem",
+      }}
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+    >
+      <button
+        type="button"
+        disabled={busy || !playlistActions.canMoveUp}
+        onClick={() => onMoveUp?.(poll.id)}
+        title={
+          playlistActions.reorderBlockedReason ||
+          (playlistActions.canMoveUp
+            ? "Monter dans la playlist"
+            : "Déjà en première position")
+        }
+        aria-label="Monter la question"
+        style={{
+          width: "1.7rem",
+          height: "1.7rem",
+          padding: 0,
+          borderRadius: "8px",
+          border: "1px solid #cbd5e1",
+          background: busy || !playlistActions.canMoveUp ? "#f8fafc" : "#ffffff",
+          color: busy || !playlistActions.canMoveUp ? "#94a3b8" : "#334155",
+          fontSize: "0.72rem",
+          fontWeight: 800,
+          cursor: busy || !playlistActions.canMoveUp ? "not-allowed" : "pointer",
+          lineHeight: 1,
+        }}
+      >
+        ↑
+      </button>
+      <button
+        type="button"
+        disabled={busy || !playlistActions.canMoveDown}
+        onClick={() => onMoveDown?.(poll.id)}
+        title={
+          playlistActions.reorderBlockedReason ||
+          (playlistActions.canMoveDown
+            ? "Descendre dans la playlist"
+            : "Déjà en dernière position")
+        }
+        aria-label="Descendre la question"
+        style={{
+          width: "1.7rem",
+          height: "1.7rem",
+          padding: 0,
+          borderRadius: "8px",
+          border: "1px solid #cbd5e1",
+          background:
+            busy || !playlistActions.canMoveDown ? "#f8fafc" : "#ffffff",
+          color: busy || !playlistActions.canMoveDown ? "#94a3b8" : "#334155",
+          fontSize: "0.72rem",
+          fontWeight: 800,
+          cursor:
+            busy || !playlistActions.canMoveDown ? "not-allowed" : "pointer",
+          lineHeight: 1,
+        }}
+      >
+        ↓
+      </button>
+      <button
+        type="button"
+        disabled={busy || !playlistActions.canDelete}
+        onClick={() => onDelete?.(poll, playlistActions)}
+        title={
+          playlistActions.deleteBlockedReason ||
+          (playlistActions.requiresWipeConfirm
+            ? "Supprimer (remise à zéro des votes test requise)"
+            : "Supprimer cette question")
+        }
+        style={{
+          marginLeft: "auto",
+          padding: "0.22rem 0.45rem",
+          borderRadius: "8px",
+          border: "1px solid transparent",
+          background: "transparent",
+          color: busy || !playlistActions.canDelete ? "#94a3b8" : "#9f1239",
+          fontSize: "0.64rem",
+          fontWeight: 650,
+          cursor: busy || !playlistActions.canDelete ? "not-allowed" : "pointer",
+          textDecoration: "underline",
+          textUnderlineOffset: "2px",
+        }}
+      >
+        Supprimer
+      </button>
+    </div>
+  ) : null;
 
   const metaRow = (
     <div
@@ -940,6 +1063,7 @@ function PollCard({
               {editLabel}
             </button>
           ) : null}
+          {playlistManageRow}
         </div>
       </div>
     );
@@ -973,6 +1097,7 @@ function PollCard({
           <div style={{ flex: "1 1 220px", minWidth: 0 }}>
             {metaRow}
             {titre}
+            {playlistManageRow}
           </div>
           <div
             style={{
@@ -6770,6 +6895,83 @@ export default function RegieEventPage() {
     setSelectedPollId(String(pollId || "") || null);
   }, []);
 
+  const handlePlaylistMove = useCallback(
+    async (pollId, direction) => {
+      if (!eventId || busy || eventLocked) return;
+      setAutoRotate(false);
+      setBusy(true);
+      setActionError(null);
+      try {
+        const res = await adminFetch(
+          `${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/polls/reorder`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pollId, direction }),
+          },
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(mapApiError(body, res.status));
+        }
+        await fetchEvent({ silent: true });
+      } catch (e) {
+        setActionError(e.message || "Réordonnancement échoué.");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [eventId, busy, eventLocked, fetchEvent],
+  );
+
+  const handlePlaylistDelete = useCallback(
+    async (poll, actions) => {
+      if (!poll?.id || busy || eventLocked) return;
+      if (actions && actions.canDelete === false) return;
+      if (typeof window === "undefined") return;
+      const confirmMsg =
+        (actions && actions.deleteConfirmMessage) ||
+        "Supprimer cette question de la playlist ?";
+      const ok = window.confirm(confirmMsg);
+      if (!ok) return;
+      const confirmWipeTestData = Boolean(actions?.requiresWipeConfirm);
+      setAutoRotate(false);
+      setBusy(true);
+      setActionError(null);
+      const pid = String(poll.id);
+      try {
+        const res = await adminFetch(
+          `${apiBaseBrowser()}/polls/${encodeURIComponent(pid)}`,
+          {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ confirmWipeTestData }),
+          },
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(mapApiError(body, res.status));
+        }
+        setSelectedPollId((prev) =>
+          String(prev || "") === pid ? null : prev,
+        );
+        setPollDrawSummary((prev) => {
+          const next = { ...prev };
+          delete next[pid];
+          return next;
+        });
+        await fetchEvent({ silent: true });
+        setToastNotif("Question supprimée");
+        window.setTimeout(() => setToastNotif(null), 2200);
+      } catch (e) {
+        setActionError(e.message || "Suppression échouée.");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy, eventLocked, fetchEvent],
+  );
+
   const selectedReplayGate = canOfferReplayTestPoll({
     isTestMode: inTestMode,
     voteState: voteStateUi,
@@ -6924,6 +7126,13 @@ export default function RegieEventPage() {
             onEdit={openEditPollModal}
             editActionLabel={playlistEditActionLabel}
             contestDrawSummary={pollDrawSummary[String(poll.id)]}
+            playlistIndex={index}
+            playlistTotal={pollsOrdonnes.length}
+            isLocked={eventLocked}
+            isLiveConsumed={eventData?.isLiveConsumed}
+            onMoveUp={(id) => handlePlaylistMove(id, "up")}
+            onMoveDown={(id) => handlePlaylistMove(id, "down")}
+            onDelete={handlePlaylistDelete}
           />
         ))}
       </div>
