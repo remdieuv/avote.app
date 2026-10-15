@@ -92,6 +92,10 @@ import {
   assertPollEditOptionsPersisted,
   buildRegiePollEditPayload,
 } from "@/lib/regiePollEditPayload";
+import {
+  buildSkipPollRequestBody,
+  getRegieSkipQuestionState,
+} from "@/lib/regieSkipQuestion";
 
 const VOTE_STATE_LABELS = {
   open: "Vote ouvert",
@@ -6390,6 +6394,17 @@ export default function RegieEventPage() {
     pollStatus: activePoll?.status,
   });
   const canGoNext = canGoNextBase && allowedLiveActions.next;
+  const skipQuestionState = getRegieSkipQuestionState({
+    isLocked: eventLocked,
+    eventFinished,
+    busy,
+    hasActivePoll: Boolean(activePollIdJs),
+    hasNextPoll: hasNextPollAfterActive,
+    voteState: voteStateUi,
+    pollType: activePoll?.type,
+    leadEnabled: activePoll?.leadEnabled,
+    contestQuotaReached,
+  });
   const primaryLiveActionLabel = getRegiePrimaryLiveActionLabel(primaryLiveAction);
   const pilotageStepLabel = getRegiePilotageStepLabel({
     voteState: voteStateUi,
@@ -6792,6 +6807,58 @@ export default function RegieEventPage() {
     eventId,
     postAction,
   ]);
+
+  const handleSkipQuestion = useCallback(async () => {
+    if (!eventId || !skipQuestionState.canSkip) return;
+    if (typeof window === "undefined") return;
+
+    if (skipQuestionState.isLastQuestion) {
+      const ok = window.confirm(
+        skipQuestionState.finishConfirmMessage ||
+          "C’est la dernière question. Terminer l’événement maintenant ?",
+      );
+      if (!ok) return;
+      const confirmWord = window.prompt(
+        "Confirmation de sécurité : tapez TERMINER pour confirmer.",
+        "",
+      );
+      if (String(confirmWord || "").trim().toUpperCase() !== "TERMINER") return;
+      await postAction(`/events/${eventId}/finish`, "Evenement termine");
+      return;
+    }
+
+    const ok = window.confirm(
+      skipQuestionState.confirmMessage ||
+        "Passer cette question et préparer la suivante ?",
+    );
+    if (!ok) return;
+
+    setAutoRotate(false);
+    setBusy(true);
+    setActionError(null);
+    try {
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/skip-poll`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(buildSkipPollRequestBody(skipQuestionState)),
+        },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(mapApiError(body, res.status));
+      }
+      await fetchEvent({ silent: true });
+      setToastNotif("Question passee");
+      window.setTimeout(() => setToastNotif(null), 2200);
+    } catch (e) {
+      setActionError(e.message || "Impossible de passer cette question.");
+    } finally {
+      setBusy(false);
+    }
+  }, [eventId, skipQuestionState, postAction, fetchEvent]);
+
   const selectedQuestionIndex = pollsOrdonnes.findIndex(
     (p) => String(p.id) === String(selectedPollId || ""),
   );
@@ -9629,6 +9696,34 @@ export default function RegieEventPage() {
                         alignItems: "center",
                       }}
                     >
+                      <button
+                        type="button"
+                        disabled={!skipQuestionState.canSkip}
+                        onClick={() => void handleSkipQuestion()}
+                        title={
+                          skipQuestionState.blockedReason ||
+                          (skipQuestionState.isLastQuestion
+                            ? "Dernière question : propose de terminer l’événement"
+                            : "Passe à la question suivante sans publier les résultats")
+                        }
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          padding: 0,
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          color: skipQuestionState.canSkip
+                            ? "#0f766e"
+                            : "#94a3b8",
+                          cursor: skipQuestionState.canSkip
+                            ? "pointer"
+                            : "not-allowed",
+                          textDecoration: "underline",
+                          textUnderlineOffset: "3px",
+                        }}
+                      >
+                        {skipQuestionState.buttonLabel}
+                      </button>
                       {primaryLiveAction !== "finish" ? (
                         <button
                           type="button"

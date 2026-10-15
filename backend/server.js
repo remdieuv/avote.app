@@ -68,6 +68,12 @@ const {
 } = require("./lib/playlistPollGuards");
 const { applyEventPollsReorder } = require("./lib/reorderEventPolls");
 const { applyEventPollDelete } = require("./lib/deleteEventPoll");
+const {
+  evaluateSkipPollGuards,
+  resolveSkipPollPlaylist,
+  isContestPoll: isSkipContestPoll,
+  isContestQuotaReached,
+} = require("./lib/skipEventPoll");
 
 /** Anti double-clic rejeu TEST (sérialise par pollId). */
 const runReplayTestExclusive = createPollExclusiveQueue();
@@ -3455,6 +3461,104 @@ app.post("/events/:eventId/next-poll", requireAuth, async (req, res) => {
     return res.json(result);
   } catch (e) {
     console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/**
+ * POST /events/:eventId/skip-poll — « Passer cette question ».
+ * Même transition d’antenne que next-poll (passerAuSondageSuivant) :
+ * pas de publication résultats, pas d’effacement de votes, pas de gagnant fictif.
+ * Dernière question → 409 LAST_QUESTION (le client propose finish).
+ */
+app.post("/events/:eventId/skip-poll", requireAuth, async (req, res) => {
+  const { eventId } = req.params;
+  try {
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true,
+        isLocked: true,
+        liveState: true,
+        voteState: true,
+        activePollId: true,
+        polls: {
+          orderBy: { order: "asc" },
+          select: {
+            id: true,
+            order: true,
+            status: true,
+            type: true,
+            contestWinnerCount: true,
+          },
+        },
+      },
+    });
+    if (!event) {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+
+    const playlist = resolveSkipPollPlaylist(event.polls, event.activePollId);
+    const activePoll = playlist.hasActive
+      ? event.polls.find((p) => String(p.id) === String(event.activePollId))
+      : null;
+    const isContest = isSkipContestPoll(activePoll || {});
+    let contestQuotaReached = true;
+    if (isContest && activePoll?.id) {
+      const activeWinners = await prisma.contestDrawWinner.count({
+        where: { pollId: activePoll.id, status: STATUS_ACTIVE },
+      });
+      contestQuotaReached = isContestQuotaReached({
+        contestWinnerCount: activePoll.contestWinnerCount,
+        totalWinners: activeWinners,
+      });
+    }
+
+    const body = req.body ?? {};
+    const guard = evaluateSkipPollGuards({
+      isLocked: event.isLocked,
+      eventFinished:
+        String(event.liveState || "").toUpperCase() === "FINISHED",
+      hasActivePoll: playlist.hasActive,
+      hasNextPoll: playlist.hasNext,
+      voteState: event.voteState,
+      confirmOpenVote: body.confirmOpenVote === true,
+      isContest,
+      contestQuotaReached,
+      confirmAbandonDraw: body.confirmAbandonDraw === true,
+    });
+    if (!guard.ok) {
+      return res.status(guard.status).json({
+        error: guard.error,
+        code: guard.code,
+        requiresFinish: guard.requiresFinish,
+        needsConfirmOpenVote: guard.needsConfirmOpenVote,
+        needsConfirmAbandonDraw: guard.needsConfirmAbandonDraw,
+      });
+    }
+
+    const result = await passerAuSondageSuivant(eventId);
+    if (!result.ok) {
+      return res.status(result.code || 404).json({ error: result.message });
+    }
+
+    await emitEventLiveUpdated(io, eventId);
+    return res.json({
+      ok: true,
+      skipped: true,
+      finished: Boolean(result.finished),
+      prepared: Boolean(result.prepared),
+      activePollId: result.activePollId ?? null,
+      votesPreserved: true,
+      winnersCreated: false,
+    });
+  } catch (e) {
+    console.error("events/:eventId/skip-poll", e);
     return res.status(500).json({ error: "Erreur serveur." });
   }
 });

@@ -23,6 +23,8 @@
     "test:regie-poll-edit-payload": "node scripts/test-regie-poll-edit-payload.mjs",
     "test:regie-playlist-guards": "node scripts/test-regie-playlist-guards.mjs",
     "test:playlist-poll-guards": "node ../backend/scripts/test-playlist-poll-guards.mjs",
+    "test:regie-skip-question": "node scripts/test-regie-skip-question.mjs",
+    "test:skip-event-poll": "node ../backend/scripts/test-skip-event-poll.mjs",
     "test:poll-options-form": "node scripts/test-poll-options-form.mjs",
     "test:regie-option-stats": "node scripts/test-regie-option-stats.mjs",
     "test:poll-patch-guards": "node ../backend/scripts/test-poll-patch-guards.mjs",
