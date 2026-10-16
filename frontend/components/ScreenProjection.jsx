@@ -19,6 +19,7 @@ import { API_URL, SOCKET_URL } from "@/lib/config";
 import {
   getScreenDiffusionLabel,
   resolveScreenQuestionProgress,
+  shouldRenderScreenFinished,
   shouldShowScreenCornerQr,
 } from "@/lib/diffusionUx";
 import {
@@ -180,6 +181,10 @@ export function ScreenProjection({
     /** @type {string | null} */ (initialBDisplay),
   );
   const [eventId, setEventId] = useState(null);
+  /** Titre événement (meta slug) — scène FINISHED. */
+  const [eventTitle, setEventTitle] = useState(
+    /** @type {string | null} */ (null),
+  );
   const [resultsBarsAnimated, setResultsBarsAnimated] = useState(false);
   /** Rafraîchit l’affichage du chrono chaque seconde quand il est actif */
   const [chronoTick, setChronoTick] = useState(0);
@@ -250,6 +255,11 @@ export function ScreenProjection({
   const applyEventSlugMeta = useCallback((meta) => {
     setEventId(meta.id);
     setLiveScene(meta.liveState ?? null);
+    if (typeof meta.title === "string" && meta.title.trim()) {
+      setEventTitle(meta.title.trim());
+    } else {
+      setEventTitle(null);
+    }
     const mainDs =
       typeof meta.screenDisplayState === "string"
         ? meta.screenDisplayState.toLowerCase()
@@ -327,6 +337,7 @@ export function ScreenProjection({
             setError(getLiveStateLabel(LIVE_UX_LOCAL.ERROR));
           }
           setEventId(null);
+          setEventTitle(null);
           setRoomCustomization(null);
           setEventVoteState(null);
           setEventAutoReveal(false);
@@ -1220,6 +1231,23 @@ export function ScreenProjection({
     );
   }
 
+  /**
+   * FINISHED prioritaire absolue : avant no-poll WAITING, ds=waiting, BLACK forcé
+   * et B indépendant — A/B + F5 (meta liveState=finished).
+   */
+  if (
+    shouldRenderScreenFinished({
+      liveScene,
+      uxState: projectionPres.ux,
+    })
+  ) {
+    return wrapOut(
+      false,
+      <ScreenFinished shell={shell} eventTitle={eventTitle} />,
+      { hideStatePill: true },
+    );
+  }
+
   if (!poll && noPollFromHttp404) {
     if (ds === "black") {
       return wrapOut(
@@ -1251,6 +1279,7 @@ export function ScreenProjection({
   /**
    * WAITING explicite (Attente / QR) — prioritaire sur VOTING dérivé de liveScene
    * tant que le vote reste OPEN (Screen A forçage + Screen B indépendant).
+   * (FINISHED déjà traité plus haut.)
    */
   if (ds === "waiting") {
     return wrapOut(
@@ -1279,13 +1308,6 @@ export function ScreenProjection({
         questionProgress={questionProgress}
       />,
     );
-  }
-
-  /** FINISHED : scène finale, jamais d’ancienne question / résultats. */
-  if (liveScene === "finished" || projectionPres.ux === "FINISHED") {
-    return wrapOut(false, <ScreenFinished shell={shell} />, {
-      hideStatePill: true,
-    });
   }
 
   if (liveScene === "paused" || projectionPres.ux === "PAUSED") {

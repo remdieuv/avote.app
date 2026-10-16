@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import {
+  SCREEN_FINISHED_SUBTITLE,
   SCREEN_QR_CTA_JOIN,
   getScreenDiffusionLabel,
   getScreenWaitingDiffusionLabel,
@@ -117,10 +118,18 @@ export function ScreenWaiting({
 }
 
 /**
- * Scène FINISHED — clôture simple, sans ancienne question / résultats.
- * @param {{ shell: Record<string, unknown> }} props
+ * Scène FINISHED — clôture Screen A/B (vidéoprojecteur + mobile).
+ * @param {{
+ *   shell: Record<string, unknown>;
+ *   eventTitle?: string | null;
+ * }} props
  */
-export function ScreenFinished({ shell }) {
+export function ScreenFinished({ shell, eventTitle = null }) {
+  const title =
+    typeof eventTitle === "string" && eventTitle.trim()
+      ? eventTitle.trim()
+      : null;
+
   return (
     <main
       style={{
@@ -134,14 +143,31 @@ export function ScreenFinished({ shell }) {
         alignItems: "center",
         justifyContent: "center",
         textAlign: "center",
+        gap: "clamp(0.85rem, 2.4vh, 1.6rem)",
         padding: "clamp(1rem, 3vw, 2rem)",
         boxSizing: "border-box",
       }}
     >
+      {title ? (
+        <p
+          style={{
+            margin: 0,
+            fontSize: "clamp(1rem, 2.8vw, 1.85rem)",
+            fontWeight: 800,
+            letterSpacing: "0.04em",
+            textTransform: "uppercase",
+            color: "#94a3b8",
+            maxWidth: "28ch",
+            textWrap: "balance",
+          }}
+        >
+          {title}
+        </p>
+      ) : null}
       <h1
         style={{
           margin: 0,
-          fontSize: "clamp(2rem, 7vw, 4.75rem)",
+          fontSize: "clamp(1.85rem, 6.5vw, 4.5rem)",
           fontWeight: 900,
           letterSpacing: "-0.03em",
           lineHeight: 1.08,
@@ -152,6 +178,19 @@ export function ScreenFinished({ shell }) {
       >
         {getScreenDiffusionLabel("FINISHED")}
       </h1>
+      <p
+        style={{
+          margin: 0,
+          fontSize: "clamp(1.15rem, 3.4vw, 2.15rem)",
+          fontWeight: 700,
+          lineHeight: 1.25,
+          color: "#cbd5e1",
+          maxWidth: "22ch",
+          textWrap: "balance",
+        }}
+      >
+        {SCREEN_FINISHED_SUBTITLE}
+      </p>
     </main>
   );
 }

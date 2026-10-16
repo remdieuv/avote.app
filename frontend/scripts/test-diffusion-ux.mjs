@@ -14,6 +14,7 @@ import {
   getScreenClosedAwaitingResultsLabel,
   getScreenDiffusionLabel,
   getScreenWaitingDiffusionLabel,
+  SCREEN_FINISHED_SUBTITLE,
   SCREEN_WAITING_LABEL_BETWEEN,
   SCREEN_WAITING_LABEL_START,
   isScreenProjectionVoteOpen,
@@ -25,8 +26,12 @@ import {
   screenOptionLetter,
   shouldShowScreenClosedVoteCount,
   shouldShowScreenCornerQr,
+  shouldRenderScreenFinished,
   sortScreenOptions,
 } from "../lib/diffusionUx.js";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { LIVE_UX_STATE, resolveLiveUxState } from "../lib/liveStateUx.js";
 import {
   formatTestModeVoteCountLabel,
@@ -287,8 +292,52 @@ assert.equal(
   SCREEN_WAITING_LABEL_BETWEEN,
 );
 assert.equal(getScreenDiffusionLabel("CLOSED"), "VOTE TERMINÉ");
-assert.equal(getScreenDiffusionLabel("FINISHED"), "MERCI D’AVOIR PARTICIPÉ !");
+assert.equal(
+  getScreenDiffusionLabel("FINISHED"),
+  "MERCI POUR VOTRE PARTICIPATION !",
+);
+assert.match(SCREEN_FINISHED_SUBTITLE, /terminé/i);
+assert.equal(
+  shouldRenderScreenFinished({ liveScene: "finished", uxState: "WAITING" }),
+  true,
+  "FINISHED prioritaire même si UX waiting",
+);
+assert.equal(
+  shouldRenderScreenFinished({ liveScene: "waiting", uxState: "WAITING" }),
+  false,
+);
+assert.equal(
+  shouldRenderScreenFinished({ liveScene: null, uxState: "FINISHED" }),
+  true,
+);
 assert.equal(getScreenDiffusionLabel("RESULTS"), "RÉSULTATS");
+
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const screen = readFileSync(
+    join(here, "../components/ScreenProjection.jsx"),
+    "utf8",
+  );
+  const finishedScene = readFileSync(
+    join(here, "../components/ScreenLiveScenes.jsx"),
+    "utf8",
+  );
+  const renderBlock = screen.slice(screen.indexOf("if (loading)"));
+  const idxFinished = renderBlock.indexOf("shouldRenderScreenFinished");
+  const idxNoPoll = renderBlock.indexOf("!poll && noPollFromHttp404");
+  const idxDsWaiting = renderBlock.indexOf('if (ds === "waiting")');
+  assert.ok(idxFinished >= 0, "branche FINISHED dans le rendu");
+  assert.ok(idxNoPoll >= 0);
+  assert.ok(idxDsWaiting >= 0);
+  assert.ok(
+    idxFinished < idxNoPoll && idxFinished < idxDsWaiting,
+    "FINISHED doit être évalué avant no-poll / ds=waiting",
+  );
+  assert.ok(screen.includes("eventTitle={eventTitle}"));
+  assert.ok(finishedScene.includes("SCREEN_FINISHED_SUBTITLE"));
+  assert.ok(finishedScene.includes("eventTitle"));
+  console.log("ok  Screen FINISHED prioritaire + contenu clôture");
+}
 assert.notEqual(
   getScreenDiffusionLabel("CLOSED"),
   "Merci ! Ton vote est pris en compte",

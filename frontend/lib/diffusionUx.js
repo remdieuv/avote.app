@@ -51,7 +51,7 @@ export function getScreenDiffusionLabel(uxState, waitingCtx = {}) {
     case "PAUSED":
       return "PAUSE";
     case "FINISHED":
-      return "MERCI D’AVOIR PARTICIPÉ !";
+      return "MERCI POUR VOTRE PARTICIPATION !";
     default:
       return SCREEN_WAITING_LABEL_START;
   }
@@ -62,6 +62,27 @@ export const SCREEN_QR_CTA_JOIN = "SCANNER POUR REJOINDRE";
 
 /** CTA QR VOTING (retardataires). */
 export const SCREEN_QR_CTA_VOTE = "Scannez pour voter";
+
+/** Sous-titre clôture Screen A/B (FINISHED). */
+export const SCREEN_FINISHED_SUBTITLE =
+  "L’événement est maintenant terminé.";
+
+/**
+ * FINISHED écrase WAITING / absence de poll / forçage B (sauf chargement / erreur).
+ * @param {{
+ *   liveScene?: string | null;
+ *   uxState?: string | null;
+ * }} [input]
+ */
+export function shouldRenderScreenFinished(input = {}) {
+  const live = String(input.liveScene ?? "")
+    .trim()
+    .toLowerCase();
+  const ux = String(input.uxState ?? "")
+    .trim()
+    .toUpperCase();
+  return live === "finished" || ux === "FINISHED";
+}
 
 /**
  * Progression Question x/y depuis l’ordre réel des polls.
