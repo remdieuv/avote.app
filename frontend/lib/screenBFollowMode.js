@@ -211,11 +211,13 @@ export function clearScreenBDisplayState(slug, opts = {}) {
 
 /**
  * Display effectif au chargement / après meta : B indépendant garde sa cible.
+ * Indépendant sans cible → conserve `currentDisplay` (jamais le main A).
  * @param {{
  *   screenId?: string | null;
  *   independent?: boolean;
  *   mainDisplay?: unknown;
  *   targetedDisplay?: unknown;
+ *   currentDisplay?: unknown;
  * }} [input]
  * @returns {"question" | "results" | "waiting" | "black" | null}
  */
@@ -225,8 +227,103 @@ export function resolveScreenClientDisplayState(input = {}) {
     independent: input.independent,
   });
   const targeted = normalizeScreenDisplayState(input.targetedDisplay);
-  if (!follows && targeted) return targeted;
+  if (!follows) {
+    if (targeted) return targeted;
+    return normalizeScreenDisplayState(input.currentDisplay);
+  }
   return normalizeScreenDisplayState(input.mainDisplay);
+}
+
+/**
+ * Applique un `screen:update` côté client Screen (état pur — tests de course).
+ * Une commande ciblée sid=b verrouille le display indépendant ; les updates
+ * globales ne l’écrasent jamais tant que independent reste true.
+ * @param {{
+ *   localScreenId?: string | null;
+ *   independent?: boolean;
+ *   displayState?: unknown;
+ *   targetedDisplay?: unknown;
+ *   payloadScreenId?: unknown;
+ *   payloadDisplayState?: unknown;
+ * }} [input]
+ * @returns {{
+ *   independent: boolean;
+ *   displayState: string | null;
+ *   targetedDisplay: string | null;
+ *   accepted: boolean;
+ * }}
+ */
+export function applyScreenUpdateToClientState(input = {}) {
+  const local = String(input.localScreenId || "")
+    .trim()
+    .toLowerCase() || null;
+  const payloadSid =
+    typeof input.payloadScreenId === "string" && input.payloadScreenId.trim()
+      ? input.payloadScreenId.trim().toLowerCase()
+      : null;
+  let independent = input.independent === true;
+  let displayState = normalizeScreenDisplayState(input.displayState);
+  let targetedDisplay = normalizeScreenDisplayState(input.targetedDisplay);
+  const incoming = normalizeScreenDisplayState(input.payloadDisplayState);
+
+  const matches = screenPayloadMatchesClient({
+    localScreenId: local,
+    payloadScreenId: payloadSid,
+    independent,
+  });
+  if (!matches || !incoming) {
+    return {
+      independent,
+      displayState,
+      targetedDisplay,
+      accepted: false,
+    };
+  }
+
+  // Commande explicite B : verrouille + active le mode indépendant si besoin.
+  if (local === "b" && payloadSid === "b") {
+    independent = true;
+    targetedDisplay = incoming;
+    displayState = incoming;
+    return {
+      independent,
+      displayState,
+      targetedDisplay,
+      accepted: true,
+    };
+  }
+
+  displayState = incoming;
+  if (!payloadSid || screenFollowsMainDisplay({ screenId: local, independent })) {
+    targetedDisplay = null;
+  }
+  return {
+    independent,
+    displayState,
+    targetedDisplay,
+    accepted: true,
+  };
+}
+
+/**
+ * Après une update globale (live/meta/poll) : B indépendant ignore le main.
+ * @param {{
+ *   screenId?: string | null;
+ *   independent?: boolean;
+ *   displayState?: unknown;
+ *   targetedDisplay?: unknown;
+ *   mainDisplay?: unknown;
+ * }} [input]
+ * @returns {"question" | "results" | "waiting" | "black" | null}
+ */
+export function applyMainDisplayToClientState(input = {}) {
+  return resolveScreenClientDisplayState({
+    screenId: input.screenId,
+    independent: input.independent,
+    mainDisplay: input.mainDisplay,
+    targetedDisplay: input.targetedDisplay,
+    currentDisplay: input.displayState,
+  });
 }
 
 /**

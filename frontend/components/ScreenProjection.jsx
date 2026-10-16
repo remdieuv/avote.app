@@ -33,6 +33,8 @@ import {
   screenStateTitleFontSizeClamp,
 } from "@/lib/liveStateVisual";
 import {
+  applyMainDisplayToClientState,
+  applyScreenUpdateToClientState,
   clearScreenBDisplayState,
   readScreenBDisplayState,
   resolveScreenBIndependentMode,
@@ -193,6 +195,8 @@ export function ScreenProjection({
   const targetedDisplayRef = useRef(
     /** @type {string | null} */ (initialBDisplay),
   );
+  /** Dernier display rendu — pour ne pas retomber sur A si indep sans cible. */
+  const displayStateRef = useRef(/** @type {string | null} */ (initialBDisplay));
   /** Branding salle (GET /events/slug + socket event:customization_updated) */
   const [roomCustomization, setRoomCustomization] = useState(null);
   /** Vote / auto-reveal événement quand le JSON poll n’est pas affiché (socket, meta slug). */
@@ -254,11 +258,11 @@ export function ScreenProjection({
       independent: screenBIndependentRef.current,
       mainDisplay: mainDs,
       targetedDisplay: targetedDisplayRef.current,
+      currentDisplay: displayStateRef.current,
     });
     if (resolved) {
+      displayStateRef.current = resolved;
       setDisplayState(resolved);
-    } else if (mainDs) {
-      setDisplayState(mainDs);
     }
     setRoomCustomization({
       description: meta.description ?? null,
@@ -430,11 +434,11 @@ export function ScreenProjection({
           independent: screenBIndependentRef.current,
           mainDisplay: mainFromPoll,
           targetedDisplay: targetedDisplayRef.current,
+          currentDisplay: displayStateRef.current,
         });
         if (resolvedPollDs) {
+          displayStateRef.current = resolvedPollDs;
           setDisplayState(resolvedPollDs);
-        } else if (mainFromPoll) {
-          setDisplayState(mainFromPoll);
         }
         if (data.eventId) {
           setEventId(data.eventId);
@@ -756,21 +760,41 @@ export function ScreenProjection({
       });
     }
 
-    function applyMainDisplayFromLive(payload) {
+    function mainDisplayFromLivePayload(payload) {
       if (typeof payload?.screenDisplayState === "string") {
-        setDisplayState(payload.screenDisplayState.toLowerCase());
-      } else if (typeof payload?.displayState === "string") {
-        setDisplayState(payload.displayState.toLowerCase());
-      } else if (payload?.liveState != null) {
-        setDisplayState(deriveDisplayFromLive(payload.liveState));
+        return payload.screenDisplayState.toLowerCase();
       }
+      if (typeof payload?.displayState === "string") {
+        return payload.displayState.toLowerCase();
+      }
+      if (payload?.liveState != null) {
+        return deriveDisplayFromLive(payload.liveState);
+      }
+      return null;
     }
 
-    function applyMainDisplayFromPoll(data) {
+    function mainDisplayFromPollData(data) {
       if (typeof data?.eventScreenDisplayState === "string") {
-        setDisplayState(data.eventScreenDisplayState.toLowerCase());
-      } else if (typeof data?.eventDisplayState === "string") {
-        setDisplayState(data.eventDisplayState.toLowerCase());
+        return data.eventScreenDisplayState.toLowerCase();
+      }
+      if (typeof data?.eventDisplayState === "string") {
+        return data.eventDisplayState.toLowerCase();
+      }
+      return null;
+    }
+
+    function applyMainDisplaySafe(mainDisplay) {
+      if (!mainDisplay) return;
+      const resolved = applyMainDisplayToClientState({
+        screenId: sid,
+        independent: screenBIndependentRef.current,
+        displayState: displayStateRef.current,
+        targetedDisplay: targetedDisplayRef.current,
+        mainDisplay,
+      });
+      if (resolved) {
+        displayStateRef.current = resolved;
+        setDisplayState(resolved);
       }
     }
 
@@ -783,31 +807,41 @@ export function ScreenProjection({
 
     function onScreenUpdate(payload) {
       if (!payload || !eid || String(payload.eventId) !== String(eid)) return;
-      if (!payloadMatchesScreen(payload.screenId)) return;
-      if (typeof payload.displayState === "string") {
-        const dsIncoming = payload.displayState.toLowerCase();
-        setDisplayState(dsIncoming);
-        const ps =
-          typeof payload.screenId === "string" && payload.screenId.trim()
-            ? payload.screenId.trim().toLowerCase()
-            : null;
-        if (sid && ps && ps === sid && !clientFollowsMain()) {
-          targetedDisplayRef.current = dsIncoming;
-          if (sid === "b") {
-            writeScreenBDisplayState(slugPublic, dsIncoming);
-          }
-        } else if (!ps || clientFollowsMain()) {
-          targetedDisplayRef.current = null;
-          if (sid === "b") {
-            clearScreenBDisplayState(slugPublic);
-          }
+      const next = applyScreenUpdateToClientState({
+        localScreenId: sid,
+        independent: screenBIndependentRef.current,
+        displayState: displayStateRef.current,
+        targetedDisplay: targetedDisplayRef.current,
+        payloadScreenId: payload.screenId,
+        payloadDisplayState: payload.displayState,
+      });
+      if (!next.accepted) return;
+
+      const wasIndependent = screenBIndependentRef.current;
+      screenBIndependentRef.current = next.independent;
+      if (next.independent !== wasIndependent) {
+        setScreenBIndependent(next.independent);
+      }
+      targetedDisplayRef.current = next.targetedDisplay;
+      displayStateRef.current = next.displayState;
+      if (next.displayState) {
+        setDisplayState(next.displayState);
+      }
+      if (sid === "b") {
+        if (next.independent) {
+          writeScreenBIndependent(slugPublic, true);
+        }
+        if (next.targetedDisplay) {
+          writeScreenBDisplayState(slugPublic, next.targetedDisplay);
+        } else {
+          clearScreenBDisplayState(slugPublic);
         }
       }
-      const dsNow = String(payload.displayState || "").toLowerCase();
-      // Refetch contenu sauf noir ; B sync se comporte comme A.
-      // B indépendant : refetch aussi hors noir pour garder le QR / options à jour
-      // sans écraser le display (targetedDisplayRef protège loadPoll).
-      if (dsNow !== "black") {
+
+      const dsNow = String(next.displayState || "").toLowerCase();
+      // Contenu poll : utile en question/résultats. B indépendant en waiting/black
+      // n’a pas besoin d’un refetch qui croisait autrefois le verrou display.
+      if (dsNow !== "black" && (clientFollowsMain() || dsNow === "question" || dsNow === "results")) {
         void loadPoll({ silent: true });
       }
     }
@@ -836,10 +870,9 @@ export function ScreenProjection({
       }
 
       setLiveScene(payload.liveState ?? null);
-      if (clientFollowsMain()) {
-        applyMainDisplayFromLive(payload);
-      }
+      applyMainDisplaySafe(mainDisplayFromLivePayload(payload));
       // Progression Question x/y (pollsProgress) — refetch meta, pas un 2e socket.
+      // applyEventSlugMeta respecte indep + targeted (ne retombe plus sur A).
       void fetchEventSlugMeta({ silent: true });
 
       if (payload.poll) {
@@ -847,9 +880,7 @@ export function ScreenProjection({
         if (payload.poll.eventLiveState) {
           setLiveScene(payload.poll.eventLiveState);
         }
-        if (clientFollowsMain()) {
-          applyMainDisplayFromPoll(payload.poll);
-        }
+        applyMainDisplaySafe(mainDisplayFromPollData(payload.poll));
         setError(null);
         setNoPollFromHttp404(false);
         if (payload.activePollId != null && String(payload.activePollId).trim()) {
@@ -882,9 +913,7 @@ export function ScreenProjection({
       if (data.eventLiveState) {
         setLiveScene(data.eventLiveState);
       }
-      if (clientFollowsMain()) {
-        applyMainDisplayFromPoll(data);
-      }
+      applyMainDisplaySafe(mainDisplayFromPollData(data));
       if (typeof data.eventVoteState === "string" && data.eventVoteState.trim()) {
         setEventVoteState(data.eventVoteState.toLowerCase());
       }
@@ -929,6 +958,7 @@ export function ScreenProjection({
         const stored = readScreenBDisplayState(slugPublic);
         if (stored) {
           targetedDisplayRef.current = stored;
+          displayStateRef.current = stored;
           setDisplayState(stored);
         }
       }

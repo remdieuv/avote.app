@@ -7508,28 +7508,32 @@ io.on("connection", (socket) => {
       BLACK: "BLACK",
     };
     const displayState = displayMap[type];
-    try {
-      const ev = await prisma.event.findUnique({ where: { id: eventId } });
-      if (!ev) return;
-      if (targetedRoom) {
-        const dsLower = String(displayState).toLowerCase();
-        if (screenId === "b") {
-          setScreenBIndependentDisplay(eventId, dsLower);
-        }
-        const msg = {
-          eventId,
-          type,
-          displayState: dsLower,
-          voteState: String(ev.voteState).toLowerCase(),
-          pollId: ev.activePollId,
-          screenId,
-        };
-        io.to(targetedRoom).emit("screen:update", msg);
-        // Fallback robuste: passe aussi par la room event brute, filtrée côté client par screenId.
-        io.to(eventId).emit("screen:update", msg);
-        io.to(roomPourEvent(eventId)).emit("screen:update", msg);
-        return;
+    /**
+     * Ciblage B (et sid legacy) : emit synchrone SANS await Prisma.
+     * Sinon deux screen:action rapides (seed QUESTION à l’activation indep
+     * puis Attente/QR) se croisent au findUnique et la dernière complétée
+     * (souvent QUESTION) écrase WAITING ~200ms plus tard.
+     */
+    if (targetedRoom) {
+      const dsLower = String(displayState).toLowerCase();
+      if (screenId === "b") {
+        setScreenBIndependentDisplay(eventId, dsLower);
       }
+      const msg = {
+        eventId,
+        type,
+        displayState: dsLower,
+        voteState: null,
+        pollId: null,
+        screenId,
+      };
+      io.to(targetedRoom).emit("screen:update", msg);
+      // Fallback robuste: passe aussi par la room event brute, filtrée côté client par screenId.
+      io.to(eventId).emit("screen:update", msg);
+      io.to(roomPourEvent(eventId)).emit("screen:update", msg);
+      return;
+    }
+    try {
       await prisma.event.update({
         where: { id: eventId },
         data: { screenDisplayState: displayState },

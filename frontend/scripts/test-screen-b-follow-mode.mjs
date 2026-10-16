@@ -7,6 +7,8 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  applyMainDisplayToClientState,
+  applyScreenUpdateToClientState,
   buildScreenBPath,
   clearScreenBDisplayState,
   normalizeScreenDisplayState,
@@ -206,6 +208,17 @@ test("F5 : display B indépendant restauré (localStorage + resolve)", () => {
     }),
     "waiting",
   );
+  // Indépendant sans cible : ne retombe PAS sur A
+  assert.equal(
+    resolveScreenClientDisplayState({
+      screenId: "b",
+      independent: true,
+      mainDisplay: "question",
+      targetedDisplay: null,
+      currentDisplay: "waiting",
+    }),
+    "waiting",
+  );
   // Sync : ignore la cible, reprend A
   assert.equal(
     resolveScreenClientDisplayState({
@@ -218,6 +231,118 @@ test("F5 : display B indépendant restauré (localStorage + resolve)", () => {
   );
   clearScreenBDisplayState("evt-f5", { storage });
   assert.equal(readScreenBDisplayState("evt-f5", { storage }), null);
+});
+
+test("régression : Question A → B indep → Attente → updates globales", () => {
+  /** @type {{ independent: boolean; displayState: string | null; targetedDisplay: string | null }} */
+  let state = {
+    independent: false,
+    displayState: "question",
+    targetedDisplay: null,
+  };
+
+  // Seed à l’activation indep (QUESTION)
+  state = {
+    ...state,
+    ...applyScreenUpdateToClientState({
+      localScreenId: "b",
+      ...state,
+      payloadScreenId: "b",
+      payloadDisplayState: "question",
+    }),
+  };
+  assert.equal(state.independent, true);
+  assert.equal(state.displayState, "question");
+
+  // Attente / QR
+  state = {
+    ...state,
+    ...applyScreenUpdateToClientState({
+      localScreenId: "b",
+      ...state,
+      payloadScreenId: "b",
+      payloadDisplayState: "waiting",
+    }),
+  };
+  assert.equal(state.displayState, "waiting");
+  assert.equal(state.targetedDisplay, "waiting");
+
+  // Mises à jour globales (live / meta / poll) — A reste en question
+  for (const main of ["question", "question", "results"]) {
+    const kept = applyMainDisplayToClientState({
+      screenId: "b",
+      independent: state.independent,
+      displayState: state.displayState,
+      targetedDisplay: state.targetedDisplay,
+      mainDisplay: main,
+    });
+    assert.equal(kept, "waiting", `global ${main} ne doit pas écraser Attente`);
+    state.displayState = kept;
+  }
+
+  // Update global screen:update (sid null) rejetée
+  const rejected = applyScreenUpdateToClientState({
+    localScreenId: "b",
+    ...state,
+    payloadScreenId: null,
+    payloadDisplayState: "question",
+  });
+  assert.equal(rejected.accepted, false);
+  assert.equal(rejected.displayState, "waiting");
+
+  // Les 4 commandes B
+  for (const ds of ["question", "results", "black", "waiting"]) {
+    state = {
+      ...state,
+      ...applyScreenUpdateToClientState({
+        localScreenId: "b",
+        ...state,
+        payloadScreenId: "b",
+        payloadDisplayState: ds,
+      }),
+    };
+    assert.equal(state.displayState, ds);
+    assert.equal(state.targetedDisplay, ds);
+    assert.equal(
+      applyMainDisplayToClientState({
+        screenId: "b",
+        independent: true,
+        displayState: state.displayState,
+        targetedDisplay: state.targetedDisplay,
+        mainDisplay: "question",
+      }),
+      ds,
+    );
+  }
+
+  // Retour sync : suit A
+  state.independent = false;
+  state.targetedDisplay = null;
+  assert.equal(
+    applyMainDisplayToClientState({
+      screenId: "b",
+      independent: false,
+      displayState: state.displayState,
+      targetedDisplay: null,
+      mainDisplay: "question",
+    }),
+    "question",
+  );
+});
+
+test("commande B avant screen:b_mode verrouille quand même", () => {
+  const next = applyScreenUpdateToClientState({
+    localScreenId: "b",
+    independent: false,
+    displayState: "question",
+    targetedDisplay: null,
+    payloadScreenId: "b",
+    payloadDisplayState: "waiting",
+  });
+  assert.equal(next.accepted, true);
+  assert.equal(next.independent, true);
+  assert.equal(next.displayState, "waiting");
+  assert.equal(next.targetedDisplay, "waiting");
 });
 
 test("retour sync : mémoire serveur B effacée", () => {
@@ -261,6 +386,8 @@ test("page.jsx + ScreenProjection + server branchés", () => {
   assert.ok(screen.includes("screen:b_mode"));
   assert.ok(screen.includes("clientFollowsMain"));
   assert.ok(screen.includes("resolveScreenClientDisplayState"));
+  assert.ok(screen.includes("applyScreenUpdateToClientState"));
+  assert.ok(screen.includes("applyMainDisplayToClientState"));
   assert.ok(screen.includes("writeScreenBDisplayState"));
   assert.ok(screen.includes("clearScreenBDisplayState"));
   assert.ok(screen.includes('ds === "waiting"'));
@@ -273,6 +400,18 @@ test("page.jsx + ScreenProjection + server branchés", () => {
   assert.ok(server.includes("setScreenBIndependentDisplay"));
   assert.ok(server.includes("getScreenBIndependentDisplay"));
   assert.ok(server.includes("clearScreenBIndependentDisplay"));
+  // Ciblage B : emit synchrone (pas d’await Prisma avant emit)
+  assert.ok(server.includes("Ciblage B (et sid legacy) : emit synchrone"));
+  const actionIdx = server.indexOf('socket.on("screen:action"');
+  const targetedReturn = server.indexOf("if (targetedRoom)", actionIdx);
+  const awaitInTargeted = server
+    .slice(targetedReturn, server.indexOf("try {", targetedReturn))
+    .includes("await ");
+  assert.equal(
+    awaitInTargeted,
+    false,
+    "screen:action ciblé ne doit pas await avant emit",
+  );
 
   const partage = page.includes("Overlay OBS") || page.includes("pathOverlay");
   assert.ok(partage);
