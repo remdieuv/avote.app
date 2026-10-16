@@ -7539,7 +7539,7 @@ io.on("connection", (socket) => {
           emitMode(null);
           return;
         }
-        const ds = String(ev.screenDisplayState ?? ev.displayState || "waiting")
+        const ds = String((ev.screenDisplayState ?? ev.displayState) || "waiting")
           .trim()
           .toLowerCase();
         emitMode(
