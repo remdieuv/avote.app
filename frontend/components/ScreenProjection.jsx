@@ -19,6 +19,7 @@ import { API_URL, SOCKET_URL } from "@/lib/config";
 import {
   getScreenDiffusionLabel,
   resolveScreenQuestionProgress,
+  shouldRenderScreenAutoRevealWait,
   shouldRenderScreenFinished,
   shouldShowScreenCornerQr,
 } from "@/lib/diffusionUx";
@@ -1277,23 +1278,19 @@ export function ScreenProjection({
   }
 
   /**
-   * WAITING explicite (Attente / QR) — prioritaire sur VOTING dérivé de liveScene
-   * tant que le vote reste OPEN (Screen A forçage + Screen B indépendant).
-   * (FINISHED déjà traité plus haut.)
+   * Auto-reveal countdown (« Résultats dans N… ») — avant ds=WAITING.
+   * Après Fermer, le backend pose display WAITING + autoRevealShowResultsAt :
+   * sans cette priorité, A/B sync affichaient « ÇA VA BIENTÔT COMMENCER ».
+   * B indépendant : état choisi respecté (pas de forçage).
    */
-  if (ds === "waiting") {
-    return wrapOut(
-      false,
-      <ScreenWaiting
-        shell={shell}
-        joinSlug={slugPublic}
-        pollsProgress={pollsProgress}
-      />,
-      { hideStatePill: true },
-    );
-  }
-
-  if (enAttenteAutoReveal) {
+  if (
+    shouldRenderScreenAutoRevealWait({
+      pendingAutoReveal: enAttenteAutoReveal,
+      displayState: ds,
+      screenId: normalizedScreenId,
+      independent: screenBIndependent,
+    })
+  ) {
     const autoAccent = `color-mix(in srgb, #14b8a6 50%, ${roomTopAccent})`;
     const shellAuto = {
       ...shell,
@@ -1307,6 +1304,23 @@ export function ScreenProjection({
         chronoTick={chronoTick}
         questionProgress={questionProgress}
       />,
+    );
+  }
+
+  /**
+   * WAITING explicite (Attente / QR) — prioritaire sur VOTING dérivé de liveScene
+   * tant que le vote reste OPEN (Screen A forçage + Screen B indépendant).
+   * (FINISHED et auto-reveal déjà traités plus haut.)
+   */
+  if (ds === "waiting") {
+    return wrapOut(
+      false,
+      <ScreenWaiting
+        shell={shell}
+        joinSlug={slugPublic}
+        pollsProgress={pollsProgress}
+      />,
+      { hideStatePill: true },
     );
   }
 

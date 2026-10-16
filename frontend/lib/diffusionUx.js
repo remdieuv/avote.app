@@ -203,6 +203,31 @@ export function isScreenQuizAnswerRevealed(poll) {
 }
 
 /**
+ * Décompte auto-reveal (« Résultats dans N… ») sur Screen A / B sync.
+ * Prioritaire sur ds=WAITING après Fermer (display WAITING + autoRevealShowResultsAt).
+ * B indépendant : ne pas forcer — garder Attente / Question / Noir / Résultats choisis.
+ *
+ * @param {{
+ *   pendingAutoReveal?: boolean;
+ *   displayState?: string | null;
+ *   screenId?: string | null;
+ *   independent?: boolean;
+ * }} [input]
+ */
+export function shouldRenderScreenAutoRevealWait(input = {}) {
+  if (input.pendingAutoReveal !== true) return false;
+  const ds = String(input.displayState ?? "")
+    .trim()
+    .toLowerCase();
+  if (ds === "black" || ds === "results") return false;
+  const sid = String(input.screenId ?? "")
+    .trim()
+    .toLowerCase();
+  if (sid === "b" && input.independent === true) return false;
+  return true;
+}
+
+/**
  * G13 — axes projection après fermeture de vote (fin chrono OU « Fermer le vote »).
  * Les deux chemins backend doivent produire exactement cet état Screen CLOSED.
  * Un `screenDisplayState=RESULTS` collant est effacé (BLACK préservé côté serveur).

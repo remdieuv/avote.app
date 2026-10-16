@@ -26,6 +26,7 @@ import {
   screenOptionLetter,
   shouldShowScreenClosedVoteCount,
   shouldShowScreenCornerQr,
+  shouldRenderScreenAutoRevealWait,
   shouldRenderScreenFinished,
   sortScreenOptions,
 } from "../lib/diffusionUx.js";
@@ -325,18 +326,94 @@ assert.equal(getScreenDiffusionLabel("RESULTS"), "RÉSULTATS");
   const renderBlock = screen.slice(screen.indexOf("if (loading)"));
   const idxFinished = renderBlock.indexOf("shouldRenderScreenFinished");
   const idxNoPoll = renderBlock.indexOf("!poll && noPollFromHttp404");
+  const idxAutoReveal = renderBlock.indexOf("shouldRenderScreenAutoRevealWait");
   const idxDsWaiting = renderBlock.indexOf('if (ds === "waiting")');
   assert.ok(idxFinished >= 0, "branche FINISHED dans le rendu");
   assert.ok(idxNoPoll >= 0);
+  assert.ok(idxAutoReveal >= 0, "branche auto-reveal countdown");
   assert.ok(idxDsWaiting >= 0);
   assert.ok(
     idxFinished < idxNoPoll && idxFinished < idxDsWaiting,
     "FINISHED doit être évalué avant no-poll / ds=waiting",
   );
+  assert.ok(
+    idxAutoReveal < idxDsWaiting,
+    "auto-reveal countdown avant ds=waiting (sinon ÇA VA BIENTÔT écrase le décompte)",
+  );
   assert.ok(screen.includes("eventTitle={eventTitle}"));
   assert.ok(finishedScene.includes("SCREEN_FINISHED_SUBTITLE"));
   assert.ok(finishedScene.includes("eventTitle"));
   console.log("ok  Screen FINISHED prioritaire + contenu clôture");
+}
+
+{
+  assert.equal(
+    shouldRenderScreenAutoRevealWait({
+      pendingAutoReveal: true,
+      displayState: "waiting",
+      screenId: "a",
+      independent: false,
+    }),
+    true,
+    "A sync + WAITING + pending → décompte",
+  );
+  assert.equal(
+    shouldRenderScreenAutoRevealWait({
+      pendingAutoReveal: true,
+      displayState: "waiting",
+      screenId: "b",
+      independent: false,
+    }),
+    true,
+    "B sync + WAITING + pending → décompte",
+  );
+  assert.equal(
+    shouldRenderScreenAutoRevealWait({
+      pendingAutoReveal: true,
+      displayState: "waiting",
+      screenId: "b",
+      independent: true,
+    }),
+    false,
+    "B indep WAITING → pas de forçage décompte",
+  );
+  assert.equal(
+    shouldRenderScreenAutoRevealWait({
+      pendingAutoReveal: true,
+      displayState: "question",
+      screenId: "b",
+      independent: true,
+    }),
+    false,
+    "B indep QUESTION → pas de forçage",
+  );
+  assert.equal(
+    shouldRenderScreenAutoRevealWait({
+      pendingAutoReveal: true,
+      displayState: "black",
+      screenId: "a",
+    }),
+    false,
+    "BLACK prioritaire",
+  );
+  assert.equal(
+    shouldRenderScreenAutoRevealWait({
+      pendingAutoReveal: true,
+      displayState: "results",
+      screenId: "a",
+    }),
+    false,
+    "RESULTS (Afficher manuel) → pas de décompte",
+  );
+  assert.equal(
+    shouldRenderScreenAutoRevealWait({
+      pendingAutoReveal: false,
+      displayState: "waiting",
+      screenId: "a",
+    }),
+    false,
+  );
+  console.log("ok  Screen auto-reveal countdown vs WAITING / B indep");
 }
 assert.notEqual(
   getScreenDiffusionLabel("CLOSED"),
