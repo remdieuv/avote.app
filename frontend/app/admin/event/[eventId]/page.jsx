@@ -48,6 +48,7 @@ import {
   getRegieIdleProjectionHint,
 } from "@/lib/regieProjectionLabels";
 import {
+  buildScreenBPath,
   readScreenBIndependent,
   shouldShowScreenBDisplayGap,
   writeScreenBIndependent,
@@ -1601,6 +1602,16 @@ function BlocProjectionEcran({
     }
   }, [slug]);
 
+  const enc = encodeURIComponent(slug);
+  const pathScreenA = `/screen/${enc}?pm=${encodeURIComponent(projectionMode)}`;
+  const pathScreenB = buildScreenBPath(slug, {
+    independent: screenBIndependent,
+    projectionMode,
+  });
+  function ouvrirEcran(path) {
+    const url = lienDiffusionAbsolu(path);
+    if (url) window.open(url, "_blank", "noopener,noreferrer");
+  }
   const projectionModeLabel =
     projectionMode === "qr_fullscreen"
       ? "QR plein écran"
@@ -1686,6 +1697,18 @@ function BlocProjectionEcran({
   };
 
   const full = { width: "100%", boxSizing: "border-box" };
+  const btnOuvrir = {
+    ...full,
+    padding: desktop ? "0.72rem 1rem" : "0.68rem 0.9rem",
+    fontSize: "0.9rem",
+    fontWeight: 800,
+    borderRadius: "12px",
+    border: "1px solid #0f766e",
+    background: "linear-gradient(180deg, #14b8a6 0%, #0d9488 100%)",
+    color: "#fff",
+    cursor: "pointer",
+    boxShadow: "0 10px 22px rgba(13, 148, 136, 0.18)",
+  };
   const btnOutlineSecondaire = {
     ...full,
     padding: desktop ? "0.6rem 0.85rem" : "0.55rem 0.75rem",
@@ -1803,6 +1826,14 @@ function BlocProjectionEcran({
               {affichageStandardLabel}
             </span>
           </div>
+          <button
+            type="button"
+            onClick={() => ouvrirEcran(pathScreenA)}
+            style={btnOuvrir}
+            title="Ouvrir l’écran principal dans un nouvel onglet"
+          >
+            Ouvrir
+          </button>
         </div>
 
         <div
@@ -1843,6 +1874,14 @@ function BlocProjectionEcran({
               {affichageBLabel}
             </span>
           </div>
+          <button
+            type="button"
+            onClick={() => ouvrirEcran(pathScreenB)}
+            style={btnOuvrir}
+            title="Ouvrir l’écran B (?sid=b) dans un nouvel onglet"
+          >
+            Ouvrir
+          </button>
           <label
             style={{
               display: "flex",

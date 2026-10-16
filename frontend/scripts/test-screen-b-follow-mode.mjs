@@ -161,6 +161,12 @@ test("page.jsx + ScreenProjection + server branchés", () => {
   assert.ok(page.includes("handleScreenBIndependentChange"));
   assert.ok(page.includes("shouldShowScreenBDisplayGap"));
   assert.ok(!page.includes("Affichage secondaire indépendant."));
+  // Boutons Ouvrir A + B (nouvel onglet)
+  assert.ok(page.includes("pathScreenA"));
+  assert.ok(page.includes("pathScreenB"));
+  assert.ok(page.includes('ouvrirEcran(pathScreenA)'));
+  assert.ok(page.includes('ouvrirEcran(pathScreenB)'));
+  assert.ok(page.includes('window.open(url, "_blank"'));
   // Plus de boutons Question/Résultats sur A hors Options avancées forçage
   assert.ok(page.includes("Forçage écran principal"));
   assert.ok(page.includes("Options avancées"));
