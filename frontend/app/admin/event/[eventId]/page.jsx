@@ -46,6 +46,7 @@ import {
 import {
   getRegieDisplayStateLabel,
   getRegieIdleProjectionHint,
+  resolveScreenReturnToLiveAction,
 } from "@/lib/regieProjectionLabels";
 import {
   buildScreenBPath,
@@ -1550,6 +1551,8 @@ function RegieAutoRotatePanel({
  *   onScreenBIndependentChange?: (v: boolean) => void;
  *   desktop: boolean;
  *   chronoSection?: import("react").ReactNode;
+ *   salleDisplayState?: string | null;
+ *   voteState?: string | null;
  *   autoRotate: boolean;
  *   onAutoRotateChange: (v: boolean) => void;
  *   autoRotateAllowed: boolean;
@@ -1561,6 +1564,11 @@ function RegieAutoRotatePanel({
  *   activePollLeadEnabled?: boolean | null;
  * }} props
  */
+/** V1 : rotation auto masquée — code conservé, jamais activée depuis l’UI. */
+const REGIE_V1_AUTO_ROTATE_UI_ENABLED = false;
+/** V1 : seuls les modes non-Standard sont masqués (code conservé). */
+const REGIE_V1_EXTRA_PROJECTION_MODES_UI_ENABLED = false;
+
 function BlocProjectionEcran({
   slug,
   activePollId,
@@ -1576,6 +1584,8 @@ function BlocProjectionEcran({
   onScreenBIndependentChange = null,
   desktop,
   chronoSection = null,
+  salleDisplayState = null,
+  voteState = null,
   autoRotate,
   onAutoRotateChange,
   autoRotateAllowed,
@@ -1590,6 +1600,12 @@ function BlocProjectionEcran({
 
   useEffect(() => {
     if (typeof window === "undefined" || !slug) return;
+    // V1 : Standard par défaut pour les nouveaux Ouvrir ; le code des autres
+    // modes reste disponible (liens ?pm= déjà ouverts non cassés).
+    if (!REGIE_V1_EXTRA_PROJECTION_MODES_UI_ENABLED) {
+      setProjectionMode("standard");
+      return;
+    }
     const raw = window.localStorage.getItem(`avote_projection_mode_${slug}`);
     const val = String(raw || "").trim().toLowerCase();
     if (
@@ -2001,59 +2017,63 @@ function BlocProjectionEcran({
           Options avancées
         </summary>
         <div style={{ marginTop: "0.75rem", display: "grid", gap: "0.85rem" }}>
-          <div className="proj-ecran-console-inset">
-            <p className="proj-ecran-console-inset-title">Modes projection</p>
-            <p className="proj-ecran-console-inset-hint">
-              Apparence visuelle du lien Screen (Partage & accès).
-            </p>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem" }}>
-              {[
-                { id: "standard", label: "Standard" },
-                { id: "xlarge_qr", label: "Grande salle (QR XXL)" },
-                { id: "qr_fullscreen", label: "QR plein écran" },
-                { id: "results_focus", label: "Résultats focus" },
-              ].map((m) => {
-                const on = projectionMode === m.id;
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => changeProjectionMode(m.id)}
-                    style={{
-                      padding: "0.46rem 0.76rem",
-                      fontSize: "0.75rem",
-                      fontWeight: 700,
-                      borderRadius: "12px",
-                      border: on ? "1px solid #7c3aed" : PREMIUM_BORDER,
-                      background: on
-                        ? "linear-gradient(180deg, #ede9fe 0%, #ddd6fe 100%)"
-                        : "rgba(255,255,255,0.9)",
-                      color: on ? "#5b21b6" : "#475569",
-                      cursor: "pointer",
-                    }}
-                  >
-                    {m.label}
-                  </button>
-                );
-              })}
+          {REGIE_V1_EXTRA_PROJECTION_MODES_UI_ENABLED ? (
+            <div className="proj-ecran-console-inset">
+              <p className="proj-ecran-console-inset-title">Modes projection</p>
+              <p className="proj-ecran-console-inset-hint">
+                Apparence visuelle du lien Screen (Partage & accès).
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem" }}>
+                {[
+                  { id: "standard", label: "Standard" },
+                  { id: "xlarge_qr", label: "Grande salle (QR XXL)" },
+                  { id: "qr_fullscreen", label: "QR plein écran" },
+                  { id: "results_focus", label: "Résultats focus" },
+                ].map((m) => {
+                  const on = projectionMode === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => changeProjectionMode(m.id)}
+                      style={{
+                        padding: "0.46rem 0.76rem",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        borderRadius: "12px",
+                        border: on ? "1px solid #7c3aed" : PREMIUM_BORDER,
+                        background: on
+                          ? "linear-gradient(180deg, #ede9fe 0%, #ddd6fe 100%)"
+                          : "rgba(255,255,255,0.9)",
+                        color: on ? "#5b21b6" : "#475569",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {m.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="proj-ecran-console-inset-active">
+                Mode actif : <strong>{projectionModeLabel}</strong>
+              </p>
             </div>
-            <p className="proj-ecran-console-inset-active">
-              Mode actif : <strong>{projectionModeLabel}</strong>
-            </p>
-          </div>
+          ) : null}
 
-          <RegieAutoRotatePanel
-            embedded
-            auxiliaryHint="Enchaîne automatiquement question → résultats sur l’écran principal."
-            busy={busy}
-            autoRotate={autoRotate}
-            onAutoRotateChange={onAutoRotateChange}
-            autoRotateAllowed={autoRotateAllowed}
-            autoRotateQuestionSec={autoRotateQuestionSec}
-            autoRotateResultsSec={autoRotateResultsSec}
-            onAutoRotateQuestionSecChange={onAutoRotateQuestionSecChange}
-            onAutoRotateResultsSecChange={onAutoRotateResultsSecChange}
-          />
+          {REGIE_V1_AUTO_ROTATE_UI_ENABLED ? (
+            <RegieAutoRotatePanel
+              embedded
+              auxiliaryHint="Enchaîne automatiquement question → résultats sur l’écran principal."
+              busy={busy}
+              autoRotate={autoRotate}
+              onAutoRotateChange={onAutoRotateChange}
+              autoRotateAllowed={autoRotateAllowed}
+              autoRotateQuestionSec={autoRotateQuestionSec}
+              autoRotateResultsSec={autoRotateResultsSec}
+              onAutoRotateQuestionSecChange={onAutoRotateQuestionSecChange}
+              onAutoRotateResultsSecChange={onAutoRotateResultsSecChange}
+            />
+          ) : null}
 
           <div>
             <p
@@ -2064,35 +2084,66 @@ function BlocProjectionEcran({
                 color: "#475569",
               }}
             >
-              Forçage écran principal
+              Commandes de secours — écran principal
+            </p>
+            <p
+              style={{
+                margin: "0 0 0.55rem 0",
+                fontSize: "0.72rem",
+                color: "#64748b",
+                lineHeight: 1.4,
+              }}
+            >
+              N’affectent que l’écran A (B indépendant inchangé). Ne
+              réinitialisent pas les votes ni le chrono.
             </p>
             <div className="proj-ecran-console-actions">
               <button
                 type="button"
-                disabled={busy}
-                onClick={() => {
-                  if (affichageNoir) sendScreenAction("WAITING", null);
-                  else sendScreenAction("BLACK", null);
-                }}
+                disabled={busy || affichageNoir}
+                onClick={() => sendScreenAction("BLACK", null)}
                 style={{
                   ...btnDangerNoir,
-                  ...projConsoleBtn,
-                  ...secDisabled(busy),
-                }}
-              >
-                {affichageNoir ? "Retour direct" : "Noir"}
-              </button>
-              <button
-                type="button"
-                disabled={busy || affichageNoir}
-                onClick={() => sendScreenAction("WAITING", null)}
-                style={{
-                  ...btnRevenirDirect,
                   ...projConsoleBtn,
                   ...secDisabled(busy || affichageNoir),
                 }}
               >
+                Noir
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => sendScreenAction("WAITING", null)}
+                style={{
+                  ...btnRevenirDirect,
+                  ...projConsoleBtn,
+                  ...secDisabled(busy),
+                }}
+              >
                 Attente / QR
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  const type = resolveScreenReturnToLiveAction({
+                    salleDisplayState: salleDisplayState ?? null,
+                    liveState,
+                    voteState,
+                    hasActivePoll: Boolean(activePollId),
+                  });
+                  sendScreenAction(type, null);
+                }}
+                style={{
+                  ...btnOutlineSecondaire,
+                  ...projConsoleBtn,
+                  ...secDisabled(busy),
+                  border: "1px solid #0f766e",
+                  color: "#0f766e",
+                }}
+                title="Réaligne l’écran A sur le pilotage actuel (question, résultats ou attente)"
+              >
+                Retour au direct
               </button>
             </div>
           </div>
@@ -6712,6 +6763,13 @@ export default function RegieEventPage() {
     prevPollForAutoRef.current = activePollIdJs ?? null;
   }, [activePollIdJs]);
 
+  // V1 : rotation masquée — forcer off (évite un timer fantôme si state résiduel).
+  useEffect(() => {
+    if (!REGIE_V1_AUTO_ROTATE_UI_ENABLED && autoRotate) {
+      setAutoRotate(false);
+    }
+  }, [autoRotate]);
+
   useEffect(() => {
     if (voteStateUi !== "open" || displayStateUi === "black") {
       setAutoRotate(false);
@@ -6722,11 +6780,15 @@ export default function RegieEventPage() {
     if (!eventId) return;
     const s = socketRef.current;
     if (s?.connected) {
-      s.emit("screen:auto_rotate", { eventId, enabled: autoRotate });
+      s.emit("screen:auto_rotate", {
+        eventId,
+        enabled: REGIE_V1_AUTO_ROTATE_UI_ENABLED ? autoRotate : false,
+      });
     }
   }, [autoRotate, eventId]);
 
   useEffect(() => {
+    if (!REGIE_V1_AUTO_ROTATE_UI_ENABLED) return undefined;
     if (!autoRotate || !activePollIdJs || !eventId) return undefined;
     if (voteStateUi !== "open" || displayStateUi === "black") return undefined;
 
@@ -10587,7 +10649,7 @@ export default function RegieEventPage() {
                   lineHeight: 1.4,
                 }}
               >
-                Connexion des écrans, sync B, forçages avancés et rotation —
+                Connexion des écrans, sync B et commandes de secours —
                 hors parcours principal.
               </p>
               <BlocProjectionEcran
@@ -10605,6 +10667,8 @@ export default function RegieEventPage() {
                 onScreenBIndependentChange={handleScreenBIndependentChange}
                 desktop={desktop}
                 chronoSection={null}
+                salleDisplayState={displayStateUi}
+                voteState={voteStateUi}
                 autoRotate={autoRotate}
                 onAutoRotateChange={setAutoRotate}
                 autoRotateAllowed={autoRotateAllowed}

@@ -449,9 +449,19 @@ test("page.jsx + ScreenProjection + server branchés", () => {
   assert.ok(page.includes('ouvrirEcran(pathScreenA)'));
   assert.ok(page.includes('ouvrirEcran(pathScreenB)'));
   assert.ok(page.includes('window.open(url, "_blank"'));
-  // Plus de boutons Question/Résultats sur A hors Options avancées forçage
-  assert.ok(page.includes("Forçage écran principal"));
+  // Options avancées V1 : secours A (Noir / Attente / Retour au direct)
+  assert.ok(page.includes("Commandes de secours — écran principal"));
+  assert.ok(page.includes("Retour au direct"));
+  assert.ok(page.includes("resolveScreenReturnToLiveAction"));
   assert.ok(page.includes("Options avancées"));
+  assert.ok(page.includes("REGIE_V1_AUTO_ROTATE_UI_ENABLED = false"));
+  assert.ok(page.includes("REGIE_V1_EXTRA_PROJECTION_MODES_UI_ENABLED = false"));
+  // Modes extra + rotation masqués (code conservé)
+  assert.ok(page.includes("Grande salle (QR XXL)"));
+  assert.ok(page.includes("RegieAutoRotatePanel"));
+  // Liens Screen / OBS inchangés
+  assert.ok(page.includes("pathScreenA") || page.includes("/screen/"));
+  assert.ok(page.includes("pathOverlay") || page.includes("/overlay/"));
 
   const screen = readFileSync(
     join(here, "../components/ScreenProjection.jsx"),

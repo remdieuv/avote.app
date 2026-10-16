@@ -9,6 +9,7 @@ import {
   getRegieIdleProjectionHint,
   isRegieProjectionBlack,
   isRegieProjectionWaiting,
+  resolveScreenReturnToLiveAction,
 } from "../lib/regieProjectionLabels.js";
 
 const waiting = getRegieDisplayStateLabel("waiting");
@@ -65,4 +66,66 @@ assert.equal(
   "Quiz : libellé barres inchangé",
 );
 
-console.log("ok  régie WAITING = QR réel · BLACK = écran noir");
+// Retour au direct — aligné sur le pilotage, jamais WAITING systématique
+assert.equal(
+  resolveScreenReturnToLiveAction({
+    salleDisplayState: "question",
+    liveState: "voting",
+    voteState: "open",
+    hasActivePoll: true,
+  }),
+  "QUESTION",
+  "question ouverte → QUESTION",
+);
+assert.equal(
+  resolveScreenReturnToLiveAction({
+    salleDisplayState: "results",
+    liveState: "results",
+    voteState: "closed",
+    hasActivePoll: true,
+  }),
+  "RESULTS",
+  "résultats affichés → RESULTS",
+);
+assert.equal(
+  resolveScreenReturnToLiveAction({
+    salleDisplayState: "waiting",
+    liveState: "waiting",
+    voteState: "closed",
+    hasActivePoll: false,
+  }),
+  "WAITING",
+  "aucune diffusion → WAITING",
+);
+assert.equal(
+  resolveScreenReturnToLiveAction({
+    salleDisplayState: "waiting",
+    liveState: "voting",
+    voteState: "open",
+    hasActivePoll: true,
+  }),
+  "QUESTION",
+  "live voting malgré salle waiting → QUESTION",
+);
+assert.equal(
+  resolveScreenReturnToLiveAction({
+    salleDisplayState: "black",
+    liveState: "results",
+    voteState: "closed",
+    hasActivePoll: true,
+  }),
+  "RESULTS",
+  "après Noir, pilotage results → RESULTS (pas WAITING)",
+);
+assert.equal(
+  resolveScreenReturnToLiveAction({
+    salleDisplayState: "waiting",
+    liveState: "waiting",
+    voteState: "closed",
+    hasActivePoll: true,
+  }),
+  "WAITING",
+  "après Attente / QR, pas de question diffusée → WAITING",
+);
+
+console.log("ok  régie WAITING = QR réel · BLACK = écran noir · Retour au direct");

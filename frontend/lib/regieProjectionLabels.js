@@ -58,6 +58,42 @@ export function isRegieProjectionBlack(projectionDisplayState) {
 }
 
 /**
+ * « Retour au direct » — aligne le Screen A sur le pilotage salle,
+ * sans toucher vote / chrono / résultats métier, ni l’écran B indépendant.
+ * Ne renvoie jamais systématiquement WAITING.
+ *
+ * @param {{
+ *   salleDisplayState?: string | null;
+ *   liveState?: string | null;
+ *   voteState?: string | null;
+ *   hasActivePoll?: boolean;
+ * }} [input]
+ * @returns {"QUESTION" | "RESULTS" | "WAITING"}
+ */
+export function resolveScreenReturnToLiveAction(input = {}) {
+  const salle = String(input.salleDisplayState ?? "")
+    .trim()
+    .toLowerCase();
+  const live = String(input.liveState ?? "")
+    .trim()
+    .toLowerCase();
+  const vote = String(input.voteState ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (salle === "results" || live === "results") {
+    return "RESULTS";
+  }
+  if (salle === "question" || live === "voting") {
+    return "QUESTION";
+  }
+  if (vote === "open" && input.hasActivePoll === true) {
+    return "QUESTION";
+  }
+  return "WAITING";
+}
+
+/**
  * Hint console régie quand aucun poll actif — cohérent avec Screen WAITING.
  * @param {{
  *   projectionDisplayState?: string | null;
