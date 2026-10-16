@@ -138,6 +138,9 @@ test("page.jsx : Pilotage terminé centré + B Résultats en live", () => {
   assert.ok(src.includes("Résultats en live"));
   assert.ok(src.includes("formatWinnerFullName"));
   assert.ok(src.includes("activeQuizCorrectnessSummary"));
+  assert.ok(src.includes("pendingAutoRevealRegie"));
+  assert.ok(src.includes("formatAutoRevealCountdownLabel"));
+  assert.ok(src.includes("pendingAutoReveal: pendingAutoRevealRegie"));
 });
 
 test("Statuts métier carte question", () => {
@@ -282,6 +285,19 @@ test("CTA primaire — CLOSED après Fermer → Afficher / Tirage / Suivante", (
   );
   assert.equal(
     getRegiePrimaryLiveActionLabel("show-results"),
+    "Afficher les résultats",
+  );
+  assert.equal(
+    getRegiePrimaryLiveActionLabel("show-results", {
+      pendingAutoReveal: true,
+    }),
+    "Afficher les résultats maintenant",
+    "Décompte pending → CTA immédiat",
+  );
+  assert.equal(
+    getRegiePrimaryLiveActionLabel("show-results", {
+      pendingAutoReveal: false,
+    }),
     "Afficher les résultats",
   );
   assert.equal(

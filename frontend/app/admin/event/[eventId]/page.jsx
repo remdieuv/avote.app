@@ -77,6 +77,11 @@ import {
   sortPollsByPlaylistOrder,
 } from "@/lib/regieDesktopLayout";
 import {
+  formatAutoRevealCountdownLabel,
+  getAutoRevealCountdownSec,
+  isAutoRevealCountdownPending,
+} from "@/lib/participantLiveFlow";
+import {
   normalizePollOptions,
   optionVoteCount,
 } from "@/lib/normalizeLivePayload";
@@ -4928,6 +4933,8 @@ export default function RegieEventPage() {
   const [chronoMinutes, setChronoMinutes] = useState(2);
   const [chronoSeconds, setChronoSeconds] = useState(0);
   const [chronoTick, setChronoTick] = useState(0);
+  /** Tick 1 s — décompte Pilotage depuis Event.autoRevealShowResultsAt. */
+  const [autoRevealTick, setAutoRevealTick] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   /** Aperçu /join intégré (desktop split) — persistant par événement */
   const [previewJoinOpen, setPreviewJoinOpen] = useState(false);
@@ -6509,7 +6516,34 @@ export default function RegieEventPage() {
     leadEnabled: activePoll?.leadEnabled,
     contestQuotaReached,
   });
-  const primaryLiveActionLabel = getRegiePrimaryLiveActionLabel(primaryLiveAction);
+  const autoRevealUntilIsoRegie =
+    typeof eventData?.autoRevealShowResultsAt === "string"
+      ? eventData.autoRevealShowResultsAt
+      : null;
+  const displayIsResults =
+    String(displayStateUi || "").toLowerCase() === "results" ||
+    String(projectionDisplayStateUi || "").toLowerCase() === "results";
+  const pendingAutoRevealRegie =
+    !eventFinished &&
+    !displayIsResults &&
+    voteStateUi === "closed" &&
+    isAutoRevealCountdownPending(autoRevealUntilIsoRegie);
+
+  useEffect(() => {
+    if (!pendingAutoRevealRegie) return;
+    const id = setInterval(() => setAutoRevealTick((k) => k + 1), 1000);
+    return () => clearInterval(id);
+  }, [pendingAutoRevealRegie, autoRevealUntilIsoRegie]);
+
+  const autoRevealCountdownSecRegie = useMemo(() => {
+    void autoRevealTick;
+    return getAutoRevealCountdownSec(autoRevealUntilIsoRegie);
+  }, [autoRevealUntilIsoRegie, autoRevealTick]);
+
+  const primaryLiveActionLabel = getRegiePrimaryLiveActionLabel(
+    primaryLiveAction,
+    { pendingAutoReveal: pendingAutoRevealRegie },
+  );
   const pilotageStepLabel = getRegiePilotageStepLabel({
     voteState: voteStateUi,
     displayState: projectionDisplayStateUi,
@@ -9656,6 +9690,25 @@ export default function RegieEventPage() {
                           keyPrefix="pilotage-stat"
                         />
                       ) : null}
+                      {pendingAutoRevealRegie &&
+                      autoRevealCountdownSecRegie != null ? (
+                        <p
+                          style={{
+                            margin: "0.15rem 0 0 0",
+                            fontSize: desktop ? "1.05rem" : "0.95rem",
+                            fontWeight: 800,
+                            color: "#0f766e",
+                            letterSpacing: "-0.01em",
+                            fontVariantNumeric: "tabular-nums",
+                          }}
+                          aria-live="polite"
+                        >
+                          VOTE TERMINÉ —{" "}
+                          {formatAutoRevealCountdownLabel(
+                            autoRevealCountdownSecRegie,
+                          )}
+                        </p>
+                      ) : null}
                     </div>
 
                     {primaryLiveActionLabel ? (
@@ -9667,9 +9720,11 @@ export default function RegieEventPage() {
                           primaryLiveAction === "open"
                             ? openVoteButtonCopy.title
                             : primaryLiveAction === "show-results"
-                              ? isQuizPoll(activePoll)
-                                ? "Affiche les résultats finaux. Si le vote est fermé, révèle aussi la bonne réponse."
-                                : "Affiche les résultats finaux à la salle et à l’écran."
+                              ? pendingAutoRevealRegie
+                                ? "Interrompt le décompte et affiche les résultats partout maintenant."
+                                : isQuizPoll(activePoll)
+                                  ? "Affiche les résultats finaux. Si le vote est fermé, révèle aussi la bonne réponse."
+                                  : "Affiche les résultats finaux à la salle et à l’écran."
                               : primaryLiveAction === "next"
                                 ? "Prépare la question suivante sans ouvrir le vote."
                                 : primaryLiveAction === "draw"

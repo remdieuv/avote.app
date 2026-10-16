@@ -46,9 +46,12 @@ import {
   getParticipantFormNotice,
   getParticipantFullLabel,
   getParticipantOfflineLabel,
+  formatAutoRevealCountdownLabel,
+  getAutoRevealCountdownSec,
   getParticipantResultsBlockTitle,
   getParticipantResultsOptionBadgeLabel,
   getResultsLeadTieInfo,
+  isAutoRevealCountdownPending,
   isParticipantVoteSessionOpen,
   mergePollJsonPreservingQuizReveal,
   resolveParticipantTopStripLabel,
@@ -147,19 +150,27 @@ function CarteVoteTermineAttenteResultats({
   isDark,
   hasVoted = false,
   awaitingLabel = null,
+  /** Secondes restantes (SoT autoRevealShowResultsAt) — null = attente soft sans décompte. */
+  countdownSec = null,
 }) {
   const a = joinRoomAccent(accent);
   const isContestAwait = Boolean(awaitingLabel);
-  const title = isContestAwait
-    ? hasVoted
-      ? LIVE_UX_LABEL_VOTE_CONFIRMED
-      : awaitingLabel
-    : getClosedParticipantTitle(Boolean(hasVoted));
-  const body = isContestAwait
-    ? hasVoted
-      ? awaitingLabel
-      : null
-    : "Les résultats s’afficheront ici quand ce sera le moment";
+  const hasCountdown =
+    typeof countdownSec === "number" && Number.isFinite(countdownSec);
+  const title = hasCountdown
+    ? "VOTE TERMINÉ"
+    : isContestAwait
+      ? hasVoted
+        ? LIVE_UX_LABEL_VOTE_CONFIRMED
+        : awaitingLabel
+      : getClosedParticipantTitle(Boolean(hasVoted));
+  const body = hasCountdown
+    ? formatAutoRevealCountdownLabel(countdownSec)
+    : isContestAwait
+      ? hasVoted
+        ? awaitingLabel
+        : null
+      : "Les résultats s’afficheront ici quand ce sera le moment";
   return (
     <>
       <style>
@@ -188,6 +199,18 @@ function CarteVoteTermineAttenteResultats({
           animation: "avote-attente-pulse 2.4s ease-in-out infinite",
         }}
       >
+        {hasCountdown && hasVoted ? (
+          <p
+            style={{
+              margin: "0 0 0.55rem 0",
+              fontSize: "0.92rem",
+              fontWeight: 700,
+              color: isDark ? "rgba(187, 247, 208, 0.95)" : "#166534",
+            }}
+          >
+            {LIVE_UX_LABEL_VOTE_CONFIRMED}
+          </p>
+        ) : null}
         <h3
           style={{
             margin: "0 0 0.5rem 0",
@@ -203,14 +226,15 @@ function CarteVoteTermineAttenteResultats({
         <p
           style={{
             margin: 0,
-            fontSize: "0.98rem",
+            fontSize: hasCountdown ? "1.15rem" : "0.98rem",
             color: isDark ? "rgba(226, 232, 240, 0.92)" : "#334155",
-            fontWeight: 500,
+            fontWeight: hasCountdown ? 800 : 500,
             lineHeight: 1.45,
+            fontVariantNumeric: hasCountdown ? "tabular-nums" : undefined,
           }}
         >
           {body}
-          {!isContestAwait ? (
+          {!isContestAwait && !hasCountdown ? (
           <span
             aria-hidden
             style={{
@@ -346,6 +370,8 @@ export function PollExperience({
   /** Barres résultats : anim 0% → % après paint */
   const [resultsBarsAnimated, setResultsBarsAnimated] = useState(false);
   const [chronoTick, setChronoTick] = useState(0);
+  /** Tick 1 s pour le décompte auto-reveal (SoT autoRevealShowResultsAt). */
+  const [autoRevealTick, setAutoRevealTick] = useState(0);
 
   /** Identité salle /join (continuité visuelle sur /p) */
   const [eventTitleFromApi, setEventTitleFromApi] = useState(null);
@@ -1142,8 +1168,7 @@ export function PollExperience({
 
   /**
    * Bloc résultats : RESULTS, archive `/p`, ou après mon vote en VOTING **et** CLOSED
-   * (continuité — ne pas masquer à la fermeture). Libellés via
-   * getParticipantResultsBlockTitle ; Quiz reveal via shouldRevealQuizAnswerToParticipant.
+   * (continuité manuelle). Pendant décompte auto-reveal : barres masquées.
    */
   const showBlocResultatsEnDirect = shouldShowParticipantLiveResultsBlock({
     hasPoll: !!poll,
@@ -1155,7 +1180,27 @@ export function PollExperience({
     liveScene,
     pollType: poll?.type,
     leadEnabled: poll?.leadEnabled,
+    autoRevealShowResultsAt: poll?.autoRevealShowResultsAt ?? null,
   });
+
+  const autoRevealUntilIso =
+    typeof poll?.autoRevealShowResultsAt === "string"
+      ? poll.autoRevealShowResultsAt
+      : null;
+  const pendingAutoRevealCountdown =
+    !affichageResultatsPublic &&
+    isAutoRevealCountdownPending(autoRevealUntilIso);
+
+  useEffect(() => {
+    if (!pendingAutoRevealCountdown) return;
+    const id = setInterval(() => setAutoRevealTick((k) => k + 1), 1000);
+    return () => clearInterval(id);
+  }, [pendingAutoRevealCountdown, autoRevealUntilIso]);
+
+  const autoRevealCountdownSec = useMemo(() => {
+    void autoRevealTick;
+    return getAutoRevealCountdownSec(autoRevealUntilIso);
+  }, [autoRevealUntilIso, autoRevealTick]);
 
   const resultsBlockTitle = getParticipantResultsBlockTitle({
     voteSessionOpen,
@@ -2148,6 +2193,9 @@ export function PollExperience({
                 isDark={isDark}
                 hasVoted={Boolean(merciPourVote || aDejaVoteEnStockage)}
                 awaitingLabel={null}
+                countdownSec={
+                  pendingAutoRevealCountdown ? autoRevealCountdownSec : null
+                }
               />
             ) : sceneParticipant === "waiting" ||
               pollFetch404Slug ? (
@@ -2359,6 +2407,9 @@ export function PollExperience({
                   : Boolean(merciPourVote || aDejaVoteEnStockage)
               }
               awaitingLabel={closedAwaitingLabel}
+              countdownSec={
+                pendingAutoRevealCountdown ? autoRevealCountdownSec : null
+              }
             />
           ) : null}
 
@@ -2372,7 +2423,9 @@ export function PollExperience({
             <>
               {(merciPourVote || aDejaVoteEnStockage) &&
               !showLeadForm &&
-              !leadSuccess ? (
+              !leadSuccess &&
+              // Carte décompte auto-reveal porte déjà la confirmation.
+              !(attenteProjectionResultats && pendingAutoRevealCountdown) ? (
               <p
                 style={{
                   marginBottom: "1rem",

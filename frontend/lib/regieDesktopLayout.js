@@ -226,16 +226,20 @@ export function getRegiePrimaryLiveAction(input = {}) {
 
 /**
  * Libellés FR des CTA Pilotage (maquette régie simplifiée — un seul bouton visible).
+ * Pendant le décompte auto-reveal : « Afficher les résultats maintenant ».
  * @param {ReturnType<typeof getRegiePrimaryLiveAction>} action
+ * @param {{ pendingAutoReveal?: boolean }} [opts]
  */
-export function getRegiePrimaryLiveActionLabel(action) {
+export function getRegiePrimaryLiveActionLabel(action, opts = {}) {
   switch (action) {
     case "open":
       return "Ouvrir le vote";
     case "close":
       return "Fermer le vote";
     case "show-results":
-      return "Afficher les résultats";
+      return opts.pendingAutoReveal === true
+        ? "Afficher les résultats maintenant"
+        : "Afficher les résultats";
     case "draw":
       return "Tirer au sort";
     case "next":

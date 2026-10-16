@@ -45,6 +45,9 @@ import {
   shouldShowParticipantFullUi,
   shouldShowParticipantResultStats,
   shouldShowParticipantLiveResultsBlock,
+  isAutoRevealCountdownPending,
+  getAutoRevealCountdownSec,
+  formatAutoRevealCountdownLabel,
   isParticipantVoteSessionOpen,
   isParticipantVoteClosed,
   getParticipantResultsBlockTitle,
@@ -432,7 +435,7 @@ test("LOT-1. résultats live après vote (comportement /p prod) aussi en Salle",
     }),
     false,
   );
-  // CLOSED après vote → garder résultats finaux (continuité, ne pas masquer)
+  // CLOSED après vote, autoReveal OFF (pas d’ISO) → continuité manuelle
   assert.equal(
     shouldShowParticipantLiveResultsBlock({
       hasPoll: true,
@@ -443,7 +446,7 @@ test("LOT-1. résultats live après vote (comportement /p prod) aussi en Salle",
       affichageResultatsPublic: false,
     }),
     true,
-    "CLOSED après vote : barres finaux visibles",
+    "CLOSED après vote sans décompte : barres finaux visibles",
   );
   assert.equal(
     shouldShowParticipantLiveResultsBlock({
@@ -456,6 +459,40 @@ test("LOT-1. résultats live après vote (comportement /p prod) aussi en Salle",
     }),
     true,
   );
+  // CLOSED + décompte auto-reveal pending → masquer les barres
+  const untilPending = new Date(Date.now() + 10_000).toISOString();
+  assert.equal(
+    shouldShowParticipantLiveResultsBlock({
+      hasPoll: true,
+      hasVoted: true,
+      voteState: "closed",
+      pollStatus: "CLOSED",
+      liveScene: "waiting",
+      affichageResultatsPublic: false,
+      autoRevealShowResultsAt: untilPending,
+    }),
+    false,
+    "CLOSED + autoRevealShowResultsAt pending : barres masquées",
+  );
+  // RESULTS public → barres même si ISO encore présent (révélation)
+  assert.equal(
+    shouldShowParticipantLiveResultsBlock({
+      hasPoll: true,
+      hasVoted: true,
+      voteState: "closed",
+      pollStatus: "CLOSED",
+      liveScene: "results",
+      affichageResultatsPublic: true,
+      autoRevealShowResultsAt: untilPending,
+    }),
+    true,
+    "RESULTS public : barres malgré ISO stale",
+  );
+  assert.equal(isAutoRevealCountdownPending(untilPending), true);
+  assert.equal(isAutoRevealCountdownPending(null), false);
+  assert.ok(getAutoRevealCountdownSec(untilPending) >= 9);
+  assert.match(formatAutoRevealCountdownLabel(10), /Résultats dans 10 secondes/);
+  assert.equal(formatAutoRevealCountdownLabel(1), "Résultats dans 1 seconde");
   // CLOSED sans avoir voté → pas de fuite résultats (carte attente)
   assert.equal(
     shouldShowParticipantLiveResultsBlock({

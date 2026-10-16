@@ -296,10 +296,48 @@ export function isParticipantVoteClosed(input = {}) {
 }
 
 /**
+ * SoT temporelle auto-reveal : `Event.autoRevealShowResultsAt` (ISO absolu).
+ * Pas de 2ᵉ timer — lecture seule côté client.
+ * @param {string | null | undefined} iso
+ * @param {number} [nowMs]
+ * @returns {boolean}
+ */
+export function isAutoRevealCountdownPending(iso, nowMs = Date.now()) {
+  if (typeof iso !== "string" || !iso.trim()) return false;
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return false;
+  // Tolérance 800 ms (alignée Screen) pour éviter un flash à l’échéance.
+  return t > nowMs - 800;
+}
+
+/**
+ * Secondes restantes jusqu’à `autoRevealShowResultsAt` (ceil, ≥ 0).
+ * @param {string | null | undefined} iso
+ * @param {number} [nowMs]
+ * @returns {number | null} null si pas de décompte actif
+ */
+export function getAutoRevealCountdownSec(iso, nowMs = Date.now()) {
+  if (!isAutoRevealCountdownPending(iso, nowMs)) return null;
+  const t = new Date(/** @type {string} */ (iso)).getTime();
+  return Math.max(0, Math.ceil((t - nowMs) / 1000));
+}
+
+/**
+ * Libellé décompte synchronisé (participant / régie / Screen).
+ * @param {number} sec
+ * @returns {string}
+ */
+export function formatAutoRevealCountdownLabel(sec) {
+  const n = Math.max(0, Math.floor(Number(sec) || 0));
+  return `Résultats dans ${n} seconde${n !== 1 ? "s" : ""}`;
+}
+
+/**
  * Bloc barres participant (continuité VOTING → CLOSED → RESULTS) :
  * - révélation publique RESULTS, OU
  * - fiche archive standalone `/p`, OU
- * - après mon vote : session ouverte (live) **ou** vote fermé (finaux, ne pas masquer).
+ * - après mon vote : session ouverte (live) **ou** vote fermé (finaux),
+ *   sauf décompte auto-reveal pending (`autoRevealShowResultsAt`) → barres masquées.
  *
  * Quiz : mêmes barres qu’un sondage ; révélation bonne réponse / verdict
  * via `shouldRevealQuizAnswerToParticipant` (RESULTS uniquement).
@@ -312,6 +350,10 @@ export function isParticipantVoteClosed(input = {}) {
  *   voteState?: string | null;
  *   pollStatus?: string | null;
  *   liveScene?: string | null;
+ *   pollType?: string | null;
+ *   leadEnabled?: boolean | null;
+ *   autoRevealShowResultsAt?: string | null;
+ *   nowMs?: number;
  * }} input
  * @returns {boolean}
  */
@@ -323,6 +365,15 @@ export function shouldShowParticipantLiveResultsBlock(input = {}) {
   if (input.leadEnabled === true && pollType !== "CONTEST_ENTRY") return false;
   if (input.affichageResultatsPublic === true) return true;
   if (input.archiveResultsStandalone === true) return true;
+  // Décompte auto-reveal en cours : masquer les barres (même si déjà voté).
+  if (
+    isAutoRevealCountdownPending(
+      input.autoRevealShowResultsAt,
+      input.nowMs ?? Date.now(),
+    )
+  ) {
+    return false;
+  }
   if (input.hasVoted !== true) return false;
   if (
     isParticipantVoteSessionOpen({
@@ -333,7 +384,7 @@ export function shouldShowParticipantLiveResultsBlock(input = {}) {
   ) {
     return true;
   }
-  // Continuité : ne jamais masquer les barres déjà visibles quand le vote ferme.
+  // Continuité manuelle (autoReveal OFF) : garder les barres quand le vote ferme.
   return isParticipantVoteClosed({
     voteState: input.voteState,
     pollStatus: input.pollStatus,
