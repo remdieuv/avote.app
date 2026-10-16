@@ -327,6 +327,77 @@ export function applyMainDisplayToClientState(input = {}) {
 }
 
 /**
+ * Basculer sync ↔ indépendant côté client B (état pur).
+ * Retour sync : drop la cible et applique immédiatement syncDisplayState / main A.
+ * @param {{
+ *   independent?: boolean;
+ *   displayState?: unknown;
+ *   targetedDisplay?: unknown;
+ *   syncDisplayState?: unknown;
+ *   mainDisplay?: unknown;
+ * }} [input]
+ * @returns {{
+ *   independent: boolean;
+ *   displayState: string | null;
+ *   targetedDisplay: string | null;
+ *   indepQueryValue: "0" | "1";
+ * }}
+ */
+export function applyScreenBModeToClientState(input = {}) {
+  const independent = input.independent === true;
+  let displayState = normalizeScreenDisplayState(input.displayState);
+  let targetedDisplay = normalizeScreenDisplayState(input.targetedDisplay);
+
+  if (independent) {
+    return {
+      independent: true,
+      displayState,
+      targetedDisplay,
+      indepQueryValue: "1",
+    };
+  }
+
+  targetedDisplay = null;
+  const syncDs = normalizeScreenDisplayState(input.syncDisplayState);
+  const mainDs = normalizeScreenDisplayState(input.mainDisplay);
+  if (syncDs) {
+    displayState = syncDs;
+  } else if (mainDs) {
+    displayState = mainDs;
+  }
+  return {
+    independent: false,
+    displayState,
+    targetedDisplay,
+    indepQueryValue: "0",
+  };
+}
+
+/**
+ * Met à jour `indep` dans l’URL (F5 doit respecter le dernier mode socket/régie).
+ * @param {string | null | undefined} href
+ * @param {boolean} independent
+ * @returns {string | null} nouvel href ou null si inchangé / invalide
+ */
+export function withScreenBIndepQuery(href, independent) {
+  try {
+    const raw = String(href || "").trim();
+    if (!raw) return null;
+    const url = new URL(raw, "http://local.invalid");
+    const next = independent ? "1" : "0";
+    if (url.searchParams.get("indep") === next) return null;
+    url.searchParams.set("indep", next);
+    url.searchParams.delete("independent");
+    if (raw.startsWith("http://") || raw.startsWith("https://")) {
+      return url.toString();
+    }
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Un écran ciblé (B) suit-il le display principal ?
  * @param {{
  *   screenId?: string | null;

@@ -4954,6 +4954,8 @@ export default function RegieEventPage() {
   const screenBIndependentRef = useRef(false);
   const pollIdRef = useRef(/** @type {string | null} */ (null));
   const displayStateRefRegie = useRef("waiting");
+  /** screenDisplayState A — pour resync B au décochage indep / join */
+  const screenDisplayStateRefRegie = useRef("waiting");
   const voteStateRefRegie = useRef("closed");
   const prevPollForAutoRef = useRef(
     /** @type {string | null | undefined} */ (undefined),
@@ -5426,9 +5428,14 @@ export default function RegieEventPage() {
         eventId,
         enabled: autoRotateRef.current,
       });
+      const indep = screenBIndependentRef.current;
       socket.emit("screen:b_mode", {
         eventId,
-        independent: screenBIndependentRef.current,
+        independent: indep,
+        // Retour sync : B applique tout de suite l’état A (évite un fetch qui laisse Attente).
+        syncDisplayState: indep
+          ? null
+          : String(screenDisplayStateRefRegie.current || "waiting").toLowerCase(),
       });
     }
 
@@ -6641,6 +6648,9 @@ export default function RegieEventPage() {
   screenBIndependentRef.current = screenBIndependent;
   pollIdRef.current = activePollIdJs;
   displayStateRefRegie.current = displayStateUi;
+  screenDisplayStateRefRegie.current = String(
+    projectionDisplayStateUi || "waiting",
+  ).toLowerCase();
   voteStateRefRegie.current = voteStateUi;
 
   useEffect(() => {
@@ -6656,34 +6666,37 @@ export default function RegieEventPage() {
       screenBIndependentRef.current = independent;
       const slug = eventData?.slug;
       if (slug) writeScreenBIndependent(slug, independent);
+      const main = String(projectionDisplayStateUi || "waiting").toLowerCase();
+      const mainSafe = ["question", "results", "waiting", "black"].includes(main)
+        ? main
+        : "waiting";
       if (eventId && socketRef.current?.connected) {
-        socketRef.current.emit("screen:b_mode", { eventId, independent });
+        socketRef.current.emit("screen:b_mode", {
+          eventId,
+          independent,
+          // Obligatoire au décochage : B doit reprendre A tout de suite (pas seulement via fetch).
+          syncDisplayState: independent ? null : mainSafe,
+        });
       }
       if (!independent) {
         // Reprend l’état A pour le badge régie (plus d’écart affiché).
-        const main = String(projectionDisplayStateUi || "waiting").toLowerCase();
-        if (["question", "results", "waiting", "black"].includes(main)) {
-          setScreenBDisplayState(
-            /** @type {"question" | "results" | "waiting" | "black"} */ (main),
-          );
-        }
+        setScreenBDisplayState(
+          /** @type {"question" | "results" | "waiting" | "black"} */ (mainSafe),
+        );
       } else {
         // Indépendant : démarre sur l’état courant de A, sans le modifier.
-        const main = String(projectionDisplayStateUi || "waiting").toLowerCase();
-        if (["question", "results", "waiting", "black"].includes(main)) {
-          setScreenBDisplayState(
-            /** @type {"question" | "results" | "waiting" | "black"} */ (main),
-          );
-          const type =
-            main === "question"
-              ? "QUESTION"
-              : main === "results"
-                ? "RESULTS"
-                : main === "black"
-                  ? "BLACK"
-                  : "WAITING";
-          sendScreenAction(type, "B");
-        }
+        setScreenBDisplayState(
+          /** @type {"question" | "results" | "waiting" | "black"} */ (mainSafe),
+        );
+        const type =
+          mainSafe === "question"
+            ? "QUESTION"
+            : mainSafe === "results"
+              ? "RESULTS"
+              : mainSafe === "black"
+                ? "BLACK"
+                : "WAITING";
+        sendScreenAction(type, "B");
       }
     },
     [eventData?.slug, eventId, projectionDisplayStateUi, sendScreenAction],

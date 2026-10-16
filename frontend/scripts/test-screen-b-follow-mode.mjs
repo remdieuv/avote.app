@@ -8,6 +8,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   applyMainDisplayToClientState,
+  applyScreenBModeToClientState,
   applyScreenUpdateToClientState,
   buildScreenBPath,
   clearScreenBDisplayState,
@@ -20,6 +21,7 @@ import {
   screenFollowsMainDisplay,
   screenPayloadMatchesClient,
   shouldShowScreenBDisplayGap,
+  withScreenBIndepQuery,
   writeScreenBDisplayState,
   writeScreenBIndependent,
 } from "../lib/screenBFollowMode.js";
@@ -315,19 +317,16 @@ test("régression : Question A → B indep → Attente → updates globales", ()
     );
   }
 
-  // Retour sync : suit A
-  state.independent = false;
-  state.targetedDisplay = null;
-  assert.equal(
-    applyMainDisplayToClientState({
-      screenId: "b",
-      independent: false,
-      displayState: state.displayState,
-      targetedDisplay: null,
-      mainDisplay: "question",
-    }),
-    "question",
-  );
+  // Retour sync via b_mode : reprend A immédiatement
+  const synced = applyScreenBModeToClientState({
+    independent: false,
+    displayState: state.displayState,
+    targetedDisplay: state.targetedDisplay,
+    syncDisplayState: "question",
+  });
+  assert.equal(synced.independent, false);
+  assert.equal(synced.displayState, "question");
+  assert.equal(synced.targetedDisplay, null);
 });
 
 test("commande B avant screen:b_mode verrouille quand même", () => {
@@ -343,6 +342,82 @@ test("commande B avant screen:b_mode verrouille quand même", () => {
   assert.equal(next.independent, true);
   assert.equal(next.displayState, "waiting");
   assert.equal(next.targetedDisplay, "waiting");
+});
+
+test("régression : décocher indep → B = Question A immédiatement + suit A + F5", () => {
+  // A = Question, B indep = Attente
+  let state = {
+    independent: true,
+    displayState: "waiting",
+    targetedDisplay: "waiting",
+  };
+
+  // Décocher « Affichage indépendant » avec syncDisplayState = question (A)
+  let next = applyScreenBModeToClientState({
+    ...state,
+    independent: false,
+    syncDisplayState: "question",
+  });
+  assert.equal(next.independent, false);
+  assert.equal(next.targetedDisplay, null);
+  assert.equal(next.displayState, "question", "B doit reprendre A tout de suite");
+  assert.equal(next.indepQueryValue, "0");
+  state = {
+    independent: next.independent,
+    displayState: next.displayState,
+    targetedDisplay: next.targetedDisplay,
+  };
+
+  // A change → Results ; B sync suit
+  const followed = applyMainDisplayToClientState({
+    screenId: "b",
+    independent: false,
+    displayState: state.displayState,
+    targetedDisplay: null,
+    mainDisplay: "results",
+  });
+  assert.equal(followed, "results");
+  state.displayState = followed;
+
+  // Update global screen:update aussi
+  const globalUp = applyScreenUpdateToClientState({
+    localScreenId: "b",
+    ...state,
+    payloadScreenId: null,
+    payloadDisplayState: "black",
+  });
+  assert.equal(globalUp.accepted, true);
+  assert.equal(globalUp.displayState, "black");
+  assert.equal(globalUp.independent, false);
+
+  // F5 : URL indep=0 + storage sync → pas de restauration Attente
+  const storage = memoryStorage();
+  writeScreenBIndependent("evt-sync", false, { storage });
+  clearScreenBDisplayState("evt-sync", { storage });
+  const mode = resolveScreenBIndependentMode({
+    slug: "evt-sync",
+    searchParam: "0",
+    storage,
+  });
+  assert.equal(mode.independent, false);
+  assert.equal(
+    resolveScreenClientDisplayState({
+      screenId: "b",
+      independent: false,
+      mainDisplay: "black",
+      targetedDisplay: readScreenBDisplayState("evt-sync", { storage }),
+      currentDisplay: "waiting",
+    }),
+    "black",
+    "F5 sync : suit A, ignore ancien waiting",
+  );
+
+  const patched = withScreenBIndepQuery(
+    "/screen/evt-sync?sid=b&indep=1&pm=standard",
+    false,
+  );
+  assert.match(String(patched), /indep=0/);
+  assert.doesNotMatch(String(patched), /indep=1/);
 });
 
 test("retour sync : mémoire serveur B effacée", () => {
@@ -388,9 +463,15 @@ test("page.jsx + ScreenProjection + server branchés", () => {
   assert.ok(screen.includes("resolveScreenClientDisplayState"));
   assert.ok(screen.includes("applyScreenUpdateToClientState"));
   assert.ok(screen.includes("applyMainDisplayToClientState"));
+  assert.ok(screen.includes("applyScreenBModeToClientState"));
+  assert.ok(screen.includes("withScreenBIndepQuery"));
   assert.ok(screen.includes("writeScreenBDisplayState"));
   assert.ok(screen.includes("clearScreenBDisplayState"));
   assert.ok(screen.includes('ds === "waiting"'));
+  assert.ok(screen.includes("syncDisplayState"));
+
+  const pageHasSyncPayload = page.includes("syncDisplayState:");
+  assert.ok(pageHasSyncPayload, "régie doit envoyer syncDisplayState au décochage");
 
   const server = readFileSync(
     join(here, "../../backend/server.js"),
@@ -400,6 +481,7 @@ test("page.jsx + ScreenProjection + server branchés", () => {
   assert.ok(server.includes("setScreenBIndependentDisplay"));
   assert.ok(server.includes("getScreenBIndependentDisplay"));
   assert.ok(server.includes("clearScreenBIndependentDisplay"));
+  assert.ok(server.includes("syncDisplayState"));
   // Ciblage B : emit synchrone (pas d’await Prisma avant emit)
   assert.ok(server.includes("Ciblage B (et sid legacy) : emit synchrone"));
   const actionIdx = server.indexOf('socket.on("screen:action"');

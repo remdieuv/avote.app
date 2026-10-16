@@ -34,13 +34,16 @@ import {
 } from "@/lib/liveStateVisual";
 import {
   applyMainDisplayToClientState,
+  applyScreenBModeToClientState,
   applyScreenUpdateToClientState,
   clearScreenBDisplayState,
+  normalizeScreenDisplayState,
   readScreenBDisplayState,
   resolveScreenBIndependentMode,
   resolveScreenClientDisplayState,
   screenFollowsMainDisplay,
   screenPayloadMatchesClient,
+  withScreenBIndepQuery,
   writeScreenBDisplayState,
   writeScreenBIndependent,
 } from "@/lib/screenBFollowMode";
@@ -945,21 +948,51 @@ export function ScreenProjection({
     function onScreenBMode(payload) {
       if (!eid || String(payload?.eventId) !== String(eid)) return;
       if (sid !== "b") return;
-      const next = Boolean(payload?.independent);
-      setScreenBIndependent(next);
-      screenBIndependentRef.current = next;
-      writeScreenBIndependent(slugPublic, next);
-      if (!next) {
-        targetedDisplayRef.current = null;
+      const next = applyScreenBModeToClientState({
+        independent: Boolean(payload?.independent),
+        displayState: displayStateRef.current,
+        targetedDisplay: targetedDisplayRef.current,
+        syncDisplayState: payload?.syncDisplayState,
+      });
+      screenBIndependentRef.current = next.independent;
+      setScreenBIndependent(next.independent);
+      writeScreenBIndependent(slugPublic, next.independent);
+      targetedDisplayRef.current = next.targetedDisplay;
+      if (next.displayState) {
+        displayStateRef.current = next.displayState;
+        setDisplayState(next.displayState);
+      }
+      if (next.independent) {
+        if (next.targetedDisplay) {
+          writeScreenBDisplayState(slugPublic, next.targetedDisplay);
+        } else if (!targetedDisplayRef.current) {
+          const stored = readScreenBDisplayState(slugPublic);
+          if (stored) {
+            targetedDisplayRef.current = stored;
+            displayStateRef.current = stored;
+            setDisplayState(stored);
+          }
+        }
+      } else {
         clearScreenBDisplayState(slugPublic);
-        void loadPoll({ silent: true });
-        void fetchEventSlugMeta({ silent: true });
-      } else if (!targetedDisplayRef.current) {
-        const stored = readScreenBDisplayState(slugPublic);
-        if (stored) {
-          targetedDisplayRef.current = stored;
-          displayStateRef.current = stored;
-          setDisplayState(stored);
+        // Filet : si syncDisplayState absent, reprendre A via meta/poll.
+        if (!normalizeScreenDisplayState(payload?.syncDisplayState)) {
+          void loadPoll({ silent: true });
+          void fetchEventSlugMeta({ silent: true });
+        }
+      }
+      // F5 : l’URL ne doit plus forcer indep=1 après un décochage régie.
+      if (typeof window !== "undefined") {
+        const patched = withScreenBIndepQuery(
+          window.location.href,
+          next.independent,
+        );
+        if (patched) {
+          window.history.replaceState(
+            window.history.state,
+            "",
+            patched,
+          );
         }
       }
     }

@@ -7478,15 +7478,78 @@ io.on("connection", (socket) => {
     if (!independent) {
       clearScreenBIndependentDisplay(eventId);
     }
-    const msg = {
-      eventId,
-      independent,
-      screenId: "b",
-    };
+    const syncFromRegie = String(payload?.syncDisplayState || "")
+      .trim()
+      .toLowerCase();
+    const syncOk = ["question", "results", "waiting", "black"].includes(
+      syncFromRegie,
+    )
+      ? syncFromRegie
+      : null;
     const roomB = roomPourScreen(eventId, "b");
-    io.to(roomB).emit("screen:b_mode", msg);
-    io.to(eventId).emit("screen:b_mode", msg);
-    io.to(roomPourEvent(eventId)).emit("screen:b_mode", msg);
+
+    const emitMode = (syncDisplayState) => {
+      const msg = {
+        eventId,
+        independent,
+        screenId: "b",
+        syncDisplayState: syncDisplayState || null,
+      };
+      io.to(roomB).emit("screen:b_mode", msg);
+      io.to(eventId).emit("screen:b_mode", msg);
+      io.to(roomPourEvent(eventId)).emit("screen:b_mode", msg);
+      // Après retour sync : push aussi un screen:update global pour que B suive A
+      // même si un client a raté syncDisplayState sur b_mode.
+      if (!independent && syncDisplayState) {
+        const type =
+          syncDisplayState === "question"
+            ? "QUESTION"
+            : syncDisplayState === "results"
+              ? "RESULTS"
+              : syncDisplayState === "black"
+                ? "BLACK"
+                : "WAITING";
+        const updateMsg = {
+          eventId,
+          type,
+          displayState: syncDisplayState,
+          voteState: null,
+          pollId: null,
+          screenId: null,
+        };
+        io.to(roomB).emit("screen:update", updateMsg);
+        io.to(eventId).emit("screen:update", updateMsg);
+        io.to(roomPourEvent(eventId)).emit("screen:update", updateMsg);
+      }
+    };
+
+    if (independent || syncOk) {
+      emitMode(syncOk);
+      return;
+    }
+
+    // Décochage sans syncDisplayState : lire A en base puis emit (filet).
+    void prisma.event
+      .findUnique({
+        where: { id: eventId },
+        select: { screenDisplayState: true, displayState: true },
+      })
+      .then((ev) => {
+        if (!ev) {
+          emitMode(null);
+          return;
+        }
+        const ds = String(ev.screenDisplayState ?? ev.displayState || "waiting")
+          .trim()
+          .toLowerCase();
+        emitMode(
+          ["question", "results", "waiting", "black"].includes(ds) ? ds : "waiting",
+        );
+      })
+      .catch((e) => {
+        console.error("screen:b_mode syncDisplay", e);
+        emitMode(null);
+      });
   });
 
   /** Régie → persistance displayState + écrans (ne modifie pas voteState) */
