@@ -33,9 +33,13 @@ import {
   screenStateTitleFontSizeClamp,
 } from "@/lib/liveStateVisual";
 import {
+  clearScreenBDisplayState,
+  readScreenBDisplayState,
   resolveScreenBIndependentMode,
+  resolveScreenClientDisplayState,
   screenFollowsMainDisplay,
   screenPayloadMatchesClient,
+  writeScreenBDisplayState,
   writeScreenBIndependent,
 } from "@/lib/screenBFollowMode";
 
@@ -142,6 +146,19 @@ export function ScreenProjection({
       ? screenId.trim().toLowerCase()
       : null;
   const screenIdLabel = normalizedScreenId ? normalizedScreenId.toUpperCase() : null;
+  /**
+   * Écran B : sync avec A (défaut) ou indépendant.
+   * URL `indep` > socket régie > localStorage > défaut sync.
+   */
+  const indepParam = searchParams?.get("indep") ?? searchParams?.get("independent");
+  const initialBMode = resolveScreenBIndependentMode({
+    slug: slugPublic,
+    searchParam: indepParam,
+  });
+  const initialBDisplay =
+    normalizedScreenId === "b" && initialBMode.independent
+      ? readScreenBDisplayState(slugPublic)
+      : null;
   const [poll, setPoll] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -154,30 +171,28 @@ export function ScreenProjection({
   );
   const [liveScene, setLiveScene] = useState(null);
   /** question | results | black | waiting — prioritaire sur liveScene legacy */
-  const [displayState, setDisplayState] = useState(null);
+  const [displayState, setDisplayState] = useState(
+    /** @type {string | null} */ (initialBDisplay),
+  );
   const [eventId, setEventId] = useState(null);
   const [resultsBarsAnimated, setResultsBarsAnimated] = useState(false);
   /** Rafraîchit l’affichage du chrono chaque seconde quand il est actif */
   const [chronoTick, setChronoTick] = useState(0);
   /** Synchro régie : affichage discret sur /screen */
   const [modeAutoProjection, setModeAutoProjection] = useState(false);
-  /**
-   * Écran B : sync avec A (défaut) ou indépendant.
-   * URL `indep` > socket régie > localStorage > défaut sync.
-   */
-  const indepParam = searchParams?.get("indep") ?? searchParams?.get("independent");
-  const initialBMode = resolveScreenBIndependentMode({
-    slug: slugPublic,
-    searchParam: indepParam,
-  });
   const [screenBIndependent, setScreenBIndependent] = useState(
     () =>
       normalizedScreenId === "b" ? initialBMode.independent : false,
   );
   const screenBIndependentRef = useRef(screenBIndependent);
   screenBIndependentRef.current = screenBIndependent;
-  /** Si un écran ciblé indépendant reçoit une commande dédiée, on évite qu'un event global l'écrase. */
-  const targetedDisplayRef = useRef(/** @type {string | null} */ (null));
+  /**
+   * Si un écran ciblé indépendant reçoit une commande dédiée, on évite qu'un event global l'écrase.
+   * Restauré depuis localStorage au F5 (repli si la mémoire process serveur est vide).
+   */
+  const targetedDisplayRef = useRef(
+    /** @type {string | null} */ (initialBDisplay),
+  );
   /** Branding salle (GET /events/slug + socket event:customization_updated) */
   const [roomCustomization, setRoomCustomization] = useState(null);
   /** Vote / auto-reveal événement quand le JSON poll n’est pas affiché (socket, meta slug). */
@@ -228,13 +243,23 @@ export function ScreenProjection({
   const applyEventSlugMeta = useCallback((meta) => {
     setEventId(meta.id);
     setLiveScene(meta.liveState ?? null);
-    setDisplayState(
+    const mainDs =
       typeof meta.screenDisplayState === "string"
         ? meta.screenDisplayState.toLowerCase()
         : typeof meta.displayState === "string"
           ? meta.displayState.toLowerCase()
-        : deriveDisplayFromLive(meta.liveState),
-    );
+          : deriveDisplayFromLive(meta.liveState);
+    const resolved = resolveScreenClientDisplayState({
+      screenId: normalizedScreenId,
+      independent: screenBIndependentRef.current,
+      mainDisplay: mainDs,
+      targetedDisplay: targetedDisplayRef.current,
+    });
+    if (resolved) {
+      setDisplayState(resolved);
+    } else if (mainDs) {
+      setDisplayState(mainDs);
+    }
     setRoomCustomization({
       description: meta.description ?? null,
       logoUrl: resolveApiAssetUrlNullable(meta.logoUrl),
@@ -277,7 +302,7 @@ export function ScreenProjection({
     } else if (String(meta.liveState || "").toLowerCase() === "finished") {
       setPollsProgress(null);
     }
-  }, []);
+  }, [normalizedScreenId]);
 
   const fetchEventSlugMeta = useCallback(
     async (opts = {}) => {
@@ -393,19 +418,23 @@ export function ScreenProjection({
           setLiveScene("results");
         }
         // Écran B sync (ou A) : suivre le display global.
-        // B indépendant avec commande ciblée : ne pas écraser.
-        const followsMain = screenFollowsMainDisplay({
+        // B indépendant avec commande ciblée / F5 : ne pas écraser.
+        const mainFromPoll =
+          typeof data.eventScreenDisplayState === "string"
+            ? data.eventScreenDisplayState.toLowerCase()
+            : typeof data.eventDisplayState === "string"
+              ? data.eventDisplayState.toLowerCase()
+              : deriveDisplayFromLive(data.eventLiveState);
+        const resolvedPollDs = resolveScreenClientDisplayState({
           screenId: normalizedScreenId,
           independent: screenBIndependentRef.current,
+          mainDisplay: mainFromPoll,
+          targetedDisplay: targetedDisplayRef.current,
         });
-        if (followsMain || !(normalizedScreenId && targetedDisplayRef.current)) {
-          if (typeof data.eventScreenDisplayState === "string") {
-            setDisplayState(data.eventScreenDisplayState.toLowerCase());
-          } else if (typeof data.eventDisplayState === "string") {
-            setDisplayState(data.eventDisplayState.toLowerCase());
-          } else {
-            setDisplayState(deriveDisplayFromLive(data.eventLiveState));
-          }
+        if (resolvedPollDs) {
+          setDisplayState(resolvedPollDs);
+        } else if (mainFromPoll) {
+          setDisplayState(mainFromPoll);
         }
         if (data.eventId) {
           setEventId(data.eventId);
@@ -455,7 +484,7 @@ export function ScreenProjection({
         }
       }
     },
-    [getPollUrl, slugPublic],
+    [getPollUrl, slugPublic, normalizedScreenId],
   );
 
   useEffect(() => {
@@ -764,13 +793,21 @@ export function ScreenProjection({
             : null;
         if (sid && ps && ps === sid && !clientFollowsMain()) {
           targetedDisplayRef.current = dsIncoming;
+          if (sid === "b") {
+            writeScreenBDisplayState(slugPublic, dsIncoming);
+          }
         } else if (!ps || clientFollowsMain()) {
           targetedDisplayRef.current = null;
+          if (sid === "b") {
+            clearScreenBDisplayState(slugPublic);
+          }
         }
       }
       const dsNow = String(payload.displayState || "").toLowerCase();
       // Refetch contenu sauf noir ; B sync se comporte comme A.
-      if (dsNow !== "black" && (!sid || clientFollowsMain())) {
+      // B indépendant : refetch aussi hors noir pour garder le QR / options à jour
+      // sans écraser le display (targetedDisplayRef protège loadPoll).
+      if (dsNow !== "black") {
         void loadPoll({ silent: true });
       }
     }
@@ -885,7 +922,15 @@ export function ScreenProjection({
       writeScreenBIndependent(slugPublic, next);
       if (!next) {
         targetedDisplayRef.current = null;
+        clearScreenBDisplayState(slugPublic);
         void loadPoll({ silent: true });
+        void fetchEventSlugMeta({ silent: true });
+      } else if (!targetedDisplayRef.current) {
+        const stored = readScreenBDisplayState(slugPublic);
+        if (stored) {
+          targetedDisplayRef.current = stored;
+          setDisplayState(stored);
+        }
       }
     }
 
@@ -1136,6 +1181,22 @@ export function ScreenProjection({
     return wrapOut(
       true,
       <main style={{ ...shell, background: "#000" }} aria-hidden />,
+      { hideStatePill: true },
+    );
+  }
+
+  /**
+   * WAITING explicite (Attente / QR) — prioritaire sur VOTING dérivé de liveScene
+   * tant que le vote reste OPEN (Screen A forçage + Screen B indépendant).
+   */
+  if (ds === "waiting") {
+    return wrapOut(
+      false,
+      <ScreenWaiting
+        shell={shell}
+        joinSlug={slugPublic}
+        pollsProgress={pollsProgress}
+      />,
       { hideStatePill: true },
     );
   }

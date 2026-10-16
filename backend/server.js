@@ -45,6 +45,11 @@ const {
   buildEventLiveUpdatedPayload,
 } = require("./lib/eventLiveSnapshot");
 const {
+  setScreenBIndependentDisplay,
+  getScreenBIndependentDisplay,
+  clearScreenBIndependentDisplay,
+} = require("./lib/screenBIndependentDisplay");
+const {
   resolveFirstPlayablePollId,
   buildStartRealEventResetPatch,
   buildStartRealPollStatusUpdates,
@@ -7379,6 +7384,37 @@ io.on("connection", (socket) => {
     socket.data.screenEventId = eventId;
     void emitScreenCountToAdmins(io, eventId);
     void emitScreenPresenceToAdmins(io, eventId, presenceId);
+    // F5 / reconnect B indépendant : rejouer le display mémorisé (mémoire process).
+    if (presenceId === "b") {
+      const stored = getScreenBIndependentDisplay(eventId);
+      if (stored) {
+        void prisma.event
+          .findUnique({
+            where: { id: eventId },
+            select: { voteState: true, activePollId: true },
+          })
+          .then((ev) => {
+            if (!ev) return;
+            const type =
+              stored === "question"
+                ? "QUESTION"
+                : stored === "results"
+                  ? "RESULTS"
+                  : stored === "black"
+                    ? "BLACK"
+                    : "WAITING";
+            socket.emit("screen:update", {
+              eventId,
+              type,
+              displayState: stored,
+              voteState: String(ev.voteState).toLowerCase(),
+              pollId: ev.activePollId,
+              screenId: "b",
+            });
+          })
+          .catch((e) => console.error("screen:join replay B display", e));
+      }
+    }
   });
 
   socket.on("screen:leave", (payload) => {
@@ -7439,6 +7475,9 @@ io.on("connection", (socket) => {
         : "";
     if (!eventId) return;
     const independent = Boolean(payload?.independent);
+    if (!independent) {
+      clearScreenBIndependentDisplay(eventId);
+    }
     const msg = {
       eventId,
       independent,
@@ -7473,10 +7512,14 @@ io.on("connection", (socket) => {
       const ev = await prisma.event.findUnique({ where: { id: eventId } });
       if (!ev) return;
       if (targetedRoom) {
+        const dsLower = String(displayState).toLowerCase();
+        if (screenId === "b") {
+          setScreenBIndependentDisplay(eventId, dsLower);
+        }
         const msg = {
           eventId,
           type,
-          displayState: String(displayState).toLowerCase(),
+          displayState: dsLower,
           voteState: String(ev.voteState).toLowerCase(),
           pollId: ev.activePollId,
           screenId,

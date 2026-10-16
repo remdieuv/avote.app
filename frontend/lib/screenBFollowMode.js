@@ -4,6 +4,29 @@
  */
 
 export const SCREEN_B_INDEPENDENT_STORAGE_PREFIX = "avote_screen_b_independent_";
+export const SCREEN_B_DISPLAY_STORAGE_PREFIX = "avote_screen_b_display_";
+
+/** @type {ReadonlySet<string>} */
+export const SCREEN_DISPLAY_STATES = new Set([
+  "question",
+  "results",
+  "waiting",
+  "black",
+]);
+
+/**
+ * @param {unknown} raw
+ * @returns {"question" | "results" | "waiting" | "black" | null}
+ */
+export function normalizeScreenDisplayState(raw) {
+  const v = String(raw ?? "")
+    .trim()
+    .toLowerCase();
+  if (SCREEN_DISPLAY_STATES.has(v)) {
+    return /** @type {"question" | "results" | "waiting" | "black"} */ (v);
+  }
+  return null;
+}
 
 /**
  * @param {string | null | undefined} slug
@@ -107,6 +130,103 @@ export function resolveScreenBIndependentMode(input = {}) {
     return { independent: true, source: "storage" };
   }
   return { independent: false, source: "default" };
+}
+
+/**
+ * @param {string | null | undefined} slug
+ */
+export function screenBDisplayStorageKey(slug) {
+  const s = String(slug || "").trim();
+  return s ? `${SCREEN_B_DISPLAY_STORAGE_PREFIX}${s}` : null;
+}
+
+/**
+ * Display indépendant B mémorisé (survit au F5 côté client).
+ * @param {string | null | undefined} slug
+ * @param {{ storage?: Storage | null }} [opts]
+ * @returns {"question" | "results" | "waiting" | "black" | null}
+ */
+export function readScreenBDisplayState(slug, opts = {}) {
+  const key = screenBDisplayStorageKey(slug);
+  if (!key) return null;
+  const storage =
+    opts.storage !== undefined
+      ? opts.storage
+      : typeof window !== "undefined"
+        ? window.localStorage
+        : null;
+  if (!storage) return null;
+  try {
+    return normalizeScreenDisplayState(storage.getItem(key));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @param {string | null | undefined} slug
+ * @param {unknown} displayState
+ * @param {{ storage?: Storage | null }} [opts]
+ */
+export function writeScreenBDisplayState(slug, displayState, opts = {}) {
+  const key = screenBDisplayStorageKey(slug);
+  const normalized = normalizeScreenDisplayState(displayState);
+  if (!key || !normalized) return false;
+  const storage =
+    opts.storage !== undefined
+      ? opts.storage
+      : typeof window !== "undefined"
+        ? window.localStorage
+        : null;
+  if (!storage) return false;
+  try {
+    storage.setItem(key, normalized);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * @param {string | null | undefined} slug
+ * @param {{ storage?: Storage | null }} [opts]
+ */
+export function clearScreenBDisplayState(slug, opts = {}) {
+  const key = screenBDisplayStorageKey(slug);
+  if (!key) return false;
+  const storage =
+    opts.storage !== undefined
+      ? opts.storage
+      : typeof window !== "undefined"
+        ? window.localStorage
+        : null;
+  if (!storage) return false;
+  try {
+    storage.removeItem(key);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Display effectif au chargement / après meta : B indépendant garde sa cible.
+ * @param {{
+ *   screenId?: string | null;
+ *   independent?: boolean;
+ *   mainDisplay?: unknown;
+ *   targetedDisplay?: unknown;
+ * }} [input]
+ * @returns {"question" | "results" | "waiting" | "black" | null}
+ */
+export function resolveScreenClientDisplayState(input = {}) {
+  const follows = screenFollowsMainDisplay({
+    screenId: input.screenId,
+    independent: input.independent,
+  });
+  const targeted = normalizeScreenDisplayState(input.targetedDisplay);
+  if (!follows && targeted) return targeted;
+  return normalizeScreenDisplayState(input.mainDisplay);
 }
 
 /**

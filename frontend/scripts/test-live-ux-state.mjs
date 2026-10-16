@@ -167,6 +167,39 @@ const cases = [
     },
     expect: LIVE_UX_STATE.WAITING,
   },
+  {
+    name: "OPEN + WAITING + liveScene voting → WAITING (Screen Attente/QR)",
+    ctx: {
+      liveScene: "voting",
+      displayState: "waiting",
+      voteState: "open",
+      pollStatus: "ACTIVE",
+      hasActivePoll: true,
+    },
+    expect: LIVE_UX_STATE.WAITING,
+  },
+  {
+    name: "OPEN + RESULTS + liveScene voting → RESULTS",
+    ctx: {
+      liveScene: "voting",
+      displayState: "results",
+      voteState: "open",
+      pollStatus: "ACTIVE",
+      hasActivePoll: true,
+    },
+    expect: LIVE_UX_STATE.RESULTS,
+  },
+  {
+    name: "OPEN + BLACK + liveScene voting → PAUSED",
+    ctx: {
+      liveScene: "voting",
+      displayState: "black",
+      voteState: "open",
+      pollStatus: "ACTIVE",
+      hasActivePoll: true,
+    },
+    expect: LIVE_UX_STATE.PAUSED,
+  },
 ];
 
 let failed = 0;

@@ -209,10 +209,14 @@ export function resolveLiveUxState(ctx) {
 
   const voteOpen = vs === "open";
   const pollActive = ps === "ACTIVE";
+  /**
+   * VOTING seulement si le display explicite est QUESTION.
+   * Ne pas laisser liveScene=voting écraser Attente/QR (WAITING) ni Noir —
+   * cas Screen A/B : vote OPEN + screenDisplayState WAITING → QR, pas la question.
+   * Sans displayState, deriveDisplayStateFromLive(voting) → question (inchangé).
+   */
   const canVote =
-    voteOpen &&
-    (ds === "question" || ls === "voting") &&
-    (ps === "" || pollActive);
+    voteOpen && ds === "question" && (ps === "" || pollActive);
   if (canVote) return LIVE_UX_STATE.VOTING;
 
   const voteClosed = vs === "closed";
