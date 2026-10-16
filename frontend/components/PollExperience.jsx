@@ -1283,6 +1283,11 @@ export function PollExperience({
 
   const isMultipleChoice = poll?.type === "MULTIPLE_CHOICE";
   const isContestEntry = String(poll?.type || "").toUpperCase() === "CONTEST_ENTRY";
+  /** Lead / Concours : autoriser un changement NON→OUI (ou inverse) tant que le vote est ouvert. */
+  const canAmendLeadContestVote =
+    !isMultipleChoice &&
+    (Boolean(poll?.leadEnabled) || isContestEntry) &&
+    voteSessionOpen;
   const formNotice = getParticipantFormNotice({
     pollType: poll?.type,
     leadEnabled: Boolean(poll?.leadEnabled),
@@ -1338,8 +1343,8 @@ export function PollExperience({
   function toggleOptionMultiple(optionId) {
     if (
       voteLockRef.current ||
-      aDejaVoteEnStockage ||
-      merciPourVote ||
+      (!canAmendLeadContestVote &&
+        (aDejaVoteEnStockage || merciPourVote)) ||
       !storageVerifie ||
       voteSubmitting
     ) {
@@ -1358,12 +1363,16 @@ export function PollExperience({
       pollStatus: poll?.status,
       liveScene,
     });
+    const amendOk =
+      !isMultipleChoice &&
+      (Boolean(poll?.leadEnabled) ||
+        String(poll?.type || "").toUpperCase() === "CONTEST_ENTRY") &&
+      sessionOuverte;
     if (
       !pollId ||
       !sessionOuverte ||
       voteLockRef.current ||
-      aDejaVoteEnStockage ||
-      merciPourVote ||
+      (!amendOk && (aDejaVoteEnStockage || merciPourVote)) ||
       !storageVerifie
     ) {
       return;
@@ -1446,12 +1455,33 @@ export function PollExperience({
           if (axes.voteState) setEventVoteStateUi(axes.voteState);
           if (axes.displayState) setEventDisplayStateUi(axes.displayState);
         }
-        setSelectedOptionId(null);
-        setSelectedOptionIds([]);
+        // Lead/Concours amendable : garder la sélection pour pouvoir modifier.
+        if (amendOk) {
+          setSelectedOptionId(optionIds[0] || null);
+          setSelectedOptionIds(optionIds);
+        } else {
+          setSelectedOptionId(null);
+          setSelectedOptionIds([]);
+        }
         setMerciPourVote(true);
         setADejaVoteEnStockage(true);
         setShowLeadForm(leadTriggered);
-        setLeadSuccess(false);
+        // Hors déclencheur : le backend a retiré le LeadCapture — reset local.
+        if (!leadTriggered) {
+          setLeadSuccess(false);
+          try {
+            if (typeof window !== "undefined") {
+              const sid = getOrCreateVoterSessionId();
+              if (sid) {
+                window.sessionStorage.removeItem(
+                  leadSubmittedStorageKey(pollId, sid),
+                );
+              }
+            }
+          } catch {
+            // ignore
+          }
+        }
         setLeadError(null);
       });
 
@@ -1544,11 +1574,15 @@ export function PollExperience({
   const votesBloques =
     roomIsFull ||
     !voteOuvert ||
-    aDejaVoteEnStockage ||
-    merciPourVote ||
+    (!canAmendLeadContestVote &&
+      (aDejaVoteEnStockage || merciPourVote)) ||
     !storageVerifie ||
     voteSubmitting;
-  const enModeDejaVote = voteOuvert && (aDejaVoteEnStockage || merciPourVote);
+  /** Mode lecture seule après vote — pas pour Lead/Concours encore ouverts. */
+  const enModeDejaVote =
+    voteOuvert &&
+    (aDejaVoteEnStockage || merciPourVote) &&
+    !canAmendLeadContestVote;
   const optionsDejaVote = useMemo(() => {
     if (!enModeDejaVote) return optionsPourVote;
     const setIds = new Set(
@@ -1571,6 +1605,25 @@ export function PollExperience({
     selectedOptionIds,
     votedOptionIdsEnStockage,
   ]);
+  const hasAlreadyVotedLeadContest =
+    canAmendLeadContestVote && (aDejaVoteEnStockage || merciPourVote);
+  const selectionChangedFromStoredVote =
+    hasAlreadyVotedLeadContest &&
+    (() => {
+      const stored = (votedOptionIdsEnStockage || []).map(String).sort();
+      const current = (
+        isMultipleChoice
+          ? selectedOptionIds
+          : selectedOptionId
+            ? [selectedOptionId]
+            : []
+      )
+        .map(String)
+        .sort();
+      if (stored.length === 0) return hasSelectionValide;
+      if (stored.length !== current.length) return true;
+      return stored.some((id, i) => id !== current[i]);
+    })();
   const isQuiz = String(poll?.type || "").toUpperCase() === "QUIZ";
   const quizRevealed = Boolean(poll?.quizRevealed);
   /** Participant : révélation + verdict uniquement en RESULTS (pas VOTING/CLOSED). */
@@ -2690,11 +2743,27 @@ export function PollExperience({
               )}
               {!enModeDejaVote ? (
                 <div style={{ marginTop: "1.15rem" }}>
+                {hasAlreadyVotedLeadContest ? (
+                  <p
+                    style={{
+                      margin: "0 0 0.65rem 0",
+                      fontSize: "0.84rem",
+                      color: palette.muted,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Tu peux modifier ta réponse tant que le vote est ouvert.
+                  </p>
+                ) : null}
                 <button
                   className="poll-live-submit"
                   type="button"
                   onClick={submitVote}
-                  disabled={votesBloques || !hasSelectionValide}
+                  disabled={
+                    votesBloques ||
+                    !hasSelectionValide ||
+                    (hasAlreadyVotedLeadContest && !selectionChangedFromStoredVote)
+                  }
                   style={{
                     width: "100%",
                     maxWidth: "22rem",
@@ -2703,24 +2772,37 @@ export function PollExperience({
                     borderRadius: "14px",
                     border: "none",
                     background:
-                      votesBloques || !hasSelectionValide
+                      votesBloques ||
+                      !hasSelectionValide ||
+                      (hasAlreadyVotedLeadContest &&
+                        !selectionChangedFromStoredVote)
                         ? isDark
                           ? "rgba(148, 163, 184, 0.35)"
                           : "#94a3b8"
                         : pollCtaGradient,
                     color: "#fff",
                     cursor:
-                      votesBloques || !hasSelectionValide
+                      votesBloques ||
+                      !hasSelectionValide ||
+                      (hasAlreadyVotedLeadContest &&
+                        !selectionChangedFromStoredVote)
                         ? "not-allowed"
                         : "pointer",
                     fontWeight: 800,
                     boxShadow:
-                      votesBloques || !hasSelectionValide
+                      votesBloques ||
+                      !hasSelectionValide ||
+                      (hasAlreadyVotedLeadContest &&
+                        !selectionChangedFromStoredVote)
                         ? "none"
                         : `0 ${Math.round(8 * pollVisualTokens.shadowScale)}px ${Math.round(30 * pollVisualTokens.shadowScale)}px rgba(0, 0, 0, ${isDark ? 0.3 : 0.2})`,
                   }}
                 >
-                  {voteSubmitting ? "Envoi…" : "Valider mon vote"}
+                  {voteSubmitting
+                    ? "Envoi…"
+                    : hasAlreadyVotedLeadContest
+                      ? "Modifier ma réponse"
+                      : "Valider mon vote"}
                 </button>
               </div>
               ) : null}

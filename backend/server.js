@@ -738,14 +738,24 @@ async function submitVote(input) {
       return { ok: false, message: "Ce sondage n'est pas ouvert au vote." };
     }
 
-    const existing = await tx.vote.findFirst({
+    const existingVotes = await tx.vote.findMany({
       where: {
         pollId: input.pollId,
         voterSessionId: input.voterSessionId,
       },
-      select: { id: true },
+      select: { id: true, optionId: true },
     });
-    if (existing) {
+    const hasExistingVote = existingVotes.length > 0;
+    /**
+     * Lead / Concours : permettre de remplacer un NON (ou autre) par OUI tant que
+     * le vote est OPEN — une seule réponse active par session, pas de doublon.
+     */
+    const canReplaceLeadContestVote =
+      hasExistingVote &&
+      poll.type !== "MULTIPLE_CHOICE" &&
+      (Boolean(poll.leadEnabled) || String(poll.type || "").toUpperCase() === "CONTEST_ENTRY");
+
+    if (hasExistingVote && !canReplaceLeadContestVote) {
       return {
         ok: false,
         alreadyVoted: true,
@@ -768,6 +778,14 @@ async function submitVote(input) {
         ok: false,
         message: "Une seule réponse est autorisée pour ce sondage.",
       };
+    }
+
+    const sameAsExisting =
+      hasExistingVote &&
+      existingVotes.length === cleaned.length &&
+      cleaned.every((id) => existingVotes.some((v) => v.optionId === id));
+    if (sameAsExisting) {
+      return { ok: true, unchanged: true };
     }
 
     const participantExistsOnEvent = await tx.vote.findFirst({
@@ -800,6 +818,14 @@ async function submitVote(input) {
     }
 
     try {
+      if (canReplaceLeadContestVote) {
+        await tx.vote.deleteMany({
+          where: {
+            pollId: input.pollId,
+            voterSessionId: input.voterSessionId,
+          },
+        });
+      }
       await tx.vote.createMany({
         data: cleaned.map((optionId) => ({
           pollId: input.pollId,
@@ -807,6 +833,20 @@ async function submitVote(input) {
           voterSessionId: input.voterSessionId,
         })),
       });
+      // OUI → NON (ou hors déclencheur) : retirer le lead pour garder l’éligibilité cohérente.
+      if (
+        Boolean(poll.leadEnabled) &&
+        typeof poll.leadTriggerOptionId === "string" &&
+        poll.leadTriggerOptionId &&
+        !cleaned.includes(poll.leadTriggerOptionId)
+      ) {
+        await tx.leadCapture.deleteMany({
+          where: {
+            pollId: input.pollId,
+            voterSessionId: input.voterSessionId,
+          },
+        });
+      }
     } catch (err) {
       if (err?.code === "P2002") {
         return {
@@ -818,7 +858,7 @@ async function submitVote(input) {
       throw err;
     }
 
-    return { ok: true };
+    return { ok: true, replaced: canReplaceLeadContestVote };
   });
 }
 
@@ -4526,6 +4566,8 @@ app.post("/polls", requireAuth, async (req, res) => {
             liveState: "WAITING",
             voteState: "CLOSED",
             displayState: "WAITING",
+            autoReveal: true,
+            autoRevealDelaySec: 5,
           },
         });
 
@@ -4664,6 +4706,8 @@ app.post("/polls", requireAuth, async (req, res) => {
           liveState: "WAITING",
           voteState: "CLOSED",
           displayState: "WAITING",
+          autoReveal: true,
+          autoRevealDelaySec: 5,
         },
       });
 

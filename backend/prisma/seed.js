@@ -57,6 +57,8 @@ async function main() {
       status: "PUBLISHED",
       liveState: "VOTING",
       userId: owner.id,
+      autoReveal: true,
+      autoRevealDelaySec: 5,
     },
   });
 

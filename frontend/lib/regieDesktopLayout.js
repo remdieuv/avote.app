@@ -199,7 +199,11 @@ export function getRegiePrimaryLiveAction(input = {}) {
   // CLOSED après Fermer (poll.status CLOSED) — parcours Afficher / Tirage / Suivante
   if (ps === "CLOSED") {
     if (contest) return "draw";
-    if (lead) return "next";
+    // Dernière question Lead : Terminer (pas « Question suivante » ambiguë).
+    if (lead) {
+      if (input.hasNextPoll === false) return "finish";
+      return "next";
+    }
     return "show-results";
   }
 
@@ -211,7 +215,10 @@ export function getRegiePrimaryLiveAction(input = {}) {
   // Fallback vote fermé sans statut clair
   if (vs === "closed" || vs === "") {
     if (contest) return "draw";
-    if (lead) return "next";
+    if (lead) {
+      if (input.hasNextPoll === false) return "finish";
+      return "next";
+    }
     return "show-results";
   }
   return "open";

@@ -128,6 +128,18 @@ test("page.jsx : bandeau terminé via getRegieConsultBannerState", () => {
   assert.ok(src.includes("consultBannerState.showReturnToLive"));
 });
 
+test("page.jsx : Pilotage terminé centré + B Résultats en live", () => {
+  const src = readFileSync(
+    join(here, "../app/admin/event/[eventId]/page.jsx"),
+    "utf8",
+  );
+  assert.ok(src.includes("ÉVÉNEMENT TERMINÉ"));
+  assert.ok(src.includes("Merci pour votre participation."));
+  assert.ok(src.includes("Résultats en live"));
+  assert.ok(src.includes("formatWinnerFullName"));
+  assert.ok(src.includes("activeQuizCorrectnessSummary"));
+});
+
 test("Statuts métier carte question", () => {
   assert.equal(
     getRegiePollStatusLabel({ pollStatus: "DRAFT", isActive: false }),
@@ -280,9 +292,23 @@ test("CTA primaire — CLOSED après Fermer → Afficher / Tirage / Suivante", (
       pollStatus: "CLOSED",
       pollType: "SINGLE_CHOICE",
       leadEnabled: true,
+      hasNextPoll: true,
     }),
     "next",
-    "Lead CLOSED → Suivante (pas Afficher)",
+    "Lead CLOSED avec suivante → Suivante (pas Afficher)",
+  );
+  assert.equal(
+    getRegiePrimaryLiveAction({
+      hasActivePoll: true,
+      voteState: "closed",
+      displayState: "waiting",
+      pollStatus: "CLOSED",
+      pollType: "SINGLE_CHOICE",
+      leadEnabled: true,
+      hasNextPoll: false,
+    }),
+    "finish",
+    "Lead CLOSED dernière question → Terminer (pas Question suivante)",
   );
   assert.equal(
     getRegiePrimaryLiveAction({

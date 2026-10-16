@@ -384,30 +384,23 @@ function formatContestDrawSummary(summary, poll) {
   return `Gagnants tirés : ${Math.max(0, winners)} / ${quota}`;
 }
 
-function formatWinnerName(winner) {
+/** Régie organisateur — identité complète collectée (pas de masquage). */
+function formatWinnerFullName(winner) {
   const first = String(winner?.firstName || "").trim();
   const last = String(winner?.lastName || "").trim();
-  if (first && last) return `${first} ${last[0].toUpperCase()}.`;
+  if (first && last) return `${first} ${last}`;
   if (first) return first;
+  if (last) return last;
   return "Participant";
 }
 
-function maskPhone(phoneRaw) {
-  const phone = String(phoneRaw || "").trim();
-  if (!phone) return "Téléphone indisponible";
-  const digits = phone.replace(/\D/g, "");
-  if (digits.length < 4) return phone;
-  const start = phone.slice(0, 2);
-  const end = digits.slice(-2);
-  return `${start} XX XX XX ${end}`;
-}
-
-function maskEmail(emailRaw) {
-  const email = String(emailRaw || "").trim();
-  if (!email || !email.includes("@")) return null;
-  const [local, domain] = email.split("@");
-  const localMask = local.length <= 2 ? `${local}***` : `${local.slice(0, 2)}***`;
-  return `${localMask}@${domain || ""}`;
+function formatWinnerRegieContact(winner) {
+  const parts = [];
+  const phone = String(winner?.phone || "").trim();
+  const email = String(winner?.email || "").trim();
+  if (phone) parts.push(phone);
+  if (email) parts.push(email);
+  return parts.join(" · ");
 }
 
 function PollCard({
@@ -1967,7 +1960,7 @@ function BlocProjectionEcran({
                   ...secDisabled(busy || !activePollId),
                 }}
               >
-                Résultats
+                Résultats en live
               </button>
               <button
                 type="button"
@@ -3733,7 +3726,7 @@ const btnGhost = {
 /**
  * Liste stats régie : barres horizontales, ordre stable (pas de tri votes).
  * @param {{
- *   options: Array<{ id: string; label: string; voteCount: number; pct: number; showBonneReponse?: boolean }>;
+ *   options: Array<{ id: string; label: string; voteCount: number; pct: number; showBonneReponse?: boolean; showMauvaiseReponse?: boolean }>;
  *   keyPrefix?: string;
  * }} props
  */
@@ -3772,6 +3765,21 @@ function RegieOptionStatsList({ options, keyPrefix = "opt-stat" }) {
                     }}
                   >
                     Bonne réponse
+                  </span>
+                ) : null}
+                {opt.showMauvaiseReponse ? (
+                  <span
+                    style={{
+                      marginLeft: "0.4rem",
+                      fontSize: "0.66rem",
+                      fontWeight: 800,
+                      color: "#9f1239",
+                      background: "#ffe4e6",
+                      borderRadius: "999px",
+                      padding: "0.1rem 0.4rem",
+                    }}
+                  >
+                    Mauvaise
                   </span>
                 ) : null}
               </span>
@@ -6280,7 +6288,6 @@ export default function RegieEventPage() {
   );
   const liveResponsesOptions = useMemo(() => {
     const opts = normalizePollOptions(activePoll?.options);
-    const quizRevealed = Boolean(activePoll?.quizRevealed);
     const isQuiz = String(activePoll?.type || "").toUpperCase() === "QUIZ";
     const totalVotesSafe = Math.max(
       0,
@@ -6305,7 +6312,9 @@ export default function RegieEventPage() {
           label: String(o?.label || `Option ${i + 1}`),
           voteCount,
           pct: Math.max(0, Math.min(100, pct)),
-          showBonneReponse: isQuiz && quizRevealed && isCorrect,
+          // Régie owner : isCorrect déjà dans GET — distinguer sans attendre le reveal public.
+          showBonneReponse: isQuiz && isCorrect,
+          showMauvaiseReponse: isQuiz && !isCorrect,
         };
       })
       .sort((a, b) => b.voteCount - a.voteCount);
@@ -7054,7 +7063,6 @@ export default function RegieEventPage() {
   const selectedConsultOptions = useMemo(() => {
     if (!selectedPoll) return [];
     const opts = normalizePollOptions(selectedPoll?.options);
-    const quizRevealed = Boolean(selectedPoll?.quizRevealed);
     const isQuiz = String(selectedPoll?.type || "").toUpperCase() === "QUIZ";
     const totalVotesSafe = Math.max(
       0,
@@ -7073,12 +7081,14 @@ export default function RegieEventPage() {
           : totalVotesSafe > 0
             ? (voteCount / totalVotesSafe) * 100
             : 0;
+      const isCorrect = Boolean(o?.isCorrect);
       return {
         id: String(o?.id || i),
         label: String(o?.label || `Option ${i + 1}`),
         voteCount,
         pct: Math.max(0, Math.min(100, pct)),
-        showBonneReponse: isQuiz && quizRevealed && Boolean(o?.isCorrect),
+        showBonneReponse: isQuiz && isCorrect,
+        showMauvaiseReponse: isQuiz && !isCorrect,
       };
     });
   }, [selectedPoll]);
@@ -7087,7 +7097,6 @@ export default function RegieEventPage() {
   const activePilotageStatsOptions = useMemo(() => {
     if (!activePoll) return [];
     const opts = normalizePollOptions(activePoll?.options);
-    const quizRevealed = Boolean(activePoll?.quizRevealed);
     const isQuiz = String(activePoll?.type || "").toUpperCase() === "QUIZ";
     const totalVotesSafe = Math.max(
       0,
@@ -7111,14 +7120,30 @@ export default function RegieEventPage() {
         label: String(o?.label || `Option ${i + 1}`),
         voteCount,
         pct: Math.max(0, Math.min(100, pct)),
-        showBonneReponse: isQuiz && quizRevealed && Boolean(o?.isCorrect),
+        showBonneReponse: isQuiz && Boolean(o?.isCorrect),
+        showMauvaiseReponse: isQuiz && !Boolean(o?.isCorrect),
       };
     });
   }, [activePoll]);
 
-  /** Libellé régie après révélation publique uniquement. */
+  /** Agrégat bonnes / mauvaises réponses (régie, sans identité participant). */
+  const activeQuizCorrectnessSummary = useMemo(() => {
+    if (!isQuizPoll(activePoll)) return null;
+    const opts = normalizePollOptions(activePoll?.options);
+    let correct = 0;
+    let incorrect = 0;
+    for (const o of opts) {
+      const n = optionVoteCount(o);
+      if (Boolean(o?.isCorrect)) correct += n;
+      else incorrect += n;
+    }
+    if (correct + incorrect < 1) return null;
+    return { correct, incorrect };
+  }, [activePoll]);
+
+  /** Libellé régie dès que la bonne réponse est connue côté owner. */
   const activeQuizBonneReponseLabel = useMemo(() => {
-    if (!isQuizPoll(activePoll) || !activePoll?.quizRevealed) return null;
+    if (!isQuizPoll(activePoll)) return null;
     const saved = getSavedQuizCorrectAnswer(activePoll);
     return saved.hasSaved ? saved.label : null;
   }, [activePoll]);
@@ -8679,17 +8704,19 @@ export default function RegieEventPage() {
                 >
                   {activeContestWinnersOnly.map((w) => (
                     <option key={w.id} value={w.id}>
-                      {formatWinnerName(w)}
-                      {w.phone ? ` — ${maskPhone(w.phone)}` : ""}
+                      {formatWinnerFullName(w)}
+                      {formatWinnerRegieContact(w)
+                        ? ` — ${formatWinnerRegieContact(w)}`
+                        : ""}
                     </option>
                   ))}
                 </select>
               </label>
             ) : activeContestWinnersOnly[0] ? (
               <p style={{ margin: "0.65rem 0 0 0", fontSize: "0.88rem", color: "#111827", fontWeight: 700 }}>
-                {formatWinnerName(activeContestWinnersOnly[0])}
-                {activeContestWinnersOnly[0].phone
-                  ? ` — ${maskPhone(activeContestWinnersOnly[0].phone)}`
+                {formatWinnerFullName(activeContestWinnersOnly[0])}
+                {formatWinnerRegieContact(activeContestWinnersOnly[0])
+                  ? ` — ${formatWinnerRegieContact(activeContestWinnersOnly[0])}`
                   : ""}
               </p>
             ) : (
@@ -9419,21 +9446,59 @@ export default function RegieEventPage() {
                   </p>
                 </div>
 
-                {selectedIsConsultOnly ? (
+                {eventFinished ? (
+                  <div
+                    style={{
+                      marginTop: "0.95rem",
+                      padding: desktop ? "2.5rem 1.5rem" : "2rem 1.15rem",
+                      borderRadius: "20px",
+                      border: "1px solid rgba(148, 163, 184, 0.35)",
+                      background:
+                        "linear-gradient(180deg, rgba(248, 250, 252, 0.98) 0%, rgba(255,255,255,0.99) 100%)",
+                      boxShadow: "0 18px 40px rgba(15, 23, 42, 0.05)",
+                      display: "grid",
+                      placeItems: "center",
+                      textAlign: "center",
+                      gap: "0.65rem",
+                      minHeight: desktop ? "14rem" : "11rem",
+                      minWidth: 0,
+                    }}
+                  >
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: desktop ? "1.65rem" : "1.35rem",
+                        fontWeight: 900,
+                        letterSpacing: "0.06em",
+                        textTransform: "uppercase",
+                        color: "#0f172a",
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      ÉVÉNEMENT TERMINÉ
+                    </p>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: desktop ? "1.05rem" : "0.95rem",
+                        fontWeight: 600,
+                        color: "#64748b",
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      Merci pour votre participation.
+                    </p>
+                  </div>
+                ) : selectedIsConsultOnly ? (
                   <div
                     style={{
                       marginTop: "0.85rem",
                       padding: "0.95rem 1rem",
                       borderRadius: "18px",
-                      border: eventFinished
-                        ? "1px solid rgba(148, 163, 184, 0.35)"
-                        : "1px solid rgba(245, 158, 11, 0.35)",
-                      background: eventFinished
-                        ? "linear-gradient(180deg, rgba(248, 250, 252, 0.98) 0%, rgba(255,255,255,0.99) 100%)"
-                        : "linear-gradient(180deg, rgba(255, 251, 235, 0.98) 0%, rgba(255,255,255,0.99) 100%)",
-                      boxShadow: eventFinished
-                        ? "0 12px 28px rgba(15, 23, 42, 0.04)"
-                        : "0 12px 28px rgba(180, 83, 9, 0.06)",
+                      border: "1px solid rgba(245, 158, 11, 0.35)",
+                      background:
+                        "linear-gradient(180deg, rgba(255, 251, 235, 0.98) 0%, rgba(255,255,255,0.99) 100%)",
+                      boxShadow: "0 12px 28px rgba(180, 83, 9, 0.06)",
                       display: "grid",
                       gap: "0.7rem",
                     }}
@@ -9443,7 +9508,7 @@ export default function RegieEventPage() {
                         margin: 0,
                         fontSize: "0.86rem",
                         fontWeight: 700,
-                        color: eventFinished ? "#334155" : "#92400e",
+                        color: "#92400e",
                         lineHeight: 1.4,
                       }}
                     >
@@ -9557,6 +9622,20 @@ export default function RegieEventPage() {
                           }}
                         >
                           Bonne réponse : {activeQuizBonneReponseLabel}
+                        </p>
+                      ) : null}
+                      {activeQuizCorrectnessSummary ? (
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "0.82rem",
+                            fontWeight: 700,
+                            color: "#475569",
+                          }}
+                        >
+                          Participants — bonnes :{" "}
+                          {activeQuizCorrectnessSummary.correct} · mauvaises :{" "}
+                          {activeQuizCorrectnessSummary.incorrect}
                         </p>
                       ) : null}
                       <p
@@ -10119,6 +10198,21 @@ export default function RegieEventPage() {
                                   Bonne réponse
                                 </span>
                               ) : null}
+                              {opt.showMauvaiseReponse ? (
+                                <span
+                                  style={{
+                                    marginLeft: "0.4rem",
+                                    fontSize: "0.66rem",
+                                    fontWeight: 800,
+                                    color: "#9f1239",
+                                    background: "#ffe4e6",
+                                    borderRadius: "999px",
+                                    padding: "0.1rem 0.4rem",
+                                  }}
+                                >
+                                  Mauvaise
+                                </span>
+                              ) : null}
                             </span>
                             <span style={{ fontSize: "0.74rem", fontWeight: 800, color: "#334155" }}>
                               {opt.voteCount} · {Number(opt.pct).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}%
@@ -10272,6 +10366,21 @@ export default function RegieEventPage() {
                                   }}
                                 >
                                   Bonne réponse
+                                </span>
+                              ) : null}
+                              {opt.showMauvaiseReponse ? (
+                                <span
+                                  style={{
+                                    marginLeft: "0.35rem",
+                                    fontSize: "0.64rem",
+                                    fontWeight: 800,
+                                    color: "#9f1239",
+                                    background: "#ffe4e6",
+                                    borderRadius: "999px",
+                                    padding: "0.08rem 0.35rem",
+                                  }}
+                                >
+                                  Mauvaise
                                 </span>
                               ) : null}
                             </span>
@@ -10528,7 +10637,7 @@ export default function RegieEventPage() {
                       color: "#111827",
                     }}
                   >
-                    {contestDrawResult.winner?.firstName || "Participant"}
+                    {formatWinnerFullName(contestDrawResult.winner)}
                   </p>
                   <p
                     style={{
@@ -10537,10 +10646,8 @@ export default function RegieEventPage() {
                       color: "#4b5563",
                     }}
                   >
-                    {contestDrawResult.winner?.phone || "Téléphone indisponible"}
-                    {contestDrawResult.winner?.email
-                      ? ` · ${contestDrawResult.winner.email}`
-                      : ""}
+                    {formatWinnerRegieContact(contestDrawResult.winner) ||
+                      "Coordonnées indisponibles"}
                   </p>
                 </div>
               ) : null}
@@ -10591,8 +10698,12 @@ export default function RegieEventPage() {
                           lineHeight: 1.35,
                         }}
                       >
-                        {formatWinnerName(winner)} — {maskPhone(winner.phone)}
-                        {maskEmail(winner.email) ? ` · ${maskEmail(winner.email)}` : ""}
+                        <span style={{ display: "block" }}>
+                          {formatWinnerFullName(winner)}
+                          {formatWinnerRegieContact(winner)
+                            ? ` — ${formatWinnerRegieContact(winner)}`
+                            : ""}
+                        </span>
                         <span
                           style={{
                             marginLeft: "0.4rem",
