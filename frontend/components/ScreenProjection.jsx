@@ -32,6 +32,12 @@ import {
   screenShellTopBorderStyle,
   screenStateTitleFontSizeClamp,
 } from "@/lib/liveStateVisual";
+import {
+  resolveScreenBIndependentMode,
+  screenFollowsMainDisplay,
+  screenPayloadMatchesClient,
+  writeScreenBIndependent,
+} from "@/lib/screenBFollowMode";
 
 /** @param {Record<string, unknown> | null | undefined} tm */
 function chronoRestantSecondes(tm) {
@@ -155,7 +161,22 @@ export function ScreenProjection({
   const [chronoTick, setChronoTick] = useState(0);
   /** Synchro régie : affichage discret sur /screen */
   const [modeAutoProjection, setModeAutoProjection] = useState(false);
-  /** Si un écran ciblé reçoit une commande dédiée, on évite qu'un event global l'écrase. */
+  /**
+   * Écran B : sync avec A (défaut) ou indépendant.
+   * URL `indep` > socket régie > localStorage > défaut sync.
+   */
+  const indepParam = searchParams?.get("indep") ?? searchParams?.get("independent");
+  const initialBMode = resolveScreenBIndependentMode({
+    slug: slugPublic,
+    searchParam: indepParam,
+  });
+  const [screenBIndependent, setScreenBIndependent] = useState(
+    () =>
+      normalizedScreenId === "b" ? initialBMode.independent : false,
+  );
+  const screenBIndependentRef = useRef(screenBIndependent);
+  screenBIndependentRef.current = screenBIndependent;
+  /** Si un écran ciblé indépendant reçoit une commande dédiée, on évite qu'un event global l'écrase. */
   const targetedDisplayRef = useRef(/** @type {string | null} */ (null));
   /** Branding salle (GET /events/slug + socket event:customization_updated) */
   const [roomCustomization, setRoomCustomization] = useState(null);
@@ -371,9 +392,13 @@ export function ScreenProjection({
         } else {
           setLiveScene("results");
         }
-        // Sur un écran ciblé (sid), ne pas écraser l'état piloté manuellement
-        // avec le displayState global venant du fetch.
-        if (!(normalizedScreenId && targetedDisplayRef.current)) {
+        // Écran B sync (ou A) : suivre le display global.
+        // B indépendant avec commande ciblée : ne pas écraser.
+        const followsMain = screenFollowsMainDisplay({
+          screenId: normalizedScreenId,
+          independent: screenBIndependentRef.current,
+        });
+        if (followsMain || !(normalizedScreenId && targetedDisplayRef.current)) {
           if (typeof data.eventScreenDisplayState === "string") {
             setDisplayState(data.eventScreenDisplayState.toLowerCase());
           } else if (typeof data.eventDisplayState === "string") {
@@ -695,15 +720,36 @@ export function ScreenProjection({
     }
 
     function payloadMatchesScreen(payloadScreenId) {
-      const ps =
-        typeof payloadScreenId === "string" && payloadScreenId.trim()
-          ? payloadScreenId.trim().toLowerCase()
-          : null;
-      // Écran ciblé (ex: sid=B) : ignore les commandes globales sans screenId.
-      if (sid && !ps) return false;
-      if (!ps) return true;
-      if (!sid) return false;
-      return ps === sid;
+      return screenPayloadMatchesClient({
+        localScreenId: sid,
+        payloadScreenId,
+        independent: screenBIndependentRef.current,
+      });
+    }
+
+    function applyMainDisplayFromLive(payload) {
+      if (typeof payload?.screenDisplayState === "string") {
+        setDisplayState(payload.screenDisplayState.toLowerCase());
+      } else if (typeof payload?.displayState === "string") {
+        setDisplayState(payload.displayState.toLowerCase());
+      } else if (payload?.liveState != null) {
+        setDisplayState(deriveDisplayFromLive(payload.liveState));
+      }
+    }
+
+    function applyMainDisplayFromPoll(data) {
+      if (typeof data?.eventScreenDisplayState === "string") {
+        setDisplayState(data.eventScreenDisplayState.toLowerCase());
+      } else if (typeof data?.eventDisplayState === "string") {
+        setDisplayState(data.eventDisplayState.toLowerCase());
+      }
+    }
+
+    function clientFollowsMain() {
+      return screenFollowsMainDisplay({
+        screenId: sid,
+        independent: screenBIndependentRef.current,
+      });
     }
 
     function onScreenUpdate(payload) {
@@ -714,18 +760,17 @@ export function ScreenProjection({
         setDisplayState(dsIncoming);
         const ps =
           typeof payload.screenId === "string" && payload.screenId.trim()
-            ? payload.screenId.trim()
+            ? payload.screenId.trim().toLowerCase()
             : null;
-        if (sid && ps && ps === sid) {
+        if (sid && ps && ps === sid && !clientFollowsMain()) {
           targetedDisplayRef.current = dsIncoming;
-        } else if (!ps) {
+        } else if (!ps || clientFollowsMain()) {
           targetedDisplayRef.current = null;
         }
       }
       const dsNow = String(payload.displayState || "").toLowerCase();
-      // Pour un écran ciblé, un refetch global réécrase l'état séparé.
-      // On évite donc le loadPoll automatique sur les updates ciblées.
-      if (dsNow !== "black" && !sid) {
+      // Refetch contenu sauf noir ; B sync se comporte comme A.
+      if (dsNow !== "black" && (!sid || clientFollowsMain())) {
         void loadPoll({ silent: true });
       }
     }
@@ -754,14 +799,8 @@ export function ScreenProjection({
       }
 
       setLiveScene(payload.liveState ?? null);
-      if (!sid) {
-        if (typeof payload.screenDisplayState === "string") {
-          setDisplayState(payload.screenDisplayState.toLowerCase());
-        } else if (typeof payload.displayState === "string") {
-          setDisplayState(payload.displayState.toLowerCase());
-        } else {
-          setDisplayState(deriveDisplayFromLive(payload.liveState));
-        }
+      if (clientFollowsMain()) {
+        applyMainDisplayFromLive(payload);
       }
       // Progression Question x/y (pollsProgress) — refetch meta, pas un 2e socket.
       void fetchEventSlugMeta({ silent: true });
@@ -771,12 +810,8 @@ export function ScreenProjection({
         if (payload.poll.eventLiveState) {
           setLiveScene(payload.poll.eventLiveState);
         }
-        if (!sid) {
-          if (typeof payload.poll.eventScreenDisplayState === "string") {
-            setDisplayState(payload.poll.eventScreenDisplayState.toLowerCase());
-          } else if (typeof payload.poll.eventDisplayState === "string") {
-            setDisplayState(payload.poll.eventDisplayState.toLowerCase());
-          }
+        if (clientFollowsMain()) {
+          applyMainDisplayFromPoll(payload.poll);
         }
         setError(null);
         setNoPollFromHttp404(false);
@@ -810,12 +845,8 @@ export function ScreenProjection({
       if (data.eventLiveState) {
         setLiveScene(data.eventLiveState);
       }
-      if (!sid) {
-        if (typeof data.eventScreenDisplayState === "string") {
-          setDisplayState(data.eventScreenDisplayState.toLowerCase());
-        } else if (typeof data.eventDisplayState === "string") {
-          setDisplayState(data.eventDisplayState.toLowerCase());
-        }
+      if (clientFollowsMain()) {
+        applyMainDisplayFromPoll(data);
       }
       if (typeof data.eventVoteState === "string" && data.eventVoteState.trim()) {
         setEventVoteState(data.eventVoteState.toLowerCase());
@@ -845,6 +876,19 @@ export function ScreenProjection({
       setModeAutoProjection(Boolean(payload?.enabled));
     }
 
+    function onScreenBMode(payload) {
+      if (!eid || String(payload?.eventId) !== String(eid)) return;
+      if (sid !== "b") return;
+      const next = Boolean(payload?.independent);
+      setScreenBIndependent(next);
+      screenBIndependentRef.current = next;
+      writeScreenBIndependent(slugPublic, next);
+      if (!next) {
+        targetedDisplayRef.current = null;
+        void loadPoll({ silent: true });
+      }
+    }
+
     function onCustomizationUpdated(payload) {
       if (!payload?.eventId || String(payload.eventId) !== String(eid)) {
         return;
@@ -856,6 +900,7 @@ export function ScreenProjection({
     socket.on("poll_updated", onPollUpdated);
     socket.on("screen:update", onScreenUpdate);
     socket.on("screen:auto_rotate", onScreenAutoRotate);
+    socket.on("screen:b_mode", onScreenBMode);
     socket.on("event:customization_updated", onCustomizationUpdated);
 
     return () => {
@@ -869,10 +914,11 @@ export function ScreenProjection({
       socket.off("poll_updated", onPollUpdated);
       socket.off("screen:update", onScreenUpdate);
       socket.off("screen:auto_rotate", onScreenAutoRotate);
+      socket.off("screen:b_mode", onScreenBMode);
       socket.off("event:customization_updated", onCustomizationUpdated);
       socket.disconnect();
     };
-  }, [eventId, pollId, normalizedScreenId, loadPoll, fetchEventSlugMeta]);
+  }, [eventId, pollId, normalizedScreenId, loadPoll, fetchEventSlugMeta, slugPublic]);
 
   const resultsVoteSignature =
     ds === "results" && poll

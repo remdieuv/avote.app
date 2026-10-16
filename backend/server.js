@@ -7428,6 +7428,28 @@ io.on("connection", (socket) => {
     io.to(roomPourEvent(eventId)).emit("screen:auto_rotate", msg);
   });
 
+  /**
+   * Régie → mode sync/indépendant de l’écran B (pas de colonne DB V1).
+   * Relais socket pour multi-navigateurs ; clients B mémorisent aussi en localStorage.
+   */
+  socket.on("screen:b_mode", (payload) => {
+    const eventId =
+      payload && typeof payload.eventId === "string"
+        ? payload.eventId.trim()
+        : "";
+    if (!eventId) return;
+    const independent = Boolean(payload?.independent);
+    const msg = {
+      eventId,
+      independent,
+      screenId: "b",
+    };
+    const roomB = roomPourScreen(eventId, "b");
+    io.to(roomB).emit("screen:b_mode", msg);
+    io.to(eventId).emit("screen:b_mode", msg);
+    io.to(roomPourEvent(eventId)).emit("screen:b_mode", msg);
+  });
+
   /** Régie → persistance displayState + écrans (ne modifie pas voteState) */
   socket.on("screen:action", async (payload) => {
     const eventId =

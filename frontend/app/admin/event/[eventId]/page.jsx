@@ -48,6 +48,11 @@ import {
   getRegieIdleProjectionHint,
 } from "@/lib/regieProjectionLabels";
 import {
+  readScreenBIndependent,
+  shouldShowScreenBDisplayGap,
+  writeScreenBIndependent,
+} from "@/lib/screenBFollowMode";
+import {
   CONTEST_WINNER_STATUS_REPLACED,
   canOfferContestWinnerReplace,
   filterActiveContestWinners,
@@ -1540,6 +1545,8 @@ function RegieAutoRotatePanel({
  *   screenMainConnected: boolean;
  *   screenBConnected: boolean;
  *   screenBDisplayState?: string | null;
+ *   screenBIndependent?: boolean;
+ *   onScreenBIndependentChange?: (v: boolean) => void;
  *   desktop: boolean;
  *   chronoSection?: import("react").ReactNode;
  *   autoRotate: boolean;
@@ -1564,6 +1571,8 @@ function BlocProjectionEcran({
   screenMainConnected,
   screenBConnected,
   screenBDisplayState = null,
+  screenBIndependent = false,
+  onScreenBIndependentChange = null,
   desktop,
   chronoSection = null,
   autoRotate,
@@ -1576,13 +1585,8 @@ function BlocProjectionEcran({
   activePollType = null,
   activePollLeadEnabled = null,
 }) {
-  const [clientPret, setClientPret] = useState(false);
   const [projectionMode, setProjectionMode] = useState("standard");
-  const [copiedScreenId, setCopiedScreenId] = useState(null);
 
-  useEffect(() => {
-    if (typeof window !== "undefined") setClientPret(true);
-  }, []);
   useEffect(() => {
     if (typeof window === "undefined" || !slug) return;
     const raw = window.localStorage.getItem(`avote_projection_mode_${slug}`);
@@ -1597,10 +1601,6 @@ function BlocProjectionEcran({
     }
   }, [slug]);
 
-  const enc = encodeURIComponent(slug);
-  const pathScreen = `/screen/${enc}?pm=${encodeURIComponent(projectionMode)}`;
-  const pathScreenById = (id) =>
-    `/screen/${enc}?pm=${encodeURIComponent(projectionMode)}&sid=${encodeURIComponent(id)}`;
   const projectionModeLabel =
     projectionMode === "qr_fullscreen"
       ? "QR plein écran"
@@ -1628,60 +1628,33 @@ function BlocProjectionEcran({
     }
   }
 
-  function ouvrirEcran() {
-    const url = lienDiffusionAbsolu(pathScreen);
-    if (url) window.open(url, "_blank", "noopener,noreferrer");
-  }
-  async function copierLienEcranStandard() {
-    const url = lienDiffusionAbsolu(pathScreen);
-    if (!url) return;
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopiedScreenId("standard");
-      window.setTimeout(() => setCopiedScreenId(null), 1800);
-    } catch {
-      // ignore
-    }
-  }
-  async function copierLienEcranCible(id) {
-    const url = lienDiffusionAbsolu(pathScreenById(id));
-    if (!url) return;
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopiedScreenId(id);
-      window.setTimeout(() => setCopiedScreenId(null), 1800);
-    } catch {
-      // ignore
-    }
-  }
-
   const d = String(displayStateProp || deriveRegieDisplayFallback(liveState)).toLowerCase();
   const ls = String(liveState || "").toLowerCase();
   /** Aligné sur le serveur — évite un bouton « noir » désynchronisé après refresh */
   const affichageNoir = d === "black" || ls === "paused";
   const statutEcranPrincipal = screenMainConnected
-    ? "🟢 Écran principal connecté"
-    : "🔴 Écran principal hors ligne";
-  const statutEcranB = screenBConnected
-    ? "🟢 Écran B connecté"
-    : "🔴 Écran B non connecté";
+    ? "Connecté"
+    : "Hors ligne";
+  const statutEcranB = screenBConnected ? "Connecté" : "Non connecté";
   const statutEcran =
     !screenMainConnected && !screenBConnected
-      ? "🔴 Aucun écran connecté"
+      ? "Aucun écran connecté"
       : screenMainConnected && screenBConnected
-        ? "🟢 Écran principal et écran B connectés"
+        ? "Écran principal et écran B connectés"
         : screenMainConnected
-          ? statutEcranPrincipal
-          : statutEcranB;
+          ? "Écran principal connecté"
+          : "Écran B connecté";
   const regiePollContext = {
     pollType: activePollType,
     leadEnabled: activePollLeadEnabled,
   };
   const affichageStandardLabel = getRegieDisplayStateLabel(d, regiePollContext);
   const ecranBDisplayLower = String(screenBDisplayState || "").toLowerCase();
-  const affichageBLabel = screenBConnected
-    ? getRegieDisplayStateLabel(ecranBDisplayLower, regiePollContext)
-    : "Non connecté";
+  const affichageBLabel = !screenBConnected
+    ? "Non connecté"
+    : screenBIndependent
+      ? getRegieDisplayStateLabel(ecranBDisplayLower, regiePollContext)
+      : "Suit l’écran principal";
   const styleBadgeAffichage = (state) => {
     const s = String(state || "").toLowerCase();
     if (s === "question") {
@@ -1713,23 +1686,6 @@ function BlocProjectionEcran({
   };
 
   const full = { width: "100%", boxSizing: "border-box" };
-  const btnOuvrir = {
-    ...full,
-    padding: desktop ? "0.88rem 1.35rem" : "0.9rem 1.15rem",
-    fontSize: desktop ? "1rem" : "0.98rem",
-    fontWeight: 800,
-    borderRadius: "12px",
-    border: "1px solid #5b21b6",
-    background: "linear-gradient(180deg, #7c3aed 0%, #6d28d9 100%)",
-    color: "#fff",
-    cursor: "pointer",
-    boxShadow: "0 4px 14px rgba(109, 40, 217, 0.35)",
-    letterSpacing: "-0.02em",
-    maxWidth: desktop ? "600px" : "none",
-    marginLeft: "auto",
-    marginRight: "auto",
-    display: "block",
-  };
   const btnOutlineSecondaire = {
     ...full,
     padding: desktop ? "0.6rem 0.85rem" : "0.55rem 0.75rem",
@@ -1778,37 +1734,34 @@ function BlocProjectionEcran({
     boxSizing: "border-box",
   };
 
-
   return (
     <section
       style={{
         ...CARD,
-        padding: desktop ? "1.45rem 1.55rem" : "1.25rem 1rem",
+        padding: desktop ? "1.25rem 1.35rem" : "1.05rem 0.95rem",
         background:
-          "linear-gradient(145deg, #faf5ff 0%, #eef2ff 48%, #ffffff 100%)",
-        border: "1px solid rgba(167, 139, 250, 0.26)",
-        boxShadow: "0 24px 44px rgba(91, 33, 182, 0.12)",
+          "linear-gradient(145deg, #f8fafc 0%, #eef2ff 48%, #ffffff 100%)",
+        border: "1px solid rgba(148, 163, 184, 0.28)",
+        boxShadow: "0 16px 32px rgba(15, 23, 42, 0.06)",
       }}
     >
-      <div style={{ marginBottom: "1.25rem" }}>
+      <div style={{ marginBottom: "0.95rem" }}>
         <h2
           style={{
-            fontSize: desktop ? "1.4rem" : "1.16rem",
+            fontSize: desktop ? "1.2rem" : "1.05rem",
             fontWeight: 800,
             margin: 0,
-            letterSpacing: "-0.03em",
-            color: "#3b0764",
+            letterSpacing: "-0.02em",
+            color: "#0f172a",
           }}
         >
           Projection écran
         </h2>
         <p
           style={{
-            margin: "0.45rem 0 0 0",
-            fontSize: desktop ? "1.14rem" : "1.02rem",
+            margin: "0.4rem 0 0 0",
+            fontSize: "0.92rem",
             fontWeight: 700,
-            letterSpacing: "-0.01em",
-            lineHeight: 1.35,
             color:
               screenMainConnected || screenBConnected ? "#14532d" : "#991b1b",
           }}
@@ -1817,124 +1770,264 @@ function BlocProjectionEcran({
         </p>
         <p
           style={{
-            margin: "0.35rem 0 0 0",
+            margin: "0.3rem 0 0 0",
             fontSize: "0.78rem",
-            color: "#6b21a8",
-            lineHeight: 1.45,
-            fontWeight: 500,
-            opacity: 0.92,
+            color: "#64748b",
+            lineHeight: 1.4,
           }}
         >
-          Affichage en direct pour votre audience
+          L’écran principal suit le pilotage. L’écran B le suit aussi, sauf si
+          vous activez un affichage indépendant.
         </p>
       </div>
 
-      <div
-        style={{
-          marginBottom: "0.85rem",
-        }}
-      >
-        <p style={{ margin: "0 0 0.72rem 0", fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#7c3aed" }}>
-          Zone écrans
-        </p>
-        <div className="proj-ecran-console-grid">
-          <div className="proj-ecran-console-col" data-screen-state={d}>
-            <div className="proj-ecran-console-col-head">
-              <div className="proj-ecran-console-col-head-main">
-                <div className="proj-ecran-console-col-head-row">
-                  <p className="proj-ecran-console-col-title">Écran principal</p>
-                  <p className="proj-ecran-console-col-meta">{statutEcranPrincipal}</p>
-                </div>
+      <div className="proj-ecran-console-grid">
+        <div className="proj-ecran-console-col" data-screen-state={d}>
+          <div className="proj-ecran-console-col-head">
+            <div className="proj-ecran-console-col-head-main">
+              <div className="proj-ecran-console-col-head-row">
+                <p className="proj-ecran-console-col-title">Écran principal</p>
+                <p className="proj-ecran-console-col-meta">{statutEcranPrincipal}</p>
               </div>
-            </div>
-            <div className="proj-ecran-console-state">
-              <span className="proj-ecran-console-state-label">État actuel</span>
-              <span
-                className="proj-ecran-console-state-badge"
-                style={styleBadgeAffichage(d)}
-              >
-                {affichageStandardLabel}
-              </span>
-            </div>
-            <div className="proj-ecran-console-inset">
-              <p className="proj-ecran-console-inset-title">Modes projection</p>
-              <p className="proj-ecran-console-inset-hint">
-                S’applique à l’écran principal et au lien généré pour l’écran B.
-              </p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem" }}>
-                {[
-                  { id: "standard", label: "Standard" },
-                  { id: "xlarge_qr", label: "Grande salle (QR XXL)" },
-                  { id: "qr_fullscreen", label: "QR plein écran" },
-                  { id: "results_focus", label: "Résultats focus" },
-                ].map((m) => {
-                  const on = projectionMode === m.id;
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => changeProjectionMode(m.id)}
-                      style={{
-                        padding: "0.46rem 0.76rem",
-                        fontSize: "0.75rem",
-                        fontWeight: 700,
-                        borderRadius: "12px",
-                        border: on ? "1px solid #7c3aed" : PREMIUM_BORDER,
-                        background: on
-                          ? "linear-gradient(180deg, #ede9fe 0%, #ddd6fe 100%)"
-                          : "rgba(255,255,255,0.9)",
-                        color: on ? "#5b21b6" : "#475569",
-                        cursor: "pointer",
-                        boxShadow: on ? "0 12px 24px rgba(124, 58, 237, 0.12)" : "none",
-                      }}
-                    >
-                      {m.label}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="proj-ecran-console-inset-active">
-                Mode actif : <strong>{projectionModeLabel}</strong>
+              <p className="proj-ecran-console-col-desc">
+                Piloté automatiquement par la régie.
               </p>
             </div>
-            <RegieAutoRotatePanel
-              embedded
-              auxiliaryHint="Enchaîne automatiquement question → résultats sur l’écran principal."
-              busy={busy}
-              autoRotate={autoRotate}
-              onAutoRotateChange={onAutoRotateChange}
-              autoRotateAllowed={autoRotateAllowed}
-              autoRotateQuestionSec={autoRotateQuestionSec}
-              autoRotateResultsSec={autoRotateResultsSec}
-              onAutoRotateQuestionSecChange={onAutoRotateQuestionSecChange}
-              onAutoRotateResultsSecChange={onAutoRotateResultsSecChange}
+          </div>
+          <div className="proj-ecran-console-state">
+            <span className="proj-ecran-console-state-label">État</span>
+            <span
+              className="proj-ecran-console-state-badge"
+              style={styleBadgeAffichage(d)}
+            >
+              {affichageStandardLabel}
+            </span>
+          </div>
+        </div>
+
+        <div
+          className="proj-ecran-console-col"
+          data-screen-state={
+            screenBConnected && screenBIndependent
+              ? ecranBDisplayLower
+              : screenBConnected
+                ? d
+                : "waiting"
+          }
+        >
+          <div className="proj-ecran-console-col-head">
+            <div className="proj-ecran-console-col-head-main">
+              <div className="proj-ecran-console-col-head-row">
+                <p className="proj-ecran-console-col-title">Écran B</p>
+                <p className="proj-ecran-console-col-meta">{statutEcranB}</p>
+              </div>
+              <p className="proj-ecran-console-col-desc">
+                {screenBIndependent
+                  ? "Affichage indépendant activé."
+                  : "Synchronisé avec l’écran principal."}
+              </p>
+            </div>
+          </div>
+          <div className="proj-ecran-console-state">
+            <span className="proj-ecran-console-state-label">État</span>
+            <span
+              className="proj-ecran-console-state-badge"
+              style={styleBadgeAffichage(
+                screenBConnected && screenBIndependent
+                  ? ecranBDisplayLower
+                  : screenBConnected
+                    ? d
+                    : "waiting",
+              )}
+            >
+              {affichageBLabel}
+            </span>
+          </div>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "0.55rem",
+              margin: 0,
+              padding: "0.55rem 0.6rem",
+              borderRadius: "12px",
+              border: "1px solid rgba(148, 163, 184, 0.35)",
+              background: "rgba(248, 250, 252, 0.9)",
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={screenBIndependent}
+              disabled={busy || typeof onScreenBIndependentChange !== "function"}
+              onChange={(e) => onScreenBIndependentChange?.(e.target.checked)}
+              style={{ marginTop: "0.15rem" }}
             />
-            <button type="button" onClick={ouvrirEcran} style={{ ...btnOuvrir, marginLeft: 0, marginRight: 0, maxWidth: "none", width: "100%" }}>
-              Ouvrir
-            </button>
+            <span>
+              <span
+                style={{
+                  display: "block",
+                  fontSize: "0.82rem",
+                  fontWeight: 700,
+                  color: "#0f172a",
+                }}
+              >
+                Affichage indépendant
+              </span>
+              <span
+                style={{
+                  display: "block",
+                  marginTop: "0.15rem",
+                  fontSize: "0.72rem",
+                  color: "#64748b",
+                  lineHeight: 1.35,
+                }}
+              >
+                B peut montrer Attente, Question, Résultats ou Noir sans changer
+                l’écran principal.
+              </span>
+            </span>
+          </label>
+          {screenBIndependent ? (
             <div className="proj-ecran-console-actions">
               <button
                 type="button"
-                disabled={busy || !activePollId || d !== "results"}
-                onClick={async () => {
-                  const ok = await postAction(`/polls/${activePollId}/display-question`);
-                  if (ok) sendScreenAction("QUESTION", null);
+                disabled={busy || !activePollId}
+                onClick={() => sendScreenAction("QUESTION", "B")}
+                style={{
+                  ...btnOutlineSecondaire,
+                  ...projConsoleBtn,
+                  ...secDisabled(busy || !activePollId),
                 }}
-                style={{ ...btnOutlineSecondaire, ...projConsoleBtn, ...secDisabled(busy || !activePollId || d !== "results") }}
               >
                 Question
               </button>
               <button
                 type="button"
                 disabled={busy || !activePollId}
-                onClick={async () => {
-                  const ok = await postAction(`/polls/${activePollId}/show-results`);
-                  if (ok) sendScreenAction("RESULTS", null);
+                onClick={() => sendScreenAction("RESULTS", "B")}
+                style={{
+                  ...btnOutlineSecondaire,
+                  ...projConsoleBtn,
+                  ...secDisabled(busy || !activePollId),
                 }}
-                style={{ ...btnOutlineSecondaire, ...projConsoleBtn, ...secDisabled(busy || !activePollId) }}
               >
                 Résultats
               </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => sendScreenAction("BLACK", "B")}
+                style={{
+                  ...btnDangerNoir,
+                  ...projConsoleBtn,
+                  ...secDisabled(busy),
+                }}
+              >
+                Noir
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => sendScreenAction("WAITING", "B")}
+                style={{
+                  ...btnRevenirDirect,
+                  ...projConsoleBtn,
+                  ...secDisabled(busy),
+                }}
+              >
+                Attente / QR
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <details
+        style={{
+          marginTop: "0.85rem",
+          borderTop: "1px solid rgba(148, 163, 184, 0.28)",
+          paddingTop: "0.75rem",
+        }}
+      >
+        <summary
+          style={{
+            cursor: "pointer",
+            fontWeight: 800,
+            fontSize: "0.82rem",
+            color: "#0f172a",
+            listStyle: "none",
+          }}
+        >
+          Options avancées
+        </summary>
+        <div style={{ marginTop: "0.75rem", display: "grid", gap: "0.85rem" }}>
+          <div className="proj-ecran-console-inset">
+            <p className="proj-ecran-console-inset-title">Modes projection</p>
+            <p className="proj-ecran-console-inset-hint">
+              Apparence visuelle du lien Screen (Partage & accès).
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem" }}>
+              {[
+                { id: "standard", label: "Standard" },
+                { id: "xlarge_qr", label: "Grande salle (QR XXL)" },
+                { id: "qr_fullscreen", label: "QR plein écran" },
+                { id: "results_focus", label: "Résultats focus" },
+              ].map((m) => {
+                const on = projectionMode === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => changeProjectionMode(m.id)}
+                    style={{
+                      padding: "0.46rem 0.76rem",
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      borderRadius: "12px",
+                      border: on ? "1px solid #7c3aed" : PREMIUM_BORDER,
+                      background: on
+                        ? "linear-gradient(180deg, #ede9fe 0%, #ddd6fe 100%)"
+                        : "rgba(255,255,255,0.9)",
+                      color: on ? "#5b21b6" : "#475569",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="proj-ecran-console-inset-active">
+              Mode actif : <strong>{projectionModeLabel}</strong>
+            </p>
+          </div>
+
+          <RegieAutoRotatePanel
+            embedded
+            auxiliaryHint="Enchaîne automatiquement question → résultats sur l’écran principal."
+            busy={busy}
+            autoRotate={autoRotate}
+            onAutoRotateChange={onAutoRotateChange}
+            autoRotateAllowed={autoRotateAllowed}
+            autoRotateQuestionSec={autoRotateQuestionSec}
+            autoRotateResultsSec={autoRotateResultsSec}
+            onAutoRotateQuestionSecChange={onAutoRotateQuestionSecChange}
+            onAutoRotateResultsSecChange={onAutoRotateResultsSecChange}
+          />
+
+          <div>
+            <p
+              style={{
+                margin: "0 0 0.45rem 0",
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                color: "#475569",
+              }}
+            >
+              Forçage écran principal
+            </p>
+            <div className="proj-ecran-console-actions">
               <button
                 type="button"
                 disabled={busy}
@@ -1942,7 +2035,11 @@ function BlocProjectionEcran({
                   if (affichageNoir) sendScreenAction("WAITING", null);
                   else sendScreenAction("BLACK", null);
                 }}
-                style={{ ...btnDangerNoir, ...projConsoleBtn, ...secDisabled(busy) }}
+                style={{
+                  ...btnDangerNoir,
+                  ...projConsoleBtn,
+                  ...secDisabled(busy),
+                }}
               >
                 {affichageNoir ? "Retour direct" : "Noir"}
               </button>
@@ -1950,141 +2047,32 @@ function BlocProjectionEcran({
                 type="button"
                 disabled={busy || affichageNoir}
                 onClick={() => sendScreenAction("WAITING", null)}
-                style={{ ...btnRevenirDirect, ...projConsoleBtn, ...secDisabled(busy || affichageNoir) }}
-              >
-                Attente
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={() => void copierLienEcranStandard()}
-              style={{ ...btnOutlineSecondaire, width: "100%", padding: "0.58rem 0.75rem", fontWeight: 700 }}
-            >
-              {copiedScreenId === "standard" ? "Lien copié" : "Copier le lien"}
-            </button>
-          </div>
-
-          <div className="proj-ecran-console-col" data-screen-state={screenBConnected ? ecranBDisplayLower : "waiting"}>
-            <div className="proj-ecran-console-col-head">
-              <div className="proj-ecran-console-col-head-main">
-                <div className="proj-ecran-console-col-head-row">
-                  <p className="proj-ecran-console-col-title">Écran B</p>
-                  <p className="proj-ecran-console-col-meta">{statutEcranB}</p>
-                </div>
-                <p className="proj-ecran-console-col-desc">Affichage secondaire indépendant.</p>
-              </div>
-            </div>
-            <div className="proj-ecran-console-state">
-              <span className="proj-ecran-console-state-label">État actuel</span>
-              <span
-                className="proj-ecran-console-state-badge"
-                style={styleBadgeAffichage(screenBConnected ? ecranBDisplayLower : "waiting")}
-              >
-                {affichageBLabel}
-              </span>
-            </div>
-          {["B"].map((sid) => (
-            <div key={sid} style={{ display: "grid", gap: "0.55rem" }}>
-              <button
-                type="button"
-                onClick={() => {
-                  const url = lienDiffusionAbsolu(pathScreenById(sid));
-                  if (url) window.open(url, "_blank", "noopener,noreferrer");
+                style={{
+                  ...btnRevenirDirect,
+                  ...projConsoleBtn,
+                  ...secDisabled(busy || affichageNoir),
                 }}
-                style={{ ...btnOuvrir, marginLeft: 0, marginRight: 0, maxWidth: "none", width: "100%" }}
               >
-                Ouvrir
-              </button>
-              <div className="proj-ecran-console-actions">
-                <button
-                  type="button"
-                  disabled={busy || !activePollId}
-                  onClick={() => sendScreenAction("QUESTION", sid)}
-                  style={{ ...btnOutlineSecondaire, ...projConsoleBtn, ...(busy || !activePollId ? secDisabled(true) : {}) }}
-                >
-                  Question
-                </button>
-                <button
-                  type="button"
-                  disabled={busy || !activePollId}
-                  onClick={() => sendScreenAction("RESULTS", sid)}
-                  style={{ ...btnOutlineSecondaire, ...projConsoleBtn, ...(busy || !activePollId ? secDisabled(true) : {}) }}
-                >
-                  Résultats
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => sendScreenAction("BLACK", sid)}
-                  style={{ ...btnDangerNoir, ...projConsoleBtn, ...(busy ? secDisabled(true) : {}) }}
-                >
-                  Noir
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => sendScreenAction("WAITING", sid)}
-                  style={{ ...btnRevenirDirect, ...projConsoleBtn, ...(busy ? secDisabled(true) : {}) }}
-                >
-                  Attente
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => void copierLienEcranCible(sid)}
-                style={{ ...btnOutlineSecondaire, width: "100%", padding: "0.58rem 0.75rem", fontWeight: 700 }}
-              >
-                {copiedScreenId === sid ? "Lien copié" : "Copier le lien"}
+                Attente / QR
               </button>
             </div>
-          ))}
           </div>
-        </div>
-      </div>
 
-      {chronoSection ? (
-        <div
-          id="regie-chrono-panel"
-          style={{
-            marginBottom: "0.75rem",
-            padding: desktop ? "1.1rem 1.05rem" : "1rem 0.85rem",
-            borderRadius: "14px",
-            background: "rgba(255,255,255,0.72)",
-            border: "1px solid #ddd6fe",
-          }}
-        >
-          <p
-            style={{
-              margin: "0 0 0.75rem 0",
-              fontSize: "0.65rem",
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              color: "#6d28d9",
-            }}
-          >
-            Chrono scène
-          </p>
-          {chronoSection}
+          {chronoSection ? (
+            <div
+              id="regie-chrono-panel"
+              style={{
+                padding: desktop ? "0.85rem" : "0.75rem",
+                borderRadius: "14px",
+                background: "rgba(255,255,255,0.72)",
+                border: "1px solid #e2e8f0",
+              }}
+            >
+              {chronoSection}
+            </div>
+          ) : null}
         </div>
-      ) : null}
-
-      {clientPret ? (
-        <p
-          style={{
-            margin: chronoSection ? "0.35rem 0 0 0" : "0.75rem 0 0 0",
-            paddingTop: chronoSection ? "0.75rem" : "0.85rem",
-            borderTop: "1px solid #e9d5ff",
-            fontSize: "0.65rem",
-            color: "#64748b",
-            wordBreak: "break-all",
-            fontFamily: "ui-monospace, monospace",
-            lineHeight: 1.35,
-          }}
-        >
-          {lienDiffusionAbsolu(pathScreen)}
-        </p>
-      ) : null}
+      </details>
 
       <style>{`
         .proj-ecran-console-grid {
@@ -4869,6 +4857,8 @@ export default function RegieEventPage() {
   const [screenBDisplayState, setScreenBDisplayState] = useState(
     /** @type {"question" | "results" | "waiting" | "black"} */ ("waiting"),
   );
+  /** Écran B : false = suit A (défaut), true = affichage indépendant (localStorage + socket). */
+  const [screenBIndependent, setScreenBIndependent] = useState(false);
   /** Alternance automatique question ↔ résultats (régie uniquement) */
   const [autoRotate, setAutoRotate] = useState(false);
   const [autoRotateQuestionSec, setAutoRotateQuestionSec] = useState(10);
@@ -4922,6 +4912,7 @@ export default function RegieEventPage() {
   const fetchEventGenerationRef = useRef(0);
   const socketRef = useRef(null);
   const autoRotateRef = useRef(false);
+  const screenBIndependentRef = useRef(false);
   const pollIdRef = useRef(/** @type {string | null} */ (null));
   const displayStateRefRegie = useRef("waiting");
   const voteStateRefRegie = useRef("closed");
@@ -5395,6 +5386,10 @@ export default function RegieEventPage() {
       socket.emit("screen:auto_rotate", {
         eventId,
         enabled: autoRotateRef.current,
+      });
+      socket.emit("screen:b_mode", {
+        eventId,
+        independent: screenBIndependentRef.current,
       });
     }
 
@@ -6328,10 +6323,12 @@ export default function RegieEventPage() {
     displayStateBUi,
     regieActivePollContext,
   );
-  const hasDisplayGap =
-    Boolean(screenBConnected) &&
-    ["question", "results", "waiting", "black"].includes(displayStateBUi) &&
-    displayStateBUi !== String(projectionDisplayStateUi || "").toLowerCase();
+  const hasDisplayGap = shouldShowScreenBDisplayGap({
+    screenBConnected,
+    screenBIndependent,
+    mainDisplayState: projectionDisplayStateUi,
+    screenBDisplayState: displayStateBUi,
+  });
   const compactTopPanel = !desktop;
   const socketStatusLabel = socketConnected
     ? "Sync live connectee"
@@ -6602,9 +6599,56 @@ export default function RegieEventPage() {
   };
   const liveBandDivider = "1px solid rgba(148, 163, 184, 0.18)";
   autoRotateRef.current = autoRotate;
+  screenBIndependentRef.current = screenBIndependent;
   pollIdRef.current = activePollIdJs;
   displayStateRefRegie.current = displayStateUi;
   voteStateRefRegie.current = voteStateUi;
+
+  useEffect(() => {
+    const slug = eventData?.slug;
+    if (!slug) return;
+    setScreenBIndependent(readScreenBIndependent(slug));
+  }, [eventData?.slug]);
+
+  const handleScreenBIndependentChange = useCallback(
+    (next) => {
+      const independent = Boolean(next);
+      setScreenBIndependent(independent);
+      screenBIndependentRef.current = independent;
+      const slug = eventData?.slug;
+      if (slug) writeScreenBIndependent(slug, independent);
+      if (eventId && socketRef.current?.connected) {
+        socketRef.current.emit("screen:b_mode", { eventId, independent });
+      }
+      if (!independent) {
+        // Reprend l’état A pour le badge régie (plus d’écart affiché).
+        const main = String(projectionDisplayStateUi || "waiting").toLowerCase();
+        if (["question", "results", "waiting", "black"].includes(main)) {
+          setScreenBDisplayState(
+            /** @type {"question" | "results" | "waiting" | "black"} */ (main),
+          );
+        }
+      } else {
+        // Indépendant : démarre sur l’état courant de A, sans le modifier.
+        const main = String(projectionDisplayStateUi || "waiting").toLowerCase();
+        if (["question", "results", "waiting", "black"].includes(main)) {
+          setScreenBDisplayState(
+            /** @type {"question" | "results" | "waiting" | "black"} */ (main),
+          );
+          const type =
+            main === "question"
+              ? "QUESTION"
+              : main === "results"
+                ? "RESULTS"
+                : main === "black"
+                  ? "BLACK"
+                  : "WAITING";
+          sendScreenAction(type, "B");
+        }
+      }
+    },
+    [eventData?.slug, eventId, projectionDisplayStateUi, sendScreenAction],
+  );
 
   useEffect(() => {
     if (
@@ -10491,7 +10535,7 @@ export default function RegieEventPage() {
                   lineHeight: 1.4,
                 }}
               >
-                Noir, Attente, écrans A/B, forçage Question/Résultats, auto-rotation —
+                Connexion des écrans, sync B, forçages avancés et rotation —
                 hors parcours principal.
               </p>
               <BlocProjectionEcran
@@ -10505,6 +10549,8 @@ export default function RegieEventPage() {
                 screenMainConnected={screenMainConnected}
                 screenBConnected={screenBConnected}
                 screenBDisplayState={screenBDisplayState}
+                screenBIndependent={screenBIndependent}
+                onScreenBIndependentChange={handleScreenBIndependentChange}
                 desktop={desktop}
                 chronoSection={null}
                 autoRotate={autoRotate}
