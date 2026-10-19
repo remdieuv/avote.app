@@ -11,6 +11,7 @@ const Stripe = require("stripe");
 const { Server } = require("socket.io");
 const cookieParser = require("cookie-parser");
 const { prisma } = require("./lib/prisma");
+const { corsOriginCallback } = require("./lib/corsOrigins");
 const {
   uploadImageBufferToCloudinary,
   destroyCloudinaryByPublicId,
@@ -197,12 +198,10 @@ const authAttemptLimiter = rateLimit({
   message: { error: "Trop de tentatives. Réessayez plus tard." },
 });
 
-/** CORS navigateur → API (dev local : Next :3000 → Express :4000 direct). */
-const allowedOrigins = [
-  "http://localhost:3000",
-  "http://127.0.0.1:3000",
-  process.env.CLIENT_URL,
-].filter(Boolean);
+/** CORS navigateur → API (www + localhost + Previews Vercel AVOTE uniquement). */
+function resolveCorsOrigin(origin, callback) {
+  corsOriginCallback(origin, callback);
+}
 
 const PORT = process.env.PORT || 4000;
 
@@ -1274,7 +1273,7 @@ async function handleCheckoutCompleted(session) {
 
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: resolveCorsOrigin,
     credentials: true,
   }),
 );
@@ -7340,7 +7339,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: resolveCorsOrigin,
     methods: ["GET", "POST"],
     credentials: true,
   },
