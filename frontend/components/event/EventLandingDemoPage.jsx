@@ -122,7 +122,7 @@ export function EventLandingDemoPage() {
           z-index: 1;
           margin-top: -2.5rem;
           padding: 0 clamp(1rem, 4vw, 1.5rem) clamp(2.5rem, 6vw, 4rem);
-          max-width: 1100px;
+          max-width: 1200px;
           margin-left: auto;
           margin-right: auto;
           box-sizing: border-box;

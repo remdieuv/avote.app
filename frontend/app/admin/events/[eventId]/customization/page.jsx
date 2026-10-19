@@ -11,7 +11,10 @@ import {
 } from "react";
 import { LiveMicroLabel } from "@/components/admin/LiveMicroIcon";
 import { resolveApiAssetUrl } from "@/lib/assetUrl";
-import { adminContentMaxWidth } from "@/lib/adminLayout";
+import {
+  adminContentMaxWidth,
+  adminContentShellStyle,
+} from "@/lib/adminLayout";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
 function mapApiError(body, status, fallbackPrefix = "Erreur") {
@@ -2340,12 +2343,9 @@ export default function EventCustomizationHubPage() {
   return (
     <main style={{ minHeight: "100vh", background: "#f8fafc", color: "#0f172a" }}>
       <div
-        style={{
-          maxWidth: "980px",
-          margin: "0 auto",
+        style={adminContentShellStyle("workspace", {
           padding: "1.25rem clamp(1rem, 3vw, 1.75rem) 2.5rem",
-          boxSizing: "border-box",
-        }}
+        })}
       >
         <div style={{ marginBottom: "1.35rem" }}>
           <Link

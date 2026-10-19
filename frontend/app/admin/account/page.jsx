@@ -2,6 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import {
+  AdminContentShell,
+  AdminFormRail,
+} from "@/components/admin/AdminContentShell";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { useAdminUser } from "@/components/admin/AdminUserContext";
 import { CheckoutEventButton } from "@/components/billing/CheckoutEventButton";
@@ -10,6 +14,7 @@ import {
   formatDisponibles,
 } from "@/lib/activationBalance";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
+import { ADMIN_CONTENT_MAX_FORM_NARROW } from "@/lib/adminLayout";
 
 export default function AdminAccountPage() {
   const { user } = useAdminUser();
@@ -157,16 +162,11 @@ export default function AdminAccountPage() {
   }, []);
 
   return (
-    <main
+    <AdminContentShell
       id="account-page"
-      style={{
-        maxWidth: "1200px",
-        margin: "0 auto",
-        padding: "24px clamp(16px, 3vw, 24px) 40px",
-        fontFamily: 'system-ui, "Segoe UI", sans-serif',
-        boxSizing: "border-box",
-      }}
+      style={{ fontFamily: 'system-ui, "Segoe UI", sans-serif' }}
     >
+      <AdminFormRail>
       <AdminPageHeader
         title="Mon compte"
         subtitle="Informations de profil liées à votre espace administrateur."
@@ -331,7 +331,14 @@ export default function AdminAccountPage() {
       <section style={{ marginTop: "clamp(1rem, 2vw, 1.5rem)" }}>
         <article style={CARD}>
           <h2 style={CARD_TITLE}>Sécurité</h2>
-          <form onSubmit={submitPasswordChange} style={{ display: "grid", gap: "0.75rem", maxWidth: "640px" }}>
+          <form
+            onSubmit={submitPasswordChange}
+            style={{
+              display: "grid",
+              gap: "0.75rem",
+              maxWidth: `${ADMIN_CONTENT_MAX_FORM_NARROW}px`,
+            }}
+          >
             <label style={LABEL_STYLE}>
               Mot de passe actuel
               <input
@@ -454,7 +461,8 @@ export default function AdminAccountPage() {
           box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
         }
       `}</style>
-    </main>
+      </AdminFormRail>
+    </AdminContentShell>
   );
 }
 

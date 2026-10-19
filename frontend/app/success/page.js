@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { LandingHeader } from "@/components/landing/LandingHeader";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
+import { marketingContentShellStyle } from "@/lib/marketingLayout";
 
 export default function SuccessPage() {
   const [eventCredits, setEventCredits] = useState(/** @type {number | null} */ (null));
@@ -70,13 +71,11 @@ const shell = {
   fontFamily: "system-ui, sans-serif",
 };
 
-const mainWrap = {
-  maxWidth: "920px",
-  margin: "0 auto",
-  padding: "clamp(2rem, 5vw, 4rem) 1rem 3rem",
+const mainWrap = marketingContentShellStyle({
+  padding: "clamp(2rem, 5vw, 4rem) 1.25rem 3rem",
   display: "flex",
   justifyContent: "center",
-};
+});
 
 const card = {
   width: "100%",
