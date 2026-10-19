@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { adminContentShellStyle } from "@/lib/adminLayout";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
 function mapApiError(body, status) {
@@ -157,12 +158,9 @@ export default function EventAnalyticsPage() {
 
   return (
     <div
-      style={{
-        maxWidth: "1200px",
-        margin: "0 auto",
-        padding: "24px clamp(16px, 3vw, 24px) 40px",
+      style={adminContentShellStyle("workspace", {
         fontFamily: 'system-ui, "Segoe UI", sans-serif',
-      }}
+      })}
     >
       <AdminPageHeader
         eyebrow={data?.event?.title || "Événement"}
