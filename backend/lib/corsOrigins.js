@@ -6,13 +6,18 @@
  * - http://localhost:3000 / http://127.0.0.1:3000
  * - process.env.CLIENT_URL (ex. https://www.avote.app)
  * - https://avote-app.vercel.app
- * - https://avote-<id>-remdieuvs-projects.vercel.app
+ * - https://avote-<id>-remdieuvs-projects.vercel.app (déploiements)
+ * - https://avote-app-git-<branche>-remdieuvs-projects.vercel.app (aliases git Preview)
  */
 
 /** Hosts Preview Vercel du projet AVOTE uniquement (pas tout *.vercel.app). */
 const AVOTE_VERCEL_APP_HOST = "avote-app.vercel.app";
+/** Déploiements : avote-<hash>-remdieuvs-projects.vercel.app */
 const AVOTE_VERCEL_PREVIEW_HOST_RE =
   /^avote-[a-z0-9]+-remdieuvs-projects\.vercel\.app$/i;
+/** Aliases git branch : avote-app-git-<slug>-remdieuvs-projects.vercel.app */
+const AVOTE_VERCEL_GIT_PREVIEW_HOST_RE =
+  /^avote-app-git-[a-z0-9-]+-remdieuvs-projects\.vercel\.app$/i;
 
 /**
  * @param {unknown} origin
@@ -63,6 +68,7 @@ function isAllowedCorsOrigin(origin, opts = {}) {
   const host = url.hostname.toLowerCase();
   if (host === AVOTE_VERCEL_APP_HOST) return true;
   if (AVOTE_VERCEL_PREVIEW_HOST_RE.test(host)) return true;
+  if (AVOTE_VERCEL_GIT_PREVIEW_HOST_RE.test(host)) return true;
 
   return false;
 }
@@ -86,6 +92,7 @@ function corsOriginCallback(origin, callback, opts = {}) {
 module.exports = {
   AVOTE_VERCEL_APP_HOST,
   AVOTE_VERCEL_PREVIEW_HOST_RE,
+  AVOTE_VERCEL_GIT_PREVIEW_HOST_RE,
   isAllowedCorsOrigin,
   corsOriginCallback,
 };

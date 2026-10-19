@@ -92,6 +92,56 @@ test("Autre hash Preview AVOTE autorisé", () => {
   );
 });
 
+test("Preview git branch AVOTE (PR #11) autorisée", () => {
+  assert.equal(
+    isAllowedCorsOrigin(
+      "https://avote-app-git-cursor-desktop-layout-c-57047e-remdieuvs-projects.vercel.app",
+      opts,
+    ),
+    true,
+  );
+});
+
+test("Preview git branch AVOTE (PR #8) autorisée", () => {
+  assert.equal(
+    isAllowedCorsOrigin(
+      "https://avote-app-git-cursor-ux-salle-live-si-d812b5-remdieuvs-projects.vercel.app",
+      opts,
+    ),
+    true,
+  );
+});
+
+test("http://avote-app-git-… refusé (https requis)", () => {
+  assert.equal(
+    isAllowedCorsOrigin(
+      "http://avote-app-git-cursor-desktop-layout-c-57047e-remdieuvs-projects.vercel.app",
+      opts,
+    ),
+    false,
+  );
+});
+
+test("autre projet *-app-git-* remdieuvs refusé", () => {
+  assert.equal(
+    isAllowedCorsOrigin(
+      "https://other-app-git-foo-remdieuvs-projects.vercel.app",
+      opts,
+    ),
+    false,
+  );
+});
+
+test("avote-app-git sans suffixe projet refusé", () => {
+  assert.equal(
+    isAllowedCorsOrigin(
+      "https://avote-app-git-cursor-desktop.vercel.app",
+      opts,
+    ),
+    false,
+  );
+});
+
 test("http://avote-app.vercel.app refusé (https requis)", () => {
   assert.equal(
     isAllowedCorsOrigin("http://avote-app.vercel.app", opts),
@@ -159,10 +209,19 @@ test("callback : pas d’Origin → allow (non-browser)", () => {
   assert.equal(callbackAllowsSync(undefined), true);
 });
 
-test("callback : preview autorisée", () => {
+test("callback : preview hash autorisée", () => {
   assert.equal(
     callbackAllowsSync(
       "https://avote-mvdee3ua4-remdieuvs-projects.vercel.app",
+    ),
+    true,
+  );
+});
+
+test("callback : preview git branch autorisée", () => {
+  assert.equal(
+    callbackAllowsSync(
+      "https://avote-app-git-cursor-desktop-layout-c-57047e-remdieuvs-projects.vercel.app",
     ),
     true,
   );
