@@ -429,7 +429,6 @@ export default function AdminPage() {
   return (
     <main className="admin-create-page">
       <div className="admin-create-shell">
-        <div className="admin-create-form-rail">
         <AdminPageHeader
           title="Créer un événement"
           subtitle="Préparez vos questions, structurez le vote et lancez votre régie en quelques secondes."
@@ -888,7 +887,6 @@ export default function AdminPage() {
             </div>
           </aside>
         </div>
-        </div>
       </div>
 
       <style>{`
@@ -904,12 +902,6 @@ export default function AdminPage() {
           max-width: 1600px;
           margin: 0 auto;
           padding: 24px clamp(16px, 3vw, 24px) 40px;
-          box-sizing: border-box;
-        }
-        .admin-create-form-rail {
-          width: 100%;
-          max-width: 1200px;
-          margin: 0 auto;
           box-sizing: border-box;
         }
         .admin-create-grid {
@@ -1294,7 +1286,18 @@ export default function AdminPage() {
         }
         @media (min-width: 1280px) {
           .admin-create-grid {
-            grid-template-columns: minmax(0, 1fr) minmax(340px, 390px);
+            grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
+            gap: 1.25rem;
+          }
+          .admin-side-sticky {
+            position: sticky;
+            top: 5rem;
+          }
+        }
+        @media (min-width: 1440px) {
+          .admin-create-grid {
+            grid-template-columns: minmax(0, 1fr) minmax(380px, 460px);
+            gap: 1.5rem;
           }
         }
         @media (max-width: 640px) {

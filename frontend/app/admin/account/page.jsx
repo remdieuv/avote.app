@@ -2,10 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import {
-  AdminContentShell,
-  AdminFormRail,
-} from "@/components/admin/AdminContentShell";
+import { AdminContentShell } from "@/components/admin/AdminContentShell";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { useAdminUser } from "@/components/admin/AdminUserContext";
 import { CheckoutEventButton } from "@/components/billing/CheckoutEventButton";
@@ -13,8 +10,8 @@ import {
   computeActivationBalance,
   formatDisponibles,
 } from "@/lib/activationBalance";
-import { adminFetch, apiBaseBrowser } from "@/lib/config";
 import { ADMIN_CONTENT_MAX_FORM_NARROW } from "@/lib/adminLayout";
+import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
 export default function AdminAccountPage() {
   const { user } = useAdminUser();
@@ -166,7 +163,6 @@ export default function AdminAccountPage() {
       id="account-page"
       style={{ fontFamily: 'system-ui, "Segoe UI", sans-serif' }}
     >
-      <AdminFormRail>
       <AdminPageHeader
         title="Mon compte"
         subtitle="Informations de profil liées à votre espace administrateur."
@@ -176,13 +172,7 @@ export default function AdminAccountPage() {
           </Link>
         }
       />
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-          gap: "clamp(0.75rem, 1.8vw, 1rem)",
-        }}
-      >
+      <section className="account-overview-grid">
         <article style={CARD}>
           <h2 style={CARD_TITLE}>Informations du compte</h2>
           <p style={ROW_TEXT}>
@@ -298,7 +288,7 @@ export default function AdminAccountPage() {
               Aucun achat pour le moment.
             </p>
           ) : (
-            <div style={{ display: "grid", gap: "0.6rem" }}>
+            <div className="account-payments-grid">
               {payments.map((p) => (
                 <div
                   key={p.id}
@@ -409,6 +399,16 @@ export default function AdminAccountPage() {
         </article>
       </section>
       <style>{`
+        #account-page .account-overview-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr);
+          gap: clamp(0.75rem, 1.8vw, 1rem);
+        }
+        #account-page .account-payments-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr);
+          gap: 0.6rem;
+        }
         #account-page .account-plan-grid {
           display: grid;
           grid-template-columns: 1fr;
@@ -456,12 +456,24 @@ export default function AdminAccountPage() {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
         }
+        @media (min-width: 980px) {
+          #account-page .account-overview-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          #account-page .account-payments-grid {
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+          }
+        }
+        @media (min-width: 1280px) {
+          #account-page .account-overview-grid {
+            gap: 1.15rem;
+          }
+        }
         #account-page input:focus-visible {
           border-color: #93c5fd;
           box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
         }
       `}</style>
-      </AdminFormRail>
     </AdminContentShell>
   );
 }

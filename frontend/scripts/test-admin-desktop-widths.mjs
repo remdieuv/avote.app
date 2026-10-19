@@ -1,5 +1,5 @@
 /**
- * Largeurs desktop admin (cadre 1600 / rail formulaires 1200).
+ * Largeurs desktop admin — cadre unique 1600 sur toutes les pages shellées.
  * Exécution : node frontend/scripts/test-admin-desktop-widths.mjs
  */
 import assert from "node:assert/strict";
@@ -12,7 +12,6 @@ import {
   ADMIN_CONTENT_MAX_WORKSPACE,
   adminContentMaxWidth,
   adminContentShellStyle,
-  adminFormRailStyle,
 } from "../lib/adminLayout.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -36,12 +35,12 @@ function read(rel) {
   return readFileSync(join(root, rel), "utf8");
 }
 
-test("Tokens workspace / standard / formNarrow", () => {
+test("Tokens workspace unifié 1600 (+ formNarrow)", () => {
   assert.equal(ADMIN_CONTENT_MAX_WORKSPACE, 1600);
-  assert.equal(ADMIN_CONTENT_MAX_STANDARD, 1200);
+  assert.equal(ADMIN_CONTENT_MAX_STANDARD, 1600);
   assert.equal(ADMIN_CONTENT_MAX_FORM_NARROW, 640);
   assert.equal(adminContentMaxWidth("workspace"), "1600px");
-  assert.equal(adminContentMaxWidth("standard"), "1200px");
+  assert.equal(adminContentMaxWidth("standard"), "1600px");
   assert.equal(adminContentMaxWidth(), "1600px");
 });
 
@@ -52,16 +51,7 @@ test("adminContentShellStyle cadre toujours 1600", () => {
   assert.equal(s.width, "100%");
   assert.equal(s.boxSizing, "border-box");
   assert.equal(s.fontFamily, "system-ui");
-  // tier « standard » ne réduit plus le cadre (rail séparé)
   assert.equal(adminContentShellStyle("standard").maxWidth, "1600px");
-});
-
-test("adminFormRailStyle rail formulaire 1200", () => {
-  const r = adminFormRailStyle({ padding: 0 });
-  assert.equal(r.maxWidth, "1200px");
-  assert.equal(r.margin, "0 auto");
-  assert.equal(r.width, "100%");
-  assert.equal(r.padding, 0);
 });
 
 test("Header admin branche sur workspace 1600", () => {
@@ -73,7 +63,7 @@ test("Header admin branche sur workspace 1600", () => {
   assert.match(shell, /contentMaxWidth/);
 });
 
-test("Pages workspace utilisent 1600 (pas 1200 en dur pour le shell)", () => {
+test("Pages admin shellées à 1600 (pas de rail 1200)", () => {
   const files = [
     "app/admin/events/page.js",
     "app/admin/leads/page.jsx",
@@ -81,9 +71,22 @@ test("Pages workspace utilisent 1600 (pas 1200 en dur pour le shell)", () => {
     "app/admin/event/[eventId]/leads/page.jsx",
     "app/admin/event/[eventId]/analytics/page.jsx",
     "app/admin/events/[eventId]/customization/page.jsx",
+    "app/admin/page.js",
+    "app/admin/account/page.jsx",
   ];
   for (const f of files) {
     const src = read(f);
+    if (f === "app/admin/page.js") {
+      assert.match(src, /max-width:\s*1600px/, `${f} shell 1600`);
+      assert.doesNotMatch(src, /admin-create-form-rail|max-width:\s*1200px/);
+      continue;
+    }
+    if (f === "app/admin/account/page.jsx") {
+      assert.match(src, /AdminContentShell/);
+      assert.doesNotMatch(src, /AdminFormRail|adminFormRailStyle|maxWidth:\s*"1200px"/);
+      assert.match(src, /ADMIN_CONTENT_MAX_FORM_NARROW/);
+      continue;
+    }
     assert.match(
       src,
       /adminContent(?:MaxWidth|ShellStyle)/,
@@ -104,16 +107,24 @@ test("Pages workspace utilisent 1600 (pas 1200 en dur pour le shell)", () => {
   assert.doesNotMatch(custom, /maxWidth:\s*"980px"/);
 });
 
-test("Création + compte : cadre 1600 + rail 1200", () => {
+test("Création : grille élargie ≥1280 / ≥1440", () => {
   const create = read("app/admin/page.js");
-  assert.match(create, /admin-create-form-rail/);
-  assert.match(create, /max-width:\s*1600px/);
-  assert.match(create, /\.admin-create-form-rail[\s\S]*max-width:\s*1200px/);
+  assert.match(create, /minmax\(360px, 420px\)/);
+  assert.match(create, /minmax\(380px, 460px\)/);
+  assert.match(create, /@media \(min-width: 1440px\)/);
+});
 
+test("Compte : grilles overview / payments desktop", () => {
   const account = read("app/admin/account/page.jsx");
-  assert.match(account, /AdminContentShell/);
-  assert.match(account, /AdminFormRail/);
-  assert.match(account, /ADMIN_CONTENT_MAX_FORM_NARROW/);
+  assert.match(account, /account-overview-grid/);
+  assert.match(account, /account-payments-grid/);
+});
+
+test("Plus de AdminFormRail / adminFormRailStyle", () => {
+  const shell = read("components/admin/AdminContentShell.jsx");
+  assert.doesNotMatch(shell, /AdminFormRail|adminFormRailStyle/);
+  const layout = read("lib/adminLayout.js");
+  assert.doesNotMatch(layout, /adminFormRailStyle/);
 });
 
 test("Leads événement utilise AdminPageHeader + padding token", () => {

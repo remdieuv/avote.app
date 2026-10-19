@@ -1,15 +1,12 @@
 "use client";
 
-import {
-  adminContentShellStyle,
-  adminFormRailStyle,
-} from "@/lib/adminLayout";
+import { adminContentShellStyle } from "@/lib/adminLayout";
 
 /**
  * Cadre admin desktop (1600 px) — aligné sur le header.
  * @param {{
  *  children: import("react").ReactNode;
- *  as?: keyof JSX.IntrinsicElements;
+ *  as?: string;
  *  style?: Record<string, string | number>;
  *  className?: string;
  *  id?: string;
@@ -30,21 +27,5 @@ export function AdminContentShell({
     >
       {children}
     </Comp>
-  );
-}
-
-/**
- * Rail formulaire (1200 px) à l’intérieur du cadre 1600.
- * @param {{
- *  children: import("react").ReactNode;
- *  style?: Record<string, string | number>;
- *  className?: string;
- * }} props
- */
-export function AdminFormRail({ children, style, className }) {
-  return (
-    <div className={className} style={{ ...adminFormRailStyle(), ...style }}>
-      {children}
-    </div>
   );
 }
