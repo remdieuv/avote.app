@@ -2,10 +2,29 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { EventLivePreview } from "@/components/admin/EventLivePreview";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
+import {
+  CONTEST_PRIZE_PLACEHOLDER,
+  QUESTION_TYPE_META,
+  applyQuestionType,
+  buildContestQuestion,
+  clearCreateEventDraft,
+  createBlankQuestion,
+  duplicateQuestion,
+  isContestEntryQuestion,
+  isCreateEventDraftMeaningful,
+  isLeadLikeQuestionType,
+  isQuizQuestion,
+  loadCreateEventDraft,
+  moveItem,
+  normalizeContestWinnerCount,
+  saveCreateEventDraft,
+  summarizeQuestionTypes,
+  validateCreateEventForm,
+} from "@/lib/createEventForm";
 import { rememberMyEvent } from "@/lib/myEventsStorage";
 
 const inputStyle = {
@@ -19,47 +38,10 @@ const inputStyle = {
   outline: "none",
 };
 
-const CONTEST_DEFAULT_QUESTION = "Souhaitez-vous participer au tirage au sort ?";
-const CONTEST_DEFAULT_OPTIONS = ["Oui", "Non"];
-const CONTEST_PRIZE_PLACEHOLDER =
-  "Ex : un iPhone 15 / une carte cadeau de 200€ / un week-end";
-const CONTEST_WINNER_COUNT_DEFAULT = 1;
-
-function isLeadLikeQuestionType(type) {
-  return type === "LEAD" || type === "CONTEST_ENTRY";
-}
-
-function isContestEntryQuestion(type) {
-  return type === "CONTEST_ENTRY";
-}
-
-function isQuizQuestion(type) {
-  return type === "QUIZ";
-}
-
-function buildContestQuestion(prizeRaw) {
-  const prize = typeof prizeRaw === "string" ? prizeRaw.trim() : "";
-  if (!prize) return CONTEST_DEFAULT_QUESTION;
-  return `Souhaitez-vous participer au tirage au sort pour gagner ${prize} ?`;
-}
-
-function normalizeContestWinnerCount(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return CONTEST_WINNER_COUNT_DEFAULT;
-  return Math.max(1, Math.floor(n));
-}
-
-/** IDs stables (pas Date/random) pour éviter les erreurs d’hydratation SSR. */
-const QUESTION_INITIALE = {
-  id: "q-1",
-  question: "",
-  type: "SINGLE_CHOICE",
-  options: ["", ""],
-  leadTriggerOrder: 0,
-  quizCorrectOrder: 0,
-  contestPrize: "",
-  contestWinnerCount: CONTEST_WINNER_COUNT_DEFAULT,
-  contestQuestionCustomized: false,
+const inputErrorStyle = {
+  ...inputStyle,
+  borderColor: "#f87171",
+  boxShadow: "0 0 0 3px rgba(248, 113, 113, 0.18)",
 };
 
 const btnGhost = {
@@ -71,6 +53,8 @@ const btnGhost = {
   cursor: "pointer",
 };
 
+const QUESTION_INITIALE = createBlankQuestion("q-1");
+
 export default function AdminPage() {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
@@ -79,43 +63,152 @@ export default function AdminPage() {
   const [eventTitle, setEventTitle] = useState("");
   const [eventDescription, setEventDescription] = useState("");
   const [questions, setQuestions] = useState(() => [{ ...QUESTION_INITIALE }]);
+  const [openQuestionId, setOpenQuestionId] = useState(QUESTION_INITIALE.id);
   const [formError, setFormError] = useState(null);
+  /** @type {[Record<string, unknown>, Function]} */
+  const [fieldErrors, setFieldErrors] = useState({ questions: {} });
+  const [draftBanner, setDraftBanner] = useState(false);
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState(
+    /** @type {"form" | "preview"} */ ("form"),
+  );
 
   const createLockRef = useRef(false);
   const nextQuestionIdRef = useRef(2);
+  const questionCardRefs = useRef(/** @type {Record<string, HTMLElement|null>} */ ({}));
+  const titleInputRef = useRef(/** @type {HTMLInputElement|null} */ (null));
+  const skipNextDraftSaveRef = useRef(false);
   /** Import en masse des réponses (une question à la fois) */
   const [importMasseQuestionId, setImportMasseQuestionId] = useState(null);
   const [importMasseTexte, setImportMasseTexte] = useState("");
 
-  function ajouterQuestion() {
-    const nid = `q-${nextQuestionIdRef.current++}`;
-    setQuestions((q) => [
-      ...q,
-      {
-        id: nid,
-        question: "",
-        type: "SINGLE_CHOICE",
-        options: ["", ""],
-        leadTriggerOrder: 0,
-        quizCorrectOrder: 0,
-        contestPrize: "",
-        contestWinnerCount: CONTEST_WINNER_COUNT_DEFAULT,
-        contestQuestionCustomized: false,
-      },
-    ]);
-  }
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const draft = loadCreateEventDraft(window.localStorage);
+    if (draft && isCreateEventDraftMeaningful(draft)) {
+      skipNextDraftSaveRef.current = true;
+      setEventTitle(draft.eventTitle);
+      setEventDescription(draft.eventDescription);
+      setQuestions(draft.questions);
+      setOpenQuestionId(draft.questions[draft.questions.length - 1]?.id || "q-1");
+      let maxN = 1;
+      for (const q of draft.questions) {
+        const m = /^q-(\d+)$/.exec(String(q.id || ""));
+        if (m) maxN = Math.max(maxN, Number(m[1]));
+      }
+      nextQuestionIdRef.current = maxN + 1;
+      setDraftBanner(true);
+    }
+    setDraftHydrated(true);
+  }, []);
 
-  function retirerQuestion(id) {
-    setImportMasseQuestionId((ouvert) => (ouvert === id ? null : ouvert));
-    setQuestions((q) => {
-      if (q.length <= 1) return q;
-      return q.filter((item) => item.id !== id);
+  useEffect(() => {
+    if (!draftHydrated || typeof window === "undefined") return;
+    if (skipNextDraftSaveRef.current) {
+      skipNextDraftSaveRef.current = false;
+      return;
+    }
+    const t = window.setTimeout(() => {
+      saveCreateEventDraft(window.localStorage, {
+        eventTitle,
+        eventDescription,
+        questions,
+      });
+    }, 350);
+    return () => window.clearTimeout(t);
+  }, [eventTitle, eventDescription, questions, draftHydrated]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const dirty = isCreateEventDraftMeaningful({
+      eventTitle,
+      eventDescription,
+      questions,
     });
-  }
+    if (!dirty) return undefined;
+    const onBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [eventTitle, eventDescription, questions]);
 
   useEffect(() => {
     if (importMasseQuestionId === null) setImportMasseTexte("");
   }, [importMasseQuestionId]);
+
+  function resetFormToBlank() {
+    const blank = createBlankQuestion("q-1");
+    nextQuestionIdRef.current = 2;
+    skipNextDraftSaveRef.current = true;
+    setEventTitle("");
+    setEventDescription("");
+    setQuestions([{ ...blank }]);
+    setOpenQuestionId(blank.id);
+    setFormError(null);
+    setFieldErrors({ questions: {} });
+    setError(null);
+    setImportMasseQuestionId(null);
+    setDraftBanner(false);
+    if (typeof window !== "undefined") {
+      clearCreateEventDraft(window.localStorage);
+    }
+  }
+
+  function ajouterQuestion() {
+    const nid = `q-${nextQuestionIdRef.current++}`;
+    setQuestions((q) => [...q, createBlankQuestion(nid)]);
+    setOpenQuestionId(nid);
+    setImportMasseQuestionId(null);
+    window.setTimeout(() => {
+      const el = questionCardRefs.current[nid];
+      el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 50);
+  }
+
+  function retirerQuestion(id) {
+    if (questions.length <= 1) return;
+    const next = questions.filter((item) => item.id !== id);
+    setImportMasseQuestionId((ouvert) => (ouvert === id ? null : ouvert));
+    setQuestions(next);
+    setOpenQuestionId((cur) =>
+      cur === id ? next[next.length - 1]?.id || next[0]?.id || null : cur,
+    );
+    setFieldErrors((fe) => {
+      const qs = { ...(fe.questions || {}) };
+      delete qs[id];
+      return { ...fe, questions: qs };
+    });
+  }
+
+  function dupliquerQuestion(id) {
+    const nid = `q-${nextQuestionIdRef.current++}`;
+    setQuestions((q) => {
+      const idx = q.findIndex((item) => item.id === id);
+      if (idx < 0) return q;
+      const copy = duplicateQuestion(q[idx], nid);
+      const next = [...q];
+      next.splice(idx + 1, 0, copy);
+      return next;
+    });
+    setOpenQuestionId(nid);
+    window.setTimeout(() => {
+      questionCardRefs.current[nid]?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    }, 50);
+  }
+
+  function deplacerQuestion(id, direction) {
+    setQuestions((q) => {
+      const from = q.findIndex((item) => item.id === id);
+      if (from < 0) return q;
+      const to = direction === "up" ? from - 1 : from + 1;
+      return moveItem(q, from, to);
+    });
+  }
 
   function majQuestion(id, patch) {
     setQuestions((q) =>
@@ -141,34 +234,11 @@ export default function AdminPage() {
   }
 
   function majTypeQuestion(id, type) {
-    if (type === "CONTEST_ENTRY") {
-      setQuestions((q) =>
-        q.map((item) => {
-          if (item.id !== id) return item;
-          const contestPrize = item.contestPrize ?? "";
-          const contestWinnerCount = normalizeContestWinnerCount(
-            item.contestWinnerCount,
-          );
-          return {
-            ...item,
-            type,
-            question: buildContestQuestion(contestPrize),
-            options: [...CONTEST_DEFAULT_OPTIONS],
-            leadTriggerOrder: 0,
-            quizCorrectOrder: 0,
-            contestPrize,
-            contestWinnerCount,
-            contestQuestionCustomized: false,
-          };
-        }),
-      );
-      return;
-    }
-    if (type === "QUIZ") {
-      majQuestion(id, { type, leadTriggerOrder: 0, quizCorrectOrder: 0 });
-      return;
-    }
-    majQuestion(id, { type, leadTriggerOrder: 0 });
+    setQuestions((q) =>
+      q.map((item) =>
+        item.id === id ? applyQuestionType(item, type) : item,
+      ),
+    );
   }
 
   function majContestPrize(id, contestPrize) {
@@ -282,52 +352,36 @@ export default function AdminPage() {
     setImportMasseTexte("");
   }
 
-  function validerFormulaire() {
-    const titre = eventTitle.trim();
-    if (!titre) {
-      return "Indique un titre pour l’événement.";
+  function focusValidationError(result) {
+    setFormError(result.formError);
+    setFieldErrors(result.fieldErrors);
+    if (result.fieldErrors?.eventTitle) {
+      setMobilePanel("form");
+      window.setTimeout(() => titleInputRef.current?.focus(), 40);
+      return;
     }
-    if (questions.length < 1) {
-      return "Ajoute au moins une question.";
+    const qid = result.firstErrorQuestionId;
+    if (qid) {
+      setOpenQuestionId(qid);
+      setMobilePanel("form");
+      window.setTimeout(() => {
+        questionCardRefs.current[qid]?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 60);
     }
-    for (let i = 0; i < questions.length; i++) {
-      const x = questions[i];
-      const qi = x.question.trim();
-      if (!qi) {
-        return `Question ${i + 1} : saisis le texte de la question.`;
-      }
-      if (isContestEntryQuestion(x.type) && !(x.contestPrize || "").trim()) {
-        return `Question ${i + 1} : précisez le lot à gagner pour rendre le concours clair pour les participants.`;
-      }
-      if (
-        isContestEntryQuestion(x.type) &&
-        normalizeContestWinnerCount(x.contestWinnerCount) < 1
-      ) {
-        return `Question ${i + 1} : le nombre de gagnants doit être au minimum de 1.`;
-      }
-      const opts = x.options.map((s) => s.trim()).filter(Boolean);
-      if (opts.length < 2) {
-        return `Question ${i + 1} (« ${qi.slice(0, 40)}${qi.length > 40 ? "…" : ""} ») : au moins 2 réponses non vides.`;
-      }
-      if (isQuizQuestion(x.type)) {
-        const idx = Number(x.quizCorrectOrder);
-        const max = Math.max(0, opts.length - 1);
-        if (!Number.isFinite(idx) || idx < 0 || idx > max) {
-          return `Question ${i + 1} : sélectionnez la bonne réponse du quiz.`;
-        }
-      }
-    }
-    return null;
   }
 
   async function handleCreatePoll(e) {
     e.preventDefault();
-    const msg = validerFormulaire();
-    if (msg) {
-      setFormError(msg);
+    const result = validateCreateEventForm({ eventTitle, questions });
+    if (!result.ok) {
+      focusValidationError(result);
       return;
     }
     setFormError(null);
+    setFieldErrors({ questions: {} });
 
     if (createLockRef.current) return;
     createLockRef.current = true;
@@ -349,10 +403,9 @@ export default function AdminPage() {
         ? normalizeContestWinnerCount(premier.contestWinnerCount)
         : 1,
       options: premier.options.map((s) => s.trim()).filter(Boolean),
-      leadTriggerOrder:
-        isLeadLikeQuestionType(premier.type)
-          ? Number(premier.leadTriggerOrder ?? 0)
-          : 0,
+      leadTriggerOrder: isLeadLikeQuestionType(premier.type)
+        ? Number(premier.leadTriggerOrder ?? 0)
+        : 0,
       quizCorrectOrder: isQuizQuestion(premier.type)
         ? Number(premier.quizCorrectOrder ?? 0)
         : null,
@@ -367,8 +420,9 @@ export default function AdminPage() {
           : 1,
         order,
         options: x.options.map((s) => s.trim()).filter(Boolean),
-        leadTriggerOrder:
-          isLeadLikeQuestionType(x.type) ? Number(x.leadTriggerOrder ?? 0) : 0,
+        leadTriggerOrder: isLeadLikeQuestionType(x.type)
+          ? Number(x.leadTriggerOrder ?? 0)
+          : 0,
         quizCorrectOrder: isQuizQuestion(x.type)
           ? Number(x.quizCorrectOrder ?? 0)
           : null,
@@ -398,6 +452,9 @@ export default function AdminPage() {
       const slug = created.eventSlug;
 
       if (eventId) {
+        if (typeof window !== "undefined") {
+          clearCreateEventDraft(window.localStorage);
+        }
         const titre = eventTitle.trim();
         if (slug) {
           rememberMyEvent({ id: eventId, title: titre, slug });
@@ -405,26 +462,29 @@ export default function AdminPage() {
         router.replace(`/admin/event/${eventId}`);
         return;
       }
-    } catch (e) {
-      setError(e.message || "Échec de la création du sondage");
+    } catch (err) {
+      setError(err.message || "Échec de la création du sondage");
     } finally {
       setCreating(false);
       createLockRef.current = false;
     }
   }
 
-  const totalQuestions = questions.length;
-  const totalOptions = questions.reduce((sum, q) => sum + q.options.length, 0);
-  const leadQuestions = questions.filter((q) => q.type === "LEAD").length;
-  const contestQuestions = questions.filter(
-    (q) => q.type === "CONTEST_ENTRY",
-  ).length;
-  const multipleQuestions = questions.filter(
-    (q) => q.type === "MULTIPLE_CHOICE",
-  ).length;
-  const singleQuestions =
-    totalQuestions - leadQuestions - contestQuestions - multipleQuestions;
+  const stats = useMemo(() => summarizeQuestionTypes(questions), [questions]);
   const eventTitlePreview = eventTitle.trim() || "Titre de l’événement";
+  const activeQuestionIndex = Math.max(
+    0,
+    questions.findIndex((q) => q.id === openQuestionId),
+  );
+  const titleHasError = Boolean(fieldErrors?.eventTitle);
+
+  function questionSummaryLine(item) {
+    const meta = QUESTION_TYPE_META.find((t) => t.type === item.type);
+    const filled = (item.options || []).filter((o) => String(o).trim()).length;
+    const label = meta?.label || item.type;
+    const qText = item.question.trim();
+    return `${label} · ${filled} réponse(s)${qText ? ` · ${qText.slice(0, 42)}${qText.length > 42 ? "…" : ""}` : ""}`;
+  }
 
   return (
     <main className="admin-create-page">
@@ -433,14 +493,75 @@ export default function AdminPage() {
           title="Créer un événement"
           subtitle="Préparez vos questions, structurez le vote et lancez votre régie en quelques secondes."
           breadcrumbs={
-            <Link href="/admin/events" style={{ color: "#64748b", fontWeight: 600, textDecoration: "none", fontSize: "0.88rem" }}>
+            <Link
+              href="/admin/events"
+              style={{
+                color: "#64748b",
+                fontWeight: 600,
+                textDecoration: "none",
+                fontSize: "0.88rem",
+              }}
+            >
               ← Mes événements
             </Link>
           }
         />
 
-        <div className="admin-create-grid">
-          <form id="create-event-form" className="admin-create-form" onSubmit={handleCreatePoll}>
+        {draftBanner ? (
+          <div className="admin-draft-banner" role="status">
+            <p>
+              Brouillon récupéré automatiquement. Vous pouvez continuer ou
+              repartir de zéro.
+            </p>
+            <div className="admin-draft-actions">
+              <button
+                type="button"
+                className="admin-draft-continue"
+                onClick={() => setDraftBanner(false)}
+              >
+                Continuer
+              </button>
+              <button type="button" style={btnGhost} onClick={resetFormToBlank}>
+                Repartir de zéro
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        <div
+          className="admin-mobile-tabs"
+          role="tablist"
+          aria-label="Formulaire ou aperçu"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobilePanel === "form"}
+            className={mobilePanel === "form" ? "active" : ""}
+            onClick={() => setMobilePanel("form")}
+          >
+            Formulaire
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobilePanel === "preview"}
+            className={mobilePanel === "preview" ? "active" : ""}
+            onClick={() => setMobilePanel("preview")}
+          >
+            Aperçu
+          </button>
+        </div>
+
+        <div
+          className="admin-create-grid"
+          data-mobile-panel={mobilePanel}
+        >
+          <form
+            id="create-event-form"
+            className="admin-create-form"
+            onSubmit={handleCreatePoll}
+          >
             <section className="admin-section-card">
               <h2 className="admin-section-title">Informations événement</h2>
               <label className="admin-label" htmlFor="event-title">
@@ -448,13 +569,32 @@ export default function AdminPage() {
               </label>
               <input
                 id="event-title"
+                ref={titleInputRef}
                 type="text"
                 value={eventTitle}
-                onChange={(ev) => setEventTitle(ev.target.value)}
+                onChange={(ev) => {
+                  setEventTitle(ev.target.value);
+                  if (fieldErrors?.eventTitle) {
+                    setFieldErrors((fe) => {
+                      const next = { ...fe };
+                      delete next.eventTitle;
+                      return next;
+                    });
+                  }
+                }}
                 placeholder="Ex. Soirée partenaires Q2"
                 disabled={creating}
-                style={{ ...inputStyle, marginBottom: "0.95rem" }}
+                aria-invalid={titleHasError ? "true" : undefined}
+                style={{
+                  ...(titleHasError ? inputErrorStyle : inputStyle),
+                  marginBottom: titleHasError ? "0.35rem" : "0.95rem",
+                }}
               />
+              {titleHasError ? (
+                <p className="admin-field-error" role="alert">
+                  {fieldErrors.eventTitle}
+                </p>
+              ) : null}
 
               <label className="admin-label" htmlFor="event-desc">
                 Description (optionnelle)
@@ -481,8 +621,8 @@ export default function AdminPage() {
                 <div>
                   <h2 className="admin-section-title">Questions</h2>
                   <p className="admin-section-sub">
-                    Ordre d’affichage = ordre du vote. Chaque question contient
-                    au moins 2 réponses.
+                    Une question ouverte à la fois. Ordre d’affichage = ordre du
+                    vote. Chaque question contient au moins 2 réponses.
                   </p>
                 </div>
                 <button
@@ -496,315 +636,482 @@ export default function AdminPage() {
               </div>
 
               <div className="admin-question-list">
-                {questions.map((item, indexQ) => (
-                  <article key={item.id} className="admin-question-card">
-                    <div className="admin-question-top">
-                      <span className="admin-question-title">Question {indexQ + 1}</span>
-                      <button
-                        type="button"
-                        disabled={creating || questions.length <= 1}
-                        onClick={() => retirerQuestion(item.id)}
-                        className="admin-remove-question"
-                      >
-                        Supprimer
-                      </button>
-                    </div>
-
-                    <label className="admin-label" htmlFor={`q-text-${item.id}`}>
-                      Texte de la question
-                    </label>
-                    <input
-                      id={`q-text-${item.id}`}
-                      type="text"
-                      value={item.question}
-                      onChange={(ev) => majTexteQuestion(item.id, ev.target.value)}
-                      placeholder="Ex. Qui va marquer le prochain but ?"
-                      disabled={creating}
-                      style={{ ...inputStyle, marginBottom: "0.95rem" }}
-                    />
-
-                    <div className="admin-question-separator" />
-
-                    <fieldset style={{ border: "none", padding: 0, margin: "0 0 0.9rem 0" }}>
-                      <legend className="admin-label" style={{ marginBottom: "0.5rem" }}>
-                        Type de vote
-                      </legend>
-                      <div className="admin-type-grid">
-                        <label className="admin-choice">
-                          <input
-                            type="radio"
-                            name={`pollType-${item.id}`}
-                            checked={item.type === "SINGLE_CHOICE"}
-                            disabled={creating}
-                            onChange={() => majTypeQuestion(item.id, "SINGLE_CHOICE")}
-                          />
-                          <span>Choix unique</span>
-                        </label>
-                        <label className="admin-choice">
-                          <input
-                            type="radio"
-                            name={`pollType-${item.id}`}
-                            checked={item.type === "MULTIPLE_CHOICE"}
-                            disabled={creating}
-                            onChange={() => majTypeQuestion(item.id, "MULTIPLE_CHOICE")}
-                          />
-                          <span>Choix multiple</span>
-                        </label>
-                        <label className="admin-choice">
-                          <input
-                            type="radio"
-                            name={`pollType-${item.id}`}
-                            checked={item.type === "LEAD"}
-                            disabled={creating}
-                            onChange={() => majTypeQuestion(item.id, "LEAD")}
-                          />
-                          <span>Lead (Oui/Non + formulaire)</span>
-                        </label>
-                        <label className="admin-choice">
-                          <input
-                            type="radio"
-                            name={`pollType-${item.id}`}
-                            checked={item.type === "CONTEST_ENTRY"}
-                            disabled={creating}
-                            onChange={() =>
-                              majTypeQuestion(item.id, "CONTEST_ENTRY")
-                            }
-                          />
-                          <span>Participation concours</span>
-                        </label>
-                        <label className="admin-choice">
-                          <input
-                            type="radio"
-                            name={`pollType-${item.id}`}
-                            checked={item.type === "QUIZ"}
-                            disabled={creating}
-                            onChange={() => majTypeQuestion(item.id, "QUIZ")}
-                          />
-                          <span>Quiz (1 bonne réponse)</span>
-                        </label>
-                      </div>
-                    </fieldset>
-
-                    {isContestEntryQuestion(item.type) ? (
-                      <div style={{ marginBottom: "0.9rem" }}>
-                        <label className="admin-label" htmlFor={`q-prize-${item.id}`}>
-                          Lot à gagner
-                        </label>
-                        <input
-                          id={`q-prize-${item.id}`}
-                          type="text"
-                          value={item.contestPrize || ""}
-                          onChange={(ev) =>
-                            majContestPrize(item.id, ev.target.value)
-                          }
-                          placeholder={CONTEST_PRIZE_PLACEHOLDER}
+                {questions.map((item, indexQ) => {
+                  const isOpen = openQuestionId === item.id;
+                  const qErr = fieldErrors?.questions?.[item.id] || {};
+                  const hasQErr = Object.keys(qErr).length > 0;
+                  return (
+                    <article
+                      key={item.id}
+                      ref={(el) => {
+                        questionCardRefs.current[item.id] = el;
+                      }}
+                      className={`admin-question-card ${isOpen ? "is-open" : "is-collapsed"} ${hasQErr ? "has-error" : ""}`}
+                      data-question-id={item.id}
+                    >
+                      <div className="admin-question-top">
+                        <button
+                          type="button"
+                          className="admin-question-toggle"
+                          aria-expanded={isOpen}
                           disabled={creating}
-                          style={{ ...inputStyle, marginBottom: "0.45rem" }}
-                        />
-                        {!(item.contestPrize || "").trim() ? (
-                          <p
-                            style={{
-                              margin: 0,
-                              fontSize: "0.86rem",
-                              color: "#b45309",
-                            }}
-                          >
-                            Précisez le lot à gagner pour rendre le concours clair
-                            pour les participants.
-                          </p>
-                        ) : null}
-                        <div style={{ marginTop: "0.65rem" }}>
-                          <label
-                            className="admin-label"
-                            htmlFor={`q-winner-count-${item.id}`}
-                          >
-                            Nombre de gagnants
-                          </label>
-                          <input
-                            id={`q-winner-count-${item.id}`}
-                            type="number"
-                            min={1}
-                            step={1}
-                            value={normalizeContestWinnerCount(
-                              item.contestWinnerCount,
-                            )}
-                            onChange={(ev) =>
-                              majContestWinnerCount(item.id, ev.target.value)
-                            }
-                            disabled={creating}
-                            style={{ ...inputStyle, marginBottom: "0.32rem" }}
-                          />
-                          <p
-                            style={{
-                              margin: 0,
-                              fontSize: "0.8rem",
-                              color: "#64748b",
-                            }}
-                          >
-                            Nombre total de gagnants à tirer pour ce concours.
-                          </p>
-                        </div>
-                      </div>
-                    ) : null}
-
-                    <div className="admin-question-separator" />
-
-                    <p className="admin-label" style={{ marginBottom: "0.45rem" }}>
-                      Réponses
-                    </p>
-                    <ul className="admin-options-list">
-                      {item.options.map((value, indexOpt) => (
-                        <li key={`${item.id}-opt-${indexOpt}`} className="admin-option-row">
-                          <span
-                            className={`admin-option-indicator ${
-                              item.type === "MULTIPLE_CHOICE"
-                                ? "checkbox"
-                                : "radio"
-                            }`}
-                            aria-hidden
-                          />
-                          <input
-                            type="text"
-                            value={value}
-                            onChange={(ev) => majOption(item.id, indexOpt, ev.target.value)}
-                            placeholder={`Option ${indexOpt + 1}`}
-                            disabled={creating || item.type === "CONTEST_ENTRY"}
-                            className="admin-option-input"
-                          />
+                          onClick={() =>
+                            setOpenQuestionId(isOpen ? null : item.id)
+                          }
+                        >
+                          <span className="admin-question-title">
+                            Question {indexQ + 1}
+                            {hasQErr ? (
+                              <span className="admin-q-error-dot" aria-hidden>
+                                !
+                              </span>
+                            ) : null}
+                          </span>
+                          {!isOpen ? (
+                            <span className="admin-question-summary">
+                              {questionSummaryLine(item)}
+                            </span>
+                          ) : null}
+                        </button>
+                        <div className="admin-question-toolbar">
                           <button
                             type="button"
+                            className="admin-q-tool"
+                            disabled={creating || indexQ === 0}
+                            onClick={() => deplacerQuestion(item.id, "up")}
+                            title="Monter"
+                            aria-label={`Monter la question ${indexQ + 1}`}
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-q-tool"
                             disabled={
-                              creating ||
-                              item.options.length <= 2 ||
-                              item.type === "CONTEST_ENTRY"
+                              creating || indexQ === questions.length - 1
                             }
-                            onClick={() => retirerOption(item.id, indexOpt)}
-                            className="admin-option-remove"
+                            onClick={() => deplacerQuestion(item.id, "down")}
+                            title="Descendre"
+                            aria-label={`Descendre la question ${indexQ + 1}`}
+                          >
+                            ↓
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-q-tool"
+                            disabled={creating}
+                            onClick={() => dupliquerQuestion(item.id)}
+                          >
+                            Dupliquer
+                          </button>
+                          <button
+                            type="button"
+                            disabled={creating || questions.length <= 1}
+                            onClick={() => retirerQuestion(item.id)}
+                            className="admin-remove-question"
                           >
                             Supprimer
                           </button>
-                        </li>
-                      ))}
-                    </ul>
-
-                    {isLeadLikeQuestionType(item.type) ? (
-                      <div className="admin-lead-config">
-                        <label htmlFor={`lead-trigger-${item.id}`} className="admin-label">
-                          Option déclencheuse du formulaire
-                        </label>
-                        <select
-                          id={`lead-trigger-${item.id}`}
-                          value={Math.min(
-                            Math.max(0, Number(item.leadTriggerOrder ?? 0)),
-                            Math.max(0, item.options.length - 1),
-                          )}
-                          onChange={(ev) =>
-                            majLeadTriggerOrder(item.id, Number(ev.target.value))
-                          }
-                          disabled={creating}
-                          style={{ ...inputStyle, padding: "0.45rem 0.6rem" }}
-                        >
-                          {item.options.map((opt, idx) => (
-                            <option key={`${item.id}-lead-trigger-${idx}`} value={idx}>
-                              {opt.trim() || `Option ${idx + 1}`}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    ) : null}
-                    {isQuizQuestion(item.type) ? (
-                      <div className="admin-lead-config">
-                        <label htmlFor={`quiz-correct-${item.id}`} className="admin-label">
-                          Bonne réponse
-                        </label>
-                        <select
-                          id={`quiz-correct-${item.id}`}
-                          value={Math.min(
-                            Math.max(0, Number(item.quizCorrectOrder ?? 0)),
-                            Math.max(0, item.options.length - 1),
-                          )}
-                          onChange={(ev) =>
-                            majQuestion(item.id, { quizCorrectOrder: Number(ev.target.value) })
-                          }
-                          disabled={creating}
-                          style={{ ...inputStyle, padding: "0.45rem 0.6rem" }}
-                        >
-                          {item.options.map((opt, idx) => (
-                            <option key={`${item.id}-quiz-correct-${idx}`} value={idx}>
-                              {opt.trim() || `Option ${idx + 1}`}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    ) : null}
-
-                    <div className="admin-option-actions">
-                      <button
-                        type="button"
-                        disabled={creating || item.type === "CONTEST_ENTRY"}
-                        onClick={() => ajouterOption(item.id)}
-                        className="admin-option-add-btn"
-                      >
-                        {item.type === "CONTEST_ENTRY"
-                          ? "Options fixées à Oui / Non"
-                          : "Ajouter une option"}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={creating || item.type === "CONTEST_ENTRY"}
-                        onClick={() => basculerPanneauImportMasse(item.id)}
-                        className="admin-bulk-btn"
-                      >
-                        {importMasseQuestionId === item.id
-                          ? "Fermer l’import en masse"
-                          : "Ajouter en masse"}
-                      </button>
-                    </div>
-
-                    {importMasseQuestionId === item.id ? (
-                      <div className="admin-bulk-panel">
-                        <p>
-                          Collez une réponse par ligne. Les lignes vides et doublons
-                          sont ignorés.
-                        </p>
-                        <textarea
-                          value={importMasseTexte}
-                          onChange={(ev) => setImportMasseTexte(ev.target.value)}
-                          disabled={creating}
-                          rows={6}
-                          placeholder={"Mbappé\nDembélé\nVitinha"}
-                          style={{
-                            ...inputStyle,
-                            display: "block",
-                            width: "100%",
-                            minHeight: "7rem",
-                            resize: "vertical",
-                            fontFamily: "inherit",
-                            marginBottom: "0.65rem",
-                          }}
-                        />
-                        <div className="admin-bulk-actions">
-                          <button
-                            type="button"
-                            disabled={creating}
-                            onClick={() => importerOptionsEnMasse(item.id)}
-                            className="admin-bulk-import"
-                          >
-                            Importer
-                          </button>
-                          <button
-                            type="button"
-                            disabled={creating}
-                            onClick={() => setImportMasseQuestionId(null)}
-                            style={btnGhost}
-                          >
-                            Annuler
-                          </button>
                         </div>
                       </div>
-                    ) : null}
-                  </article>
-                ))}
+
+                      {isOpen ? (
+                        <div className="admin-question-body">
+                          <label
+                            className="admin-label"
+                            htmlFor={`q-text-${item.id}`}
+                          >
+                            Texte de la question
+                          </label>
+                          <input
+                            id={`q-text-${item.id}`}
+                            type="text"
+                            value={item.question}
+                            onChange={(ev) =>
+                              majTexteQuestion(item.id, ev.target.value)
+                            }
+                            placeholder="Ex. Qui va marquer le prochain but ?"
+                            disabled={creating}
+                            aria-invalid={qErr.question ? "true" : undefined}
+                            style={{
+                              ...(qErr.question ? inputErrorStyle : inputStyle),
+                              marginBottom: qErr.question
+                                ? "0.35rem"
+                                : "0.95rem",
+                            }}
+                          />
+                          {qErr.question ? (
+                            <p className="admin-field-error" role="alert">
+                              {qErr.question}
+                            </p>
+                          ) : null}
+
+                          <div className="admin-question-separator" />
+
+                          <fieldset
+                            style={{
+                              border: "none",
+                              padding: 0,
+                              margin: "0 0 0.9rem 0",
+                            }}
+                          >
+                            <legend
+                              className="admin-label"
+                              style={{ marginBottom: "0.5rem" }}
+                            >
+                              Type de vote
+                            </legend>
+                            <div className="admin-type-grid">
+                              {QUESTION_TYPE_META.map((meta) => {
+                                const checked = item.type === meta.type;
+                                return (
+                                  <label
+                                    key={meta.type}
+                                    className={`admin-type-card ${checked ? "is-selected" : ""}`}
+                                  >
+                                    <input
+                                      type="radio"
+                                      name={`pollType-${item.id}`}
+                                      checked={checked}
+                                      disabled={creating}
+                                      onChange={() =>
+                                        majTypeQuestion(item.id, meta.type)
+                                      }
+                                    />
+                                    <span className="admin-type-card-label">
+                                      {meta.label}
+                                    </span>
+                                    <span className="admin-type-card-help">
+                                      {meta.help}
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </fieldset>
+
+                          {isContestEntryQuestion(item.type) ? (
+                            <div style={{ marginBottom: "0.9rem" }}>
+                              <label
+                                className="admin-label"
+                                htmlFor={`q-prize-${item.id}`}
+                              >
+                                Lot à gagner
+                              </label>
+                              <input
+                                id={`q-prize-${item.id}`}
+                                type="text"
+                                value={item.contestPrize || ""}
+                                onChange={(ev) =>
+                                  majContestPrize(item.id, ev.target.value)
+                                }
+                                placeholder={CONTEST_PRIZE_PLACEHOLDER}
+                                disabled={creating}
+                                aria-invalid={
+                                  qErr.contestPrize ? "true" : undefined
+                                }
+                                style={{
+                                  ...(qErr.contestPrize
+                                    ? inputErrorStyle
+                                    : inputStyle),
+                                  marginBottom: "0.45rem",
+                                }}
+                              />
+                              {qErr.contestPrize ||
+                              !(item.contestPrize || "").trim() ? (
+                                <p
+                                  className={
+                                    qErr.contestPrize
+                                      ? "admin-field-error"
+                                      : undefined
+                                  }
+                                  style={
+                                    qErr.contestPrize
+                                      ? undefined
+                                      : {
+                                          margin: 0,
+                                          fontSize: "0.86rem",
+                                          color: "#b45309",
+                                        }
+                                  }
+                                  role={qErr.contestPrize ? "alert" : undefined}
+                                >
+                                  {qErr.contestPrize ||
+                                    "Précisez le lot à gagner pour rendre le concours clair pour les participants."}
+                                </p>
+                              ) : null}
+                              <div style={{ marginTop: "0.65rem" }}>
+                                <label
+                                  className="admin-label"
+                                  htmlFor={`q-winner-count-${item.id}`}
+                                >
+                                  Nombre de gagnants
+                                </label>
+                                <input
+                                  id={`q-winner-count-${item.id}`}
+                                  type="number"
+                                  min={1}
+                                  step={1}
+                                  value={normalizeContestWinnerCount(
+                                    item.contestWinnerCount,
+                                  )}
+                                  onChange={(ev) =>
+                                    majContestWinnerCount(
+                                      item.id,
+                                      ev.target.value,
+                                    )
+                                  }
+                                  disabled={creating}
+                                  style={{
+                                    ...inputStyle,
+                                    marginBottom: "0.32rem",
+                                  }}
+                                />
+                                <p
+                                  style={{
+                                    margin: 0,
+                                    fontSize: "0.8rem",
+                                    color: "#64748b",
+                                  }}
+                                >
+                                  Nombre total de gagnants à tirer pour ce
+                                  concours.
+                                </p>
+                              </div>
+                            </div>
+                          ) : null}
+
+                          <div className="admin-question-separator" />
+
+                          <p
+                            className="admin-label"
+                            style={{ marginBottom: "0.45rem" }}
+                          >
+                            Réponses
+                          </p>
+                          <ul className="admin-options-list">
+                            {item.options.map((value, indexOpt) => (
+                              <li
+                                key={`${item.id}-opt-${indexOpt}`}
+                                className="admin-option-row"
+                              >
+                                <span
+                                  className={`admin-option-indicator ${
+                                    item.type === "MULTIPLE_CHOICE"
+                                      ? "checkbox"
+                                      : "radio"
+                                  }`}
+                                  aria-hidden
+                                />
+                                <input
+                                  type="text"
+                                  value={value}
+                                  onChange={(ev) =>
+                                    majOption(
+                                      item.id,
+                                      indexOpt,
+                                      ev.target.value,
+                                    )
+                                  }
+                                  placeholder={`Option ${indexOpt + 1}`}
+                                  disabled={
+                                    creating || item.type === "CONTEST_ENTRY"
+                                  }
+                                  className="admin-option-input"
+                                />
+                                <button
+                                  type="button"
+                                  disabled={
+                                    creating ||
+                                    item.options.length <= 2 ||
+                                    item.type === "CONTEST_ENTRY"
+                                  }
+                                  onClick={() =>
+                                    retirerOption(item.id, indexOpt)
+                                  }
+                                  className="admin-option-remove"
+                                >
+                                  Supprimer
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                          {qErr.options ? (
+                            <p className="admin-field-error" role="alert">
+                              {qErr.options}
+                            </p>
+                          ) : null}
+
+                          {isLeadLikeQuestionType(item.type) ? (
+                            <div className="admin-lead-config">
+                              <label
+                                htmlFor={`lead-trigger-${item.id}`}
+                                className="admin-label"
+                              >
+                                Option déclencheuse du formulaire
+                              </label>
+                              <select
+                                id={`lead-trigger-${item.id}`}
+                                value={Math.min(
+                                  Math.max(
+                                    0,
+                                    Number(item.leadTriggerOrder ?? 0),
+                                  ),
+                                  Math.max(0, item.options.length - 1),
+                                )}
+                                onChange={(ev) =>
+                                  majLeadTriggerOrder(
+                                    item.id,
+                                    Number(ev.target.value),
+                                  )
+                                }
+                                disabled={creating}
+                                style={{
+                                  ...inputStyle,
+                                  padding: "0.45rem 0.6rem",
+                                }}
+                              >
+                                {item.options.map((opt, idx) => (
+                                  <option
+                                    key={`${item.id}-lead-trigger-${idx}`}
+                                    value={idx}
+                                  >
+                                    {opt.trim() || `Option ${idx + 1}`}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          ) : null}
+                          {isQuizQuestion(item.type) ? (
+                            <div className="admin-lead-config">
+                              <label
+                                htmlFor={`quiz-correct-${item.id}`}
+                                className="admin-label"
+                              >
+                                Bonne réponse
+                              </label>
+                              <select
+                                id={`quiz-correct-${item.id}`}
+                                value={Math.min(
+                                  Math.max(
+                                    0,
+                                    Number(item.quizCorrectOrder ?? 0),
+                                  ),
+                                  Math.max(0, item.options.length - 1),
+                                )}
+                                onChange={(ev) =>
+                                  majQuestion(item.id, {
+                                    quizCorrectOrder: Number(ev.target.value),
+                                  })
+                                }
+                                disabled={creating}
+                                aria-invalid={
+                                  qErr.quizCorrectOrder ? "true" : undefined
+                                }
+                                style={{
+                                  ...(qErr.quizCorrectOrder
+                                    ? inputErrorStyle
+                                    : inputStyle),
+                                  padding: "0.45rem 0.6rem",
+                                }}
+                              >
+                                {item.options.map((opt, idx) => (
+                                  <option
+                                    key={`${item.id}-quiz-correct-${idx}`}
+                                    value={idx}
+                                  >
+                                    {opt.trim() || `Option ${idx + 1}`}
+                                  </option>
+                                ))}
+                              </select>
+                              {qErr.quizCorrectOrder ? (
+                                <p className="admin-field-error" role="alert">
+                                  {qErr.quizCorrectOrder}
+                                </p>
+                              ) : null}
+                            </div>
+                          ) : null}
+
+                          <div className="admin-option-actions">
+                            <button
+                              type="button"
+                              disabled={
+                                creating || item.type === "CONTEST_ENTRY"
+                              }
+                              onClick={() => ajouterOption(item.id)}
+                              className="admin-option-add-btn"
+                            >
+                              {item.type === "CONTEST_ENTRY"
+                                ? "Options fixées à Oui / Non"
+                                : "Ajouter une option"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={
+                                creating || item.type === "CONTEST_ENTRY"
+                              }
+                              onClick={() =>
+                                basculerPanneauImportMasse(item.id)
+                              }
+                              className="admin-bulk-btn"
+                            >
+                              {importMasseQuestionId === item.id
+                                ? "Fermer l’import en masse"
+                                : "Ajouter en masse"}
+                            </button>
+                          </div>
+
+                          {importMasseQuestionId === item.id ? (
+                            <div className="admin-bulk-panel">
+                              <p>
+                                Collez une réponse par ligne. Les lignes vides et
+                                doublons sont ignorés.
+                              </p>
+                              <textarea
+                                value={importMasseTexte}
+                                onChange={(ev) =>
+                                  setImportMasseTexte(ev.target.value)
+                                }
+                                disabled={creating}
+                                rows={6}
+                                placeholder={"Mbappé\nDembélé\nVitinha"}
+                                style={{
+                                  ...inputStyle,
+                                  display: "block",
+                                  width: "100%",
+                                  minHeight: "7rem",
+                                  resize: "vertical",
+                                  fontFamily: "inherit",
+                                  marginBottom: "0.65rem",
+                                }}
+                              />
+                              <div className="admin-bulk-actions">
+                                <button
+                                  type="button"
+                                  disabled={creating}
+                                  onClick={() =>
+                                    importerOptionsEnMasse(item.id)
+                                  }
+                                  className="admin-bulk-import"
+                                >
+                                  Importer
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={creating}
+                                  onClick={() => setImportMasseQuestionId(null)}
+                                  style={btnGhost}
+                                >
+                                  Annuler
+                                </button>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
               </div>
 
               <div className="admin-questions-footer">
@@ -831,14 +1138,21 @@ export default function AdminPage() {
               </p>
             ) : null}
 
-            <button type="submit" disabled={creating} className="admin-create-cta mobile">
+            <button
+              type="submit"
+              disabled={creating}
+              className="admin-create-cta mobile"
+            >
               {creating ? "Création en cours…" : "Créer l’événement"}
             </button>
 
             <p className="admin-footnote">
               Après création, vous êtes redirigé vers la régie. Retrouvez vos
               événements dans{" "}
-              <Link href="/admin/events" style={{ color: "#7c3aed", fontWeight: 700 }}>
+              <Link
+                href="/admin/events"
+                style={{ color: "#7c3aed", fontWeight: 700 }}
+              >
                 Mes événements
               </Link>
               .
@@ -851,12 +1165,13 @@ export default function AdminPage() {
                 <p className="admin-side-kicker">Résumé</p>
                 <h3>{eventTitlePreview}</h3>
                 <ul>
-                  <li>{totalQuestions} question(s)</li>
-                  <li>{totalOptions} option(s) au total</li>
-                  <li>{singleQuestions} en choix unique</li>
-                  <li>{multipleQuestions} en choix multiple</li>
-                  <li>{leadQuestions} lead(s)</li>
-                  <li>{contestQuestions} concours</li>
+                  <li>{stats.totalQuestions} question(s)</li>
+                  <li>{stats.totalOptions} option(s) au total</li>
+                  <li>{stats.single} en choix unique</li>
+                  <li>{stats.multiple} en choix multiple</li>
+                  <li>{stats.quiz} quiz</li>
+                  <li>{stats.lead} lead(s)</li>
+                  <li>{stats.contest} concours</li>
                 </ul>
               </section>
 
@@ -864,7 +1179,9 @@ export default function AdminPage() {
                 <EventLivePreview
                   title={eventTitle}
                   questions={questions}
-                  activeQuestionIndex={0}
+                  activeQuestionIndex={
+                    activeQuestionIndex >= 0 ? activeQuestionIndex : 0
+                  }
                 />
               </section>
 
@@ -904,6 +1221,60 @@ export default function AdminPage() {
           padding: 24px clamp(16px, 3vw, 24px) 40px;
           box-sizing: border-box;
         }
+        .admin-draft-banner {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.75rem;
+          margin-bottom: 0.85rem;
+          padding: 0.85rem 1rem;
+          border-radius: 12px;
+          border: 1px solid #c7d2fe;
+          background: #eef2ff;
+        }
+        .admin-draft-banner p {
+          margin: 0;
+          font-size: 0.9rem;
+          font-weight: 600;
+          color: #312e81;
+        }
+        .admin-draft-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.45rem;
+        }
+        .admin-draft-continue {
+          min-height: 36px;
+          padding: 0.45rem 0.85rem;
+          border-radius: 8px;
+          border: 1px solid #4338ca;
+          background: #4338ca;
+          color: #fff;
+          font-weight: 700;
+          cursor: pointer;
+        }
+        .admin-mobile-tabs {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 0.4rem;
+          margin-bottom: 0.75rem;
+        }
+        .admin-mobile-tabs button {
+          min-height: 42px;
+          border-radius: 10px;
+          border: 1px solid #cbd5e1;
+          background: #fff;
+          color: #475569;
+          font-weight: 700;
+          font-size: 0.9rem;
+          cursor: pointer;
+        }
+        .admin-mobile-tabs button.active {
+          border-color: #4f46e5;
+          background: #eef2ff;
+          color: #3730a3;
+        }
         .admin-create-grid {
           display: grid;
           grid-template-columns: minmax(0, 1fr);
@@ -914,6 +1285,12 @@ export default function AdminPage() {
           display: flex;
           flex-direction: column;
           gap: 0.75rem;
+        }
+        .admin-create-grid[data-mobile-panel="form"] .admin-side-panel {
+          display: none;
+        }
+        .admin-create-grid[data-mobile-panel="preview"] .admin-create-form {
+          display: none;
         }
         .admin-section-card {
           border-radius: 14px;
@@ -939,6 +1316,12 @@ export default function AdminPage() {
           font-weight: 700;
           color: #334155;
           margin-bottom: 0.35rem;
+        }
+        .admin-field-error {
+          margin: 0 0 0.75rem;
+          font-size: 0.82rem;
+          font-weight: 600;
+          color: #b91c1c;
         }
         .admin-questions-head {
           display: flex;
@@ -969,18 +1352,80 @@ export default function AdminPage() {
           padding: 0.9rem;
           background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
         }
+        .admin-question-card.has-error {
+          border-color: #fca5a5;
+        }
+        .admin-question-card.is-collapsed {
+          padding: 0.7rem 0.85rem;
+        }
         .admin-question-top {
           display: flex;
           justify-content: space-between;
-          align-items: center;
+          align-items: flex-start;
           gap: 0.5rem;
-          margin-bottom: 0.65rem;
+          margin-bottom: 0;
           flex-wrap: wrap;
+        }
+        .admin-question-card.is-open .admin-question-top {
+          margin-bottom: 0.65rem;
+        }
+        .admin-question-toggle {
+          flex: 1;
+          min-width: 0;
+          text-align: left;
+          border: none;
+          background: transparent;
+          padding: 0;
+          cursor: pointer;
+          display: grid;
+          gap: 0.2rem;
         }
         .admin-question-title {
           font-weight: 800;
           font-size: 0.95rem;
           color: #0f172a;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.4rem;
+        }
+        .admin-q-error-dot {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 1.05rem;
+          height: 1.05rem;
+          border-radius: 999px;
+          background: #fee2e2;
+          color: #b91c1c;
+          font-size: 0.72rem;
+          font-weight: 900;
+        }
+        .admin-question-summary {
+          font-size: 0.8rem;
+          color: #64748b;
+          font-weight: 500;
+          line-height: 1.35;
+        }
+        .admin-question-toolbar {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.35rem;
+          align-items: center;
+        }
+        .admin-q-tool {
+          min-height: 36px;
+          padding: 0.42rem 0.6rem;
+          border-radius: 9px;
+          border: 1px solid #cbd5e1;
+          background: #fff;
+          color: #334155;
+          font-size: 0.78rem;
+          font-weight: 700;
+          cursor: pointer;
+        }
+        .admin-q-tool:disabled {
+          opacity: 0.45;
+          cursor: not-allowed;
         }
         .admin-remove-question {
           min-height: 36px;
@@ -1000,14 +1445,40 @@ export default function AdminPage() {
         }
         .admin-type-grid {
           display: grid;
-          gap: 0.45rem;
+          gap: 0.5rem;
         }
-        .admin-choice {
-          display: flex;
-          align-items: center;
-          gap: 0.45rem;
+        .admin-type-card {
+          display: grid;
+          grid-template-columns: auto 1fr;
+          grid-template-rows: auto auto;
+          column-gap: 0.55rem;
+          row-gap: 0.1rem;
+          align-items: start;
+          padding: 0.65rem 0.75rem;
+          border-radius: 12px;
+          border: 1px solid #e2e8f0;
+          background: #fff;
+          cursor: pointer;
+          transition: border-color .16s ease, background-color .16s ease, box-shadow .16s ease;
+        }
+        .admin-type-card input {
+          grid-row: 1 / span 2;
+          margin-top: 0.2rem;
+        }
+        .admin-type-card-label {
           font-size: 0.9rem;
-          color: #334155;
+          font-weight: 800;
+          color: #0f172a;
+        }
+        .admin-type-card-help {
+          font-size: 0.78rem;
+          color: #64748b;
+          line-height: 1.35;
+        }
+        .admin-type-card.is-selected {
+          border-color: #818cf8;
+          background: #eef2ff;
+          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
         }
         .admin-option-row {
           display: flex;
@@ -1262,10 +1733,17 @@ export default function AdminPage() {
           box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
         }
         @media (min-width: 980px) {
+          .admin-mobile-tabs { display: none; }
           .admin-create-grid {
             grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
             align-items: start;
             gap: 1rem;
+          }
+          .admin-create-grid[data-mobile-panel="form"] .admin-side-panel {
+            display: block;
+          }
+          .admin-create-grid[data-mobile-panel="preview"] .admin-create-form {
+            display: flex;
           }
           .admin-create-form {
             gap: 1rem;
@@ -1282,6 +1760,9 @@ export default function AdminPage() {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 0.55rem;
+          }
+          .admin-type-grid {
+            grid-template-columns: 1fr 1fr;
           }
         }
         @media (min-width: 1280px) {
@@ -1308,6 +1789,9 @@ export default function AdminPage() {
           .admin-option-remove {
             padding: 0.46rem 0.6rem;
             font-size: 0.75rem;
+          }
+          .admin-question-toolbar {
+            width: 100%;
           }
         }
         @keyframes adminOptionAppear {
