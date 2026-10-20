@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from "react";
  *  mobileQuickItem?: { href: string; label: string; match?: "exact" | "prefix" | "none" } | null;
  *  mobileMoreItems?: Array<{ href: string; label: string; match?: "exact" | "prefix" | "none" }> | null;
  *  rightSlot: import("react").ReactNode;
+ *  contentMaxWidth?: number | string;
  * }} props
  */
 export function AppHeaderShell({
@@ -25,6 +26,7 @@ export function AppHeaderShell({
   mobileQuickItem = null,
   mobileMoreItems = null,
   rightSlot,
+  contentMaxWidth = 1200,
 }) {
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
@@ -153,7 +155,7 @@ export function AppHeaderShell({
         }
         .app-header-inner {
           width: 100%;
-          max-width: 1200px;
+          max-width: ${typeof contentMaxWidth === "number" ? `${contentMaxWidth}px` : contentMaxWidth};
           margin: 0 auto;
           padding: 0 24px;
           box-sizing: border-box;

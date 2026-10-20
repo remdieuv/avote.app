@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { adminContentShellStyle } from "@/lib/adminLayout";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
 const LEADS_LAST_SEEN_LS_PREFIX = "avote_leads_seen_at_";
@@ -202,12 +203,10 @@ export default function EventLeadsPage() {
 
   return (
     <div
-      style={{
-        maxWidth: "1200px",
-        margin: "0 auto",
+      style={adminContentShellStyle("workspace", {
         padding: "24px 16px 40px",
         fontFamily: 'system-ui, "Segoe UI", sans-serif',
-      }}
+      })}
     >
       <div
         style={{

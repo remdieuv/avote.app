@@ -11,6 +11,7 @@ import {
 } from "react";
 import { LiveMicroLabel } from "@/components/admin/LiveMicroIcon";
 import { resolveApiAssetUrl } from "@/lib/assetUrl";
+import { adminContentMaxWidth } from "@/lib/adminLayout";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
 function mapApiError(body, status, fallbackPrefix = "Erreur") {
@@ -834,10 +835,11 @@ export function EventCustomizationEditor({ mode = "live" }) {
 
       <div
         style={{
-          maxWidth: "1200px",
+          maxWidth: adminContentMaxWidth("workspace"),
           margin: "0 auto",
           padding: "1.25rem clamp(1rem, 3vw, 1.75rem) 2.5rem",
           boxSizing: "border-box",
+          width: "100%",
         }}
       >
         <div style={{ marginBottom: "1.35rem" }}>
@@ -931,7 +933,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "minmax(300px, 45%) minmax(320px, 55%)",
+              gridTemplateColumns: "minmax(340px, 42%) minmax(320px, 1fr)",
               gap: "1.35rem",
               alignItems: "start",
               boxSizing: "border-box",
@@ -2289,7 +2291,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
           backdrop-filter: blur(8px);
         }
         .customization-sticky-bar-inner {
-          max-width: 1200px;
+          max-width: ${adminContentMaxWidth("workspace")};
           margin: 0 auto;
           padding: 0.7rem clamp(1rem, 3vw, 1.75rem);
           display: flex;
@@ -2297,6 +2299,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
           justify-content: space-between;
           gap: 0.75rem;
           box-sizing: border-box;
+          width: 100%;
         }
         @media (min-width: 901px) {
           .customization-preview-card {

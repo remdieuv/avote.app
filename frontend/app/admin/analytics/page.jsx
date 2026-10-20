@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { adminContentShellStyle } from "@/lib/adminLayout";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
 function mapApiError(body, status) {
@@ -140,7 +141,7 @@ export default function AdminAccountAnalyticsPage() {
   };
 
   return (
-    <main style={{ maxWidth: "1200px", margin: "0 auto", padding: "24px clamp(16px, 3vw, 24px) 40px", fontFamily: 'system-ui, "Segoe UI", sans-serif' }}>
+    <main style={adminContentShellStyle("workspace", { fontFamily: 'system-ui, "Segoe UI", sans-serif' })}>
       <AdminPageHeader
         title="Dashboard compte"
         subtitle="Vue consolidée de vos performances multi-événements."
