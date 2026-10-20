@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminEventsToolbar } from "@/components/admin/AdminEventsToolbar";
 import { EventDashboardCard } from "@/components/admin/EventDashboardCard";
+import { adminContentShellStyle } from "@/lib/adminLayout";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 import {
   EVENT_SORT_OPTIONS,
@@ -321,15 +322,7 @@ export default function AdminEventsPage() {
           {toastMsg}
         </div>
       ) : null}
-      <div
-        style={{
-          maxWidth: "1200px",
-          margin: "0 auto",
-          padding: "24px clamp(16px, 3vw, 24px) 40px",
-          boxSizing: "border-box",
-          width: "100%",
-        }}
-      >
+      <div style={adminContentShellStyle("workspace")}>
         <AdminPageHeader
           title="Mes événements"
           subtitle="Pilotez le live : régie, salle participants et projection sur un même tableau."

@@ -18,6 +18,7 @@
     "test:lead-contest": "node scripts/test-lead-contest-live-flow.mjs",
     "test:contest-replace": "node ../backend/scripts/test-contest-winner-replace.mjs",
     "test:regie-desktop": "node scripts/test-regie-desktop-layout.mjs",
+    "test:admin-widths": "node scripts/test-admin-desktop-widths.mjs",
     "test:regie-chrono": "node scripts/test-regie-chrono-enabled.mjs",
     "test:regie-quiz-edit": "node scripts/test-regie-quiz-edit.mjs",
     "test:regie-poll-edit-guards": "node scripts/test-regie-poll-edit-guards.mjs",

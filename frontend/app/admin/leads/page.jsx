@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { adminContentMaxWidth } from "@/lib/adminLayout";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
 function mapApiError(body, status) {
@@ -411,10 +412,12 @@ export default function MesLeadsPage() {
 
       <style>{`
         .leads-page-wrap {
-          max-width: 1200px;
+          max-width: ${adminContentMaxWidth("workspace")};
           margin: 0 auto;
           padding: 24px clamp(16px, 3vw, 24px) 40px;
           font-family: system-ui, "Segoe UI", sans-serif;
+          width: 100%;
+          box-sizing: border-box;
         }
         .leads-back-link {
           font-size: 0.88rem;

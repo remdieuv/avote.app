@@ -2,6 +2,7 @@
 
 import { AdminAccountMenu } from "./AdminAccountMenu";
 import { AppHeaderShell } from "@/components/navigation/AppHeaderShell";
+import { ADMIN_CONTENT_MAX_WORKSPACE } from "@/lib/adminLayout";
 
 export function AdminAccountBar() {
   return (
@@ -9,6 +10,7 @@ export function AdminAccountBar() {
       logoHref="/"
       logoLabel="AVOTE"
       logoWordmarkSrc="/avote-wordmark.png"
+      contentMaxWidth={ADMIN_CONTENT_MAX_WORKSPACE}
       navItems={[
         { href: "/admin/events", label: "Mes événements", match: "prefix" },
         { href: "/admin/leads", label: "Mes leads", match: "prefix" },
