@@ -67,6 +67,87 @@ function getEventIdFromParams(params) {
   return typeof rawId === "string" ? rawId : Array.isArray(rawId) ? rawId[0] : null;
 }
 
+function isHexColor(value) {
+  return /^#[0-9A-Fa-f]{6}$/.test(String(value || "").trim());
+}
+
+function isHttpUrl(value) {
+  return /^https?:\/\/\S+$/i.test(String(value || "").trim());
+}
+
+const fieldErrorStyle = {
+  margin: "0.35rem 0 0",
+  fontSize: "0.75rem",
+  fontWeight: 600,
+  color: "#b91c1c",
+  lineHeight: 1.35,
+};
+
+const fieldHintStyle = {
+  margin: "0 0 0.4rem",
+  fontSize: "0.72rem",
+  color: "#64748b",
+  lineHeight: 1.45,
+};
+
+function FieldError({ children }) {
+  if (!children) return null;
+  return (
+    <p role="alert" style={fieldErrorStyle}>
+      {children}
+    </p>
+  );
+}
+
+function CollapsibleSection({ title, defaultOpen = false, children, summaryHint }) {
+  return (
+    <details
+      className="customization-section"
+      style={card}
+      defaultOpen={defaultOpen}
+    >
+      <summary
+        className="customization-section-summary"
+        style={{
+          listStyle: "none",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "0.75rem",
+          userSelect: "none",
+        }}
+      >
+        <span
+          style={{
+            fontSize: "0.72rem",
+            fontWeight: 800,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "#64748b",
+          }}
+        >
+          {title}
+        </span>
+        {summaryHint ? (
+          <span
+            style={{
+              fontSize: "0.72rem",
+              fontWeight: 600,
+              color: "#94a3b8",
+              textTransform: "none",
+              letterSpacing: 0,
+            }}
+          >
+            {summaryHint}
+          </span>
+        ) : null}
+      </summary>
+      <div style={{ marginTop: "0.9rem" }}>{children}</div>
+    </details>
+  );
+}
+
 function EditorModeSwitch({ eventId, current }) {
   const liveHref = eventId ? `/admin/events/${encodeURIComponent(eventId)}/live` : "/admin/events";
   const landingHref = eventId
@@ -165,6 +246,8 @@ export function EventCustomizationEditor({ mode = "live" }) {
   const [showcasePhotoBusy, setShowcasePhotoBusy] = useState(false);
   const previewIframeRef = useRef(null);
   const [previewIframeReady, setPreviewIframeReady] = useState(false);
+  /** Mobile (<900px) : bascule Réglages / Aperçu sans changer le layout desktop. */
+  const [mobilePanel, setMobilePanel] = useState(/** @type {"form" | "preview"} */ ("form"));
 
   /** Brouillon aligné sur le formulaire → postMessage vers l’iframe /join (sans API). */
   const draftCustomization = useMemo(
@@ -301,6 +384,47 @@ export function EventCustomizationEditor({ mode = "live" }) {
     landingTitle,
     landingDescription,
   ]);
+
+  const liveFieldErrors = useMemo(() => {
+    /** @type {Record<string, string>} */
+    const errors = {};
+    if (primaryColor.trim() && !isHexColor(primaryColor)) {
+      errors.primaryColor = "Format attendu : #RRGGBB";
+    }
+    if (roomBackgroundColor.trim() && !isHexColor(roomBackgroundColor)) {
+      errors.roomBackgroundColor = "Format attendu : #RRGGBB, ou laissez vide";
+    }
+    if (infoPrimaryCtaUrl.trim() && !isHttpUrl(infoPrimaryCtaUrl)) {
+      errors.infoPrimaryCtaUrl =
+        "URL invalide : utilisez http:// ou https://";
+    } else if (infoPrimaryCtaLabel.trim() && !infoPrimaryCtaUrl.trim()) {
+      errors.infoPrimaryCtaUrl =
+        "Ajoutez une URL pour afficher le bouton principal";
+    } else if (infoPrimaryCtaUrl.trim() && !infoPrimaryCtaLabel.trim()) {
+      errors.infoPrimaryCtaLabel =
+        "Ajoutez un libellé pour afficher le bouton principal";
+    }
+    if (infoSecondaryCtaUrl.trim() && !isHttpUrl(infoSecondaryCtaUrl)) {
+      errors.infoSecondaryCtaUrl =
+        "URL invalide : utilisez http:// ou https://";
+    } else if (infoSecondaryCtaLabel.trim() && !infoSecondaryCtaUrl.trim()) {
+      errors.infoSecondaryCtaUrl =
+        "Ajoutez une URL pour afficher le bouton secondaire";
+    } else if (infoSecondaryCtaUrl.trim() && !infoSecondaryCtaLabel.trim()) {
+      errors.infoSecondaryCtaLabel =
+        "Ajoutez un libellé pour afficher le bouton secondaire";
+    }
+    return errors;
+  }, [
+    primaryColor,
+    roomBackgroundColor,
+    infoPrimaryCtaLabel,
+    infoPrimaryCtaUrl,
+    infoSecondaryCtaLabel,
+    infoSecondaryCtaUrl,
+  ]);
+
+  const hasLiveFieldErrors = Object.keys(liveFieldErrors).length > 0;
 
   const load = useCallback(async () => {
     if (!eventId) return;
@@ -472,6 +596,12 @@ export function EventCustomizationEditor({ mode = "live" }) {
 
   async function handleSave() {
     if (!eventId) return;
+    if (isLivePage && hasLiveFieldErrors) {
+      setSaveError(
+        "Corrigez les champs en erreur (couleurs ou URL) avant d’enregistrer.",
+      );
+      return;
+    }
     setSaving(true);
     setSaveError(null);
     try {
@@ -677,6 +807,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
         color: "#0f172a",
         lineHeight: 1.5,
         boxSizing: "border-box",
+        paddingBottom: "5.5rem",
       }}
     >
       {toast ? (
@@ -737,18 +868,6 @@ export function EventCustomizationEditor({ mode = "live" }) {
               : "Configurez l’expérience interactive et visuelle de votre salle de vote."}
           </p>
           <EditorModeSwitch eventId={eventId} current={isLandingPage ? "landing" : "live"} />
-          {dirty ? (
-            <p
-              style={{
-                margin: "0.5rem 0 0",
-                fontSize: "0.8rem",
-                fontWeight: 600,
-                color: "#b45309",
-              }}
-            >
-              Modifications non enregistrées
-            </p>
-          ) : null}
         </div>
 
         {loadError ? (
@@ -771,6 +890,41 @@ export function EventCustomizationEditor({ mode = "live" }) {
           </p>
         ) : null}
 
+        {!loading && isLivePage ? (
+          <div
+            className="customization-mobile-tabs"
+            role="tablist"
+            aria-label="Affichage mobile"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mobilePanel === "form"}
+              className={
+                mobilePanel === "form"
+                  ? "customization-mobile-tab customization-mobile-tab--active"
+                  : "customization-mobile-tab"
+              }
+              onClick={() => setMobilePanel("form")}
+            >
+              Réglages
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mobilePanel === "preview"}
+              className={
+                mobilePanel === "preview"
+                  ? "customization-mobile-tab customization-mobile-tab--active"
+                  : "customization-mobile-tab"
+              }
+              onClick={() => setMobilePanel("preview")}
+            >
+              Aperçu
+            </button>
+          </div>
+        ) : null}
+
         {loading ? (
           <p style={{ color: "#64748b" }}>Chargement…</p>
         ) : (
@@ -783,8 +937,10 @@ export function EventCustomizationEditor({ mode = "live" }) {
               boxSizing: "border-box",
             }}
             className="customization-layout"
+            data-mobile-panel={isLivePage ? mobilePanel : "form"}
           >
             <div
+              className="customization-form-col"
               style={{
                 display: "flex",
                 flexDirection: "column",
@@ -1228,19 +1384,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
                 </>
               ) : (
                 <>
-                  <section style={card}>
-                    <h2
-                      style={{
-                        margin: "0 0 0.85rem",
-                        fontSize: "0.72rem",
-                        fontWeight: 800,
-                        letterSpacing: "0.08em",
-                        textTransform: "uppercase",
-                        color: "#64748b",
-                      }}
-                    >
-                      Identité
-                    </h2>
+                  <CollapsibleSection title="Identité" defaultOpen>
                     <label
                       style={{
                         display: "block",
@@ -1265,9 +1409,18 @@ export function EventCustomizationEditor({ mode = "live" }) {
                         background: "#f8fafc",
                         color: "#64748b",
                         fontSize: "0.88rem",
-                        marginBottom: "0.85rem",
                       }}
                     />
+                    <p style={{ ...fieldHintStyle, margin: "0.35rem 0 0.85rem" }}>
+                      Défini à la création de l’événement.{" "}
+                      <Link
+                        href={`/admin/event/${encodeURIComponent(eventId)}`}
+                        style={{ color: "#2563eb", fontWeight: 600 }}
+                      >
+                        Ouvrir la régie
+                      </Link>{" "}
+                      pour le gérer.
+                    </p>
                     <label
                       style={{
                         display: "block",
@@ -1306,6 +1459,9 @@ export function EventCustomizationEditor({ mode = "live" }) {
                     >
                       Logo
                     </p>
+                    <p style={fieldHintStyle}>
+                      Visible pour les participants après enregistrement.
+                    </p>
                     <div
                       style={{
                         display: "flex",
@@ -1328,7 +1484,13 @@ export function EventCustomizationEditor({ mode = "live" }) {
                           }}
                         />
                       ) : null}
-                      <label style={{ ...btnSecondary, display: "inline-block", cursor: "pointer" }}>
+                      <label
+                        style={{
+                          ...btnSecondary,
+                          display: "inline-block",
+                          cursor: "pointer",
+                        }}
+                      >
                         <input
                           type="file"
                           accept="image/jpeg,image/png,image/webp,image/gif"
@@ -1348,30 +1510,18 @@ export function EventCustomizationEditor({ mode = "live" }) {
                         </button>
                       ) : null}
                     </div>
-                  </section>
+                  </CollapsibleSection>
 
-                  <section style={card}>
-                    <h2
-                      style={{
-                        margin: "0 0 0.85rem",
-                        fontSize: "0.72rem",
-                        fontWeight: 800,
-                        letterSpacing: "0.08em",
-                        textTransform: "uppercase",
-                        color: "#64748b",
-                      }}
-                    >
-                      Infos & liens
-                    </h2>
-                    <p
-                      style={{
-                        margin: "0 0 0.75rem",
-                        fontSize: "0.77rem",
-                        color: "#64748b",
-                        lineHeight: 1.45,
-                      }}
-                    >
-                      Bloc d’information affiché sur la salle participant `/join`.
+                  <CollapsibleSection
+                    title="Infos & liens"
+                    defaultOpen={false}
+                    summaryHint="Optionnel"
+                  >
+                    <p style={{ ...fieldHintStyle, marginBottom: "0.75rem" }}>
+                      Bloc d’information affiché sur la salle participant{" "}
+                      <code style={{ fontSize: "0.72rem" }}>/join</code>. Les
+                      boutons n’apparaissent que si libellé et URL sont tous les
+                      deux renseignés.
                     </p>
                     <label
                       style={{
@@ -1453,30 +1603,41 @@ export function EventCustomizationEditor({ mode = "live" }) {
                         maxLength={80}
                         onChange={(e) => setInfoPrimaryCtaLabel(e.target.value)}
                         placeholder="Label (ex: Programme)"
+                        aria-invalid={Boolean(liveFieldErrors.infoPrimaryCtaLabel)}
                         style={{
                           width: "100%",
                           boxSizing: "border-box",
                           padding: "0.47rem 0.6rem",
                           borderRadius: "8px",
-                          border: "1px solid #cbd5e1",
+                          border: liveFieldErrors.infoPrimaryCtaLabel
+                            ? "1px solid #fca5a5"
+                            : "1px solid #cbd5e1",
                           fontSize: "0.84rem",
                           marginBottom: "0.4rem",
                         }}
                       />
+                      <FieldError>{liveFieldErrors.infoPrimaryCtaLabel}</FieldError>
                       <input
                         type="url"
                         value={infoPrimaryCtaUrl}
                         onChange={(e) => setInfoPrimaryCtaUrl(e.target.value)}
                         placeholder="https://..."
+                        aria-invalid={Boolean(liveFieldErrors.infoPrimaryCtaUrl)}
                         style={{
                           width: "100%",
                           boxSizing: "border-box",
                           padding: "0.47rem 0.6rem",
                           borderRadius: "8px",
-                          border: "1px solid #cbd5e1",
+                          border: liveFieldErrors.infoPrimaryCtaUrl
+                            ? "1px solid #fca5a5"
+                            : "1px solid #cbd5e1",
                           fontSize: "0.84rem",
+                          marginTop: liveFieldErrors.infoPrimaryCtaLabel
+                            ? "0.4rem"
+                            : 0,
                         }}
                       />
+                      <FieldError>{liveFieldErrors.infoPrimaryCtaUrl}</FieldError>
                     </div>
                     <div
                       style={{
@@ -1502,30 +1663,47 @@ export function EventCustomizationEditor({ mode = "live" }) {
                         maxLength={80}
                         onChange={(e) => setInfoSecondaryCtaLabel(e.target.value)}
                         placeholder="Label (ex: Règlement)"
+                        aria-invalid={Boolean(
+                          liveFieldErrors.infoSecondaryCtaLabel,
+                        )}
                         style={{
                           width: "100%",
                           boxSizing: "border-box",
                           padding: "0.47rem 0.6rem",
                           borderRadius: "8px",
-                          border: "1px solid #cbd5e1",
+                          border: liveFieldErrors.infoSecondaryCtaLabel
+                            ? "1px solid #fca5a5"
+                            : "1px solid #cbd5e1",
                           fontSize: "0.84rem",
                           marginBottom: "0.4rem",
                         }}
                       />
+                      <FieldError>
+                        {liveFieldErrors.infoSecondaryCtaLabel}
+                      </FieldError>
                       <input
                         type="url"
                         value={infoSecondaryCtaUrl}
                         onChange={(e) => setInfoSecondaryCtaUrl(e.target.value)}
                         placeholder="https://..."
+                        aria-invalid={Boolean(liveFieldErrors.infoSecondaryCtaUrl)}
                         style={{
                           width: "100%",
                           boxSizing: "border-box",
                           padding: "0.47rem 0.6rem",
                           borderRadius: "8px",
-                          border: "1px solid #cbd5e1",
+                          border: liveFieldErrors.infoSecondaryCtaUrl
+                            ? "1px solid #fca5a5"
+                            : "1px solid #cbd5e1",
                           fontSize: "0.84rem",
+                          marginTop: liveFieldErrors.infoSecondaryCtaLabel
+                            ? "0.4rem"
+                            : 0,
                         }}
                       />
+                      <FieldError>
+                        {liveFieldErrors.infoSecondaryCtaUrl}
+                      </FieldError>
                     </div>
                     <label
                       style={{
@@ -1544,135 +1722,221 @@ export function EventCustomizationEditor({ mode = "live" }) {
                       />
                       Afficher aussi après la fin de l’événement
                     </label>
-                  </section>
+                    <p style={{ ...fieldHintStyle, marginTop: "0.4rem" }}>
+                      Ce réglage s’applique sur la salle réelle une fois
+                      l’événement terminé (l’aperçu ne simule pas cette étape).
+                    </p>
+                  </CollapsibleSection>
 
-                  <section style={card}>
-                    <h2
-                      style={{
-                        margin: "0 0 0.85rem",
-                        fontSize: "0.72rem",
-                        fontWeight: 800,
-                        letterSpacing: "0.08em",
-                        textTransform: "uppercase",
-                        color: "#64748b",
-                      }}
-                    >
-                      Apparence
-                    </h2>
-                    <p
-                      style={{
-                        margin: "0 0 0.35rem",
-                        fontSize: "0.78rem",
-                        fontWeight: 600,
-                        color: "#475569",
-                      }}
-                    >
-                      Image de fond
+                  <CollapsibleSection title="Apparence" defaultOpen>
+                    <p style={{ ...fieldHintStyle, marginBottom: "0.85rem" }}>
+                      Fond, couleurs, thème et assombrissement — regroupés pour
+                      régler l’ambiance visuelle de la salle.
                     </p>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center", marginBottom: "0.85rem" }}>
-                      {backgroundUrl ? (
-                        <img
-                          src={backgroundUrl}
-                          alt=""
-                          style={{
-                            width: "120px",
-                            height: "72px",
-                            objectFit: "cover",
-                            borderRadius: "8px",
-                            border: "1px solid #e2e8f0",
-                          }}
-                        />
-                      ) : null}
-                      <label style={{ ...btnSecondary, display: "inline-block", cursor: "pointer" }}>
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp,image/gif"
-                          style={{ display: "none" }}
-                          disabled={uploadKind !== null}
-                          onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            e.target.value = "";
-                            if (f) void handleUpload("background", f);
-                          }}
-                        />
-                        {uploadKind === "background" ? "Envoi…" : "Image de fond"}
-                      </label>
-                      {backgroundUrl ? (
-                        <button type="button" style={btnDanger} onClick={clearBackground}>
-                          Retirer
-                        </button>
-                      ) : null}
-                    </div>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "0.78rem",
-                        fontWeight: 600,
-                        color: "#475569",
-                        marginBottom: "0.35rem",
-                      }}
-                    >
-                      Couleur de fond (sans image)
-                    </label>
-                    <p
-                      style={{
-                        margin: "0 0 0.4rem",
-                        fontSize: "0.72rem",
-                        color: "#64748b",
-                        lineHeight: 1.45,
-                      }}
-                    >
-                      S’applique lorsque aucune image de fond n’est définie. Sinon,
-                      dégradé ou thème par défaut.
-                    </p>
+
                     <div
                       style={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        gap: "0.5rem",
-                        alignItems: "center",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "10px",
+                        padding: "0.75rem",
                         marginBottom: "0.85rem",
+                        background: "#f8fafc",
                       }}
                     >
-                      <input
-                        type="text"
-                        value={roomBackgroundColor}
-                        onChange={(e) => setRoomBackgroundColor(e.target.value)}
-                        placeholder="#e5e7eb ou vide"
+                      <p
                         style={{
-                          width: "10rem",
-                          padding: "0.45rem 0.55rem",
-                          borderRadius: "8px",
-                          border: "1px solid #cbd5e1",
-                          fontFamily: "ui-monospace, monospace",
-                          fontSize: "0.85rem",
+                          margin: "0 0 0.35rem",
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          color: "#334155",
                         }}
-                      />
-                      <input
-                        type="color"
-                        value={
-                          /^#[0-9A-Fa-f]{6}$/.test(roomBackgroundColor.trim())
-                            ? roomBackgroundColor.trim()
-                            : "#e5e7eb"
-                        }
-                        onChange={(e) => setRoomBackgroundColor(e.target.value)}
-                        style={{
-                          width: "2.5rem",
-                          height: "2.5rem",
-                          padding: 0,
-                          border: "1px solid #cbd5e1",
-                          borderRadius: "8px",
-                          cursor: "pointer",
-                        }}
-                      />
-                      <button
-                        type="button"
-                        style={btnDanger}
-                        onClick={() => setRoomBackgroundColor("")}
                       >
-                        Par défaut
-                      </button>
+                        1. Image de fond (prioritaire)
+                      </p>
+                      <p style={fieldHintStyle}>
+                        Si une image est définie, elle remplace la couleur de
+                        fond. Visible pour les participants après
+                        enregistrement.
+                      </p>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: "0.5rem",
+                          alignItems: "center",
+                          marginBottom: backgroundUrl ? "0.75rem" : 0,
+                        }}
+                      >
+                        {backgroundUrl ? (
+                          <img
+                            src={backgroundUrl}
+                            alt=""
+                            style={{
+                              width: "120px",
+                              height: "72px",
+                              objectFit: "cover",
+                              borderRadius: "8px",
+                              border: "1px solid #e2e8f0",
+                            }}
+                          />
+                        ) : null}
+                        <label
+                          style={{
+                            ...btnSecondary,
+                            display: "inline-block",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/gif"
+                            style={{ display: "none" }}
+                            disabled={uploadKind !== null}
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              e.target.value = "";
+                              if (f) void handleUpload("background", f);
+                            }}
+                          />
+                          {uploadKind === "background"
+                            ? "Envoi…"
+                            : "Image de fond"}
+                        </label>
+                        {backgroundUrl ? (
+                          <button
+                            type="button"
+                            style={btnDanger}
+                            onClick={clearBackground}
+                          >
+                            Retirer
+                          </button>
+                        ) : null}
+                      </div>
+                      {backgroundUrl ? (
+                        <>
+                          <label
+                            style={{
+                              display: "block",
+                              fontSize: "0.78rem",
+                              fontWeight: 600,
+                              color: "#475569",
+                              marginBottom: "0.35rem",
+                            }}
+                          >
+                            Assombrissement sur l’image
+                          </label>
+                          <p style={fieldHintStyle}>
+                            Améliore la lisibilité du texte par-dessus l’image.
+                          </p>
+                          <select
+                            value={backgroundOverlayStrength}
+                            onChange={(e) =>
+                              setBackgroundOverlayStrength(e.target.value)
+                            }
+                            style={{
+                              width: "100%",
+                              maxWidth: "16rem",
+                              padding: "0.45rem 0.55rem",
+                              borderRadius: "8px",
+                              border: "1px solid #cbd5e1",
+                              fontSize: "0.88rem",
+                            }}
+                          >
+                            <option value="low">Faible</option>
+                            <option value="medium">Moyen</option>
+                            <option value="strong">Fort</option>
+                          </select>
+                        </>
+                      ) : (
+                        <p style={{ ...fieldHintStyle, margin: "0.55rem 0 0" }}>
+                          Sans image, l’assombrissement n’a pas d’effet. Ajoutez
+                          une image pour l’activer.
+                        </p>
+                      )}
                     </div>
+
+                    <div
+                      style={{
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "10px",
+                        padding: "0.75rem",
+                        marginBottom: "0.85rem",
+                        background: backgroundUrl ? "#fff" : "#f8fafc",
+                        opacity: backgroundUrl ? 0.72 : 1,
+                      }}
+                    >
+                      <p
+                        style={{
+                          margin: "0 0 0.35rem",
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          color: "#334155",
+                        }}
+                      >
+                        2. Couleur de fond (sans image)
+                      </p>
+                      <p style={fieldHintStyle}>
+                        {backgroundUrl
+                          ? "Une image est active : cette couleur ne s’applique qu’après retrait de l’image."
+                          : "S’applique lorsque aucune image de fond n’est définie. Sinon, dégradé ou thème par défaut."}
+                      </p>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: "0.5rem",
+                          alignItems: "center",
+                        }}
+                      >
+                        <input
+                          type="text"
+                          value={roomBackgroundColor}
+                          onChange={(e) => setRoomBackgroundColor(e.target.value)}
+                          placeholder="#e5e7eb ou vide"
+                          aria-invalid={Boolean(
+                            liveFieldErrors.roomBackgroundColor,
+                          )}
+                          style={{
+                            width: "10rem",
+                            padding: "0.45rem 0.55rem",
+                            borderRadius: "8px",
+                            border: liveFieldErrors.roomBackgroundColor
+                              ? "1px solid #fca5a5"
+                              : "1px solid #cbd5e1",
+                            fontFamily: "ui-monospace, monospace",
+                            fontSize: "0.85rem",
+                          }}
+                        />
+                        <input
+                          type="color"
+                          value={
+                            isHexColor(roomBackgroundColor)
+                              ? roomBackgroundColor.trim()
+                              : "#e5e7eb"
+                          }
+                          onChange={(e) => setRoomBackgroundColor(e.target.value)}
+                          style={{
+                            width: "2.5rem",
+                            height: "2.5rem",
+                            padding: 0,
+                            border: "1px solid #cbd5e1",
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                          }}
+                        />
+                        <button
+                          type="button"
+                          style={btnDanger}
+                          onClick={() => setRoomBackgroundColor("")}
+                        >
+                          Par défaut
+                        </button>
+                      </div>
+                      <FieldError>
+                        {liveFieldErrors.roomBackgroundColor}
+                      </FieldError>
+                    </div>
+
                     <label
                       style={{
                         display: "block",
@@ -1684,24 +1948,39 @@ export function EventCustomizationEditor({ mode = "live" }) {
                     >
                       Couleur principale (accents)
                     </label>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "0.5rem",
+                        alignItems: "center",
+                        marginBottom: "0.85rem",
+                      }}
+                    >
                       <input
                         type="text"
                         value={primaryColor}
                         onChange={(e) => setPrimaryColor(e.target.value)}
                         placeholder="#2563eb"
+                        aria-invalid={Boolean(liveFieldErrors.primaryColor)}
                         style={{
                           width: "7rem",
                           padding: "0.45rem 0.55rem",
                           borderRadius: "8px",
-                          border: "1px solid #cbd5e1",
+                          border: liveFieldErrors.primaryColor
+                            ? "1px solid #fca5a5"
+                            : "1px solid #cbd5e1",
                           fontFamily: "ui-monospace, monospace",
                           fontSize: "0.85rem",
                         }}
                       />
                       <input
                         type="color"
-                        value={/^#[0-9A-Fa-f]{6}$/.test(primaryColor) ? primaryColor : "#2563eb"}
+                        value={
+                          isHexColor(primaryColor)
+                            ? primaryColor.trim()
+                            : "#2563eb"
+                        }
                         onChange={(e) => setPrimaryColor(e.target.value)}
                         style={{
                           width: "2.5rem",
@@ -1718,35 +1997,22 @@ export function EventCustomizationEditor({ mode = "live" }) {
                           height: "2rem",
                           borderRadius: "8px",
                           border: "1px solid #e2e8f0",
-                          background: /^#[0-9A-Fa-f]{6}$/.test(primaryColor)
-                            ? primaryColor
+                          background: isHexColor(primaryColor)
+                            ? primaryColor.trim()
                             : "#2563eb",
                         }}
                         aria-hidden
                       />
                     </div>
-                  </section>
+                    <FieldError>{liveFieldErrors.primaryColor}</FieldError>
 
-                  <section style={card}>
-                    <h2
-                      style={{
-                        margin: "0 0 0.85rem",
-                        fontSize: "0.72rem",
-                        fontWeight: 800,
-                        letterSpacing: "0.08em",
-                        textTransform: "uppercase",
-                        color: "#64748b",
-                      }}
-                    >
-                      Ambiance
-                    </h2>
                     <label
                       style={{
                         display: "block",
                         fontSize: "0.78rem",
                         fontWeight: 600,
                         color: "#475569",
-                        marginBottom: "0.35rem",
+                        margin: "0.85rem 0 0.35rem",
                       }}
                     >
                       Thème de base
@@ -1761,71 +2027,50 @@ export function EventCustomizationEditor({ mode = "live" }) {
                         borderRadius: "8px",
                         border: "1px solid #cbd5e1",
                         fontSize: "0.88rem",
-                        marginBottom: "0.85rem",
                       }}
                     >
                       <option value="dark">Sombre</option>
                       <option value="light">Clair</option>
                       <option value="auto">Auto (appareil)</option>
                     </select>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "0.78rem",
-                        fontWeight: 600,
-                        color: "#475569",
-                        marginBottom: "0.35rem",
-                      }}
-                    >
-                      Assombrissement sur l’image de fond
-                    </label>
-                    <select
-                      value={backgroundOverlayStrength}
-                      onChange={(e) =>
-                        setBackgroundOverlayStrength(e.target.value)
-                      }
-                      style={{
-                        width: "100%",
-                        maxWidth: "16rem",
-                        padding: "0.45rem 0.55rem",
-                        borderRadius: "8px",
-                        border: "1px solid #cbd5e1",
-                        fontSize: "0.88rem",
-                      }}
-                    >
-                      <option value="low">Faible</option>
-                      <option value="medium">Moyen</option>
-                      <option value="strong">Fort</option>
-                    </select>
-                  </section>
-
-                  <section style={card}>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem" }}>
-                      <button
-                        type="button"
-                        style={{ ...btnPrimary, opacity: saving ? 0.7 : 1 }}
-                        disabled={saving}
-                        onClick={() => void handleSave()}
-                      >
-                        {saving ? "Enregistrement…" : "Enregistrer la salle live"}
-                      </button>
-                      {joinPath ? (
-                        <button
-                          type="button"
-                          style={btnSecondary}
-                          onClick={() =>
-                            window.open(
-                              `${window.location.origin}${joinPath}`,
-                              "_blank",
-                              "noopener,noreferrer",
-                            )
-                          }
+                    {!backgroundUrl ? (
+                      <div style={{ marginTop: "0.85rem" }}>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "0.78rem",
+                            fontWeight: 600,
+                            color: "#475569",
+                            marginBottom: "0.35rem",
+                          }}
                         >
-                          Voir la salle
-                        </button>
-                      ) : null}
-                    </div>
-                  </section>
+                          Assombrissement image (mémorisé)
+                        </label>
+                        <p style={fieldHintStyle}>
+                          Conservé pour la prochaine image de fond. Sans effet
+                          tant qu’aucune image n’est définie.
+                        </p>
+                        <select
+                          value={backgroundOverlayStrength}
+                          onChange={(e) =>
+                            setBackgroundOverlayStrength(e.target.value)
+                          }
+                          style={{
+                            width: "100%",
+                            maxWidth: "16rem",
+                            padding: "0.45rem 0.55rem",
+                            borderRadius: "8px",
+                            border: "1px solid #cbd5e1",
+                            fontSize: "0.88rem",
+                          }}
+                        >
+                          <option value="low">Faible</option>
+                          <option value="medium">Moyen</option>
+                          <option value="strong">Fort</option>
+                        </select>
+                      </div>
+                    ) : null}
+                  </CollapsibleSection>
                 </>
               )}
             </div>
@@ -1838,12 +2083,12 @@ export function EventCustomizationEditor({ mode = "live" }) {
                   fontWeight: 800,
                 }}
               >
-                {isLandingPage ? "Aperçu landing" : "Aperçu de la salle"}
+                {isLandingPage ? "Aperçu landing" : "Aperçu brouillon"}
               </h2>
               <p style={{ margin: "0 0 0.85rem", fontSize: "0.82rem", color: "#64748b" }}>
                 {isLandingPage
                   ? "Prévisualisation de la vitrine publique. L’aperçu reflète la dernière version enregistrée."
-                  : "Aperçu brouillon en direct (sans enregistrement) : seule la page admin reçoit ces réglages ; les participants voient la version sauvegardée côté serveur."}
+                  : "Brouillon en direct dans cette page (mise en page, couleurs, médias). Les participants voient uniquement la version enregistrée. Cet aperçu ne simule pas les étapes de vote."}
               </p>
               {(isLandingPage ? landingPath : joinPath) ? (
                 <>
@@ -1907,9 +2152,15 @@ export function EventCustomizationEditor({ mode = "live" }) {
                     }
                   >
                     {isLandingPage
-                      ? "Ouvrir la landing dans un nouvel onglet"
-                      : "Ouvrir l’aperçu dans un nouvel onglet"}
+                      ? "Ouvrir la landing publiée"
+                      : "Ouvrir la salle publiée"}
                   </button>
+                  {isLivePage ? (
+                    <p style={{ ...fieldHintStyle, marginTop: "0.45rem" }}>
+                      La salle publiée ignore le brouillon non enregistré de
+                      cette page.
+                    </p>
+                  ) : null}
                 </>
               ) : (
                 <p style={{ color: "#64748b", margin: 0 }}>Slug manquant.</p>
@@ -1918,6 +2169,50 @@ export function EventCustomizationEditor({ mode = "live" }) {
           </div>
         )}
       </div>
+
+      {!loading ? (
+        <div className="customization-sticky-bar" role="region" aria-label="Enregistrement">
+          <div className="customization-sticky-bar-inner">
+            <p
+              style={{
+                margin: 0,
+                fontSize: "0.82rem",
+                fontWeight: 600,
+                color: dirty
+                  ? "#b45309"
+                  : hasLiveFieldErrors && isLivePage
+                    ? "#b91c1c"
+                    : "#64748b",
+                flex: "1 1 auto",
+                minWidth: 0,
+              }}
+            >
+              {isLivePage && hasLiveFieldErrors
+                ? "Corrigez les champs en erreur avant d’enregistrer"
+                : dirty
+                  ? "Modifications non enregistrées"
+                  : "Tout est enregistré"}
+            </p>
+            <button
+              type="button"
+              style={{
+                ...btnPrimary,
+                opacity: saving || (isLivePage && hasLiveFieldErrors) ? 0.7 : 1,
+                whiteSpace: "nowrap",
+              }}
+              disabled={saving || (isLivePage && hasLiveFieldErrors)}
+              onClick={() => void handleSave()}
+            >
+              {saving
+                ? "Enregistrement…"
+                : isLandingPage
+                  ? "Enregistrer la landing"
+                  : "Enregistrer la salle live"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <style>{`
         .editor-universe-link {
           transition:
@@ -1945,9 +2240,85 @@ export function EventCustomizationEditor({ mode = "live" }) {
             border-color: rgba(168, 85, 247, 0.32) !important;
           }
         }
+        .customization-section-summary::-webkit-details-marker {
+          display: none;
+        }
+        .customization-section-summary::before {
+          content: "▾";
+          font-size: 0.85rem;
+          color: #94a3b8;
+          transition: transform 0.15s ease;
+          flex: 0 0 auto;
+        }
+        details.customization-section:not([open]) > .customization-section-summary::before {
+          transform: rotate(-90deg);
+        }
+        .customization-mobile-tabs {
+          display: none;
+          gap: 0.4rem;
+          margin: 0 0 1rem;
+          padding: 0.3rem;
+          border-radius: 12px;
+          border: 1px solid #e2e8f0;
+          background: #fff;
+        }
+        .customization-mobile-tab {
+          flex: 1;
+          border: none;
+          background: transparent;
+          border-radius: 9px;
+          padding: 0.55rem 0.75rem;
+          font-size: 0.86rem;
+          font-weight: 700;
+          color: #64748b;
+          cursor: pointer;
+        }
+        .customization-mobile-tab--active {
+          background: #eff6ff;
+          color: #1d4ed8;
+        }
+        .customization-sticky-bar {
+          position: fixed;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 40;
+          background: rgba(255, 255, 255, 0.96);
+          border-top: 1px solid #e2e8f0;
+          box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.06);
+          backdrop-filter: blur(8px);
+        }
+        .customization-sticky-bar-inner {
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: 0.7rem clamp(1rem, 3vw, 1.75rem);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.75rem;
+          box-sizing: border-box;
+        }
+        @media (min-width: 901px) {
+          .customization-preview-card {
+            position: sticky;
+            top: 1rem;
+          }
+        }
         @media (max-width: 900px) {
           .customization-layout {
             grid-template-columns: 1fr !important;
+          }
+          .customization-mobile-tabs {
+            display: flex;
+          }
+          .customization-layout[data-mobile-panel="form"] .customization-preview-card {
+            display: none;
+          }
+          .customization-layout[data-mobile-panel="preview"] .customization-form-col {
+            display: none;
+          }
+          .customization-preview-card iframe {
+            height: min(420px, 58vh) !important;
           }
         }
       `}</style>
