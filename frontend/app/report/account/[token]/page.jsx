@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { apiBaseBrowser } from "@/lib/config";
+import { marketingContentShellStyle } from "@/lib/marketingLayout";
 
 const CARD = {
   background: "#fff",
@@ -47,7 +48,13 @@ export default function SharedAccountReportPage() {
   const best = data?.bestPerformer ?? null;
 
   return (
-    <main style={{ maxWidth: "1100px", margin: "0 auto", padding: "1rem 1rem 2rem", fontFamily: 'system-ui, "Segoe UI", sans-serif', color: "#0f172a" }}>
+    <main
+      style={marketingContentShellStyle({
+        padding: "1rem 1.25rem 2rem",
+        fontFamily: 'system-ui, "Segoe UI", sans-serif',
+        color: "#0f172a",
+      })}
+    >
       <style>{`@media print {.report-actions{display:none!important;} main{padding:0!important;}}`}</style>
       <div className="report-actions" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", marginBottom: "0.8rem", flexWrap: "wrap" }}>
         <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", fontWeight: 700 }}>

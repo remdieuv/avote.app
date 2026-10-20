@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { adminContentShellStyle } from "@/lib/adminLayout";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
@@ -204,60 +205,40 @@ export default function EventLeadsPage() {
   return (
     <div
       style={adminContentShellStyle("workspace", {
-        padding: "24px 16px 40px",
         fontFamily: 'system-ui, "Segoe UI", sans-serif',
       })}
     >
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "0.65rem",
-          marginBottom: "1.15rem",
-          alignItems: "center",
-        }}
-      >
-        <Link
-          href={`/admin/event/${encodeURIComponent(eventId || "")}`}
-          style={{
-            fontSize: "0.86rem",
-            fontWeight: 600,
-            color: "#64748b",
-            textDecoration: "none",
-          }}
-        >
-          ← Régie
-        </Link>
-        <span style={{ color: "#e2e8f0" }}>|</span>
-        <Link
-          href="/admin/leads"
-          style={{
-            fontSize: "0.86rem",
-            fontWeight: 600,
-            color: "#4f46e5",
-            textDecoration: "none",
-          }}
-        >
-          Tous mes leads
-        </Link>
-      </div>
-
-      <header style={{ marginBottom: "1.25rem" }}>
-        <h1
-          style={{
-            margin: "0 0 0.35rem 0",
-            fontSize: "clamp(1.3rem, 2.2vw, 1.55rem)",
-            fontWeight: 800,
-            letterSpacing: "-0.03em",
-            color: "#0f172a",
-          }}
-        >
-          Leads de l’événement
-        </h1>
-        <p style={{ margin: 0, color: "#64748b", fontSize: "0.95rem" }}>
-          Contacts issus des questions de collecte pour cet événement uniquement.
-        </p>
-      </header>
+      <AdminPageHeader
+        title="Leads de l’événement"
+        subtitle="Contacts issus des questions de collecte pour cet événement uniquement."
+        breadcrumbs={
+          <>
+            <Link
+              href={`/admin/event/${encodeURIComponent(eventId || "")}`}
+              style={{
+                fontSize: "0.86rem",
+                fontWeight: 600,
+                color: "#64748b",
+                textDecoration: "none",
+              }}
+            >
+              ← Régie
+            </Link>
+            <span style={{ color: "#e2e8f0" }}>|</span>
+            <Link
+              href="/admin/leads"
+              style={{
+                fontSize: "0.86rem",
+                fontWeight: 600,
+                color: "#4f46e5",
+                textDecoration: "none",
+              }}
+            >
+              Tous mes leads
+            </Link>
+          </>
+        }
+      />
 
       {!error ? (
         <>

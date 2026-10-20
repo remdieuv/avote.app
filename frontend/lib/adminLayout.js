@@ -1,14 +1,19 @@
 /**
  * Largeurs desktop partagées pour l’espace organisateur `/admin`.
- * — standard : formulaires « confort » (création, etc.)
- * — workspace : listes, tableaux, dual-pane live/landing
- * — formNarrow : sous-formulaires (ex. mot de passe)
+ *
+ * Contrat produit :
+ * — cadre / header admin : **1600 px** sur toutes les pages shellées
+ *   (événements, leads, analytics, création, compte, dual-pane, etc.)
+ * — formNarrow : sous-blocs de champs (ex. mot de passe) — pas un plafond de page
  *
  * Ne pas élargir la régie : elle reste en pleine largeur viewport.
  */
 
-export const ADMIN_CONTENT_MAX_STANDARD = 1200;
 export const ADMIN_CONTENT_MAX_WORKSPACE = 1600;
+
+/** Alias historique — même valeur que workspace (toutes pages admin = 1600). */
+export const ADMIN_CONTENT_MAX_STANDARD = ADMIN_CONTENT_MAX_WORKSPACE;
+
 export const ADMIN_CONTENT_MAX_FORM_NARROW = 640;
 
 /** Padding horizontal typique des shells admin (inchangé mobile). */
@@ -19,23 +24,27 @@ export const ADMIN_CONTENT_PADDING =
  * @param {"standard" | "workspace"} [tier="workspace"]
  * @returns {string} ex. `"1600px"`
  */
-export function adminContentMaxWidth(tier = "workspace") {
-  if (tier === "standard") return `${ADMIN_CONTENT_MAX_STANDARD}px`;
+export function adminContentMaxWidth(_tier = "workspace") {
   return `${ADMIN_CONTENT_MAX_WORKSPACE}px`;
 }
 
 /**
- * Style de shell de contenu centré (pages admin).
- * @param {"standard" | "workspace"} [tier="workspace"]
+ * Style du cadre admin centré (1600).
+ * Le 1er argument `tier` est accepté pour rétrocompatibilité mais n’affecte
+ * plus la largeur — toutes les pages admin shellées partagent 1600.
+ *
+ * @param {"standard" | "workspace" | Record<string, string | number>} [tierOrExtra="workspace"]
  * @param {Record<string, string | number>} [extra]
  */
-export function adminContentShellStyle(tier = "workspace", extra = {}) {
+export function adminContentShellStyle(tierOrExtra = "workspace", extra = {}) {
+  const extras =
+    tierOrExtra && typeof tierOrExtra === "object" ? tierOrExtra : extra;
   return {
     width: "100%",
-    maxWidth: adminContentMaxWidth(tier),
+    maxWidth: adminContentMaxWidth("workspace"),
     margin: "0 auto",
     padding: ADMIN_CONTENT_PADDING,
     boxSizing: "border-box",
-    ...extra,
+    ...extras,
   };
 }

@@ -1114,7 +1114,7 @@ export default function EventLandingPage() {
 
       <div
         style={{
-          maxWidth: "1100px",
+          maxWidth: "1200px",
           margin: "0 auto",
           padding: "clamp(1.5rem, 4vw, 2.5rem) clamp(1.15rem, 4vw, 2rem) 2.75rem",
           boxSizing: "border-box",

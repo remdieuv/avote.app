@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { ADMIN_CONTENT_MAX_WORKSPACE } from "@/lib/adminLayout";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
+
+const INTERNAL_SHELL_MAX = `${ADMIN_CONTENT_MAX_WORKSPACE}px`;
 
 const NAV = [
   { href: "/admin-internal", label: "Dashboard" },
@@ -99,9 +102,9 @@ export function InternalAdminShell({ children }) {
       >
         <div
           style={{
-            maxWidth: "1200px",
+            maxWidth: INTERNAL_SHELL_MAX,
             margin: "0 auto",
-            padding: "0.75rem 1rem",
+            padding: "0.75rem clamp(16px, 3vw, 24px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -143,7 +146,7 @@ export function InternalAdminShell({ children }) {
             </button>
           </div>
         </div>
-        <nav style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 1rem 0.7rem 1rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <nav style={{ maxWidth: INTERNAL_SHELL_MAX, margin: "0 auto", padding: "0 clamp(16px, 3vw, 24px) 0.7rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
           {NAV.map((item) => {
             const active = item.href === activeHref;
             return (
@@ -167,7 +170,7 @@ export function InternalAdminShell({ children }) {
           })}
         </nav>
       </header>
-      <main style={{ maxWidth: "1200px", margin: "0 auto", padding: "1rem" }}>{children}</main>
+      <main style={{ maxWidth: INTERNAL_SHELL_MAX, margin: "0 auto", padding: "1rem clamp(16px, 3vw, 24px)" }}>{children}</main>
     </div>
   );
 }

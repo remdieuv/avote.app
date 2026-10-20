@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { LandingHeader } from "@/components/landing/LandingHeader";
 import { CheckoutEventButton } from "@/components/billing/CheckoutEventButton";
+import { marketingContentShellStyle } from "@/lib/marketingLayout";
 
 export const metadata = {
   title: "Tarifs Avote | Vote interactif en direct",
@@ -18,13 +19,7 @@ const shell = {
   background: "linear-gradient(180deg, #f1f5f9 0%, #ffffff 38%, #faf5ff 100%)",
 };
 
-const inner = {
-  width: "100%",
-  maxWidth: "1100px",
-  margin: "0 auto",
-  padding: "1.25rem 1.25rem 4rem",
-  boxSizing: "border-box",
-};
+const inner = marketingContentShellStyle();
 
 const sectionY = {
   paddingTop: "clamp(2.8rem, 7vw, 4.4rem)",

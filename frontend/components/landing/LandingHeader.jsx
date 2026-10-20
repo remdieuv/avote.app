@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 import { AppHeaderShell } from "@/components/navigation/AppHeaderShell";
+import { MARKETING_CONTENT_MAX } from "@/lib/marketingLayout";
 
 export function LandingHeader() {
   const [isAuthed, setIsAuthed] = useState(false);
@@ -28,6 +29,7 @@ export function LandingHeader() {
       logoHref="/"
       logoLabel="AVOTE"
       logoWordmarkSrc="/avote-wordmark.png"
+      contentMaxWidth={MARKETING_CONTENT_MAX}
       navItems={[{ href: "/pricing", label: "Tarifs", match: "exact" }]}
       mobileQuickItem={{ href: "/pricing", label: "Tarifs", match: "exact" }}
       rightSlot={

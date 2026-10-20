@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LandingHeader } from "@/components/landing/LandingHeader";
+import { marketingContentShellStyle } from "@/lib/marketingLayout";
 
 const shell = {
   fontFamily: "system-ui, sans-serif",
@@ -11,13 +12,7 @@ const shell = {
   background: "linear-gradient(180deg, #f1f5f9 0%, #ffffff 38%, #faf5ff 100%)",
 };
 
-const inner = {
-  width: "100%",
-  maxWidth: "1100px",
-  margin: "0 auto",
-  padding: "1.25rem 1.25rem 4rem",
-  boxSizing: "border-box",
-};
+const inner = marketingContentShellStyle();
 
 const btnPrimary = {
   display: "inline-flex",
