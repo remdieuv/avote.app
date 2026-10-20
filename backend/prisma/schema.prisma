@@ -199,6 +199,10 @@ model Poll {
   quizRevealed       Boolean  @default(false)
   leadEnabled         Boolean  @default(false)
   leadTriggerOptionId String?
+  /** L1 formulaires : définition JSON (null = hors Lead/Concours ou pré-backfill). */
+  formDefinition     Json?
+  formTemplateKey    String?
+  formSchemaVersion  Int       @default(1)
   status    PollStatus @default(DRAFT)
   order     Int        @default(0)
   createdAt DateTime   @default(now())
@@ -243,7 +247,8 @@ model ContestDrawWinner {
   position           Int                  @default(0)
   firstName          String
   lastName           String?
-  phone              String
+  /** Nullable L1 : gagnant Concours email-only (D2). */
+  phone              String?
   email              String?
   /** ACTIVE = gagnant courant ; REPLACED = historique (non affiché publiquement). */
   status             ContestWinnerStatus  @default(ACTIVE)
@@ -292,10 +297,17 @@ model LeadCapture {
   eventId        String
   pollId         String
   voterSessionId String
-  firstName      String
+  /** Nullable L1 : templates sans prénom (ex. civic) — contraintes applicatives Concours. */
+  firstName      String?
   lastName       String?
-  phone          String
+  /** Nullable L1 : Concours email-only (D2). */
+  phone          String?
   email          String?
+  /** Réponses dynamiques { [fieldId]: value }. */
+  answers        Json?
+  schemaVersion  Int?
+  /** Preuve consentements RGPD (D7). */
+  consents       Json?
   createdAt      DateTime @default(now())
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
