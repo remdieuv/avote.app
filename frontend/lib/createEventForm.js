@@ -1,0 +1,468 @@
+/**
+ * Helpers création d’événement (`/admin`) — validation, brouillon, types, reorder.
+ * Aucune dépendance React / API.
+ */
+
+export const CREATE_EVENT_DRAFT_KEY = "avote_create_event_draft_v1";
+export const CONTEST_DEFAULT_QUESTION =
+  "Souhaitez-vous participer au tirage au sort ?";
+export const CONTEST_DEFAULT_OPTIONS = ["Oui", "Non"];
+export const CONTEST_PRIZE_PLACEHOLDER =
+  "Ex : un iPhone 15 / une carte cadeau de 200€ / un week-end";
+export const CONTEST_WINNER_COUNT_DEFAULT = 1;
+export const LEAD_DEFAULT_OPTIONS = ["Oui", "Non"];
+
+/** @typedef {"SINGLE_CHOICE"|"MULTIPLE_CHOICE"|"LEAD"|"CONTEST_ENTRY"|"QUIZ"} CreateQuestionType */
+
+/**
+ * @typedef {{
+ *   id: string;
+ *   question: string;
+ *   type: CreateQuestionType;
+ *   options: string[];
+ *   leadTriggerOrder: number;
+ *   quizCorrectOrder: number;
+ *   contestPrize: string;
+ *   contestWinnerCount: number;
+ *   contestQuestionCustomized: boolean;
+ * }} CreateQuestion
+ */
+
+export const QUESTION_TYPE_META = [
+  {
+    type: "SINGLE_CHOICE",
+    label: "Choix unique",
+    help: "Une seule réponse par participant.",
+  },
+  {
+    type: "MULTIPLE_CHOICE",
+    label: "Choix multiple",
+    help: "Plusieurs réponses possibles.",
+  },
+  {
+    type: "LEAD",
+    label: "Lead",
+    help: "Oui/Non + formulaire de contact après le déclencheur.",
+  },
+  {
+    type: "CONTEST_ENTRY",
+    label: "Concours",
+    help: "Participation au tirage avec lot et gagnants.",
+  },
+  {
+    type: "QUIZ",
+    label: "Quiz",
+    help: "Une bonne réponse à révéler après le vote.",
+  },
+];
+
+export function isLeadLikeQuestionType(type) {
+  return type === "LEAD" || type === "CONTEST_ENTRY";
+}
+
+export function isContestEntryQuestion(type) {
+  return type === "CONTEST_ENTRY";
+}
+
+export function isQuizQuestion(type) {
+  return type === "QUIZ";
+}
+
+export function buildContestQuestion(prizeRaw) {
+  const prize = typeof prizeRaw === "string" ? prizeRaw.trim() : "";
+  if (!prize) return CONTEST_DEFAULT_QUESTION;
+  return `Souhaitez-vous participer au tirage au sort pour gagner ${prize} ?`;
+}
+
+export function normalizeContestWinnerCount(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return CONTEST_WINNER_COUNT_DEFAULT;
+  return Math.max(1, Math.floor(n));
+}
+
+/** Options toutes vides (ou absentes). */
+export function optionsAreBlank(options) {
+  if (!Array.isArray(options) || options.length === 0) return true;
+  return options.every((o) => !String(o ?? "").trim());
+}
+
+/**
+ * @param {string} id
+ * @returns {CreateQuestion}
+ */
+export function createBlankQuestion(id) {
+  return {
+    id,
+    question: "",
+    type: "SINGLE_CHOICE",
+    options: ["", ""],
+    leadTriggerOrder: 0,
+    quizCorrectOrder: 0,
+    contestPrize: "",
+    contestWinnerCount: CONTEST_WINNER_COUNT_DEFAULT,
+    contestQuestionCustomized: false,
+  };
+}
+
+/**
+ * Applique le type avec les règles métier (concours forcé, Lead Oui/Non si vide).
+ * @param {CreateQuestion} item
+ * @param {CreateQuestionType} type
+ * @returns {CreateQuestion}
+ */
+export function applyQuestionType(item, type) {
+  if (type === "CONTEST_ENTRY") {
+    const contestPrize = item.contestPrize ?? "";
+    const contestWinnerCount = normalizeContestWinnerCount(
+      item.contestWinnerCount,
+    );
+    return {
+      ...item,
+      type,
+      question: buildContestQuestion(contestPrize),
+      options: [...CONTEST_DEFAULT_OPTIONS],
+      leadTriggerOrder: 0,
+      quizCorrectOrder: 0,
+      contestPrize,
+      contestWinnerCount,
+      contestQuestionCustomized: false,
+    };
+  }
+  if (type === "LEAD") {
+    const nextOptions = optionsAreBlank(item.options)
+      ? [...LEAD_DEFAULT_OPTIONS]
+      : [...item.options];
+    return {
+      ...item,
+      type,
+      options: nextOptions,
+      leadTriggerOrder: 0,
+      quizCorrectOrder: 0,
+    };
+  }
+  if (type === "QUIZ") {
+    return {
+      ...item,
+      type,
+      leadTriggerOrder: 0,
+      quizCorrectOrder: 0,
+    };
+  }
+  return {
+    ...item,
+    type,
+    leadTriggerOrder: 0,
+  };
+}
+
+/**
+ * @param {CreateQuestion} item
+ * @param {string} newId
+ * @returns {CreateQuestion}
+ */
+export function duplicateQuestion(item, newId) {
+  return {
+    ...item,
+    id: newId,
+    options: Array.isArray(item.options) ? [...item.options] : ["", ""],
+    contestPrize: item.contestPrize ?? "",
+    contestWinnerCount: normalizeContestWinnerCount(item.contestWinnerCount),
+    contestQuestionCustomized: Boolean(item.contestQuestionCustomized),
+    leadTriggerOrder: Number(item.leadTriggerOrder ?? 0) || 0,
+    quizCorrectOrder: Number(item.quizCorrectOrder ?? 0) || 0,
+  };
+}
+
+/**
+ * @template T
+ * @param {T[]} list
+ * @param {number} fromIndex
+ * @param {number} toIndex
+ * @returns {T[]}
+ */
+export function moveItem(list, fromIndex, toIndex) {
+  if (!Array.isArray(list)) return [];
+  const len = list.length;
+  if (
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= len ||
+    toIndex >= len ||
+    fromIndex === toIndex
+  ) {
+    return [...list];
+  }
+  const next = [...list];
+  const [item] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, item);
+  return next;
+}
+
+/**
+ * @param {{
+ *   eventTitle: string;
+ *   questions: CreateQuestion[];
+ * }} input
+ * @returns {{
+ *   ok: boolean;
+ *   formError: string | null;
+ *   fieldErrors: {
+ *     eventTitle?: string;
+ *     questions: Record<string, {
+ *       question?: string;
+ *       options?: string;
+ *       contestPrize?: string;
+ *       contestWinnerCount?: string;
+ *       quizCorrectOrder?: string;
+ *     }>;
+ *   };
+ *   firstErrorQuestionId: string | null;
+ * }}
+ */
+export function validateCreateEventForm(input) {
+  /** @type {ReturnType<typeof validateCreateEventForm>["fieldErrors"]} */
+  const fieldErrors = { questions: {} };
+  let formError = null;
+  let firstErrorQuestionId = null;
+
+  const titre = String(input?.eventTitle ?? "").trim();
+  if (!titre) {
+    fieldErrors.eventTitle = "Indique un titre pour l’événement.";
+    formError = fieldErrors.eventTitle;
+  }
+
+  const questions = Array.isArray(input?.questions) ? input.questions : [];
+  if (questions.length < 1) {
+    formError = formError || "Ajoute au moins une question.";
+  }
+
+  for (let i = 0; i < questions.length; i++) {
+    const x = questions[i];
+    const qid = x?.id || `q-${i}`;
+    /** @type {Record<string, string>} */
+    const qErr = {};
+    const qi = String(x?.question ?? "").trim();
+    if (!qi) {
+      qErr.question = "Saisis le texte de la question.";
+      formError =
+        formError || `Question ${i + 1} : saisis le texte de la question.`;
+    }
+    if (isContestEntryQuestion(x?.type) && !(x?.contestPrize || "").trim()) {
+      qErr.contestPrize =
+        "Précisez le lot à gagner pour rendre le concours clair pour les participants.";
+      formError =
+        formError ||
+        `Question ${i + 1} : précisez le lot à gagner pour rendre le concours clair pour les participants.`;
+    }
+    if (
+      isContestEntryQuestion(x?.type) &&
+      normalizeContestWinnerCount(x?.contestWinnerCount) < 1
+    ) {
+      qErr.contestWinnerCount =
+        "Le nombre de gagnants doit être au minimum de 1.";
+      formError =
+        formError ||
+        `Question ${i + 1} : le nombre de gagnants doit être au minimum de 1.`;
+    }
+    const opts = (Array.isArray(x?.options) ? x.options : [])
+      .map((s) => String(s ?? "").trim())
+      .filter(Boolean);
+    if (opts.length < 2) {
+      const slice = qi.slice(0, 40);
+      qErr.options = "Au moins 2 réponses non vides.";
+      formError =
+        formError ||
+        `Question ${i + 1} (« ${slice}${qi.length > 40 ? "…" : ""} ») : au moins 2 réponses non vides.`;
+    }
+    if (isQuizQuestion(x?.type)) {
+      const idx = Number(x?.quizCorrectOrder);
+      const max = Math.max(0, opts.length - 1);
+      if (!Number.isFinite(idx) || idx < 0 || idx > max) {
+        qErr.quizCorrectOrder = "Sélectionnez la bonne réponse du quiz.";
+        formError =
+          formError ||
+          `Question ${i + 1} : sélectionnez la bonne réponse du quiz.`;
+      }
+    }
+    if (Object.keys(qErr).length > 0) {
+      fieldErrors.questions[qid] = qErr;
+      if (!firstErrorQuestionId) firstErrorQuestionId = qid;
+    }
+  }
+
+  return {
+    ok: !formError,
+    formError,
+    fieldErrors,
+    firstErrorQuestionId,
+  };
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {{ eventTitle: string; eventDescription: string; questions: CreateQuestion[] } | null}
+ */
+export function parseCreateEventDraft(raw) {
+  if (raw == null) return null;
+  let data = raw;
+  if (typeof raw === "string") {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (!data || typeof data !== "object") return null;
+  const eventTitle =
+    typeof data.eventTitle === "string" ? data.eventTitle : "";
+  const eventDescription =
+    typeof data.eventDescription === "string" ? data.eventDescription : "";
+  if (!Array.isArray(data.questions) || data.questions.length < 1) return null;
+
+  const questions = [];
+  for (let i = 0; i < data.questions.length; i++) {
+    const q = data.questions[i];
+    if (!q || typeof q !== "object") continue;
+    const id =
+      typeof q.id === "string" && q.id.trim() ? q.id.trim() : `q-${i + 1}`;
+    const typeRaw = String(q.type || "SINGLE_CHOICE").toUpperCase();
+    const type =
+      typeRaw === "MULTIPLE_CHOICE" ||
+      typeRaw === "LEAD" ||
+      typeRaw === "CONTEST_ENTRY" ||
+      typeRaw === "QUIZ"
+        ? typeRaw
+        : "SINGLE_CHOICE";
+    const options = Array.isArray(q.options)
+      ? q.options.map((o) => String(o ?? ""))
+      : ["", ""];
+    questions.push({
+      id,
+      question: typeof q.question === "string" ? q.question : "",
+      type,
+      options: options.length >= 2 ? options : ["", ""],
+      leadTriggerOrder: Number(q.leadTriggerOrder ?? 0) || 0,
+      quizCorrectOrder: Number(q.quizCorrectOrder ?? 0) || 0,
+      contestPrize: typeof q.contestPrize === "string" ? q.contestPrize : "",
+      contestWinnerCount: normalizeContestWinnerCount(q.contestWinnerCount),
+      contestQuestionCustomized: Boolean(q.contestQuestionCustomized),
+    });
+  }
+  if (questions.length < 1) return null;
+  return { eventTitle, eventDescription, questions };
+}
+
+/**
+ * @param {{ eventTitle: string; eventDescription: string; questions: CreateQuestion[] }} draft
+ * @returns {string}
+ */
+export function serializeCreateEventDraft(draft) {
+  return JSON.stringify({
+    v: 1,
+    savedAt: Date.now(),
+    eventTitle: draft.eventTitle ?? "",
+    eventDescription: draft.eventDescription ?? "",
+    questions: Array.isArray(draft.questions) ? draft.questions : [],
+  });
+}
+
+/**
+ * @param {Storage | null | undefined} storage
+ * @returns {{ eventTitle: string; eventDescription: string; questions: CreateQuestion[] } | null}
+ */
+export function loadCreateEventDraft(storage) {
+  if (!storage || typeof storage.getItem !== "function") return null;
+  try {
+    const raw = storage.getItem(CREATE_EVENT_DRAFT_KEY);
+    return parseCreateEventDraft(raw);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @param {Storage | null | undefined} storage
+ * @param {{ eventTitle: string; eventDescription: string; questions: CreateQuestion[] }} draft
+ */
+export function saveCreateEventDraft(storage, draft) {
+  if (!storage || typeof storage.setItem !== "function") return;
+  try {
+    storage.setItem(CREATE_EVENT_DRAFT_KEY, serializeCreateEventDraft(draft));
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+/**
+ * @param {Storage | null | undefined} storage
+ */
+export function clearCreateEventDraft(storage) {
+  if (!storage || typeof storage.removeItem !== "function") return;
+  try {
+    storage.removeItem(CREATE_EVENT_DRAFT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Brouillon « non vide » (sinon inutile de proposer reprise).
+ * @param {{ eventTitle?: string; eventDescription?: string; questions?: CreateQuestion[] } | null} draft
+ */
+export function isCreateEventDraftMeaningful(draft) {
+  if (!draft) return false;
+  if (String(draft.eventTitle ?? "").trim()) return true;
+  if (String(draft.eventDescription ?? "").trim()) return true;
+  const qs = Array.isArray(draft.questions) ? draft.questions : [];
+  if (qs.length > 1) return true;
+  const q0 = qs[0];
+  if (!q0) return false;
+  if (String(q0.question ?? "").trim()) return true;
+  if ((q0.options || []).some((o) => String(o ?? "").trim())) return true;
+  if (q0.type && q0.type !== "SINGLE_CHOICE") return true;
+  if (String(q0.contestPrize ?? "").trim()) return true;
+  return false;
+}
+
+/**
+ * Compteurs résumé (Quiz séparé du choix unique).
+ * @param {CreateQuestion[]} questions
+ */
+export function summarizeQuestionTypes(questions) {
+  const list = Array.isArray(questions) ? questions : [];
+  let single = 0;
+  let multiple = 0;
+  let lead = 0;
+  let contest = 0;
+  let quiz = 0;
+  for (const q of list) {
+    switch (q?.type) {
+      case "MULTIPLE_CHOICE":
+        multiple += 1;
+        break;
+      case "LEAD":
+        lead += 1;
+        break;
+      case "CONTEST_ENTRY":
+        contest += 1;
+        break;
+      case "QUIZ":
+        quiz += 1;
+        break;
+      default:
+        single += 1;
+    }
+  }
+  return {
+    totalQuestions: list.length,
+    totalOptions: list.reduce(
+      (sum, q) => sum + (Array.isArray(q?.options) ? q.options.length : 0),
+      0,
+    ),
+    single,
+    multiple,
+    lead,
+    contest,
+    quiz,
+  };
+}
