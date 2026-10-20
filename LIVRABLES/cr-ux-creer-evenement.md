@@ -1,6 +1,8 @@
 # Compte rendu — Refonte UX Créer un événement
 
 Branche : `cursor/ux-creer-evenement-fbab`  
+PR : https://github.com/remdieuv/avote.app/pull/13  
+Preview : https://avote-app-git-cursor-ux-creer-evenement-fbab-remdieuvs-projects.vercel.app/admin  
 Réf. audit : [audit-ux-creer-evenement.md](./audit-ux-creer-evenement.md)
 
 ## Modifications
