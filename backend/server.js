@@ -4545,6 +4545,12 @@ app.post("/polls", requireAuth, async (req, res) => {
           contestPrize,
           contestWinnerCount,
           quizCorrectOrder,
+          formTemplateKey:
+            typeof p?.formTemplateKey === "string" ? p.formTemplateKey : null,
+          formDefinition:
+            p?.formDefinition && typeof p.formDefinition === "object"
+              ? p.formDefinition
+              : null,
         };
       });
 
@@ -4606,7 +4612,10 @@ app.post("/polls", requireAuth, async (req, res) => {
                 e.type === "CONTEST_ENTRY" ? e.contestWinnerCount : 1,
               type: e.type === "LEAD" ? "SINGLE_CHOICE" : e.type,
               leadEnabled: requiresFormOnPositiveAnswer(e.type),
-              ...formCreateDataForPollType(e.type),
+              ...formCreateDataForPollType(e.type, {
+                formTemplateKey: e.formTemplateKey,
+                formDefinition: e.formDefinition,
+              }),
               status: i === 0 ? "ACTIVE" : "DRAFT",
               order: i,
               options: {

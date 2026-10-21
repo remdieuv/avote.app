@@ -32,6 +32,7 @@
     "test:create-event-form": "node scripts/test-create-event-form.mjs",
     "test:forms-l0": "node scripts/test-forms-l0.mjs",
     "test:forms-l2": "node scripts/test-forms-l2.mjs",
+    "test:forms-l3": "node scripts/test-forms-l3.mjs",
     "test:regie-option-stats": "node scripts/test-regie-option-stats.mjs",
     "test:poll-patch-guards": "node ../backend/scripts/test-poll-patch-guards.mjs",
     "test:replace-poll-options": "node ../backend/scripts/test-replace-poll-options.mjs",

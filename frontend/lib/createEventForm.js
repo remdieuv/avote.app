@@ -3,6 +3,12 @@
  * Aucune dépendance React / API.
  */
 
+import {
+  defaultFormStateForPollKind,
+  validateQuestionFormBuilder,
+} from "./forms/formBuilder.js";
+import { cloneFormDefinition } from "./forms/formTemplates.js";
+
 export const CREATE_EVENT_DRAFT_KEY = "avote_create_event_draft_v1";
 export const CONTEST_DEFAULT_QUESTION =
   "Souhaitez-vous participer au tirage au sort ?";
@@ -25,6 +31,8 @@ export const LEAD_DEFAULT_OPTIONS = ["Oui", "Non"];
  *   contestPrize: string;
  *   contestWinnerCount: number;
  *   contestQuestionCustomized: boolean;
+ *   formTemplateKey: string | null;
+ *   formDefinition: import("./forms/formTemplates.js").FormDefinition | null;
  * }} CreateQuestion
  */
 
@@ -101,6 +109,8 @@ export function createBlankQuestion(id) {
     contestPrize: "",
     contestWinnerCount: CONTEST_WINNER_COUNT_DEFAULT,
     contestQuestionCustomized: false,
+    formTemplateKey: null,
+    formDefinition: null,
   };
 }
 
@@ -176,6 +186,7 @@ export function applyQuestionType(item, type) {
     const contestWinnerCount = normalizeContestWinnerCount(
       item.contestWinnerCount,
     );
+    const formState = defaultFormStateForPollKind("CONTEST_ENTRY");
     return {
       ...item,
       type,
@@ -186,12 +197,15 @@ export function applyQuestionType(item, type) {
       contestPrize,
       contestWinnerCount,
       contestQuestionCustomized: textPatch.contestQuestionCustomized,
+      formTemplateKey: formState.formTemplateKey,
+      formDefinition: formState.formDefinition,
     };
   }
   if (type === "LEAD") {
     const nextOptions = optionsAreBlank(item.options)
       ? [...LEAD_DEFAULT_OPTIONS]
       : [...item.options];
+    const formState = defaultFormStateForPollKind("LEAD");
     return {
       ...item,
       type,
@@ -200,6 +214,8 @@ export function applyQuestionType(item, type) {
       leadTriggerOrder: 0,
       quizCorrectOrder: 0,
       contestQuestionCustomized: textPatch.contestQuestionCustomized,
+      formTemplateKey: formState.formTemplateKey,
+      formDefinition: formState.formDefinition,
     };
   }
   if (type === "QUIZ") {
@@ -210,6 +226,8 @@ export function applyQuestionType(item, type) {
       leadTriggerOrder: 0,
       quizCorrectOrder: 0,
       contestQuestionCustomized: textPatch.contestQuestionCustomized,
+      formTemplateKey: null,
+      formDefinition: null,
     };
   }
   return {
@@ -218,6 +236,8 @@ export function applyQuestionType(item, type) {
     question: textPatch.question,
     leadTriggerOrder: 0,
     contestQuestionCustomized: textPatch.contestQuestionCustomized,
+    formTemplateKey: null,
+    formDefinition: null,
   };
 }
 
@@ -236,6 +256,9 @@ export function duplicateQuestion(item, newId) {
     contestQuestionCustomized: Boolean(item.contestQuestionCustomized),
     leadTriggerOrder: Number(item.leadTriggerOrder ?? 0) || 0,
     quizCorrectOrder: Number(item.quizCorrectOrder ?? 0) || 0,
+    formTemplateKey:
+      typeof item.formTemplateKey === "string" ? item.formTemplateKey : null,
+    formDefinition: cloneFormDefinition(item.formDefinition),
   };
 }
 
@@ -280,6 +303,7 @@ export function moveItem(list, fromIndex, toIndex) {
  *       contestPrize?: string;
  *       contestWinnerCount?: string;
  *       quizCorrectOrder?: string;
+ *       formDefinition?: string;
  *     }>;
  *   };
  *   firstErrorQuestionId: string | null;
@@ -350,6 +374,15 @@ export function validateCreateEventForm(input) {
           `Question ${i + 1} : sélectionnez la bonne réponse du quiz.`;
       }
     }
+    if (isLeadLikeQuestionType(x?.type)) {
+      const formCheck = validateQuestionFormBuilder(x);
+      if (!formCheck.ok) {
+        qErr.formDefinition = formCheck.error || "Formulaire invalide.";
+        formError =
+          formError ||
+          `Question ${i + 1} : ${formCheck.error || "formulaire invalide."}`;
+      }
+    }
     if (Object.keys(qErr).length > 0) {
       fieldErrors.questions[qid] = qErr;
       if (!firstErrorQuestionId) firstErrorQuestionId = qid;
@@ -402,7 +435,8 @@ export function parseCreateEventDraft(raw) {
     const options = Array.isArray(q.options)
       ? q.options.map((o) => String(o ?? ""))
       : ["", ""];
-    questions.push({
+    /** @type {CreateQuestion} */
+    const base = {
       id,
       question: typeof q.question === "string" ? q.question : "",
       type,
@@ -412,7 +446,26 @@ export function parseCreateEventDraft(raw) {
       contestPrize: typeof q.contestPrize === "string" ? q.contestPrize : "",
       contestWinnerCount: normalizeContestWinnerCount(q.contestWinnerCount),
       contestQuestionCustomized: Boolean(q.contestQuestionCustomized),
-    });
+      formTemplateKey: null,
+      formDefinition: null,
+    };
+    if (type === "LEAD" || type === "CONTEST_ENTRY") {
+      const cloned = cloneFormDefinition(q.formDefinition);
+      if (cloned) {
+        base.formDefinition = cloned;
+        base.formTemplateKey =
+          typeof q.formTemplateKey === "string" && q.formTemplateKey.trim()
+            ? q.formTemplateKey.trim()
+            : cloned.templateKey || null;
+      } else {
+        const fresh = defaultFormStateForPollKind(
+          type === "CONTEST_ENTRY" ? "CONTEST_ENTRY" : "LEAD",
+        );
+        base.formTemplateKey = fresh.formTemplateKey;
+        base.formDefinition = fresh.formDefinition;
+      }
+    }
+    questions.push(base);
   }
   if (questions.length < 1) return null;
   return { eventTitle, eventDescription, questions };

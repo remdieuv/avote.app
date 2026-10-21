@@ -53,3 +53,18 @@ export {
   parseAnswersDraft,
   serializeAnswersDraft,
 } from "./resolveParticipantForm.js";
+
+export {
+  FORM_BUILDER_FIELD_TYPES,
+  FORM_BUILDER_TEMPLATES,
+  newFormFieldId,
+  definitionFromTemplateKey,
+  defaultFormStateForPollKind,
+  createBlankFormField,
+  addFieldToDefinition,
+  removeFieldFromDefinition,
+  moveFieldInDefinition,
+  patchFieldInDefinition,
+  applyTemplateToFormState,
+  validateQuestionFormBuilder,
+} from "./formBuilder.js";
