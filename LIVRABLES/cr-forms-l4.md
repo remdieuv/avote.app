@@ -2,6 +2,7 @@
 
 **Date :** 2026-10-21  
 **Branche :** `cursor/forms-l4-1e88` (base **L3** `cursor/forms-l3-1e88`)  
+**PR :** https://github.com/remdieuv/avote.app/pull/19 (draft)  
 **Périmètre :** soft lock D4 ; Mes leads Détail ; CSV 1 col/champ (D6/D9) ; historique `contact_legacy`.  
 **Hors scope :** Régie / Screen / Salle live, L5, merge, deploy, migrate prod.
 
