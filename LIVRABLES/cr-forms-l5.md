@@ -2,6 +2,7 @@
 
 **Date :** 2026-10-21  
 **Branche :** `cursor/forms-l5-1e88` (base **L4** `cursor/forms-l4-1e88`)  
+**PR :** https://github.com/remdieuv/avote.app/pull/20 (draft)  
 **Périmètre :** RGPD D7 bout-en-bout — info, consent commercial, preuve, max 5, garde PII ; compat legacy.  
 **Hors scope :** Régie / Screen / Salle live, merge, deploy, migrate prod.
 
