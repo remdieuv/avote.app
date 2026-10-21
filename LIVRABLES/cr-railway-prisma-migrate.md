@@ -10,7 +10,7 @@ cursor:
 | **Date** | 2026-10-21 |
 | **Repo** | `remdieuv/avote.app` @ `main` `3b5460c` |
 | **Périmètre** | Audit + corrections code minimales — **pas** de merge, migrate prod, ni deploy |
-| **PR draft** | https://github.com/remdieuv/avote.app/pull/16 (à confirmer après ouverture) · branche `cursor/railway-prisma-migrate-d54f` |
+| **PR draft** | [#16](https://github.com/remdieuv/avote.app/pull/16) · branche `cursor/railway-prisma-migrate-d54f` |
 
 ---
 
