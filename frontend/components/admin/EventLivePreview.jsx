@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { FormRenderer } from "@/components/forms/FormRenderer";
+import {
+  emptyAnswersForDefinition,
+  resolvePreviewFormDefinition,
+} from "@/lib/forms";
 
 /**
  * @param {{
@@ -12,6 +17,8 @@ import { useEffect, useMemo, useState } from "react";
  *    options?: string[];
  *    leadTriggerOrder?: number;
  *    quizCorrectOrder?: number;
+ *    formDefinition?: unknown;
+ *    formTemplateKey?: string;
  *  }>;
  *  activeQuestionIndex?: number;
  * }} props
@@ -34,6 +41,9 @@ export function EventLivePreview({
               : [],
             leadTriggerOrder: Number(q?.leadTriggerOrder ?? 0) || 0,
             quizCorrectOrder: Number(q?.quizCorrectOrder ?? 0) || 0,
+            formDefinition: q?.formDefinition ?? null,
+            formTemplateKey:
+              typeof q?.formTemplateKey === "string" ? q.formTemplateKey : "",
           }))
         : [],
     [questions],
@@ -159,14 +169,31 @@ export function EventLivePreview({
           {showLead ? (
             <div className="event-preview-lead">
               <p>
-                Formulaire lead
+                {question?.type === "CONTEST_ENTRY"
+                  ? "Formulaire de participation"
+                  : "Formulaire de contact"}
                 {triggerLabel
                   ? ` (après « ${triggerLabel} »)`
                   : " (après le déclencheur)"}
               </p>
-              <input type="text" disabled value="Prénom" readOnly />
-              <input type="text" disabled value="Téléphone" readOnly />
-              <input type="text" disabled value="Email (optionnel)" readOnly />
+              <FormRenderer
+                definition={
+                  question?.formDefinition
+                    ? question.formDefinition
+                    : resolvePreviewFormDefinition(question?.type)
+                }
+                answers={emptyAnswersForDefinition(
+                  question?.formDefinition
+                    ? question.formDefinition
+                    : resolvePreviewFormDefinition(question?.type),
+                )}
+                preview
+                pollKind={
+                  question?.type === "CONTEST_ENTRY" ? "CONTEST_ENTRY" : "LEAD"
+                }
+                showTitle={false}
+                showRgpdInfo={false}
+              />
             </div>
           ) : null}
         </div>

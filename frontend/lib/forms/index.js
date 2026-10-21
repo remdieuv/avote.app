@@ -45,3 +45,11 @@ export {
   legacyLeadBodyToAnswers,
   isLeadFormSubmissionOptional,
 } from "./formValidation.js";
+
+export {
+  resolveParticipantFormDefinition,
+  resolvePreviewFormDefinition,
+  emptyAnswersForDefinition,
+  parseAnswersDraft,
+  serializeAnswersDraft,
+} from "./resolveParticipantForm.js";
