@@ -2,6 +2,7 @@
 
 **Date :** 2026-10-21  
 **Branche :** `cursor/forms-l6-1e88` (base **L5** `cursor/forms-l5-1e88`)  
+**PR :** https://github.com/remdieuv/avote.app/pull/21 (draft)  
 **Périmètre :** parité Régie ↔ Créer un événement — `FormBuilderPanel`, soft lock, consent L5.  
 **Hors scope :** merge, deploy, migrate prod ; pas de refonte Screen / Salle.
 
