@@ -1,6 +1,7 @@
 "use client";
 
 import { leadDetailRows, leadSourceFromPollType } from "@/lib/forms/leadsCrm";
+import { consentsProofDetailRows } from "@/lib/forms/rgpdConsent";
 
 /**
  * Panneau Détail — toutes les réponses custom d’un participant (L4 / D6 / D9).
@@ -21,6 +22,7 @@ export function LeadAnswersDetail({
   if (!open || !lead) return null;
 
   const rows = leadDetailRows(lead);
+  const consentRows = consentsProofDetailRows(lead.consents);
   const source =
     leadSourceFromPollType(lead.pollType) === "contest" ? "Concours" : "Lead";
   const when =
@@ -103,6 +105,22 @@ export function LeadAnswersDetail({
             ))}
           </ul>
         )}
+
+        {consentRows.length > 0 ? (
+          <>
+            <p className="lead-detail-section" style={{ marginTop: "1rem" }}>
+              Preuve consentement (RGPD)
+            </p>
+            <ul className="lead-detail-list">
+              {consentRows.map((row) => (
+                <li key={`c-${row.label}`}>
+                  <span className="lead-detail-label">{row.label}</span>
+                  <span className="lead-detail-value">{row.value || "—"}</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
 
         <style>{`
           .lead-detail-overlay {

@@ -97,6 +97,12 @@ export const FORM_RGPD_MARKETING_CONSENT_LABEL =
 
 export const FORM_RGPD_CONSENT_NEVER_PRECHECKED = true;
 
+/** Version de schéma de la preuve `LeadCapture.consents` (L5 / D7). */
+export const FORM_CONSENT_PROOF_VERSION = 1;
+
+/** Id stable du champ consentement commercial (toggle orga). */
+export const FORM_MARKETING_CONSENT_FIELD_ID = "fld_marketing";
+
 /**
  * Meta templates pour sélecteur admin (hors contact_legacy = backfill seul).
  * @type {{ key: FormTemplateKey; label: string; description: string; selectable: boolean }[]}

@@ -18,6 +18,8 @@ export {
   FORM_RGPD_INFO_SHORT,
   FORM_RGPD_MARKETING_CONSENT_LABEL,
   FORM_RGPD_CONSENT_NEVER_PRECHECKED,
+  FORM_CONSENT_PROOF_VERSION,
+  FORM_MARKETING_CONSENT_FIELD_ID,
   formUiTitleForPollKind,
   defaultFormTemplateKeyForPollKind,
 } from "./formConstants.js";
@@ -67,6 +69,8 @@ export {
   patchFieldInDefinition,
   applyTemplateToFormState,
   validateQuestionFormBuilder,
+  hasMarketingConsentField,
+  setMarketingConsentEnabled,
 } from "./formBuilder.js";
 
 export {
@@ -77,3 +81,10 @@ export {
   leadDetailRows,
   assertFormFieldEditAllowed,
 } from "./leadsCrm.js";
+
+export {
+  consentDefaultsNeverPrechecked,
+  normalizeConsentsProof,
+  consentsProofDetailRows,
+  assertNoLeadPiiInPublicPayload,
+} from "./rgpdConsent.js";

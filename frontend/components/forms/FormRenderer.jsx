@@ -3,6 +3,7 @@
 import { sortedFormFields } from "@/lib/forms/formTemplates";
 import {
   FORM_RGPD_INFO_SHORT,
+  FORM_RGPD_INFO_TEXT,
   formUiTitleForPollKind,
 } from "@/lib/forms/formConstants";
 
@@ -277,8 +278,10 @@ export function FormRenderer({
           }
 
           if (field.type === "consent") {
+            // D7 — jamais précoché : checked uniquement si value === true (défaut false).
+            const checked = value === true;
             return (
-              <div key={field.id}>
+              <div key={field.id} data-consent-field={field.id}>
                 <label
                   style={{
                     display: "flex",
@@ -292,15 +295,20 @@ export function FormRenderer({
                   <input
                     id={id}
                     type="checkbox"
-                    checked={value === true}
+                    checked={checked}
+                    defaultChecked={undefined}
                     disabled={disabled || preview || submitting}
-                    // D7 — jamais précoché : valeur initiale false côté parent
                     onChange={(e) => setValue(field.id, e.target.checked)}
                     style={{ marginTop: "0.2rem" }}
                   />
                   <span>
                     {field.label}
-                    {reqMark}
+                    {field.required ? reqMark : (
+                      <span style={{ color: mutedColor, fontWeight: 500 }}>
+                        {" "}
+                        (facultatif)
+                      </span>
+                    )}
                   </span>
                 </label>
                 {err ? <FieldError text={err} /> : null}
@@ -353,16 +361,50 @@ export function FormRenderer({
         })}
 
         {showRgpdInfo ? (
-          <p
+          <div
+            className="form-rgpd-info"
+            data-rgpd-info="1"
             style={{
-              margin: "0.1rem 0 0",
-              fontSize: "0.72rem",
-              lineHeight: 1.4,
-              color: mutedColor,
+              margin: "0.15rem 0 0",
+              padding: "0.65rem 0.7rem",
+              borderRadius: "10px",
+              border: "1px solid rgba(148, 163, 184, 0.45)",
+              background: "rgba(248, 250, 252, 0.9)",
             }}
           >
-            {FORM_RGPD_INFO_SHORT}
-          </p>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "0.72rem",
+                fontWeight: 800,
+                letterSpacing: "0.04em",
+                textTransform: "uppercase",
+                color: mutedColor,
+              }}
+            >
+              Données personnelles
+            </p>
+            <p
+              style={{
+                margin: "0.35rem 0 0",
+                fontSize: "0.78rem",
+                lineHeight: 1.45,
+                color: textColor,
+              }}
+            >
+              {FORM_RGPD_INFO_TEXT}
+            </p>
+            <p
+              style={{
+                margin: "0.35rem 0 0",
+                fontSize: "0.72rem",
+                lineHeight: 1.4,
+                color: mutedColor,
+              }}
+            >
+              {FORM_RGPD_INFO_SHORT}
+            </p>
+          </div>
         ) : null}
 
         {!preview && onSubmit ? (

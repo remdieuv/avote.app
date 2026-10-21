@@ -3,6 +3,7 @@
  */
 
 import {
+  FORM_CONSENT_PROOF_VERSION,
   FORM_LIMITS,
   FORM_RGPD_CONSENT_NEVER_PRECHECKED,
   FORM_RGPD_INFO_TEXT,
@@ -388,7 +389,10 @@ export function validateFormAnswers(def, answersRaw, opts = {}) {
 export function buildConsentsProof(def, answers, opts = {}) {
   const now = (opts.now instanceof Date ? opts.now : new Date()).toISOString();
   /** @type {Record<string, unknown>} */
-  const proof = {};
+  const proof = {
+    version: FORM_CONSENT_PROOF_VERSION,
+    neverPrechecked: FORM_RGPD_CONSENT_NEVER_PRECHECKED,
+  };
   if (opts.infoAcknowledged !== false) {
     proof.infoAcknowledgedAt = now;
     proof.infoTextSnapshot = FORM_RGPD_INFO_TEXT;
@@ -406,6 +410,7 @@ export function buildConsentsProof(def, answers, opts = {}) {
       fieldId: f.id,
       labelSnapshot: f.label || FORM_RGPD_MARKETING_CONSENT_LABEL,
       acceptedAt: now,
+      choice: true,
     };
     if (isMarketing) {
       proof.marketing = entry;
@@ -414,9 +419,6 @@ export function buildConsentsProof(def, answers, opts = {}) {
       /** @type {unknown[]} */ (proof.other).push(entry);
     }
   }
-
-  // Garantie produit documentée
-  proof.neverPrechecked = FORM_RGPD_CONSENT_NEVER_PRECHECKED;
 
   return proof;
 }
