@@ -17,7 +17,13 @@ import {
   isRegieChronoEnabled,
 } from "@/lib/chronoFormat";
 import { AjouterQuestionLiveModal } from "@/components/AjouterQuestionLiveModal";
+import { FormBuilderPanel } from "@/components/admin/FormBuilderPanel";
 import { LiveMicroLabel } from "@/components/admin/LiveMicroIcon";
+import { defaultFormStateForPollKind } from "@/lib/forms/formBuilder";
+import {
+  collectUsedFormIdsFromLeadRows,
+  regieFormPollKind,
+} from "@/lib/forms/formUsage";
 import { computeActivationBalance } from "@/lib/activationBalance";
 import {
   shouldClearRegieEventLoadingAfterFetch,
@@ -5009,6 +5015,18 @@ export default function RegieEventPage() {
     /** @type {string[]} */ (["", ""]),
   );
   const [editLeadTriggerOrder, setEditLeadTriggerOrder] = useState(0);
+  const [editFormTemplateKey, setEditFormTemplateKey] = useState(
+    /** @type {string | null} */ (null),
+  );
+  const [editFormDefinition, setEditFormDefinition] = useState(
+    /** @type {object | null} */ (null),
+  );
+  const [editUsedFieldIds, setEditUsedFieldIds] = useState(
+    /** @type {string[]} */ ([]),
+  );
+  const [editUsedOptionIdsByField, setEditUsedOptionIdsByField] = useState(
+    /** @type {Record<string, string[]>} */ ({}),
+  );
   const [editModalError, setEditModalError] = useState(
     /** @type {string | null} */ (null),
   );
@@ -5780,9 +5798,51 @@ export default function RegieEventPage() {
       const correctIdx = opts.findIndex((o) => o?.isCorrect === true);
       // Sélecteur : valeur enregistrée si connue, sinon 1re option (brouillon).
       setEditQuizCorrectOrder(correctIdx >= 0 ? correctIdx : 0);
+
+      // L6 — formulaire Lead/Concours + soft lock depuis leads existants.
+      const formKind = regieFormPollKind(src);
+      setEditUsedFieldIds([]);
+      setEditUsedOptionIdsByField({});
+      if (formKind) {
+        if (src?.formDefinition && typeof src.formDefinition === "object") {
+          setEditFormDefinition(src.formDefinition);
+          setEditFormTemplateKey(
+            typeof src.formTemplateKey === "string" && src.formTemplateKey
+              ? src.formTemplateKey
+              : src.formDefinition.templateKey || null,
+          );
+        } else {
+          const defaults = defaultFormStateForPollKind(formKind);
+          setEditFormDefinition(defaults.formDefinition);
+          setEditFormTemplateKey(defaults.formTemplateKey);
+        }
+        const pollId = String(src?.id || "");
+        const eid = String(eventId || "");
+        if (pollId && eid) {
+          void (async () => {
+            try {
+              const res = await adminFetch(
+                `${apiBaseBrowser()}/events/${encodeURIComponent(eid)}/leads`,
+              );
+              const body = await res.json().catch(() => []);
+              if (!res.ok) return;
+              const rows = Array.isArray(body) ? body : [];
+              const usage = collectUsedFormIdsFromLeadRows(rows, pollId);
+              setEditUsedFieldIds(usage.usedFieldIds);
+              setEditUsedOptionIdsByField(usage.usedOptionIdsByField);
+            } catch {
+              /* soft lock best-effort */
+            }
+          })();
+        }
+      } else {
+        setEditFormDefinition(null);
+        setEditFormTemplateKey(null);
+      }
+
       setEditPollModalOpen(true);
     },
-    [eventData?.polls],
+    [eventData?.polls, eventId],
   );
 
   /** @returns {Promise<boolean>} */
@@ -5908,6 +5968,8 @@ export default function RegieEventPage() {
       leadTriggerOrder: editLeadTriggerOrder,
       contestPrize: editContestPrize,
       contestWinnerCount: editContestWinnerCount,
+      formDefinition: editFormDefinition,
+      formTemplateKey: editFormTemplateKey,
       normalizeContestWinnerCount,
     });
     if (!built.ok || !built.payload) {
@@ -5945,7 +6007,7 @@ export default function RegieEventPage() {
       const nextOptions = Array.isArray(body?.options)
         ? body.options
         : null;
-      if (nextOptions) {
+      if (nextOptions || body?.formDefinition) {
         setEventData((prev) => {
           if (!prev?.polls) return prev;
           return {
@@ -5960,7 +6022,7 @@ export default function RegieEventPage() {
                         : p.question,
                     title:
                       typeof body.title === "string" ? body.title : p.title,
-                    options: nextOptions,
+                    options: nextOptions || p.options,
                     leadTriggerOptionId:
                       body.leadTriggerOptionId !== undefined
                         ? body.leadTriggerOptionId
@@ -5969,6 +6031,14 @@ export default function RegieEventPage() {
                       typeof body.quizRevealed === "boolean"
                         ? body.quizRevealed
                         : p.quizRevealed,
+                    formDefinition:
+                      body.formDefinition !== undefined
+                        ? body.formDefinition
+                        : p.formDefinition,
+                    formTemplateKey:
+                      body.formTemplateKey !== undefined
+                        ? body.formTemplateKey
+                        : p.formTemplateKey,
                   }
                 : p,
             ),
@@ -7821,7 +7891,9 @@ export default function RegieEventPage() {
           <div
             style={{
               width: "100%",
-              maxWidth: "30rem",
+              maxWidth: regieFormPollKind(editingPoll) ? "34rem" : "30rem",
+              maxHeight: "min(92vh, 760px)",
+              overflow: "auto",
               borderRadius: "14px",
               background: "#fff",
               border: "1px solid #e5e7eb",
@@ -8189,6 +8261,25 @@ export default function RegieEventPage() {
                     </select>
                   </div>
                 ) : null}
+              </div>
+            ) : null}
+            {regieFormPollKind(editingPoll) && editFormDefinition ? (
+              <div
+                data-testid="regie-edit-form-builder"
+                style={{ marginTop: "0.85rem" }}
+              >
+                <FormBuilderPanel
+                  pollKind={regieFormPollKind(editingPoll)}
+                  formTemplateKey={editFormTemplateKey}
+                  formDefinition={editFormDefinition}
+                  disabled={busy || !pollEditGuard.canEditSoftFields}
+                  usedFieldIds={editUsedFieldIds}
+                  usedOptionIdsByField={editUsedOptionIdsByField}
+                  onChange={(next) => {
+                    setEditFormTemplateKey(next.formTemplateKey);
+                    setEditFormDefinition(next.formDefinition);
+                  }}
+                />
               </div>
             ) : null}
             {String(editingPoll?.type || "").toUpperCase() === "QUIZ" ? (

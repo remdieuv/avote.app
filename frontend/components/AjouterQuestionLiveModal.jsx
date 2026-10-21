@@ -1,7 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { FormBuilderPanel } from "@/components/admin/FormBuilderPanel";
 import { adminFetch } from "@/lib/config";
+import {
+  defaultFormStateForPollKind,
+  validateQuestionFormBuilder,
+} from "@/lib/forms/formBuilder";
 import { validatePollOptionLabels } from "@/lib/pollOptionsForm";
 
 const CONTEST_DEFAULT_QUESTION = "Souhaitez-vous participer au tirage au sort ?";
@@ -54,6 +59,10 @@ export function AjouterQuestionLiveModal({
     CONTEST_WINNER_COUNT_DEFAULT,
   );
   const [contestQuestionCustomized, setContestQuestionCustomized] = useState(false);
+  const [formTemplateKey, setFormTemplateKey] = useState(/** @type {string | null} */ (null));
+  const [formDefinition, setFormDefinition] = useState(
+    /** @type {object | null} */ (null),
+  );
   const [submitting, setSubmitting] = useState(false);
   const [erreur, setErreur] = useState(/** @type {string | null} */ (null));
 
@@ -67,8 +76,16 @@ export function AjouterQuestionLiveModal({
     setContestPrize("");
     setContestWinnerCount(CONTEST_WINNER_COUNT_DEFAULT);
     setContestQuestionCustomized(false);
+    setFormTemplateKey(null);
+    setFormDefinition(null);
     setErreur(null);
   }, [open, eventId]);
+
+  const applyLeadFormDefaults = useCallback((kind) => {
+    const state = defaultFormStateForPollKind(kind);
+    setFormTemplateKey(state.formTemplateKey);
+    setFormDefinition(state.formDefinition);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -153,6 +170,17 @@ export function AjouterQuestionLiveModal({
         );
         return;
       }
+      if (isLeadLikeQuestionType(pollType)) {
+        const formCheck = validateQuestionFormBuilder({
+          type: pollType,
+          formDefinition,
+          formTemplateKey: formTemplateKey || undefined,
+        });
+        if (!formCheck.ok) {
+          setErreur(formCheck.error || "Formulaire invalide.");
+          return;
+        }
+      }
       const winnerCountNormalized = normalizeContestWinnerCount(contestWinnerCount);
       setSubmitting(true);
       setErreur(null);
@@ -176,6 +204,13 @@ export function AjouterQuestionLiveModal({
               quizCorrectOrder:
                 pollType === "QUIZ" ? Number(quizCorrectOrder ?? 0) : null,
               launchNow,
+              ...(isLeadLikeQuestionType(pollType) && formDefinition
+                ? {
+                    formTemplateKey:
+                      formTemplateKey || formDefinition.templateKey,
+                    formDefinition,
+                  }
+                : {}),
             }),
           },
         );
@@ -205,6 +240,8 @@ export function AjouterQuestionLiveModal({
       contestWinnerCount,
       leadTriggerOrder,
       quizCorrectOrder,
+      formDefinition,
+      formTemplateKey,
       onSuccess,
       onClose,
     ],
@@ -235,8 +272,8 @@ export function AjouterQuestionLiveModal({
       <div
         style={{
           width: "100%",
-          maxWidth: "26rem",
-          maxHeight: "min(92vh, 640px)",
+          maxWidth: isLeadLikeQuestionType(pollType) ? "32rem" : "26rem",
+          maxHeight: "min(92vh, 720px)",
           overflow: "auto",
           background: "#fff",
           borderRadius: "14px",
@@ -326,7 +363,11 @@ export function AjouterQuestionLiveModal({
               name="pollTypeAjout"
               checked={pollType === "SINGLE_CHOICE"}
               disabled={submitting}
-              onChange={() => setPollType("SINGLE_CHOICE")}
+              onChange={() => {
+                setPollType("SINGLE_CHOICE");
+                setFormTemplateKey(null);
+                setFormDefinition(null);
+              }}
             />
             Choix unique
           </label>
@@ -344,7 +385,11 @@ export function AjouterQuestionLiveModal({
               name="pollTypeAjout"
               checked={pollType === "MULTIPLE_CHOICE"}
               disabled={submitting}
-              onChange={() => setPollType("MULTIPLE_CHOICE")}
+              onChange={() => {
+                setPollType("MULTIPLE_CHOICE");
+                setFormTemplateKey(null);
+                setFormDefinition(null);
+              }}
             />
             Choix multiple
           </label>
@@ -365,6 +410,7 @@ export function AjouterQuestionLiveModal({
               onChange={() => {
                 setPollType("LEAD");
                 setLeadTriggerOrder(0);
+                applyLeadFormDefaults("LEAD");
               }}
             />
             Lead (Oui/Non + formulaire)
@@ -391,6 +437,7 @@ export function AjouterQuestionLiveModal({
                 setReponses([...CONTEST_DEFAULT_OPTIONS]);
                 setLeadTriggerOrder(0);
                 setContestQuestionCustomized(false);
+                applyLeadFormDefaults("CONTEST_ENTRY");
               }}
             />
             Participation concours
@@ -412,6 +459,8 @@ export function AjouterQuestionLiveModal({
               onChange={() => {
                 setPollType("QUIZ");
                 setQuizCorrectOrder(0);
+                setFormTemplateKey(null);
+                setFormDefinition(null);
               }}
             />
             Quiz (1 bonne réponse)
@@ -693,6 +742,23 @@ export function AjouterQuestionLiveModal({
             ? "Options fixées à Oui / Non"
             : "+ Ajouter une réponse"}
         </button>
+
+        {isLeadLikeQuestionType(pollType) && formDefinition ? (
+          <div data-testid="regie-add-form-builder" style={{ marginBottom: "0.85rem" }}>
+            <FormBuilderPanel
+              pollKind={
+                pollType === "CONTEST_ENTRY" ? "CONTEST_ENTRY" : "LEAD"
+              }
+              formTemplateKey={formTemplateKey}
+              formDefinition={formDefinition}
+              disabled={submitting}
+              onChange={(next) => {
+                setFormTemplateKey(next.formTemplateKey);
+                setFormDefinition(next.formDefinition);
+              }}
+            />
+          </div>
+        ) : null}
 
         {erreur ? (
           <p

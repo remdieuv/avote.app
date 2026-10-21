@@ -88,3 +88,8 @@ export {
   consentsProofDetailRows,
   assertNoLeadPiiInPublicPayload,
 } from "./rgpdConsent.js";
+
+export {
+  collectUsedFormIdsFromLeadRows,
+  regieFormPollKind,
+} from "./formUsage.js";
