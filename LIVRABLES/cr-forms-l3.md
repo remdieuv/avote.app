@@ -2,6 +2,7 @@
 
 **Date :** 2026-10-21  
 **Branche :** `cursor/forms-l3-1e88` (base **L2** `cursor/forms-l2-1e88` @ `dad58c1`)  
+**PR :** https://github.com/remdieuv/avote.app/pull/18 (draft)  
 **Périmètre :** builder admin création d’événement — 5 modèles, max 5 champs, défauts D8, contraintes Concours D2.  
 **Hors scope :** Régie/Screen/Salle, L4/L5, merge, deploy, migrate prod.
 
