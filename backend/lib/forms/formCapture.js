@@ -555,6 +555,236 @@ function contactLegacyDefinitionJson() {
   return JSON.stringify(buildContactLegacyDefinition());
 }
 
+/**
+ * L4 — Collecte des ids de champs / options déjà présents dans des answers.
+ * @param {Iterable<unknown>} answersList
+ * @returns {{
+ *   usedFieldIds: string[];
+ *   usedOptionIdsByField: Record<string, string[]>;
+ * }}
+ */
+function collectUsedFormIdsFromAnswers(answersList) {
+  /** @type {Set<string>} */
+  const usedFieldIds = new Set();
+  /** @type {Record<string, Set<string>>} */
+  const optSets = {};
+  for (const answers of answersList || []) {
+    if (!answers || typeof answers !== "object" || Array.isArray(answers)) continue;
+    for (const [fid, val] of Object.entries(answers)) {
+      if (!fid) continue;
+      usedFieldIds.add(String(fid));
+      if (typeof val === "string" && val) {
+        if (!optSets[fid]) optSets[fid] = new Set();
+        optSets[fid].add(val);
+      } else if (Array.isArray(val)) {
+        if (!optSets[fid]) optSets[fid] = new Set();
+        for (const id of val) {
+          if (id != null && id !== "") optSets[fid].add(String(id));
+        }
+      }
+    }
+  }
+  /** @type {Record<string, string[]>} */
+  const usedOptionIdsByField = {};
+  for (const [fid, set] of Object.entries(optSets)) {
+    usedOptionIdsByField[fid] = [...set];
+  }
+  return {
+    usedFieldIds: [...usedFieldIds],
+    usedOptionIdsByField,
+  };
+}
+
+/**
+ * Résout ids de choix → libellés (D6 / D9) — miroir frontend.
+ * @param {object | null | undefined} def
+ * @param {Record<string, unknown> | null | undefined} answers
+ * @returns {{ fieldId: string; label: string; value: string; raw: unknown }[]}
+ */
+function resolveAnswersForDisplay(def, answers) {
+  if (!def || typeof def !== "object") return [];
+  const raw = answers && typeof answers === "object" ? answers : {};
+  /** @type {{ fieldId: string; label: string; value: string; raw: unknown }[]} */
+  const rows = [];
+  for (const field of sortedFields(def)) {
+    const v = raw[field.id];
+    if (v == null || v === "" || (Array.isArray(v) && v.length === 0)) {
+      rows.push({
+        fieldId: field.id,
+        label: field.label || field.id,
+        value: "",
+        raw: v ?? null,
+      });
+      continue;
+    }
+    if (field.type === "single_choice") {
+      const opt = (field.options || []).find((o) => o.id === v);
+      rows.push({
+        fieldId: field.id,
+        label: field.label || field.id,
+        value: opt ? opt.label : String(v),
+        raw: v,
+      });
+      continue;
+    }
+    if (field.type === "multiple_choice" && Array.isArray(v)) {
+      const labels = v.map((id) => {
+        const opt = (field.options || []).find((o) => o.id === id);
+        return opt ? opt.label : String(id);
+      });
+      rows.push({
+        fieldId: field.id,
+        label: field.label || field.id,
+        value: labels.join(", "),
+        raw: v,
+      });
+      continue;
+    }
+    if (field.type === "consent") {
+      rows.push({
+        fieldId: field.id,
+        label: field.label || field.id,
+        value: v === true ? "Oui" : "Non",
+        raw: v,
+      });
+      continue;
+    }
+    rows.push({
+      fieldId: field.id,
+      label: field.label || field.id,
+      value: String(v),
+      raw: v,
+    });
+  }
+  return rows;
+}
+
+/**
+ * Soft lock D4 — compare définitions avant/après + usage answers.
+ * @param {object | null | undefined} prevDef
+ * @param {object | null | undefined} nextDef
+ * @param {{
+ *   usedFieldIds?: Iterable<string>;
+ *   usedOptionIdsByField?: Record<string, Iterable<string>>;
+ * }} [usage]
+ * @returns {{ ok: boolean; status: number; error: string | null; code: string | null }}
+ */
+function evaluateFormDefinitionSoftLock(prevDef, nextDef, usage = {}) {
+  const usedFieldIds = new Set(
+    usage.usedFieldIds ? [...usage.usedFieldIds].map(String) : [],
+  );
+  /** @type {Record<string, Set<string>>} */
+  const usedOpts = {};
+  const map = usage.usedOptionIdsByField || {};
+  for (const [fid, ids] of Object.entries(map)) {
+    usedOpts[fid] = new Set([...(ids || [])].map(String));
+  }
+
+  if (!nextDef || typeof nextDef !== "object") {
+    return {
+      ok: false,
+      status: 400,
+      error: "formDefinition invalide.",
+      code: "FORM_DEFINITION_INVALID",
+    };
+  }
+
+  const nextFields = Array.isArray(nextDef.fields) ? nextDef.fields : [];
+  if (nextFields.length > FORM_MAX_FIELDS) {
+    return {
+      ok: false,
+      status: 400,
+      error: `Maximum ${FORM_MAX_FIELDS} champs.`,
+      code: "FORM_MAX_FIELDS",
+    };
+  }
+
+  const prev = prevDef && typeof prevDef === "object" ? prevDef : null;
+  const prevFields = prev && Array.isArray(prev.fields) ? prev.fields : [];
+  const prevById = new Map(prevFields.map((f) => [String(f.id), f]));
+  const nextById = new Map(
+    nextFields.filter((f) => f && f.id).map((f) => [String(f.id), f]),
+  );
+
+  const prevTemplate = prev ? String(prev.templateKey || "") : "";
+  const nextTemplate = String(nextDef.templateKey || "");
+  if (
+    usedFieldIds.size > 0 &&
+    prevTemplate &&
+    nextTemplate &&
+    prevTemplate !== nextTemplate
+  ) {
+    // Reset template = perte des champs utilisés
+    const removedUsed = [...usedFieldIds].some((id) => !nextById.has(id));
+    if (removedUsed || prevTemplate !== nextTemplate) {
+      return {
+        ok: false,
+        status: 409,
+        error:
+          "Changement de modèle interdit après des réponses (D4).",
+        code: "FORM_SOFT_LOCK_TEMPLATE",
+      };
+    }
+  }
+
+  for (const fieldId of usedFieldIds) {
+    if (!prevById.has(fieldId)) continue;
+    if (!nextById.has(fieldId)) {
+      return {
+        ok: false,
+        status: 409,
+        error:
+          "Suppression interdite : champ déjà utilisé dans des réponses (D4).",
+        code: "FORM_SOFT_LOCK_DELETE_FIELD",
+      };
+    }
+    const before = prevById.get(fieldId);
+    const after = nextById.get(fieldId);
+    if (String(before.type) !== String(after.type)) {
+      return {
+        ok: false,
+        status: 409,
+        error: "Changement de type interdit : champ déjà utilisé (D4).",
+        code: "FORM_SOFT_LOCK_CHANGE_TYPE",
+      };
+    }
+    const beforeOptIds = new Set(
+      (before.options || []).map((o) => String(o.id)),
+    );
+    const afterOptIds = new Set((after.options || []).map((o) => String(o.id)));
+    const usedForField = usedOpts[fieldId] || new Set();
+    for (const optId of usedForField) {
+      if (beforeOptIds.has(optId) && !afterOptIds.has(optId)) {
+        return {
+          ok: false,
+          status: 409,
+          error: "Suppression d’option interdite : déjà utilisée (D4).",
+          code: "FORM_SOFT_LOCK_REMOVE_OPTION",
+        };
+      }
+    }
+  }
+
+  return { ok: true, status: 200, error: null, code: null };
+}
+
+/**
+ * Valide une définition Concours (présence prénom + email/tél).
+ * @param {object} def
+ * @param {"LEAD"|"CONTEST_ENTRY"|string} pollType
+ */
+function definitionAllowsContestRules(def, pollType) {
+  if (String(pollType || "").toUpperCase() !== "CONTEST_ENTRY") return true;
+  const fields = sortedFields(def);
+  const hasFirst =
+    fields.some((f) => f.slot === "firstName") ||
+    fields.some((f) => /pr[eé]nom/i.test(f.label || ""));
+  const hasContact = fields.some(
+    (f) => f.type === "email" || f.type === "phone" || f.slot === "email" || f.slot === "phone",
+  );
+  return hasFirst && hasContact;
+}
+
 module.exports = {
   FORM_DEFINITION_VERSION,
   FORM_MAX_FIELDS,
@@ -573,4 +803,8 @@ module.exports = {
   isValidEmailFormat,
   isValidPhoneFormat,
   contactLegacyDefinitionJson,
+  collectUsedFormIdsFromAnswers,
+  resolveAnswersForDisplay,
+  evaluateFormDefinitionSoftLock,
+  definitionAllowsContestRules,
 };

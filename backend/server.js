@@ -48,6 +48,12 @@ const {
 const {
   formCreateDataForPollType,
   resolveLeadSubmitPayload,
+  resolvePollFormDefinition,
+  sanitizeClientFormDefinition,
+  collectUsedFormIdsFromAnswers,
+  resolveAnswersForDisplay,
+  evaluateFormDefinitionSoftLock,
+  definitionAllowsContestRules,
 } = require("./lib/forms/formCapture");
 const {
   setScreenBIndependentDisplay,
@@ -5018,6 +5024,8 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
         eventId: true,
         leadEnabled: true,
         quizRevealed: true,
+        formDefinition: true,
+        formTemplateKey: true,
         options: { select: { id: true }, orderBy: { order: "asc" } },
         event: {
           select: { isLocked: true, isLiveConsumed: true },
@@ -5040,6 +5048,9 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
       });
     }
     const wantsOptionsChange = optionsReq.requested;
+    const wantsFormDefinition =
+      Object.prototype.hasOwnProperty.call(body, "formDefinition") ||
+      Object.prototype.hasOwnProperty.call(body, "formTemplateKey");
     const guard = evaluatePollPatchGuards({
       isLocked: poll.event?.isLocked,
       isLiveConsumed: poll.event?.isLiveConsumed,
@@ -5066,6 +5077,10 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
     }
 
     const isContestEntry = String(poll.type || "").toUpperCase() === "CONTEST_ENTRY";
+    const isLeadLike =
+      isContestEntry ||
+      String(poll.type || "").toUpperCase() === "LEAD" ||
+      Boolean(poll.leadEnabled);
     const isQuiz = String(poll.type || "").toUpperCase() === "QUIZ";
     if (isContestEntry) {
       if (Object.prototype.hasOwnProperty.call(body, "contestPrize")) {
@@ -5076,6 +5091,55 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
           body.contestWinnerCount,
         );
       }
+    }
+
+    let formDefinitionUpdated = false;
+    if (wantsFormDefinition) {
+      if (!isLeadLike) {
+        return res.status(400).json({
+          error: "formDefinition réservé aux questions Lead / Concours.",
+        });
+      }
+      const kind = isContestEntry ? "CONTEST_ENTRY" : "LEAD";
+      const prevDef = resolvePollFormDefinition(poll);
+      const sanitized = sanitizeClientFormDefinition(body.formDefinition, kind);
+      if (!sanitized) {
+        return res.status(400).json({
+          error: "formDefinition invalide.",
+          code: "FORM_DEFINITION_INVALID",
+        });
+      }
+      if (typeof body.formTemplateKey === "string" && body.formTemplateKey.trim()) {
+        sanitized.templateKey = body.formTemplateKey.trim().slice(0, 64);
+      }
+      if (!definitionAllowsContestRules(sanitized, kind)) {
+        return res.status(400).json({
+          error:
+            "Concours : le formulaire doit permettre un prénom et au moins un email ou téléphone (D2).",
+          code: "FORM_CONTEST_RULES",
+        });
+      }
+      const leadRows = await prisma.leadCapture.findMany({
+        where: { pollId },
+        select: { answers: true },
+      });
+      const usage = collectUsedFormIdsFromAnswers(
+        leadRows.map((r) => r.answers),
+      );
+      const lock = evaluateFormDefinitionSoftLock(prevDef, sanitized, usage);
+      if (!lock.ok) {
+        return res.status(lock.status).json({
+          error: lock.error,
+          code: lock.code,
+        });
+      }
+      data.formDefinition = sanitized;
+      data.formTemplateKey =
+        typeof body.formTemplateKey === "string" && body.formTemplateKey.trim()
+          ? body.formTemplateKey.trim().slice(0, 64)
+          : sanitized.templateKey;
+      data.formSchemaVersion = sanitized.version || 1;
+      formDefinitionUpdated = true;
     }
 
     let optionsUpdated = false;
@@ -5151,7 +5215,8 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
     if (
       Object.keys(data).length === 0 &&
       !quizCorrectUpdated &&
-      !optionsUpdated
+      !optionsUpdated &&
+      !formDefinitionUpdated
     ) {
       return res.status(400).json({ error: "Aucune modification détectée." });
     }
@@ -6028,7 +6093,17 @@ app.get("/me/leads", requireAuth, async (req, res) => {
         orderBy: { createdAt: "desc" },
         take: limit,
         include: {
-          poll: { select: { id: true, question: true, order: true, type: true } },
+          poll: {
+            select: {
+              id: true,
+              question: true,
+              order: true,
+              type: true,
+              leadEnabled: true,
+              formDefinition: true,
+              formTemplateKey: true,
+            },
+          },
           event: { select: { id: true, title: true } },
         },
       }),
@@ -6036,23 +6111,30 @@ app.get("/me/leads", requireAuth, async (req, res) => {
     ]);
 
     return res.json({
-      leads: leads.map((x) => ({
-        id: x.id,
-        eventId: x.eventId,
-        eventTitle: x.event?.title ?? "",
-        pollId: x.pollId,
-        pollOrder: x.poll?.order ?? null,
-        pollQuestion: x.poll?.question ?? "",
-        pollType: x.poll?.type ?? null,
-        firstName: x.firstName,
-        lastName: x.lastName ?? null,
-        phone: x.phone,
-        email: x.email,
-        answers: x.answers ?? null,
-        schemaVersion: x.schemaVersion ?? null,
-        consents: x.consents ?? null,
-        createdAt: x.createdAt.toISOString(),
-      })),
+      leads: leads.map((x) => {
+        const formDefinition = resolvePollFormDefinition(x.poll);
+        const answers = x.answers ?? null;
+        return {
+          id: x.id,
+          eventId: x.eventId,
+          eventTitle: x.event?.title ?? "",
+          pollId: x.pollId,
+          pollOrder: x.poll?.order ?? null,
+          pollQuestion: x.poll?.question ?? "",
+          pollType: x.poll?.type ?? null,
+          firstName: x.firstName,
+          lastName: x.lastName ?? null,
+          phone: x.phone,
+          email: x.email,
+          answers,
+          answersDisplay: resolveAnswersForDisplay(formDefinition, answers),
+          formDefinition,
+          formTemplateKey: x.poll?.formTemplateKey ?? formDefinition?.templateKey ?? null,
+          schemaVersion: x.schemaVersion ?? null,
+          consents: x.consents ?? null,
+          createdAt: x.createdAt.toISOString(),
+        };
+      }),
       events,
       total,
       limit,
@@ -6133,25 +6215,43 @@ app.get("/events/:eventId/leads", requireAuth, async (req, res) => {
       where,
       orderBy: { createdAt: "desc" },
       include: {
-        poll: { select: { id: true, question: true, order: true, type: true } },
+        poll: {
+          select: {
+            id: true,
+            question: true,
+            order: true,
+            type: true,
+            leadEnabled: true,
+            formDefinition: true,
+            formTemplateKey: true,
+          },
+        },
       },
     });
     return res.json(
-      leads.map((x) => ({
-        id: x.id,
-        pollId: x.pollId,
-        pollOrder: x.poll?.order ?? null,
-        pollQuestion: x.poll?.question ?? "",
-        pollType: x.poll?.type ?? null,
-        firstName: x.firstName,
-        lastName: x.lastName ?? null,
-        phone: x.phone,
-        email: x.email,
-        answers: x.answers ?? null,
-        schemaVersion: x.schemaVersion ?? null,
-        consents: x.consents ?? null,
-        createdAt: x.createdAt.toISOString(),
-      })),
+      leads.map((x) => {
+        const formDefinition = resolvePollFormDefinition(x.poll);
+        const answers = x.answers ?? null;
+        return {
+          id: x.id,
+          pollId: x.pollId,
+          pollOrder: x.poll?.order ?? null,
+          pollQuestion: x.poll?.question ?? "",
+          pollType: x.poll?.type ?? null,
+          firstName: x.firstName,
+          lastName: x.lastName ?? null,
+          phone: x.phone,
+          email: x.email,
+          answers,
+          answersDisplay: resolveAnswersForDisplay(formDefinition, answers),
+          formDefinition,
+          formTemplateKey:
+            x.poll?.formTemplateKey ?? formDefinition?.templateKey ?? null,
+          schemaVersion: x.schemaVersion ?? null,
+          consents: x.consents ?? null,
+          createdAt: x.createdAt.toISOString(),
+        };
+      }),
     );
   } catch (e) {
     console.error(e);

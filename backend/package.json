@@ -20,6 +20,7 @@
     "test:skip-event-poll": "node scripts/test-skip-event-poll.mjs",
     "test:cors-origins": "node scripts/test-cors-origins.mjs",
     "test:forms-l1": "node scripts/test-forms-l1-form-capture.mjs",
+    "test:forms-l4": "node scripts/test-forms-l4-soft-lock.mjs",
     "postinstall": "prisma generate"
   },
   "keywords": [],

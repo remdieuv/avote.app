@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { LeadAnswersDetail } from "@/components/admin/LeadAnswersDetail";
 import { adminContentShellStyle } from "@/lib/adminLayout";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
+import { buildLeadsCsv } from "@/lib/forms/leadsCrm";
 
 const LEADS_LAST_SEEN_LS_PREFIX = "avote_leads_seen_at_";
 
@@ -43,6 +45,7 @@ export default function EventLeadsPage() {
   const [copied, setCopied] = useState("");
   const [eventMode, setEventMode] = useState(null);
   const [eventModeLoading, setEventModeLoading] = useState(true);
+  const [detailLead, setDetailLead] = useState(null);
 
   useEffect(() => {
     if (!eventId) return;
@@ -177,22 +180,10 @@ export default function EventLeadsPage() {
   }
 
   function exportCsv() {
-    const header = ["Date", "Source", "Question", "Prenom", "Telephone", "Email"];
-    const lines = filteredRows.map((r) => [
-      formatDateTime(r.createdAt),
-      getLeadSource(r.pollType) === "contest" ? "Concours" : "Lead",
-      r.pollQuestion || `Question ${Number(r.pollOrder ?? 0) + 1}`,
-      r.firstName || "",
-      r.phone || "",
-      r.email || "",
-    ]);
-    const csv = [header, ...lines]
-      .map((line) =>
-        line
-          .map((value) => `"${String(value).replaceAll('"', '""')}"`)
-          .join(","),
-      )
-      .join("\n");
+    const csv = buildLeadsCsv(filteredRows, {
+      includeEventTitle: false,
+      separator: ";",
+    });
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -413,6 +404,13 @@ export default function EventLeadsPage() {
                             >
                               Copier e-mail
                             </button>
+                            <button
+                              style={miniActionBtn}
+                              type="button"
+                              onClick={() => setDetailLead(r)}
+                            >
+                              Détail
+                            </button>
                           </div>
                         </Td>
                       </tr>
@@ -466,7 +464,7 @@ export default function EventLeadsPage() {
                     <span>Téléphone: {r.phone || "—"}</span>
                     <span>E-mail: {r.email || "—"}</span>
                   </div>
-                  <div style={{ marginTop: "0.55rem", display: "flex", gap: "0.45rem" }}>
+                  <div style={{ marginTop: "0.55rem", display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
                     <button
                       style={miniActionBtn}
                       type="button"
@@ -485,6 +483,13 @@ export default function EventLeadsPage() {
                     >
                       Copier e-mail
                     </button>
+                    <button
+                      style={miniActionBtn}
+                      type="button"
+                      onClick={() => setDetailLead(r)}
+                    >
+                      Détail
+                    </button>
                   </div>
                 </div>
               ))}
@@ -502,6 +507,13 @@ export default function EventLeadsPage() {
           )}
         </>
       ) : null}
+
+      <LeadAnswersDetail
+        open={Boolean(detailLead)}
+        lead={detailLead}
+        onClose={() => setDetailLead(null)}
+        showEventTitle={false}
+      />
 
       <p style={{ margin: "1rem 0 0", fontSize: "0.75rem", color: "#94a3b8" }}>
         Les dates « Du / Au » sont interprétées en UTC (jour calendaire) côté serveur.
