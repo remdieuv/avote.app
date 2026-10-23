@@ -46,6 +46,10 @@ const {
   buildEventLiveUpdatedPayload,
 } = require("./lib/eventLiveSnapshot");
 const {
+  formCreateDataForPollType,
+  resolveLeadSubmitPayload,
+} = require("./lib/forms/formCapture");
+const {
   setScreenBIndependentDisplay,
   getScreenBIndependentDisplay,
   clearScreenBIndependentDisplay,
@@ -500,6 +504,10 @@ function pollToJson(poll) {
     type: poll.type,
     leadEnabled: Boolean(poll.leadEnabled),
     leadTriggerOptionId: poll.leadTriggerOptionId ?? null,
+    formDefinition: poll.formDefinition ?? null,
+    formTemplateKey: poll.formTemplateKey ?? null,
+    formSchemaVersion:
+      poll.formSchemaVersion != null ? Number(poll.formSchemaVersion) : null,
     status: poll.status,
     order: poll.order,
     createdAt: poll.createdAt.toISOString(),
@@ -1759,6 +1767,19 @@ app.post("/events/:eventId/duplicate", requireAuth, async (req, res) => {
       let firstPollId = null;
       for (let i = 0; i < source.polls.length; i++) {
         const sp = source.polls[i];
+        const formCopy = Boolean(sp.leadEnabled)
+          ? sp.formDefinition
+            ? {
+                formDefinition: sp.formDefinition,
+                formTemplateKey: sp.formTemplateKey ?? null,
+                formSchemaVersion: sp.formSchemaVersion ?? 1,
+              }
+            : formCreateDataForPollType(
+                String(sp.type || "").toUpperCase() === "CONTEST_ENTRY"
+                  ? "CONTEST_ENTRY"
+                  : "LEAD",
+              )
+          : {};
         const created = await tx.poll.create({
           data: {
             eventId: event.id,
@@ -1768,6 +1789,7 @@ app.post("/events/:eventId/duplicate", requireAuth, async (req, res) => {
             contestWinnerCount: normalizeContestWinnerCount(sp.contestWinnerCount),
             type: sp.type,
             leadEnabled: Boolean(sp.leadEnabled),
+            ...formCopy,
             status: i === 0 ? "ACTIVE" : "DRAFT",
             order: i,
             options: {
@@ -3407,6 +3429,7 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
           pollTypeParsed === "CONTEST_ENTRY" ? contestWinnerCount : 1,
         type: pollType,
         leadEnabled: requiresFormOnPositiveAnswer(pollTypeParsed),
+        ...formCreateDataForPollType(pollTypeParsed),
         status: "CLOSED",
         order: nextOrder,
         options: {
@@ -4583,6 +4606,7 @@ app.post("/polls", requireAuth, async (req, res) => {
                 e.type === "CONTEST_ENTRY" ? e.contestWinnerCount : 1,
               type: e.type === "LEAD" ? "SINGLE_CHOICE" : e.type,
               leadEnabled: requiresFormOnPositiveAnswer(e.type),
+              ...formCreateDataForPollType(e.type),
               status: i === 0 ? "ACTIVE" : "DRAFT",
               order: i,
               options: {
@@ -4720,6 +4744,7 @@ app.post("/polls", requireAuth, async (req, res) => {
             pollTypeParsed === "CONTEST_ENTRY" ? contestWinnerCount : 1,
           type: pollTypeParsed === "LEAD" ? "SINGLE_CHOICE" : pollTypeParsed,
           leadEnabled: requiresFormOnPositiveAnswer(pollTypeParsed),
+          ...formCreateDataForPollType(pollTypeParsed),
           status: "ACTIVE",
           order: 0,
           options: {
@@ -5232,20 +5257,9 @@ app.post("/polls/:pollId/leads", async (req, res) => {
   const body = req.body ?? {};
   const voterSessionId =
     typeof body.voterSessionId === "string" ? body.voterSessionId.trim() : "";
-  const firstName =
-    typeof body.firstName === "string" ? body.firstName.trim() : "";
-  const lastNameRaw =
-    typeof body.lastName === "string" ? body.lastName.trim() : "";
-  const lastName = lastNameRaw === "" ? null : lastNameRaw.slice(0, 120);
-  const phone = typeof body.phone === "string" ? body.phone.trim() : "";
-  const emailRaw = typeof body.email === "string" ? body.email.trim() : "";
-  const email = emailRaw === "" ? null : emailRaw.slice(0, 320);
 
   if (!pollId || !voterSessionId) {
     return res.status(400).json({ error: "pollId et voterSessionId requis." });
-  }
-  if (!firstName || !phone) {
-    return res.status(400).json({ error: "Prénom et téléphone requis." });
   }
 
   try {
@@ -5254,14 +5268,30 @@ app.post("/polls/:pollId/leads", async (req, res) => {
       select: {
         id: true,
         eventId: true,
+        type: true,
         leadEnabled: true,
         leadTriggerOptionId: true,
+        formDefinition: true,
+        formTemplateKey: true,
       },
     });
     if (!poll) return res.status(404).json({ error: "Sondage introuvable." });
     if (!poll.leadEnabled || !poll.leadTriggerOptionId) {
       return res.status(400).json({ error: "Collecte lead non activée." });
     }
+
+    // L1 dual-write : body legacy (firstName/phone/…) OU answers JSON.
+    const resolved = resolveLeadSubmitPayload(body, poll);
+    if (!resolved.ok) {
+      return res.status(400).json({
+        error: resolved.error || "Formulaire invalide.",
+        errors: resolved.errors || [],
+      });
+    }
+    const firstName = resolved.projected.firstName;
+    const lastName = resolved.projected.lastName;
+    const phone = resolved.projected.phone;
+    const email = resolved.projected.email;
 
     // Grace post-Fermer : autorisé si vote déclencheur déjà enregistré
     // (pas de contrôle voteState — un nouveau vote reste refusé côté submitVote).
@@ -5284,7 +5314,15 @@ app.post("/polls/:pollId/leads", async (req, res) => {
           voterSessionId,
         },
       },
-      update: { firstName, lastName, phone, email },
+      update: {
+        firstName,
+        lastName,
+        phone,
+        email,
+        answers: resolved.answers,
+        schemaVersion: resolved.schemaVersion,
+        consents: resolved.consents,
+      },
       create: {
         pollId,
         eventId: poll.eventId,
@@ -5293,6 +5331,9 @@ app.post("/polls/:pollId/leads", async (req, res) => {
         lastName,
         phone,
         email,
+        answers: resolved.answers,
+        schemaVersion: resolved.schemaVersion,
+        consents: resolved.consents,
       },
     });
     return res.status(201).json({ ok: true, id: lead.id });
@@ -5995,8 +6036,12 @@ app.get("/me/leads", requireAuth, async (req, res) => {
         pollQuestion: x.poll?.question ?? "",
         pollType: x.poll?.type ?? null,
         firstName: x.firstName,
+        lastName: x.lastName ?? null,
         phone: x.phone,
         email: x.email,
+        answers: x.answers ?? null,
+        schemaVersion: x.schemaVersion ?? null,
+        consents: x.consents ?? null,
         createdAt: x.createdAt.toISOString(),
       })),
       events,
@@ -6090,8 +6135,12 @@ app.get("/events/:eventId/leads", requireAuth, async (req, res) => {
         pollQuestion: x.poll?.question ?? "",
         pollType: x.poll?.type ?? null,
         firstName: x.firstName,
+        lastName: x.lastName ?? null,
         phone: x.phone,
         email: x.email,
+        answers: x.answers ?? null,
+        schemaVersion: x.schemaVersion ?? null,
+        consents: x.consents ?? null,
         createdAt: x.createdAt.toISOString(),
       })),
     );

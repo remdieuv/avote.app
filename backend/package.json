@@ -19,6 +19,7 @@
     "test:playlist-poll-guards": "node scripts/test-playlist-poll-guards.mjs",
     "test:skip-event-poll": "node scripts/test-skip-event-poll.mjs",
     "test:cors-origins": "node scripts/test-cors-origins.mjs",
+    "test:forms-l1": "node scripts/test-forms-l1-form-capture.mjs",
     "postinstall": "prisma generate"
   },
   "keywords": [],
