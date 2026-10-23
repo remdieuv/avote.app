@@ -76,11 +76,17 @@ import {
   getContestParticipantPhaseLabel,
   leadDraftStorageKey,
   leadSubmittedStorageKey,
-  parseLeadDraft,
-  serializeLeadDraft,
   shouldShowClosedAwaitingResultsCard,
   shouldShowLeadCaptureForm,
 } from "@/lib/leadContestLiveFlow";
+import {
+  emptyAnswersForDefinition,
+  parseAnswersDraft,
+  resolveParticipantFormDefinition,
+  serializeAnswersDraft,
+  validateFormAnswers,
+} from "@/lib/forms";
+import { FormRenderer } from "@/components/forms/FormRenderer";
 import {
   clearParticipantRepetitionMarkers,
   shouldClearParticipantMarkersOnStartReal,
@@ -357,10 +363,10 @@ export function PollExperience({
   const [votedOptionIdsEnStockage, setVotedOptionIdsEnStockage] = useState([]);
   const [merciPourVote, setMerciPourVote] = useState(false);
   const [showLeadForm, setShowLeadForm] = useState(false);
-  const [leadFirstName, setLeadFirstName] = useState("");
-  const [leadLastName, setLeadLastName] = useState("");
-  const [leadPhone, setLeadPhone] = useState("");
-  const [leadEmail, setLeadEmail] = useState("");
+  /** @type {[Record<string, unknown>, Function]} */
+  const [leadAnswers, setLeadAnswers] = useState({});
+  /** @type {[Record<string, string>, Function]} */
+  const [leadFieldErrors, setLeadFieldErrors] = useState({});
   const [leadSubmitting, setLeadSubmitting] = useState(false);
   const [leadSuccess, setLeadSuccess] = useState(false);
   const [leadError, setLeadError] = useState(null);
@@ -612,17 +618,7 @@ export function PollExperience({
           setLeadSuccess(true);
           setShowLeadForm(false);
         } else {
-          const draft = parseLeadDraft(
-            window.sessionStorage.getItem(
-              leadDraftStorageKey(pollId, voterSessionId || ""),
-            ),
-          );
-          if (draft) {
-            setLeadFirstName(draft.firstName);
-            setLeadLastName(draft.lastName);
-            setLeadPhone(draft.phone);
-            setLeadEmail(draft.email);
-          }
+          // Draft chargé après résolution définition (effet dédié ci-dessous).
         }
       }
     } catch {
@@ -658,6 +654,37 @@ export function PollExperience({
     storageVerifie,
   ]);
 
+  const participantFormDefinition = useMemo(
+    () =>
+      poll?.leadEnabled ||
+      String(poll?.type || "").toUpperCase() === "CONTEST_ENTRY"
+        ? resolveParticipantFormDefinition(poll)
+        : null,
+    [
+      poll?.id,
+      poll?.type,
+      poll?.leadEnabled,
+      poll?.formDefinition,
+      poll?.formTemplateKey,
+    ],
+  );
+
+  // Init / restore draft answers when form definition is known.
+  useEffect(() => {
+    if (!pollId || !participantFormDefinition || leadSuccess) return;
+    if (typeof window === "undefined") return;
+    try {
+      const voterSessionId = getOrCreateVoterSessionId();
+      const raw = window.sessionStorage.getItem(
+        leadDraftStorageKey(pollId, voterSessionId || ""),
+      );
+      setLeadAnswers(parseAnswersDraft(raw, participantFormDefinition));
+      setLeadFieldErrors({});
+    } catch {
+      setLeadAnswers(emptyAnswersForDefinition(participantFormDefinition));
+    }
+  }, [pollId, participantFormDefinition, leadSuccess]);
+
   // Draft Lead en sessionStorage (refresh même onglet) — pas de localStorage durable.
   useEffect(() => {
     if (!pollId || !showLeadForm || leadSuccess) return;
@@ -667,25 +694,12 @@ export function PollExperience({
       if (!voterSessionId) return;
       window.sessionStorage.setItem(
         leadDraftStorageKey(pollId, voterSessionId),
-        serializeLeadDraft({
-          firstName: leadFirstName,
-          lastName: leadLastName,
-          phone: leadPhone,
-          email: leadEmail,
-        }),
+        serializeAnswersDraft(leadAnswers),
       );
     } catch {
       // ignore
     }
-  }, [
-    pollId,
-    showLeadForm,
-    leadSuccess,
-    leadFirstName,
-    leadLastName,
-    leadPhone,
-    leadEmail,
-  ]);
+  }, [pollId, showLeadForm, leadSuccess, leadAnswers]);
 
   useEffect(() => {
     setSelectedOptionId(null);
@@ -1549,7 +1563,7 @@ export function PollExperience({
   }
 
   async function submitLead() {
-    if (!pollId) return;
+    if (!pollId || !participantFormDefinition) return;
     const voterSessionId = getOrCreateVoterSessionId();
     if (!voterSessionId) return;
     if (
@@ -1560,26 +1574,36 @@ export function PollExperience({
     ) {
       return;
     }
-    const firstName = leadFirstName.trim();
-    const lastName = leadLastName.trim();
-    const phone = leadPhone.trim();
-    const email = leadEmail.trim();
-    if (!firstName || !phone) {
-      setLeadError("Prénom et téléphone requis.");
+    const pollKind =
+      String(poll?.type || "").toUpperCase() === "CONTEST_ENTRY"
+        ? "CONTEST_ENTRY"
+        : "LEAD";
+    const validated = validateFormAnswers(
+      participantFormDefinition,
+      leadAnswers,
+      { pollKind },
+    );
+    if (!validated.ok) {
+      setLeadFieldErrors(validated.fieldErrors || {});
+      setLeadError(validated.errors?.[0] || "Formulaire invalide.");
       return;
     }
     setLeadSubmitting(true);
     setLeadError(null);
+    setLeadFieldErrors({});
     try {
       const res = await fetch(`${API_POLLS}/${pollId}/leads`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           voterSessionId,
-          firstName,
-          lastName: lastName || null,
-          phone,
-          email: email || null,
+          answers: validated.answers,
+          consents: validated.consents,
+          // Dual-write legacy (compat API / colonnes projetées).
+          firstName: validated.projected?.firstName ?? null,
+          lastName: validated.projected?.lastName ?? null,
+          phone: validated.projected?.phone ?? null,
+          email: validated.projected?.email ?? null,
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -2458,6 +2482,7 @@ export function PollExperience({
                 </p>
               ) : null}
               {showLeadForm &&
+              participantFormDefinition &&
               canSubmitLeadCapture({
                 hasVotedTrigger: true,
                 leadSubmitted: leadSuccess,
@@ -2472,88 +2497,42 @@ export function PollExperience({
                     background: palette.card,
                   }}
                 >
-                  <p style={{ margin: "0 0 0.65rem", fontWeight: 700, color: palette.fg }}>
-                    Laisse-nous tes coordonnées
-                  </p>
-                  {!voteOuvert ? (
-                    <p
-                      style={{
-                        margin: "0 0 0.65rem",
-                        fontSize: "0.82rem",
-                        color: palette.muted,
-                      }}
-                    >
-                      Le vote est fermé — tu peux encore envoyer ce formulaire.
-                    </p>
-                  ) : null}
-                  <div style={{ display: "grid", gap: "0.5rem" }}>
-                    <input
-                      type="text"
-                      placeholder="Prénom *"
-                      value={leadFirstName}
-                      onChange={(e) => setLeadFirstName(e.target.value)}
-                      disabled={leadSubmitting}
-                      style={{ padding: "0.55rem 0.65rem", borderRadius: "10px", border: "1px solid #cbd5e1" }}
-                    />
-                    <input
-                      type="text"
-                      placeholder="Nom (optionnel)"
-                      value={leadLastName}
-                      onChange={(e) => setLeadLastName(e.target.value)}
-                      disabled={leadSubmitting}
-                      autoComplete="family-name"
-                      style={{ padding: "0.55rem 0.65rem", borderRadius: "10px", border: "1px solid #cbd5e1" }}
-                    />
-                    <input
-                      type="tel"
-                      placeholder="Téléphone *"
-                      value={leadPhone}
-                      onChange={(e) => setLeadPhone(e.target.value)}
-                      disabled={leadSubmitting}
-                      style={{ padding: "0.55rem 0.65rem", borderRadius: "10px", border: "1px solid #cbd5e1" }}
-                    />
-                    <input
-                      type="email"
-                      placeholder="E-mail (optionnel)"
-                      value={leadEmail}
-                      onChange={(e) => setLeadEmail(e.target.value)}
-                      disabled={leadSubmitting}
-                      style={{ padding: "0.55rem 0.65rem", borderRadius: "10px", border: "1px solid #cbd5e1" }}
-                    />
-                    <button
-                      type="button"
-                      onClick={submitLead}
-                      disabled={leadSubmitting}
-                      style={{
-                        border: "none",
-                        borderRadius: "10px",
-                        padding: "0.65rem 0.85rem",
-                        background: pollCtaGradient,
-                        color: "#fff",
-                        fontWeight: 700,
-                        cursor: leadSubmitting ? "wait" : "pointer",
-                      }}
-                    >
-                      {leadSubmitting ? "Envoi…" : "Envoyer"}
-                    </button>
-                    <p
-                      style={{
-                        margin: "0.1rem 0 0",
-                        fontSize: "0.72rem",
-                        lineHeight: 1.4,
-                        color: palette.muted,
-                      }}
-                    >
-                      En envoyant ce formulaire, vous acceptez que vos données
-                      soient utilisées pour vous recontacter dans le cadre de
-                      cet événement.
-                    </p>
-                    {leadError ? (
-                      <p role="alert" style={{ margin: 0, color: isDark ? "#fecaca" : "#b91c1c", fontSize: "0.84rem" }}>
-                        {leadError}
-                      </p>
-                    ) : null}
-                  </div>
+                  <FormRenderer
+                    definition={participantFormDefinition}
+                    answers={leadAnswers}
+                    onChange={(fieldId, value) => {
+                      setLeadAnswers((prev) => ({ ...prev, [fieldId]: value }));
+                      setLeadFieldErrors((prev) => {
+                        if (!prev[fieldId]) return prev;
+                        const next = { ...prev };
+                        delete next[fieldId];
+                        return next;
+                      });
+                      if (leadError) setLeadError(null);
+                    }}
+                    fieldErrors={leadFieldErrors}
+                    pollKind={
+                      String(poll?.type || "").toUpperCase() === "CONTEST_ENTRY"
+                        ? "CONTEST_ENTRY"
+                        : "LEAD"
+                    }
+                    notice={
+                      !voteOuvert
+                        ? "Le vote est fermé — tu peux encore envoyer ce formulaire."
+                        : null
+                    }
+                    submitting={leadSubmitting}
+                    onSubmit={submitLead}
+                    error={leadError}
+                    accent={accent}
+                    textColor={palette.fg}
+                    mutedColor={palette.muted}
+                    inputStyle={{
+                      background: isDark ? "rgba(15,23,42,0.55)" : "#fff",
+                      color: palette.fg,
+                      border: `1px solid ${palette.cardBorder}`,
+                    }}
+                  />
                 </div>
               ) : null}
             </>
