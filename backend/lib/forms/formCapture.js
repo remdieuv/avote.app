@@ -154,19 +154,96 @@ function buildContestDefinition() {
 }
 
 /**
+ * Sanitize légère d’une formDefinition client (L3).
+ * @param {unknown} raw
+ * @param {"LEAD"|"CONTEST_ENTRY"} kind
+ */
+function sanitizeClientFormDefinition(raw, kind) {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = /** @type {Record<string, unknown>} */ (raw);
+  const fieldsRaw = Array.isArray(obj.fields) ? obj.fields : null;
+  if (!fieldsRaw) return null;
+  const fields = [];
+  for (let i = 0; i < Math.min(fieldsRaw.length, FORM_MAX_FIELDS); i++) {
+    const f = fieldsRaw[i];
+    if (!f || typeof f !== "object") continue;
+    const fr = /** @type {Record<string, unknown>} */ (f);
+    const id = typeof fr.id === "string" ? fr.id.trim() : "";
+    const type = typeof fr.type === "string" ? fr.type.trim() : "";
+    const label = typeof fr.label === "string" ? fr.label.trim() : "";
+    if (!id || !type || !label) continue;
+    /** @type {object[]} */
+    let options = [];
+    if (type === "single_choice" || type === "multiple_choice") {
+      const opts = Array.isArray(fr.options) ? fr.options : [];
+      options = opts
+        .filter((o) => o && typeof o === "object")
+        .map((o, j) => {
+          const or = /** @type {Record<string, unknown>} */ (o);
+          return {
+            id: typeof or.id === "string" ? or.id : `opt_${j}`,
+            label: typeof or.label === "string" ? or.label : `Option ${j + 1}`,
+            order: j,
+          };
+        })
+        .slice(0, 20);
+    }
+    fields.push({
+      id: id.slice(0, 80),
+      type,
+      label: label.slice(0, 120),
+      required: Boolean(fr.required),
+      order: i,
+      placeholder: typeof fr.placeholder === "string" ? fr.placeholder.slice(0, 120) : "",
+      options,
+      slot:
+        typeof fr.slot === "string" &&
+        ["firstName", "lastName", "phone", "email"].includes(fr.slot)
+          ? fr.slot
+          : null,
+    });
+  }
+  const isContest = kind === "CONTEST_ENTRY";
+  return {
+    version: FORM_DEFINITION_VERSION,
+    templateKey:
+      typeof obj.templateKey === "string" && obj.templateKey.trim()
+        ? obj.templateKey.trim().slice(0, 64)
+        : isContest
+          ? "contest"
+          : "contact",
+    title: isContest ? TITLE_CONTEST : TITLE_LEAD,
+    rules: {
+      requireFirstName: isContest,
+      requireEmailOrPhone: isContest,
+    },
+    fields,
+  };
+}
+
+/**
  * Champs Prisma à poser à la création d’un poll Lead/Concours (D8).
+ * Accepte une formDefinition client (L3) si valide.
  * @param {"LEAD"|"CONTEST_ENTRY"|string} pollTypeParsed
+ * @param {{ formDefinition?: unknown; formTemplateKey?: unknown } | null} [client]
  * @returns {Record<string, unknown>}
  */
-function formCreateDataForPollType(pollTypeParsed) {
+function formCreateDataForPollType(pollTypeParsed, client = null) {
   const t = String(pollTypeParsed || "").toUpperCase();
   if (t !== "LEAD" && t !== "CONTEST_ENTRY") return {};
-  const def =
-    t === "CONTEST_ENTRY"
+  const kind = t === "CONTEST_ENTRY" ? "CONTEST_ENTRY" : "LEAD";
+  const defaults =
+    kind === "CONTEST_ENTRY"
       ? buildContestDefinition()
       : buildContactDefinition();
+  const sanitized = sanitizeClientFormDefinition(client?.formDefinition, kind);
+  const def = sanitized || defaults;
+  const keyRaw =
+    typeof client?.formTemplateKey === "string"
+      ? client.formTemplateKey.trim().slice(0, 64)
+      : "";
   return {
-    formTemplateKey: def.templateKey,
+    formTemplateKey: keyRaw || def.templateKey,
     formSchemaVersion: FORM_DEFINITION_VERSION,
     formDefinition: def,
   };
@@ -488,6 +565,7 @@ module.exports = {
   buildContactDefinition,
   buildContestDefinition,
   formCreateDataForPollType,
+  sanitizeClientFormDefinition,
   resolvePollFormDefinition,
   resolveLeadSubmitPayload,
   legacyBodyToAnswers,

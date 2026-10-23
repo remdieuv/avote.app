@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { EventLivePreview } from "@/components/admin/EventLivePreview";
+import { FormBuilderPanel } from "@/components/admin/FormBuilderPanel";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 import {
   CONTEST_PRIZE_PLACEHOLDER,
@@ -317,6 +318,23 @@ export default function AdminPage() {
     majQuestion(qid, { leadTriggerOrder: Math.floor(n) });
   }
 
+  function majFormBuilder(qid, next) {
+    majQuestion(qid, {
+      formTemplateKey: next.formTemplateKey,
+      formDefinition: next.formDefinition,
+    });
+    if (fieldErrors?.questions?.[qid]?.formDefinition) {
+      setFieldErrors((fe) => {
+        const questionsErr = { ...(fe.questions || {}) };
+        const qErr = { ...(questionsErr[qid] || {}) };
+        delete qErr.formDefinition;
+        if (Object.keys(qErr).length === 0) delete questionsErr[qid];
+        else questionsErr[qid] = qErr;
+        return { ...fe, questions: questionsErr };
+      });
+    }
+  }
+
   function basculerPanneauImportMasse(questionId) {
     if (importMasseQuestionId === questionId) {
       setImportMasseQuestionId(null);
@@ -426,6 +444,12 @@ export default function AdminPage() {
         quizCorrectOrder: isQuizQuestion(x.type)
           ? Number(x.quizCorrectOrder ?? 0)
           : null,
+        ...(isLeadLikeQuestionType(x.type) && x.formDefinition
+          ? {
+              formTemplateKey: x.formTemplateKey || x.formDefinition.templateKey,
+              formDefinition: x.formDefinition,
+            }
+          : {}),
       })),
     };
 
@@ -943,44 +967,60 @@ export default function AdminPage() {
                           ) : null}
 
                           {isLeadLikeQuestionType(item.type) ? (
-                            <div className="admin-lead-config">
-                              <label
-                                htmlFor={`lead-trigger-${item.id}`}
-                                className="admin-label"
-                              >
-                                Option déclencheuse du formulaire
-                              </label>
-                              <select
-                                id={`lead-trigger-${item.id}`}
-                                value={Math.min(
-                                  Math.max(
-                                    0,
-                                    Number(item.leadTriggerOrder ?? 0),
-                                  ),
-                                  Math.max(0, item.options.length - 1),
-                                )}
-                                onChange={(ev) =>
-                                  majLeadTriggerOrder(
-                                    item.id,
-                                    Number(ev.target.value),
-                                  )
+                            <>
+                              <div className="admin-lead-config">
+                                <label
+                                  htmlFor={`lead-trigger-${item.id}`}
+                                  className="admin-label"
+                                >
+                                  Option déclencheuse du formulaire
+                                </label>
+                                <select
+                                  id={`lead-trigger-${item.id}`}
+                                  value={Math.min(
+                                    Math.max(
+                                      0,
+                                      Number(item.leadTriggerOrder ?? 0),
+                                    ),
+                                    Math.max(0, item.options.length - 1),
+                                  )}
+                                  onChange={(ev) =>
+                                    majLeadTriggerOrder(
+                                      item.id,
+                                      Number(ev.target.value),
+                                    )
+                                  }
+                                  disabled={creating}
+                                  style={{
+                                    ...inputStyle,
+                                    padding: "0.45rem 0.6rem",
+                                  }}
+                                >
+                                  {item.options.map((opt, idx) => (
+                                    <option
+                                      key={`${item.id}-lead-trigger-${idx}`}
+                                      value={idx}
+                                    >
+                                      {opt.trim() || `Option ${idx + 1}`}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <FormBuilderPanel
+                                pollKind={
+                                  item.type === "CONTEST_ENTRY"
+                                    ? "CONTEST_ENTRY"
+                                    : "LEAD"
                                 }
+                                formTemplateKey={item.formTemplateKey}
+                                formDefinition={item.formDefinition}
                                 disabled={creating}
-                                style={{
-                                  ...inputStyle,
-                                  padding: "0.45rem 0.6rem",
-                                }}
-                              >
-                                {item.options.map((opt, idx) => (
-                                  <option
-                                    key={`${item.id}-lead-trigger-${idx}`}
-                                    value={idx}
-                                  >
-                                    {opt.trim() || `Option ${idx + 1}`}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
+                                error={qErr.formDefinition || null}
+                                onChange={(next) =>
+                                  majFormBuilder(item.id, next)
+                                }
+                              />
+                            </>
                           ) : null}
                           {isQuizQuestion(item.type) ? (
                             <div className="admin-lead-config">
