@@ -6,6 +6,7 @@
 
 const FORM_DEFINITION_VERSION = 1;
 const FORM_MAX_FIELDS = 5;
+const FORM_CONSENT_PROOF_VERSION = 1;
 const FORM_LIMITS = {
   shortTextMax: 120,
   longTextMax: 2000,
@@ -18,6 +19,13 @@ const FORM_LIMITS = {
 
 const TITLE_LEAD = "Formulaire de contact";
 const TITLE_CONTEST = "Formulaire de participation";
+
+/** Copy info usage données (aligné frontend FORM_RGPD_INFO_TEXT — D7). */
+const FORM_RGPD_INFO_TEXT =
+  "Les informations saisies sont destinées à l’organisateur de cet événement pour traiter votre participation ou votre demande. Elles ne sont pas affichées publiquement sur l’écran de diffusion ni dans la salle.";
+
+const FORM_RGPD_MARKETING_CONSENT_LABEL =
+  "J’accepte de recevoir des communications commerciales de la part de l’organisateur.";
 
 /**
  * @param {object} partial
@@ -154,6 +162,36 @@ function buildContestDefinition() {
 }
 
 /**
+ * @param {unknown} raw
+ * @returns {{ ok: boolean; error: string | null; code: string | null }}
+ */
+function validateClientFormDefinitionLimits(raw) {
+  if (!raw || typeof raw !== "object") {
+    return {
+      ok: false,
+      error: "formDefinition invalide.",
+      code: "FORM_DEFINITION_INVALID",
+    };
+  }
+  const fields = /** @type {Record<string, unknown>} */ (raw).fields;
+  if (!Array.isArray(fields)) {
+    return {
+      ok: false,
+      error: "formDefinition.fields requis.",
+      code: "FORM_DEFINITION_INVALID",
+    };
+  }
+  if (fields.length > FORM_MAX_FIELDS) {
+    return {
+      ok: false,
+      error: `Maximum ${FORM_MAX_FIELDS} champs.`,
+      code: "FORM_MAX_FIELDS",
+    };
+  }
+  return { ok: true, error: null, code: null };
+}
+
+/**
  * Sanitize légère d’une formDefinition client (L3).
  * @param {unknown} raw
  * @param {"LEAD"|"CONTEST_ENTRY"} kind
@@ -163,8 +201,9 @@ function sanitizeClientFormDefinition(raw, kind) {
   const obj = /** @type {Record<string, unknown>} */ (raw);
   const fieldsRaw = Array.isArray(obj.fields) ? obj.fields : null;
   if (!fieldsRaw) return null;
+  if (fieldsRaw.length > FORM_MAX_FIELDS) return null;
   const fields = [];
-  for (let i = 0; i < Math.min(fieldsRaw.length, FORM_MAX_FIELDS); i++) {
+  for (let i = 0; i < fieldsRaw.length; i++) {
     const f = fieldsRaw[i];
     if (!f || typeof f !== "object") continue;
     const fr = /** @type {Record<string, unknown>} */ (f);
@@ -172,6 +211,17 @@ function sanitizeClientFormDefinition(raw, kind) {
     const type = typeof fr.type === "string" ? fr.type.trim() : "";
     const label = typeof fr.label === "string" ? fr.label.trim() : "";
     if (!id || !type || !label) continue;
+    const allowedTypes = new Set([
+      "short_text",
+      "long_text",
+      "number",
+      "email",
+      "phone",
+      "single_choice",
+      "multiple_choice",
+      "consent",
+    ]);
+    if (!allowedTypes.has(type)) continue;
     /** @type {object[]} */
     let options = [];
     if (type === "single_choice" || type === "multiple_choice") {
@@ -188,11 +238,16 @@ function sanitizeClientFormDefinition(raw, kind) {
         })
         .slice(0, 20);
     }
+    // D7 — consentement commercial : facultatif (jamais forcé required côté serveur).
+    const isMarketingConsent =
+      type === "consent" &&
+      (id.includes("marketing") ||
+        /commercial|marketing|newsletter/i.test(label));
     fields.push({
       id: id.slice(0, 80),
       type,
       label: label.slice(0, 120),
-      required: Boolean(fr.required),
+      required: isMarketingConsent ? false : Boolean(fr.required),
       order: i,
       placeholder: typeof fr.placeholder === "string" ? fr.placeholder.slice(0, 120) : "",
       options,
@@ -236,7 +291,14 @@ function formCreateDataForPollType(pollTypeParsed, client = null) {
     kind === "CONTEST_ENTRY"
       ? buildContestDefinition()
       : buildContactDefinition();
-  const sanitized = sanitizeClientFormDefinition(client?.formDefinition, kind);
+  // Si > 5 champs : ignorer le client et poser les défauts (D10).
+  // PATCH refuse explicitement via validateClientFormDefinitionLimits (400).
+  const limitsOk =
+    client?.formDefinition == null ||
+    validateClientFormDefinitionLimits(client.formDefinition).ok;
+  const sanitized = limitsOk
+    ? sanitizeClientFormDefinition(client?.formDefinition, kind)
+    : null;
   const def = sanitized || defaults;
   const keyRaw =
     typeof client?.formTemplateKey === "string"
@@ -449,27 +511,42 @@ function legacyBodyToAnswers(body, def) {
   return answers;
 }
 
-function buildConsents(def, answers, body) {
+/**
+ * Preuve consentement (D7 / L5) — reconstruite côté serveur (pas de confiance
+ * aveugle au body.consents client pour accepted / neverPrechecked).
+ * @param {object} def
+ * @param {Record<string, unknown>} answers
+ * @param {Record<string, unknown> | null | undefined} [_body]
+ */
+function buildConsents(def, answers, _body) {
   const now = new Date().toISOString();
   /** @type {Record<string, unknown>} */
   const proof = {
+    version: FORM_CONSENT_PROOF_VERSION,
     neverPrechecked: true,
     infoAcknowledgedAt: now,
+    infoTextSnapshot: FORM_RGPD_INFO_TEXT,
   };
-  if (body && body.consents && typeof body.consents === "object") {
-    // Merge client-provided proof snapshots if present (L2+ UI)
-    Object.assign(proof, body.consents);
-    proof.neverPrechecked = true;
-  }
   for (const f of sortedFields(def)) {
     if (f.type !== "consent") continue;
-    if (answers[f.id] !== true) continue;
-    proof.marketing = {
+    const accepted = answers[f.id] === true;
+    if (!accepted) continue;
+    const isMarketing =
+      String(f.id || "").includes("marketing") ||
+      /commercial|marketing|newsletter/i.test(String(f.label || ""));
+    const entry = {
       accepted: true,
       fieldId: f.id,
-      labelSnapshot: f.label,
+      labelSnapshot: f.label || FORM_RGPD_MARKETING_CONSENT_LABEL,
       acceptedAt: now,
+      choice: true,
     };
+    if (isMarketing) {
+      proof.marketing = entry;
+    } else {
+      if (!Array.isArray(proof.other)) proof.other = [];
+      proof.other.push(entry);
+    }
   }
   return proof;
 }
@@ -492,12 +569,33 @@ function resolveLeadSubmitPayload(body, poll) {
   const pollType = String(poll?.type || "").toUpperCase();
   const isContest = pollType === "CONTEST_ENTRY";
 
+  // L5 — préférer answers JSON ; body legacy conservé pour compat (retrait progressif).
+  const hasAnswersJson =
+    body &&
+    body.answers &&
+    typeof body.answers === "object" &&
+    !Array.isArray(body.answers);
   /** @type {Record<string, unknown>} */
   let answersInput = {};
-  if (body.answers && typeof body.answers === "object" && !Array.isArray(body.answers)) {
+  let legacyBodyUsed = false;
+  if (hasAnswersJson) {
     answersInput = /** @type {Record<string, unknown>} */ (body.answers);
   } else {
     answersInput = legacyBodyToAnswers(body || {}, def);
+    legacyBodyUsed = true;
+  }
+
+  if ((def.fields || []).length > FORM_MAX_FIELDS) {
+    return {
+      ok: false,
+      error: `Maximum ${FORM_MAX_FIELDS} champs.`,
+      errors: [`Maximum ${FORM_MAX_FIELDS} champs.`],
+      answers: {},
+      projected: { firstName: null, lastName: null, phone: null, email: null },
+      consents: null,
+      schemaVersion: FORM_DEFINITION_VERSION,
+      legacyBodyUsed,
+    };
   }
 
   /** @type {string[]} */
@@ -545,7 +643,40 @@ function resolveLeadSubmitPayload(body, poll) {
     projected,
     consents,
     schemaVersion: FORM_DEFINITION_VERSION,
+    legacyBodyUsed,
   };
+}
+
+/**
+ * Garde PII — un payload poll/live public ne doit pas exposer answers/consents.
+ * @param {unknown} payload
+ * @returns {{ ok: boolean; leaks: string[] }}
+ */
+function assertNoLeadPiiInPublicPayload(payload) {
+  /** @type {string[]} */
+  const leaks = [];
+  /** @param {unknown} node @param {string} path */
+  function walk(node, path) {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      node.forEach((item, i) => walk(item, `${path}[${i}]`));
+      return;
+    }
+    for (const [key, val] of Object.entries(node)) {
+      const k = String(key).toLowerCase();
+      if (
+        k === "answers" ||
+        k === "consents" ||
+        k === "answersdisplay"
+      ) {
+        leaks.push(path ? `${path}.${key}` : key);
+      }
+      if (key === "formDefinition" || key === "options") continue;
+      walk(val, path ? `${path}.${key}` : key);
+    }
+  }
+  walk(payload, "");
+  return { ok: leaks.length === 0, leaks };
 }
 
 /**
@@ -788,7 +919,9 @@ function definitionAllowsContestRules(def, pollType) {
 module.exports = {
   FORM_DEFINITION_VERSION,
   FORM_MAX_FIELDS,
+  FORM_CONSENT_PROOF_VERSION,
   FORM_LIMITS,
+  FORM_RGPD_INFO_TEXT,
   TITLE_LEAD,
   TITLE_CONTEST,
   buildContactLegacyDefinition,
@@ -796,6 +929,7 @@ module.exports = {
   buildContestDefinition,
   formCreateDataForPollType,
   sanitizeClientFormDefinition,
+  validateClientFormDefinitionLimits,
   resolvePollFormDefinition,
   resolveLeadSubmitPayload,
   legacyBodyToAnswers,
@@ -807,4 +941,6 @@ module.exports = {
   resolveAnswersForDisplay,
   evaluateFormDefinitionSoftLock,
   definitionAllowsContestRules,
+  buildConsents,
+  assertNoLeadPiiInPublicPayload,
 };

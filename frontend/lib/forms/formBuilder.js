@@ -16,8 +16,12 @@ import {
   sortedFormFields,
   validateFormDefinition,
 } from "./formTemplates.js";
+import {
+  hasMarketingConsentField,
+  setMarketingConsentEnabled,
+} from "./rgpdConsent.js";
 
-/** Types ajoutables via le builder (consent = L5 toggle optionnel). */
+/** Types ajoutables via le builder (consent commercial = toggle L5 dédié). */
 export const FORM_BUILDER_FIELD_TYPES = [
   { type: "short_text", label: "Texte court" },
   { type: "long_text", label: "Texte long" },
@@ -27,6 +31,8 @@ export const FORM_BUILDER_FIELD_TYPES = [
   { type: "single_choice", label: "Choix unique" },
   { type: "multiple_choice", label: "Choix multiple" },
 ];
+
+export { hasMarketingConsentField, setMarketingConsentEnabled };
 
 /** Templates sélectionnables orga (D1) — hors contact_legacy. */
 export const FORM_BUILDER_TEMPLATES = FORM_TEMPLATE_META.filter(

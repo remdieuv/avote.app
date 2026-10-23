@@ -8,11 +8,16 @@ import {
   addFieldToDefinition,
   applyTemplateToFormState,
   createBlankFormField,
+  hasMarketingConsentField,
   moveFieldInDefinition,
   patchFieldInDefinition,
   removeFieldFromDefinition,
+  setMarketingConsentEnabled,
 } from "@/lib/forms/formBuilder";
-import { formUiTitleForPollKind } from "@/lib/forms/formConstants";
+import {
+  FORM_RGPD_MARKETING_CONSENT_LABEL,
+  formUiTitleForPollKind,
+} from "@/lib/forms/formConstants";
 import {
   canEditFormDefinitionField,
   sortedFormFields,
@@ -52,8 +57,10 @@ export function FormBuilderPanel({
       kind === "CONTEST_ENTRY" ? "contest" : "contact",
       kind,
     ).formDefinition;
-  const fields = sortedFormFields(def);
-  const atMax = fields.length >= FORM_MAX_FIELDS;
+  const allFields = sortedFormFields(def);
+  // Consent commercial géré par toggle L5 — hors liste CRUD types.
+  const fields = allFields.filter((f) => f.type !== "consent");
+  const atMax = allFields.length >= FORM_MAX_FIELDS;
   const sectionTitle = formUiTitleForPollKind(kind);
   const [addType, setAddType] = useState("short_text");
   const usedIds = usedFieldIds ? [...usedFieldIds].map(String) : [];
@@ -301,6 +308,48 @@ export function FormBuilderPanel({
           </button>
         </div>
       </div>
+
+      <label
+        className="admin-form-marketing-consent"
+        data-testid="marketing-consent-toggle"
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: "0.55rem",
+          marginTop: "0.85rem",
+          padding: "0.7rem 0.75rem",
+          borderRadius: "10px",
+          border: "1px solid #e2e8f0",
+          background: "#fff",
+          fontSize: "0.84rem",
+          color: "#334155",
+          cursor: disabled ? "not-allowed" : "pointer",
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={hasMarketingConsentField(def)}
+          disabled={
+            disabled ||
+            (!hasMarketingConsentField(def) && atMax)
+          }
+          onChange={(ev) => {
+            const next = setMarketingConsentEnabled(def, ev.target.checked);
+            commit(next, next?.templateKey || "custom");
+          }}
+          style={{ marginTop: "0.15rem" }}
+        />
+        <span>
+          <strong style={{ display: "block", color: "#0f172a" }}>
+            Consentement commercial (facultatif)
+          </strong>
+          <span style={{ color: "#64748b", lineHeight: 1.4 }}>
+            Ajoute une case distincte, jamais précochée : «{" "}
+            {FORM_RGPD_MARKETING_CONSENT_LABEL} ». Compte dans la limite de{" "}
+            {FORM_MAX_FIELDS} champs.
+          </span>
+        </span>
+      </label>
 
       {error ? (
         <p className="admin-field-error" role="alert">

@@ -50,6 +50,7 @@ const {
   resolveLeadSubmitPayload,
   resolvePollFormDefinition,
   sanitizeClientFormDefinition,
+  validateClientFormDefinitionLimits,
   collectUsedFormIdsFromAnswers,
   resolveAnswersForDisplay,
   evaluateFormDefinitionSoftLock,
@@ -5102,6 +5103,13 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
       }
       const kind = isContestEntry ? "CONTEST_ENTRY" : "LEAD";
       const prevDef = resolvePollFormDefinition(poll);
+      const limits = validateClientFormDefinitionLimits(body.formDefinition);
+      if (!limits.ok) {
+        return res.status(400).json({
+          error: limits.error,
+          code: limits.code,
+        });
+      }
       const sanitized = sanitizeClientFormDefinition(body.formDefinition, kind);
       if (!sanitized) {
         return res.status(400).json({
@@ -5410,7 +5418,13 @@ app.post("/polls/:pollId/leads", async (req, res) => {
         consents: resolved.consents,
       },
     });
-    return res.status(201).json({ ok: true, id: lead.id });
+    // Pas d’emit socket des réponses / consentements (D7) — compteur via pollToJson.leadsCount.
+    return res.status(201).json({
+      ok: true,
+      id: lead.id,
+      // Signal soft-deprecation body legacy (L5) — sans PII.
+      legacyBodyUsed: Boolean(resolved.legacyBodyUsed),
+    });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Erreur serveur." });
