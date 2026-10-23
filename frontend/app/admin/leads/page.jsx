@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { LeadAnswersDetail } from "@/components/admin/LeadAnswersDetail";
 import { adminContentMaxWidth } from "@/lib/adminLayout";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
+import { buildLeadsCsv } from "@/lib/forms/leadsCrm";
 
 function mapApiError(body, status) {
   const code = String(body?.error || "").trim();
@@ -36,6 +38,7 @@ export default function MesLeadsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState("");
+  const [detailLead, setDetailLead] = useState(null);
   const debounceRef = useRef(null);
 
   const fetchLeads = useCallback(async () => {
@@ -122,40 +125,8 @@ export default function MesLeadsPage() {
   }
 
   function exportCsv() {
-    const sep = ";";
-    const escape = (v) => {
-      const s = String(v ?? "");
-      if (s.includes(sep) || s.includes('"') || s.includes("\n")) {
-        return `"${s.replace(/"/g, '""')}"`;
-      }
-      return s;
-    };
-    const header = [
-      "Date",
-      "Événement",
-      "Source",
-      "Question",
-      "Prénom",
-      "Téléphone",
-      "E-mail",
-    ];
-    const lines = [
-      header.join(sep),
-      ...rows.map((r) =>
-        [
-          escape(new Date(r.createdAt).toLocaleString("fr-FR")),
-          escape(r.eventTitle),
-          getLeadSource(r.pollType) === "contest" ? "Concours" : "Lead",
-          escape(r.pollQuestion || ""),
-          escape(r.firstName),
-          escape(r.phone),
-          escape(r.email || ""),
-        ].join(sep),
-      ),
-    ];
-    const blob = new Blob(["\ufeff", lines.join("\n")], {
-      type: "text/csv;charset=utf-8",
-    });
+    const csv = buildLeadsCsv(rows, { includeEventTitle: true, separator: ";" });
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `avote-leads-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -336,9 +307,22 @@ export default function MesLeadsPage() {
                       >
                         Copier e-mail
                       </button>
+                      <button
+                        type="button"
+                        className="leads-detail-link"
+                        style={{
+                          background: "none",
+                          border: "none",
+                          padding: 0,
+                          cursor: "pointer",
+                        }}
+                        onClick={() => setDetailLead(r)}
+                      >
+                        Détail
+                      </button>
                       {r.eventId ? (
                         <Link href={`/admin/event/${encodeURIComponent(r.eventId)}/leads`} className="leads-detail-link">
-                          Détail
+                          Événement
                         </Link>
                       ) : null}
                     </div>
@@ -395,9 +379,22 @@ export default function MesLeadsPage() {
                 >
                   Copier e-mail
                 </button>
+                <button
+                  type="button"
+                  className="leads-detail-link"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                  }}
+                  onClick={() => setDetailLead(r)}
+                >
+                  Voir le détail
+                </button>
                 {r.eventId ? (
                   <Link href={`/admin/event/${encodeURIComponent(r.eventId)}/leads`} className="leads-detail-link">
-                    Voir le détail
+                    Événement
                   </Link>
                 ) : null}
               </div>
@@ -405,6 +402,13 @@ export default function MesLeadsPage() {
           ))}
         </div>
       ) : null}
+
+      <LeadAnswersDetail
+        open={Boolean(detailLead)}
+        lead={detailLead}
+        onClose={() => setDetailLead(null)}
+        showEventTitle
+      />
 
       <p style={{ margin: "1rem 0 0", fontSize: "0.75rem", color: "#94a3b8" }}>
         Les dates « Du / Au » sont interprétées en UTC (jour calendaire) côté serveur.

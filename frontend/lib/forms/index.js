@@ -68,3 +68,12 @@ export {
   applyTemplateToFormState,
   validateQuestionFormBuilder,
 } from "./formBuilder.js";
+
+export {
+  leadSourceFromPollType,
+  csvColumnPrefixForLead,
+  collectLeadCsvFieldColumns,
+  buildLeadsCsv,
+  leadDetailRows,
+  assertFormFieldEditAllowed,
+} from "./leadsCrm.js";

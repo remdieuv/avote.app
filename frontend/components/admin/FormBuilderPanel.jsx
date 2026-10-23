@@ -13,10 +13,13 @@ import {
   removeFieldFromDefinition,
 } from "@/lib/forms/formBuilder";
 import { formUiTitleForPollKind } from "@/lib/forms/formConstants";
-import { sortedFormFields } from "@/lib/forms/formTemplates";
+import {
+  canEditFormDefinitionField,
+  sortedFormFields,
+} from "@/lib/forms/formTemplates";
 
 /**
- * Builder formulaire Lead/Concours (création événement — L3).
+ * Builder formulaire Lead/Concours (création — L3 ; soft lock D4 — L4).
  *
  * @param {{
  *   pollKind: "LEAD" | "CONTEST_ENTRY";
@@ -25,6 +28,8 @@ import { sortedFormFields } from "@/lib/forms/formTemplates";
  *   onChange: (next: { formTemplateKey: string; formDefinition: object }) => void;
  *   disabled?: boolean;
  *   error?: string | null;
+ *   usedFieldIds?: Iterable<string> | null;
+ *   usedOptionIdsByField?: Record<string, Iterable<string>> | null;
  * }} props
  */
 export function FormBuilderPanel({
@@ -34,6 +39,8 @@ export function FormBuilderPanel({
   onChange,
   disabled = false,
   error = null,
+  usedFieldIds = null,
+  usedOptionIdsByField = null,
 }) {
   const kind =
     String(pollKind || "").toUpperCase() === "CONTEST_ENTRY"
@@ -49,6 +56,12 @@ export function FormBuilderPanel({
   const atMax = fields.length >= FORM_MAX_FIELDS;
   const sectionTitle = formUiTitleForPollKind(kind);
   const [addType, setAddType] = useState("short_text");
+  const usedIds = usedFieldIds ? [...usedFieldIds].map(String) : [];
+  const softLockActive = usedIds.length > 0;
+  const templateLocked = !canEditFormDefinitionField({
+    action: "change_template",
+    usedFieldIds: usedIds,
+  }).allowed;
 
   function commit(nextDef, templateKey) {
     onChange({
@@ -57,14 +70,28 @@ export function FormBuilderPanel({
     });
   }
 
+  function fieldUsed(fieldId) {
+    return usedIds.includes(String(fieldId));
+  }
+
   return (
-    <div className="admin-form-builder" data-poll-kind={kind}>
+    <div
+      className="admin-form-builder"
+      data-poll-kind={kind}
+      data-soft-lock={softLockActive ? "1" : "0"}
+    >
       <div className="admin-form-builder-head">
         <h3 className="admin-form-builder-title">{sectionTitle}</h3>
         <p className="admin-form-builder-help">
           Modèle prêt à l’emploi, puis personnalisez jusqu’à {FORM_MAX_FIELDS}{" "}
           champs. Aperçu synchronisé à droite.
         </p>
+        {softLockActive ? (
+          <p className="admin-form-builder-hint" data-testid="form-soft-lock-hint">
+            Des réponses existent déjà : suppression et changement de type
+            interdits sur les champs utilisés (D4).
+          </p>
+        ) : null}
       </div>
 
       <label className="admin-label" htmlFor={`form-template-${kind}`}>
@@ -73,7 +100,7 @@ export function FormBuilderPanel({
       <select
         id={`form-template-${kind}`}
         value={formTemplateKey || def.templateKey || "custom"}
-        disabled={disabled}
+        disabled={disabled || templateLocked}
         onChange={(ev) => {
           const state = applyTemplateToFormState(ev.target.value, kind);
           onChange(state);
@@ -102,10 +129,25 @@ export function FormBuilderPanel({
       ) : null}
 
       <ul className="admin-form-field-list">
-        {fields.map((field, idx) => (
-          <li key={field.id} className="admin-form-field-card">
+        {fields.map((field, idx) => {
+          const used = fieldUsed(field.id);
+          const canDelete = canEditFormDefinitionField({
+            action: "delete_field",
+            fieldId: field.id,
+            usedFieldIds: usedIds,
+          }).allowed;
+          const canChangeType = canEditFormDefinitionField({
+            action: "change_type",
+            fieldId: field.id,
+            usedFieldIds: usedIds,
+          }).allowed;
+          return (
+          <li key={field.id} className="admin-form-field-card" data-field-used={used ? "1" : "0"}>
             <div className="admin-form-field-toolbar">
-              <span className="admin-form-field-index">Champ {idx + 1}</span>
+              <span className="admin-form-field-index">
+                Champ {idx + 1}
+                {used ? " · utilisé" : ""}
+              </span>
               <div className="admin-form-field-tools">
                 <button
                   type="button"
@@ -129,11 +171,16 @@ export function FormBuilderPanel({
                 </button>
                 <button
                   type="button"
-                  disabled={disabled}
+                  disabled={disabled || !canDelete}
                   onClick={() =>
                     commit(removeFieldFromDefinition(def, field.id), "custom")
                   }
                   className="danger"
+                  title={
+                    canDelete
+                      ? "Supprimer"
+                      : "Champ déjà utilisé — suppression interdite (D4)"
+                  }
                 >
                   Supprimer
                 </button>
@@ -161,7 +208,7 @@ export function FormBuilderPanel({
                 Type
                 <select
                   value={field.type}
-                  disabled={disabled}
+                  disabled={disabled || !canChangeType}
                   onChange={(ev) =>
                     commit(
                       patchFieldInDefinition(def, field.id, {
@@ -221,7 +268,8 @@ export function FormBuilderPanel({
               </div>
             ) : null}
           </li>
-        ))}
+          );
+        })}
       </ul>
 
       <div className="admin-form-builder-add">
