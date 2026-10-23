@@ -3436,7 +3436,11 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
           pollTypeParsed === "CONTEST_ENTRY" ? contestWinnerCount : 1,
         type: pollType,
         leadEnabled: requiresFormOnPositiveAnswer(pollTypeParsed),
-        ...formCreateDataForPollType(pollTypeParsed),
+        // L6 — parité create-event : accepter formDefinition client (Lead/Concours).
+        ...formCreateDataForPollType(pollTypeParsed, {
+          formDefinition: body.formDefinition,
+          formTemplateKey: body.formTemplateKey,
+        }),
         status: "CLOSED",
         order: nextOrder,
         options: {

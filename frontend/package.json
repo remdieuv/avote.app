@@ -35,6 +35,7 @@
     "test:forms-l3": "node scripts/test-forms-l3.mjs",
     "test:forms-l4": "node scripts/test-forms-l4.mjs",
     "test:forms-l5": "node scripts/test-forms-l5.mjs",
+    "test:forms-l6": "node scripts/test-forms-l6.mjs",
     "test:regie-option-stats": "node scripts/test-regie-option-stats.mjs",
     "test:poll-patch-guards": "node ../backend/scripts/test-poll-patch-guards.mjs",
     "test:replace-poll-options": "node ../backend/scripts/test-replace-poll-options.mjs",

@@ -1,6 +1,8 @@
 /**
  * Construction du payload PATCH « Modifier la question » (testable).
  */
+import { validateQuestionFormBuilder } from "./forms/formBuilder.js";
+import { regieFormPollKind } from "./forms/formUsage.js";
 import { getRegiePollEditGuardState } from "./regiePollEditGuards.js";
 import {
   pollTypeAllowsOptionEdit,
@@ -25,6 +27,8 @@ import {
  *   leadTriggerOrder?: unknown;
  *   contestPrize?: unknown;
  *   contestWinnerCount?: unknown;
+ *   formDefinition?: unknown;
+ *   formTemplateKey?: unknown;
  *   normalizeContestWinnerCount?: (v: unknown) => number;
  * }} input
  * @returns {{
@@ -38,6 +42,7 @@ export function buildRegiePollEditPayload(input = {}) {
   const poll = input.poll || {};
   const isContest = String(poll.type || "").toUpperCase() === "CONTEST_ENTRY";
   const isQuiz = String(poll.type || "").toUpperCase() === "QUIZ";
+  const formKind = regieFormPollKind(poll);
   const allowsOptionEdit = pollTypeAllowsOptionEdit(poll.type, {
     leadEnabled: poll.leadEnabled,
   });
@@ -79,6 +84,39 @@ export function buildRegiePollEditPayload(input = {}) {
         : (v) => Math.max(1, Math.floor(Number(v) || 1));
     payload.contestPrize = String(input.contestPrize || "").trim() || null;
     payload.contestWinnerCount = norm(input.contestWinnerCount);
+  }
+
+  // L6 — parité create-event : PATCH formDefinition Lead/Concours (soft lock serveur).
+  if (formKind && input.formDefinition != null) {
+    const formCheck = validateQuestionFormBuilder({
+      type: formKind,
+      formDefinition: input.formDefinition,
+      formTemplateKey:
+        typeof input.formTemplateKey === "string"
+          ? input.formTemplateKey
+          : undefined,
+    });
+    if (!formCheck.ok) {
+      return {
+        ok: false,
+        error: formCheck.error || "Formulaire invalide.",
+        payload: null,
+        guard,
+      };
+    }
+    payload.formDefinition = input.formDefinition;
+    payload.formTemplateKey =
+      (typeof input.formTemplateKey === "string" &&
+        input.formTemplateKey.trim()) ||
+      (input.formDefinition &&
+      typeof input.formDefinition === "object" &&
+      typeof /** @type {{ templateKey?: unknown }} */ (input.formDefinition)
+        .templateKey === "string"
+        ? /** @type {{ templateKey: string }} */ (input.formDefinition)
+            .templateKey
+        : formKind === "CONTEST_ENTRY"
+          ? "contest"
+          : "contact");
   }
 
   if (guard.canEditOptions && allowsOptionEdit) {
