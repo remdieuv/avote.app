@@ -7,6 +7,7 @@
     "start": "node server.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "test:contest-replace": "node scripts/test-contest-winner-replace.mjs",
@@ -36,11 +37,9 @@
     "express-rate-limit": "^8.4.1",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.1.1",
+    "prisma": "^6.19.0",
     "socket.io": "^4.8.3",
     "stripe": "^22.1.0"
-  },
-  "devDependencies": {
-    "prisma": "^6.19.0"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
