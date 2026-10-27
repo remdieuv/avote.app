@@ -9,6 +9,7 @@ import {
   isLeadCrmPoll,
 } from "./leadContestLiveFlow.js";
 import {
+  isLastQuestionProgress,
   isWaitingBetweenQuestions,
   resolveLiveUxState,
 } from "./liveStateUx.js";
@@ -16,11 +17,22 @@ import {
 /** WAITING Screen — avant la première question. */
 export const SCREEN_WAITING_LABEL_START = "ÇA VA BIENTÔT COMMENCER";
 
-/** WAITING Screen — entre deux questions (PRÉPARÉ après Suivante). */
+/** WAITING Screen — entre deux questions (PRÉPARÉ après Suivante, pas la dernière). */
 export const SCREEN_WAITING_LABEL_BETWEEN = "PROCHAINE QUESTION BIENTÔT";
+
+/** CLOSED Screen — vote fermé, suite encore possible. */
+export const SCREEN_CLOSED_LABEL = "VOTE TERMINÉ";
+
+/**
+ * CLOSED Screen — dernière question fermée, événement encore actif
+ * (≠ FINISHED ; l’organisateur doit Terminer / Afficher / Suivante).
+ */
+export const SCREEN_CLOSED_AWAITING_ORGANIZER_LABEL =
+  "VOTE TERMINÉ — EN ATTENTE DE L'ORGANISATEUR";
 
 /**
  * Libellé WAITING grand écran selon le contexte (1ʳᵉ question vs entre questions).
+ * Jamais « PROCHAINE… » sur la dernière question (`current >= total`).
  * @param {Parameters<typeof isWaitingBetweenQuestions>[0]} [input]
  */
 export function getScreenWaitingDiffusionLabel(input = {}) {
@@ -30,11 +42,32 @@ export function getScreenWaitingDiffusionLabel(input = {}) {
 }
 
 /**
+ * Libellé CLOSED grand écran.
+ * Dernière Q fermée + event actif → attente organisateur (pas « prochaine », pas FINISHED).
+ * @param {{
+ *   pollsProgress?: { current?: number; total?: number } | null;
+ *   questionProgress?: { current?: number; total?: number } | null;
+ *   eventFinished?: boolean;
+ * }} [input]
+ */
+export function getScreenClosedDiffusionLabel(input = {}) {
+  if (input.eventFinished === true) return SCREEN_CLOSED_LABEL;
+  const progress = input.questionProgress ?? input.pollsProgress ?? null;
+  if (isLastQuestionProgress(progress)) {
+    return SCREEN_CLOSED_AWAITING_ORGANIZER_LABEL;
+  }
+  return SCREEN_CLOSED_LABEL;
+}
+
+/**
  * Libellés grand écran (salle / TV / vidéoprojecteur) — très courts, lisibles à distance.
  * Ne pas réutiliser aveuglément les textes Participant (`getLiveStateLabel`).
  *
  * @param {string | null | undefined} uxState — sortie resolveLiveUxState
- * @param {Parameters<typeof isWaitingBetweenQuestions>[0]} [waitingCtx]
+ * @param {Parameters<typeof isWaitingBetweenQuestions>[0] & {
+ *   questionProgress?: { current?: number; total?: number } | null;
+ *   eventFinished?: boolean;
+ * }} [waitingCtx]
  * @returns {string}
  */
 export function getScreenDiffusionLabel(uxState, waitingCtx = {}) {
@@ -45,7 +78,7 @@ export function getScreenDiffusionLabel(uxState, waitingCtx = {}) {
     case "VOTING":
       return "VOTE OUVERT";
     case "CLOSED":
-      return "VOTE TERMINÉ";
+      return getScreenClosedDiffusionLabel(waitingCtx);
     case "RESULTS":
       return "RÉSULTATS";
     case "PAUSED":

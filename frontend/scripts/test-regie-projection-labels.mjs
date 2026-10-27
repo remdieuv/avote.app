@@ -18,6 +18,18 @@ assert.match(waiting, /QR/i);
 assert.ok(!/ne voit rien/i.test(waiting), "WAITING ne doit pas annoncer un écran vide");
 assert.ok(!/Relancez la projection/i.test(waiting));
 
+const waitingAfterClose = getRegieDisplayStateLabel("waiting", {
+  pollStatus: "CLOSED",
+  voteState: "closed",
+  pollType: "SINGLE_CHOICE",
+});
+assert.match(
+  waitingAfterClose,
+  /Vote terminé|organisateur/i,
+  "post-Fermer : pas le texte QR « Ouvrez le vote »",
+);
+assert.notEqual(waitingAfterClose, REGIE_DISPLAY_STATE_LABELS.waiting);
+
 const black = getRegieDisplayStateLabel("black");
 assert.equal(black, REGIE_DISPLAY_STATE_LABELS.black);
 assert.match(black, /Noir|noir|écran noir/i);

@@ -18,6 +18,7 @@ import {
   getRegiePrimaryLiveAction,
   getRegiePrimaryLiveActionLabel,
   getRegiePilotageStepLabel,
+  getRegieLiveBannerLabel,
   getRegieConsultBannerState,
   getRegieQuestionNumberLabel,
   isRegieConsultSelectionOnly,
@@ -222,7 +223,7 @@ test("CTA primaire — WAITING préparée → Ouvrir (pas Afficher)", () => {
       pollStatus: "ACTIVE",
       pollType: "SINGLE_CHOICE",
     }),
-    "Question prête",
+    "En attente d'ouverture",
   );
   const allowedPrepared = getRegieAllowedLiveActions({
     hasActivePoll: true,
@@ -415,6 +416,61 @@ test("LOT-5 — Ouvrir vs Rouvrir (sans wipe) vs Rejouer TEST", () => {
   assert.equal(closed.isReopenWithoutWipe, true);
   assert.match(closed.title, /sans effacer/i);
   assert.match(closed.title, /Rejouer/i);
+});
+
+test("C3 — bandeau Régie aligné Screen (attente / ouvert / fermé)", () => {
+  assert.equal(
+    getRegieLiveBannerLabel({
+      hasActivePoll: true,
+      voteState: "closed",
+      displayState: "waiting",
+      pollStatus: "ACTIVE",
+      pollType: "SINGLE_CHOICE",
+    }),
+    "En attente d'ouverture",
+  );
+  assert.equal(
+    getRegieLiveBannerLabel({
+      hasActivePoll: true,
+      voteState: "open",
+      displayState: "question",
+      pollStatus: "ACTIVE",
+      pollType: "QUIZ",
+    }),
+    "Vote ouvert",
+  );
+  assert.equal(
+    getRegieLiveBannerLabel({
+      hasActivePoll: true,
+      voteState: "closed",
+      displayState: "waiting",
+      pollStatus: "CLOSED",
+      pollType: "SINGLE_CHOICE",
+    }),
+    "Vote fermé",
+  );
+  assert.equal(
+    getRegieLiveBannerLabel({
+      hasActivePoll: true,
+      voteState: "closed",
+      displayState: "waiting",
+      pollStatus: "CLOSED",
+      pollType: "SINGLE_CHOICE",
+      leadEnabled: true,
+    }),
+    "Collecte fermée",
+  );
+  assert.notEqual(
+    getRegieLiveBannerLabel({
+      hasActivePoll: true,
+      voteState: "closed",
+      displayState: "waiting",
+      pollStatus: "CLOSED",
+      leadEnabled: true,
+    }),
+    "En attente",
+    "post-Fermer Lead ≠ En attente générique",
+  );
 });
 
 test("Régie simplifiée — libellés d’étape + CTA unique par type", () => {

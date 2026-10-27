@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { formatCountdownVerbose } from "@/lib/chronoFormat";
 import {
+  SCREEN_CLOSED_LABEL,
   SCREEN_QR_CTA_VOTE,
   countScreenVotesReceived,
   formatScreenOptionLine,
@@ -110,6 +111,7 @@ function BlocQrSecondaire({ slug }) {
  *   voteOuvert: boolean;
  *   joinSlug: string | null | undefined;
  *   questionProgress?: { current: number; total: number } | null;
+ *   closedBannerLabel?: string | null;
  *   qrScale?: number;
  *   compactQuestionText?: boolean;
  *   fullScreenQr?: boolean;
@@ -124,6 +126,7 @@ export function ScreenQuestion({
   voteOuvert,
   joinSlug,
   questionProgress = null,
+  closedBannerLabel = null,
   qrScale = 1,
   compactQuestionText = false,
   fullScreenQr = false,
@@ -258,14 +261,18 @@ export function ScreenQuestion({
           <p
             style={{
               margin: 0,
-              fontSize: "clamp(1.35rem, 4.2vw, 2.75rem)",
+              fontSize: "clamp(1.1rem, 3.6vw, 2.35rem)",
               fontWeight: 900,
               letterSpacing: "0.06em",
               textTransform: "uppercase",
               color: "#f8fafc",
+              maxWidth: "22ch",
+              textWrap: "balance",
             }}
           >
-            VOTE TERMINÉ
+            {typeof closedBannerLabel === "string" && closedBannerLabel.trim()
+              ? closedBannerLabel.trim()
+              : SCREEN_CLOSED_LABEL}
           </p>
         ) : null}
 
