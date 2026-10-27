@@ -71,6 +71,7 @@ import {
   REGIE_ZONE_PILOTAGE,
   REGIE_ZONE_PROJECTION_AVANCEE,
   getRegieAllowedLiveActions,
+  getRegieLiveBannerLabel,
   getRegiePilotageStepLabel,
   getRegiePollStatusLabel,
   getRegiePollTypeLabel,
@@ -6467,15 +6468,24 @@ export default function RegieEventPage() {
     [liveState, displayStateUi, voteStateUi],
   );
 
-  const stateLabel =
-    ux.key === "lecture" &&
-    String(displayStateUi || "").toLowerCase() === "question" &&
-    String(voteStateUi || "").toLowerCase() === "closed"
-      ? "Question affichée (vote fermé)"
-      : ux.label;
+  const stateLabel = getRegieLiveBannerLabel({
+    voteState: voteStateUi,
+    displayState: displayStateUi,
+    pollStatus: activePoll?.status,
+    pollType: activePoll?.type,
+    leadEnabled: activePoll?.leadEnabled,
+    eventFinished,
+    hasActivePoll: Boolean(activePoll),
+    fallbackLabel:
+      ux.key === "lecture" &&
+      String(displayStateUi || "").toLowerCase() === "question" &&
+      String(voteStateUi || "").toLowerCase() === "closed"
+        ? "Question affichée (vote fermé)"
+        : ux.label,
+  });
   const statePanel = getEventUxPanelStyles(ux.key);
   const sceneBadge = getEventUxSceneBadgeFromKey(ux.key);
-  const pilotageTag = ux.label;
+  const pilotageTag = stateLabel;
   const modeBadge = inTestMode
     ? {
         label: "MODE TEST",
@@ -6495,6 +6505,9 @@ export default function RegieEventPage() {
   const regieActivePollContext = {
     pollType: activePoll?.type,
     leadEnabled: activePoll?.leadEnabled,
+    pollStatus: activePoll?.status,
+    voteState: voteStateUi,
+    eventFinished,
   };
   /** « À l’écran » = état projection réel (screenDisplayState prioritaire). */
   const displayLabelGlobal = getRegieDisplayStateLabel(

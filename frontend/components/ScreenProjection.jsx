@@ -17,6 +17,7 @@ import { ScreenResults } from "./ScreenResults";
 import { resolveApiAssetUrlNullable } from "@/lib/assetUrl";
 import { API_URL, SOCKET_URL } from "@/lib/config";
 import {
+  getScreenClosedDiffusionLabel,
   getScreenDiffusionLabel,
   resolveScreenQuestionProgress,
   shouldRenderScreenAutoRevealWait,
@@ -25,6 +26,7 @@ import {
 } from "@/lib/diffusionUx";
 import {
   LIVE_UX_LOCAL,
+  LIVE_UX_STATE,
   getLiveStateLabel,
   getLiveStatePresentation,
   getLiveStateTone,
@@ -1310,9 +1312,14 @@ export function ScreenProjection({
   /**
    * WAITING explicite (Attente / QR) — prioritaire sur VOTING dérivé de liveScene
    * tant que le vote reste OPEN (Screen A forçage + Screen B indépendant).
-   * (FINISHED et auto-reveal déjà traités plus haut.)
+   * Post-Fermer (G13) : display WAITING × poll CLOSED → UX CLOSED — ne pas
+   * écraser avec le QR « bientôt commencer » / « prochaine question ».
+   * Fermeture ≠ fin d’événement (FINISHED déjà traité plus haut).
    */
-  if (ds === "waiting") {
+  if (
+    ds === "waiting" &&
+    projectionPres.ux !== LIVE_UX_STATE.CLOSED
+  ) {
     return wrapOut(
       false,
       <ScreenWaiting
@@ -1366,6 +1373,11 @@ export function ScreenProjection({
         getLiveStateVisualTokens("neutral", "screen"),
       ),
     };
+    const closedBannerLabel = getScreenClosedDiffusionLabel({
+      questionProgress,
+      pollsProgress,
+      eventFinished: false,
+    });
     return wrapOut(
       false,
       <ScreenQuestion
@@ -1376,6 +1388,7 @@ export function ScreenProjection({
         voteOuvert={false}
         joinSlug={slugPublic}
         questionProgress={questionProgress}
+        closedBannerLabel={closedBannerLabel}
         qrScale={isModeQrFullscreen ? 2 : isModeXlargeQr ? 1.35 : isModeResultsFocus ? 1.42 : 1}
         compactQuestionText={isModeQrFullscreen || isModeXlargeQr}
         fullScreenQr={isModeQrFullscreen}

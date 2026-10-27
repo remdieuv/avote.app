@@ -54,8 +54,12 @@ const LABELS = {
 };
 
 /**
- * True si au moins une question a déjà été enchaînée (entre deux questions).
- * Sources : `pastPolls` API et/ou `pollsProgress.current > 1`.
+ * True s’il reste une question suivante à préparer/ouvrir (entre deux questions).
+ * Jamais vrai sur la **dernière** question (`current >= total`) — évite
+ * « Prochaine question bientôt » / « PROCHAINE QUESTION BIENTÔT » à N/N.
+ *
+ * Sources : `pollsProgress` (prioritaire) ; fallback `pastPolls` seulement
+ * si le total n’est pas connu.
  * @param {{
  *   pastPolls?: unknown;
  *   pastPollsCount?: number | null;
@@ -64,6 +68,14 @@ const LABELS = {
  * }} [input]
  */
 export function isWaitingBetweenQuestions(input = {}) {
+  const cur = Number(
+    input.pollsProgress?.current ?? input.pollsProgressCurrent,
+  );
+  const tot = Number(input.pollsProgress?.total);
+  if (Number.isFinite(cur) && Number.isFinite(tot) && tot >= 1) {
+    return cur > 1 && cur < tot;
+  }
+
   const pastFromList = Array.isArray(input.pastPolls)
     ? input.pastPolls.length
     : NaN;
@@ -72,10 +84,23 @@ export function isWaitingBetweenQuestions(input = {}) {
     : Number(input.pastPollsCount);
   if (Number.isFinite(pastCount) && pastCount > 0) return true;
 
-  const cur = Number(
-    input.pollsProgress?.current ?? input.pollsProgressCurrent,
-  );
   return Number.isFinite(cur) && cur > 1;
+}
+
+/**
+ * True si la progression pointe la dernière question (N/N).
+ * @param {{ current?: number; total?: number } | null | undefined} progress
+ */
+export function isLastQuestionProgress(progress) {
+  const cur = Number(progress?.current);
+  const tot = Number(progress?.total);
+  return (
+    Number.isFinite(cur) &&
+    Number.isFinite(tot) &&
+    tot >= 1 &&
+    cur >= 1 &&
+    cur >= tot
+  );
 }
 
 /**

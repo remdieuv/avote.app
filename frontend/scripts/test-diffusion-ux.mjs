@@ -12,8 +12,11 @@ import {
   formatScreenOptionLine,
   formatScreenQuestionProgressLabel,
   getScreenClosedAwaitingResultsLabel,
+  getScreenClosedDiffusionLabel,
   getScreenDiffusionLabel,
   getScreenWaitingDiffusionLabel,
+  SCREEN_CLOSED_AWAITING_ORGANIZER_LABEL,
+  SCREEN_CLOSED_LABEL,
   SCREEN_FINISHED_SUBTITLE,
   SCREEN_WAITING_LABEL_BETWEEN,
   SCREEN_WAITING_LABEL_START,
@@ -287,12 +290,34 @@ assert.equal(
   SCREEN_WAITING_LABEL_BETWEEN,
 );
 assert.equal(
+  getScreenWaitingDiffusionLabel({
+    pastPolls: [{ id: "p1", label: "Q1" }],
+    pollsProgress: { current: 2, total: 2 },
+  }),
+  SCREEN_WAITING_LABEL_START,
+  "dernière Q : jamais PROCHAINE QUESTION BIENTÔT",
+);
+assert.equal(
   getScreenDiffusionLabel("WAITING", {
     pastPolls: [{ id: "p1", label: "Q1" }],
   }),
   SCREEN_WAITING_LABEL_BETWEEN,
 );
-assert.equal(getScreenDiffusionLabel("CLOSED"), "VOTE TERMINÉ");
+assert.equal(getScreenDiffusionLabel("CLOSED"), SCREEN_CLOSED_LABEL);
+assert.equal(
+  getScreenClosedDiffusionLabel({
+    pollsProgress: { current: 2, total: 2 },
+    eventFinished: false,
+  }),
+  SCREEN_CLOSED_AWAITING_ORGANIZER_LABEL,
+  "dernière fermée + event actif → attente organisateur",
+);
+assert.equal(
+  getScreenDiffusionLabel("CLOSED", {
+    pollsProgress: { current: 1, total: 2 },
+  }),
+  SCREEN_CLOSED_LABEL,
+);
 assert.equal(
   getScreenDiffusionLabel("FINISHED"),
   "MERCI POUR VOTRE PARTICIPATION !",
@@ -327,11 +352,21 @@ assert.equal(getScreenDiffusionLabel("RESULTS"), "RÉSULTATS");
   const idxFinished = renderBlock.indexOf("shouldRenderScreenFinished");
   const idxNoPoll = renderBlock.indexOf("!poll && noPollFromHttp404");
   const idxAutoReveal = renderBlock.indexOf("shouldRenderScreenAutoRevealWait");
-  const idxDsWaiting = renderBlock.indexOf('if (ds === "waiting")');
+  const idxDsWaiting = renderBlock.indexOf('ds === "waiting"');
+  const idxClosedGuard = renderBlock.indexOf(
+    "projectionPres.ux !== LIVE_UX_STATE.CLOSED",
+  );
+  const idxClosedBranch = renderBlock.indexOf(
+    'projectionPres.ux === "CLOSED" && poll',
+  );
   assert.ok(idxFinished >= 0, "branche FINISHED dans le rendu");
   assert.ok(idxNoPoll >= 0);
   assert.ok(idxAutoReveal >= 0, "branche auto-reveal countdown");
   assert.ok(idxDsWaiting >= 0);
+  assert.ok(
+    idxClosedGuard >= 0,
+    "C1: ds=waiting ne court-circuite pas UX CLOSED",
+  );
   assert.ok(
     idxFinished < idxNoPoll && idxFinished < idxDsWaiting,
     "FINISHED doit être évalué avant no-poll / ds=waiting",
@@ -340,10 +375,16 @@ assert.equal(getScreenDiffusionLabel("RESULTS"), "RÉSULTATS");
     idxAutoReveal < idxDsWaiting,
     "auto-reveal countdown avant ds=waiting (sinon ÇA VA BIENTÔT écrase le décompte)",
   );
+  assert.ok(
+    idxClosedBranch > idxDsWaiting,
+    "branche CLOSED après garde waiting (fall-through post-Fermer)",
+  );
+  assert.ok(screen.includes("getScreenClosedDiffusionLabel"));
+  assert.ok(screen.includes("closedBannerLabel"));
   assert.ok(screen.includes("eventTitle={eventTitle}"));
   assert.ok(finishedScene.includes("SCREEN_FINISHED_SUBTITLE"));
   assert.ok(finishedScene.includes("eventTitle"));
-  console.log("ok  Screen FINISHED prioritaire + contenu clôture");
+  console.log("ok  Screen FINISHED prioritaire + contenu clôture + C1 CLOSED");
 }
 
 {
@@ -589,6 +630,22 @@ console.log("ok  CLOSED compteur + quiz reveal Screen (sans RESULTS)");
     legacyManualKeptQuestion.displayState,
     timerClose.displayState,
     "G13: l’ancien close manuel (display question) diverge du chrono",
+  );
+  // Lead / Concours / autoReveal OFF : même surface CLOSED (pas WAITING)
+  for (const kind of ["sondage", "lead", "concours"]) {
+    assert.equal(
+      resolveScreenSurfaceAfterVoteClose(timerClose),
+      "closed",
+      `${kind}: post-Fermer → surface closed`,
+    );
+  }
+  assert.equal(
+    resolveLiveUxState({
+      ...timerClose,
+      pollStatus: "ACTIVE",
+    }),
+    LIVE_UX_STATE.WAITING,
+    "PRÉPARÉ (poll ACTIVE) → WAITING, pas CLOSED",
   );
   console.log("ok  G13 manual close = timer close (projection CLOSED)");
 }

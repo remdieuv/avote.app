@@ -24,6 +24,9 @@ export const REGIE_DISPLAY_STATE_LABELS = {
  * @param {{
  *   pollType?: string | null;
  *   leadEnabled?: boolean | null;
+ *   pollStatus?: string | null;
+ *   voteState?: string | null;
+ *   eventFinished?: boolean;
  * }} [context] — type de question active (Lead / Concours ≠ barres).
  * @returns {string}
  */
@@ -32,6 +35,17 @@ export function getRegieDisplayStateLabel(displayState, context = {}) {
   if (k === "results") {
     const contextual = getRegieResultsProjectionLabel(context);
     if (contextual) return contextual;
+  }
+  /**
+   * Post-Fermer : display WAITING côté axes, mais Screen montre CLOSED
+   * (pas le QR d’accueil). Ne pas annoncer « Ouvrez le vote ».
+   */
+  if (k === "waiting" && context.eventFinished !== true) {
+    const ps = String(context.pollStatus ?? "").toUpperCase();
+    const vs = String(context.voteState ?? "").toLowerCase();
+    if (ps === "CLOSED" && (vs === "closed" || vs === "")) {
+      return "Vote terminé — en attente de l'organisateur (pas l'accueil QR).";
+    }
   }
   if (k && Object.prototype.hasOwnProperty.call(REGIE_DISPLAY_STATE_LABELS, k)) {
     return REGIE_DISPLAY_STATE_LABELS[

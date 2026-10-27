@@ -253,6 +253,7 @@ export function getRegiePrimaryLiveActionLabel(action, opts = {}) {
 
 /**
  * Libellé d’étape métier affiché au centre (pas de jargon Prisma).
+ * Aligné Screen : attente d’ouverture / vote ouvert / vote|collecte fermé(e).
  * @param {{
  *   voteState?: string | null;
  *   displayState?: string | null;
@@ -287,9 +288,56 @@ export function getRegiePilotageStepLabel(input = {}) {
     return "Vote fermé";
   }
   if (ps === "ACTIVE" || ps === "DRAFT" || ps === "SCHEDULED" || ps === "") {
-    return "Question prête";
+    return "En attente d'ouverture";
   }
   return "Prêt";
+}
+
+/**
+ * Bandeau état live Régie (cohérent Screen) — pas de « En attente » générique
+ * après Fermer (poll CLOSED) alors que la salle voit CLOSED.
+ * @param {{
+ *   voteState?: string | null;
+ *   displayState?: string | null;
+ *   pollStatus?: string | null;
+ *   pollType?: string | null;
+ *   leadEnabled?: boolean | null;
+ *   eventFinished?: boolean;
+ *   hasActivePoll?: boolean;
+ *   fallbackLabel?: string | null;
+ * }} input
+ */
+export function getRegieLiveBannerLabel(input = {}) {
+  if (input.eventFinished === true) return "Terminé";
+  if (input.hasActivePoll === false) {
+    return input.fallbackLabel || "En attente";
+  }
+  const vs = String(input.voteState ?? "").toLowerCase();
+  const ds = String(input.displayState ?? "").toLowerCase();
+  const ps = String(input.pollStatus ?? "").toUpperCase();
+  const contest = isRegieContestPoll({
+    type: input.pollType,
+    leadEnabled: input.leadEnabled,
+  });
+  const lead = isRegieLeadPoll({
+    type: input.pollType,
+    leadEnabled: input.leadEnabled,
+  });
+
+  if (vs === "open") return "Vote ouvert";
+  if (ds === "results") {
+    if (contest) return "Tirage";
+    if (lead) return "Collecte fermée";
+    return "Résultats";
+  }
+  if (ps === "CLOSED") {
+    if (lead) return "Collecte fermée";
+    return "Vote fermé";
+  }
+  if (ps === "ACTIVE" || ps === "DRAFT" || ps === "SCHEDULED" || ps === "") {
+    return "En attente d'ouverture";
+  }
+  return input.fallbackLabel || "En attente";
 }
 
 /**

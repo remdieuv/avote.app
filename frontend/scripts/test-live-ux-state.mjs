@@ -330,6 +330,15 @@ console.log("ok  labels sans jargon orga");
     }).title,
     LIVE_UX_LABEL_WAITING_START,
   );
+  // Dernière question (N/N) : jamais « Prochaine question bientôt »
+  assert.equal(
+    isWaitingBetweenQuestions({
+      pastPolls: [{ id: "p1", label: "Q1" }],
+      pollsProgress: { current: 2, total: 2 },
+    }),
+    false,
+    "dernière Q : pas BETWEEN",
+  );
   assert.equal(
     getLiveStatePresentation({
       liveScene: "waiting",
@@ -340,7 +349,11 @@ console.log("ok  labels sans jargon orga");
       pastPolls: [{ id: "p1", label: "Q1" }],
       pollsProgress: { current: 2, total: 2 },
     }).title,
-    LIVE_UX_LABEL_WAITING_BETWEEN,
+    LIVE_UX_LABEL_WAITING_START,
+  );
+  assert.equal(
+    isWaitingBetweenQuestions({ pollsProgress: { current: 1, total: 1 } }),
+    false,
   );
   console.log("ok  WAITING start vs entre questions");
 }
