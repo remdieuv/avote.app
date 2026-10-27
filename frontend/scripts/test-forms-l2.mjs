@@ -134,8 +134,11 @@ test("fichiers L2 présents (FormRenderer + PollExperience branché)", () => {
   assert.ok(pollExp.includes("FormRenderer"));
   assert.ok(pollExp.includes("validateFormAnswers"));
   assert.ok(pollExp.includes("answers: validated.answers"));
-  // Plus de champs hardcodés leadFirstName state
+  // Plus de champs hardcodés Lead (post L2 → leadAnswers)
   assert.equal(/const \[leadFirstName/.test(pollExp), false);
+  assert.equal(/setLeadFirstName|setLeadLastName|setLeadPhone|setLeadEmail/.test(pollExp), false);
+  assert.ok(pollExp.includes("setLeadAnswers"));
+  assert.ok(pollExp.includes("setLeadFieldErrors"));
 
   const preview = readFileSync(
     join(root, "components/admin/EventLivePreview.jsx"),
@@ -143,6 +146,48 @@ test("fichiers L2 présents (FormRenderer + PollExperience branché)", () => {
   );
   assert.ok(preview.includes("FormRenderer"));
   assert.ok(preview.includes("resolvePreviewFormDefinition"));
+});
+
+/** Non-régression prod : reset pollId ne doit plus appeler les setters Lead L0. */
+test("PollExperience reset pollId → leadAnswers (pas setLeadFirstName)", () => {
+  const pollExp = readFileSync(
+    join(root, "components/PollExperience.jsx"),
+    "utf8",
+  );
+  const resetBlock = pollExp.match(
+    /setShowLeadForm\(false\);[\s\S]{0,400}?if \(!pollId\)/,
+  );
+  assert.ok(resetBlock, "bloc reset pollId introuvable");
+  assert.equal(/setLeadFirstName|setLeadLastName|setLeadPhone|setLeadEmail/.test(resetBlock[0]), false);
+  assert.ok(resetBlock[0].includes("setLeadAnswers({})"));
+  assert.ok(resetBlock[0].includes("setLeadFieldErrors({})"));
+});
+
+/** Parcours join→form→coords : contact_legacy + Concours validables. */
+test("parcours Lead contact_legacy + Concours : validation coords", () => {
+  const legacy = buildFormDefinitionFromTemplate("contact_legacy");
+  const legacyOk = validateFormAnswers(legacy, {
+    fld_firstName: "Ada",
+    fld_lastName: "Lovelace",
+    fld_phone: "0612345678",
+    fld_email: "ada@example.com",
+  });
+  assert.equal(legacyOk.ok, true);
+
+  const contest = defaultFormDefinitionForPollKind("CONTEST_ENTRY");
+  const empty = emptyAnswersForDefinition(contest);
+  const contestKo = validateFormAnswers(contest, empty);
+  assert.equal(contestKo.ok, false);
+
+  const contestAnswers = { ...empty };
+  for (const f of contest.fields) {
+    if (f.type === "email") contestAnswers[f.id] = "sam@example.com";
+    else if (f.type === "phone") contestAnswers[f.id] = "0699887766";
+    else if (f.type === "checkbox") contestAnswers[f.id] = true;
+    else if (f.required) contestAnswers[f.id] = "Sam";
+  }
+  const contestOk = validateFormAnswers(contest, contestAnswers);
+  assert.equal(contestOk.ok, true);
 });
 
 test("FormRenderer ne touche pas Screen/Régie", () => {

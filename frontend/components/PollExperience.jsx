@@ -585,10 +585,8 @@ export function PollExperience({
     setShowLeadForm(false);
     setLeadSuccess(false);
     setLeadError(null);
-    setLeadFirstName("");
-    setLeadLastName("");
-    setLeadPhone("");
-    setLeadEmail("");
+    setLeadAnswers({});
+    setLeadFieldErrors({});
     if (!pollId) {
       setStorageVerifie(true);
       return;
