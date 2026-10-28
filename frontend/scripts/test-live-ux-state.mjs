@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import {
   LIVE_UX_LABEL_VOTE_CONFIRMED,
   LIVE_UX_LABEL_WAITING_BETWEEN,
+  LIVE_UX_LABEL_WAITING_LAST,
   LIVE_UX_LABEL_WAITING_START,
   LIVE_UX_STATE,
   getClosedParticipantTitle,
@@ -13,6 +14,7 @@ import {
   getLiveStatePresentation,
   getWaitingLiveLabel,
   isWaitingBetweenQuestions,
+  isWaitingLastQuestionReady,
   resolveLiveUxState,
 } from "../lib/liveStateUx.js";
 import {
@@ -330,7 +332,7 @@ console.log("ok  labels sans jargon orga");
     }).title,
     LIVE_UX_LABEL_WAITING_START,
   );
-  // Dernière question (N/N) : jamais « Prochaine question bientôt »
+  // Dernière question (N/N) PRÉPARÉ : LAST, jamais START ni BETWEEN
   assert.equal(
     isWaitingBetweenQuestions({
       pastPolls: [{ id: "p1", label: "Q1" }],
@@ -338,6 +340,22 @@ console.log("ok  labels sans jargon orga");
     }),
     false,
     "dernière Q : pas BETWEEN",
+  );
+  assert.equal(
+    isWaitingLastQuestionReady({
+      pastPolls: [{ id: "p1", label: "Q1" }],
+      pollsProgress: { current: 2, total: 2 },
+    }),
+    true,
+    "PRÉPARÉ 2/2 après Q jouée → LAST",
+  );
+  assert.equal(
+    getWaitingLiveLabel({
+      pastPolls: [{ id: "p1", label: "Q1" }],
+      pollsProgress: { current: 2, total: 2 },
+    }),
+    LIVE_UX_LABEL_WAITING_LAST,
+    "inverser 2/2 → START : désormais LAST",
   );
   assert.equal(
     getLiveStatePresentation({
@@ -349,13 +367,22 @@ console.log("ok  labels sans jargon orga");
       pastPolls: [{ id: "p1", label: "Q1" }],
       pollsProgress: { current: 2, total: 2 },
     }).title,
-    LIVE_UX_LABEL_WAITING_START,
+    LIVE_UX_LABEL_WAITING_LAST,
   );
   assert.equal(
     isWaitingBetweenQuestions({ pollsProgress: { current: 1, total: 1 } }),
     false,
   );
-  console.log("ok  WAITING start vs entre questions");
+  assert.equal(
+    isWaitingLastQuestionReady({ pollsProgress: { current: 1, total: 1 } }),
+    false,
+    "1/1 avant jeu → START, pas LAST",
+  );
+  assert.equal(
+    getWaitingLiveLabel({ pollsProgress: { current: 1, total: 1 } }),
+    LIVE_UX_LABEL_WAITING_START,
+  );
+  console.log("ok  WAITING start / entre / dernière");
 }
 
 if (failed > 0) {
