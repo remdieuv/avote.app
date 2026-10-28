@@ -19,6 +19,7 @@ import {
   SCREEN_CLOSED_LABEL,
   SCREEN_FINISHED_SUBTITLE,
   SCREEN_WAITING_LABEL_BETWEEN,
+  SCREEN_WAITING_LABEL_LAST,
   SCREEN_WAITING_LABEL_START,
   isScreenProjectionVoteOpen,
   isScreenQuizAnswerRevealed,
@@ -294,8 +295,22 @@ assert.equal(
     pastPolls: [{ id: "p1", label: "Q1" }],
     pollsProgress: { current: 2, total: 2 },
   }),
-  SCREEN_WAITING_LABEL_START,
+  SCREEN_WAITING_LABEL_LAST,
+  "inverser 2/2 → START : PRÉPARÉ N/N → DERNIÈRE QUESTION BIENTÔT",
+);
+assert.notEqual(
+  getScreenWaitingDiffusionLabel({
+    pollsProgress: { current: 2, total: 2 },
+  }),
+  SCREEN_WAITING_LABEL_BETWEEN,
   "dernière Q : jamais PROCHAINE QUESTION BIENTÔT",
+);
+assert.notEqual(
+  getScreenWaitingDiffusionLabel({
+    pollsProgress: { current: 2, total: 2 },
+  }),
+  SCREEN_WAITING_LABEL_START,
+  "dernière Q préparée : jamais accueil ÇA VA BIENTÔT COMMENCER",
 );
 assert.equal(
   getScreenDiffusionLabel("WAITING", {
@@ -648,6 +663,75 @@ console.log("ok  CLOSED compteur + quiz reveal Screen (sans RESULTS)");
     "PRÉPARÉ (poll ACTIVE) → WAITING, pas CLOSED",
   );
   console.log("ok  G13 manual close = timer close (projection CLOSED)");
+}
+
+{
+  // L1+L2 — transitions 1/2 → 2/2 préparée → ouvert → fermé (5 types)
+  const types = [
+    { name: "Unique", pollType: "SINGLE_CHOICE", leadEnabled: false },
+    { name: "Multiple", pollType: "MULTIPLE_CHOICE", leadEnabled: false },
+    { name: "Quiz", pollType: "QUIZ", leadEnabled: false },
+    { name: "Lead", pollType: "SINGLE_CHOICE", leadEnabled: true },
+    { name: "Concours", pollType: "CONTEST_ENTRY", leadEnabled: false },
+  ];
+  for (const t of types) {
+    assert.equal(
+      getScreenWaitingDiffusionLabel({
+        pollsProgress: { current: 1, total: 2 },
+      }),
+      SCREEN_WAITING_LABEL_START,
+      `${t.name}: PRÉPARÉ 1/2 → START`,
+    );
+    assert.equal(
+      getScreenWaitingDiffusionLabel({
+        pastPolls: [{ id: "q1" }],
+        pollsProgress: { current: 2, total: 2 },
+      }),
+      SCREEN_WAITING_LABEL_LAST,
+      `${t.name}: PRÉPARÉ 2/2 → LAST (pas START)`,
+    );
+    const prepared = resolveLiveUxState({
+      liveScene: "waiting",
+      displayState: "waiting",
+      voteState: "closed",
+      pollStatus: "ACTIVE",
+      hasActivePoll: true,
+      pollsProgress: { current: 2, total: 2 },
+    });
+    assert.equal(prepared, LIVE_UX_STATE.WAITING, `${t.name}: 2/2 PRÉPARÉ → WAITING`);
+    const openUx = resolveLiveUxState({
+      liveScene: "voting",
+      displayState: "question",
+      voteState: "open",
+      pollStatus: "ACTIVE",
+      hasActivePoll: true,
+    });
+    assert.equal(openUx, LIVE_UX_STATE.VOTING, `${t.name}: ouvert → VOTING`);
+    const closedAxes = projectionAxesAfterVoteClose({
+      displayState: "waiting",
+      hasActivePoll: true,
+      pollStatus: "CLOSED",
+    });
+    assert.equal(
+      resolveLiveUxState(closedAxes),
+      LIVE_UX_STATE.CLOSED,
+      `${t.name}: fermé → CLOSED`,
+    );
+    assert.equal(
+      resolveScreenSurfaceAfterVoteClose(closedAxes),
+      "closed",
+      `${t.name}: surface Screen closed`,
+    );
+    assert.equal(
+      getScreenClosedDiffusionLabel({
+        pollsProgress: { current: 2, total: 2 },
+        eventFinished: false,
+      }),
+      SCREEN_CLOSED_AWAITING_ORGANIZER_LABEL,
+      `${t.name}: N/N fermée → attente organisateur`,
+    );
+  }
+  console.log("ok  L1+L2 transitions 1/2→2/2→ouvert→fermé × 5 types");
 }
 
 if (failed > 0) {

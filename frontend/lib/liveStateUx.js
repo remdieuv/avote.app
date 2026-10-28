@@ -39,8 +39,14 @@ export const LIVE_UX_LABEL_VOTE_CONFIRMED =
 /** WAITING avant la première question (démarrage live). */
 export const LIVE_UX_LABEL_WAITING_START = "Ça va bientôt commencer";
 
-/** WAITING entre deux questions (après Suivante → PRÉPARÉ). */
+/** WAITING entre deux questions (après Suivante → PRÉPARÉ, pas la dernière). */
 export const LIVE_UX_LABEL_WAITING_BETWEEN = "Prochaine question bientôt";
+
+/**
+ * WAITING dernière question préparée (N/N après Q déjà jouée) —
+ * ≠ accueil « Ça va bientôt commencer », ≠ « Prochaine… ».
+ */
+export const LIVE_UX_LABEL_WAITING_LAST = "Dernière question bientôt";
 
 /** @type {Record<LiveUxState, string>} */
 const LABELS = {
@@ -52,6 +58,21 @@ const LABELS = {
   PAUSED: "Petite pause",
   FINISHED: "Merci d’avoir participé !",
 };
+
+/**
+ * @param {{
+ *   pastPolls?: unknown;
+ *   pastPollsCount?: number | null;
+ * }} [input]
+ */
+function resolvePastPollsCount(input = {}) {
+  const pastFromList = Array.isArray(input.pastPolls)
+    ? input.pastPolls.length
+    : NaN;
+  if (Number.isFinite(pastFromList)) return pastFromList;
+  const n = Number(input.pastPollsCount);
+  return Number.isFinite(n) ? n : NaN;
+}
 
 /**
  * True s’il reste une question suivante à préparer/ouvrir (entre deux questions).
@@ -76,12 +97,7 @@ export function isWaitingBetweenQuestions(input = {}) {
     return cur > 1 && cur < tot;
   }
 
-  const pastFromList = Array.isArray(input.pastPolls)
-    ? input.pastPolls.length
-    : NaN;
-  const pastCount = Number.isFinite(pastFromList)
-    ? pastFromList
-    : Number(input.pastPollsCount);
+  const pastCount = resolvePastPollsCount(input);
   if (Number.isFinite(pastCount) && pastCount > 0) return true;
 
   return Number.isFinite(cur) && cur > 1;
@@ -104,13 +120,37 @@ export function isLastQuestionProgress(progress) {
 }
 
 /**
+ * True si WAITING sur la **dernière** question déjà en antenne (PRÉPARÉ N/N),
+ * après qu’au moins une question a été enchaînée — pas l’accueil 1ʳᵉ / 1/1.
+ *
+ * @param {{
+ *   pastPolls?: unknown;
+ *   pastPollsCount?: number | null;
+ *   pollsProgress?: { current?: number; total?: number } | null;
+ *   pollsProgressCurrent?: number | null;
+ * }} [input]
+ */
+export function isWaitingLastQuestionReady(input = {}) {
+  if (isWaitingBetweenQuestions(input)) return false;
+  const progress = input.pollsProgress ?? null;
+  if (!isLastQuestionProgress(progress)) return false;
+  const cur = Number(
+    progress?.current ?? input.pollsProgressCurrent,
+  );
+  if (Number.isFinite(cur) && cur > 1) return true;
+  const pastCount = resolvePastPollsCount(input);
+  return Number.isFinite(pastCount) && pastCount > 0;
+}
+
+/**
  * Titre WAITING participant /join (et présentation associée).
+ * Trois états : START (avant Q1) · BETWEEN (intermédiaire) · LAST (N/N prête).
  * @param {Parameters<typeof isWaitingBetweenQuestions>[0]} [input]
  */
 export function getWaitingLiveLabel(input = {}) {
-  return isWaitingBetweenQuestions(input)
-    ? LIVE_UX_LABEL_WAITING_BETWEEN
-    : LIVE_UX_LABEL_WAITING_START;
+  if (isWaitingBetweenQuestions(input)) return LIVE_UX_LABEL_WAITING_BETWEEN;
+  if (isWaitingLastQuestionReady(input)) return LIVE_UX_LABEL_WAITING_LAST;
+  return LIVE_UX_LABEL_WAITING_START;
 }
 
 /**

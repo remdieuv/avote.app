@@ -894,6 +894,18 @@ export function ScreenProjection({
 
       if (payload.poll) {
         setPoll(payload.poll);
+        // L2 : aligner current sur poll.order tout de suite (évite flash START
+        // tant que GET /events/slug n’a pas renvoyé le nouveau pollsProgress).
+        if (typeof payload.poll.order === "number" && Number.isFinite(payload.poll.order)) {
+          setPollsProgress((prev) => {
+            const total = Number(prev?.total);
+            const current = Math.floor(payload.poll.order) + 1;
+            if (Number.isFinite(total) && total >= 1) {
+              return { current, total: Math.floor(total) };
+            }
+            return { current, total: Math.max(current, 1) };
+          });
+        }
         if (payload.poll.eventLiveState) {
           setLiveScene(payload.poll.eventLiveState);
         }
@@ -1264,7 +1276,7 @@ export function ScreenProjection({
       <ScreenWaiting
         shell={shell}
         joinSlug={slugPublic}
-        pollsProgress={pollsProgress}
+        pollsProgress={questionProgress ?? pollsProgress}
       />,
       { hideStatePill: true },
     );
@@ -1325,7 +1337,7 @@ export function ScreenProjection({
       <ScreenWaiting
         shell={shell}
         joinSlug={slugPublic}
-        pollsProgress={pollsProgress}
+        pollsProgress={questionProgress ?? pollsProgress}
       />,
       { hideStatePill: true },
     );
@@ -1358,7 +1370,7 @@ export function ScreenProjection({
       <ScreenWaiting
         shell={shell}
         joinSlug={slugPublic}
-        pollsProgress={pollsProgress}
+        pollsProgress={questionProgress ?? pollsProgress}
       />,
       { hideStatePill: true },
     );
@@ -1403,7 +1415,7 @@ export function ScreenProjection({
       <ScreenWaiting
         shell={shell}
         joinSlug={slugPublic}
-        pollsProgress={pollsProgress}
+        pollsProgress={questionProgress ?? pollsProgress}
       />,
       { hideStatePill: true },
     );

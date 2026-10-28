@@ -11,6 +11,7 @@ import {
 import {
   isLastQuestionProgress,
   isWaitingBetweenQuestions,
+  isWaitingLastQuestionReady,
   resolveLiveUxState,
 } from "./liveStateUx.js";
 
@@ -19,6 +20,12 @@ export const SCREEN_WAITING_LABEL_START = "ÇA VA BIENTÔT COMMENCER";
 
 /** WAITING Screen — entre deux questions (PRÉPARÉ après Suivante, pas la dernière). */
 export const SCREEN_WAITING_LABEL_BETWEEN = "PROCHAINE QUESTION BIENTÔT";
+
+/**
+ * WAITING Screen — dernière question préparée (N/N après Q jouée).
+ * Jamais « PROCHAINE… » ni l’accueil « ÇA VA BIENTÔT COMMENCER ».
+ */
+export const SCREEN_WAITING_LABEL_LAST = "DERNIÈRE QUESTION BIENTÔT";
 
 /** CLOSED Screen — vote fermé, suite encore possible. */
 export const SCREEN_CLOSED_LABEL = "VOTE TERMINÉ";
@@ -31,14 +38,15 @@ export const SCREEN_CLOSED_AWAITING_ORGANIZER_LABEL =
   "VOTE TERMINÉ — EN ATTENTE DE L'ORGANISATEUR";
 
 /**
- * Libellé WAITING grand écran selon le contexte (1ʳᵉ question vs entre questions).
- * Jamais « PROCHAINE… » sur la dernière question (`current >= total`).
+ * Libellé WAITING grand écran — 3 états :
+ * START (avant Q1) · BETWEEN (intermédiaire) · LAST (N/N prête).
+ * Jamais « PROCHAINE… » sur la dernière ; jamais START si N/N après jeu.
  * @param {Parameters<typeof isWaitingBetweenQuestions>[0]} [input]
  */
 export function getScreenWaitingDiffusionLabel(input = {}) {
-  return isWaitingBetweenQuestions(input)
-    ? SCREEN_WAITING_LABEL_BETWEEN
-    : SCREEN_WAITING_LABEL_START;
+  if (isWaitingBetweenQuestions(input)) return SCREEN_WAITING_LABEL_BETWEEN;
+  if (isWaitingLastQuestionReady(input)) return SCREEN_WAITING_LABEL_LAST;
+  return SCREEN_WAITING_LABEL_START;
 }
 
 /**
