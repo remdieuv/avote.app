@@ -8,7 +8,7 @@ cursor:
 **Repo :** remdieuv/avote.app  
 **Base :** `main`  
 **Branche :** `cursor/ux-closed-lead-polish-d6e3`  
-**PR :** draft (lien dans le bilan agent)  
+**PR :** [#26](https://github.com/remdieuv/avote.app/pull/26) (draft)  
 **Méthode :** AVOTE rapide — code-first, tests auto ciblés, pas de browser, pas merge/deploy.
 
 ---
