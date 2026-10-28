@@ -7,6 +7,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { io } from "socket.io-client";
 import {
   QUESTION_TIMER_MAX_SEC,
+  chronoRestantSecondes,
   decomposeTimerSeconds,
   formatCountdownCompact,
   formatCountdownVerbose,
@@ -15,6 +16,7 @@ import {
   getRegieChronoEnabledLabel,
   getRegieChronoRunningHint,
   isRegieChronoEnabled,
+  syncQuestionTimerClockOffset,
 } from "@/lib/chronoFormat";
 import { AjouterQuestionLiveModal } from "@/components/AjouterQuestionLiveModal";
 import { FormBuilderPanel } from "@/components/admin/FormBuilderPanel";
@@ -289,20 +291,6 @@ const CARD = {
   padding: "1rem",
   boxSizing: "border-box",
 };
-
-function chronoRestantAffiche(tm, tick) {
-  void tick;
-  if (!tm || typeof tm.totalSec !== "number") return null;
-  if (!tm.running || tm.isPaused) {
-    return typeof tm.remainingSec === "number" ? tm.remainingSec : null;
-  }
-  if (typeof tm.startedAt !== "string") return tm.remainingSec ?? null;
-  const seg = Math.floor(
-    (Date.now() - new Date(tm.startedAt).getTime()) / 1000,
-  );
-  const acc = typeof tm.accumulatedSec === "number" ? tm.accumulatedSec : 0;
-  return Math.max(0, tm.totalSec - acc - seg);
-}
 
 function badgeStyle(status) {
   switch (status) {
@@ -5034,6 +5022,12 @@ export default function RegieEventPage() {
 
   const loadPollAbortRef = useRef(null);
   const fetchEventGenerationRef = useRef(0);
+  /** Offset client−serveur figé tant que serverNow/startedAt du chrono n’ont pas changé. */
+  const chronoClockSlotRef = useRef({
+    offsetMs: 0,
+    serverNow: /** @type {string | null} */ (null),
+    startedAt: /** @type {string | null} */ (null),
+  });
   const socketRef = useRef(null);
   const autoRotateRef = useRef(false);
   const screenBIndependentRef = useRef(false);
@@ -5728,10 +5722,11 @@ export default function RegieEventPage() {
     return () => clearInterval(id);
   }, [tm?.running, tm?.isPaused, tm?.startedAt]);
 
-  const secondesChrono = useMemo(
-    () => chronoRestantAffiche(tm, chronoTick),
-    [tm, chronoTick],
-  );
+  const secondesChrono = useMemo(() => {
+    void chronoTick;
+    const offset = syncQuestionTimerClockOffset(tm, chronoClockSlotRef.current);
+    return chronoRestantSecondes(tm, Date.now(), offset);
+  }, [tm, chronoTick]);
 
   const regieDescriptionText = useMemo(() => {
     const d = eventData?.description;

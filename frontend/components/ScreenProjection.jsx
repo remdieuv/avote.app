@@ -15,6 +15,10 @@ import { ScreenFinished, ScreenWaiting } from "./ScreenLiveScenes";
 import { ScreenQuestion } from "./ScreenQuestion";
 import { ScreenResults } from "./ScreenResults";
 import { resolveApiAssetUrlNullable } from "@/lib/assetUrl";
+import {
+  chronoRestantSecondes,
+  syncQuestionTimerClockOffset,
+} from "@/lib/chronoFormat";
 import { API_URL, SOCKET_URL } from "@/lib/config";
 import {
   getScreenClosedDiffusionLabel,
@@ -51,20 +55,6 @@ import {
   writeScreenBDisplayState,
   writeScreenBIndependent,
 } from "@/lib/screenBFollowMode";
-
-/** @param {Record<string, unknown> | null | undefined} tm */
-function chronoRestantSecondes(tm) {
-  if (!tm || typeof tm.totalSec !== "number") return null;
-  if (!tm.running || tm.isPaused) {
-    return typeof tm.remainingSec === "number" ? tm.remainingSec : null;
-  }
-  if (typeof tm.startedAt !== "string") return tm.remainingSec ?? null;
-  const seg = Math.floor(
-    (Date.now() - new Date(tm.startedAt).getTime()) / 1000,
-  );
-  const acc = typeof tm.accumulatedSec === "number" ? tm.accumulatedSec : 0;
-  return Math.max(0, tm.totalSec - acc - seg);
-}
 
 /** @param {boolean} showModeAuto */
 function wrapWithBlackout(blackout, node, showModeAuto = false) {
@@ -226,6 +216,11 @@ export function ScreenProjection({
   const evenementInvalideRef = useRef(false);
   const loadPollAbortRef = useRef(null);
   const finChronoRefetchEffectueRef = useRef(false);
+  const chronoClockSlotRef = useRef({
+    offsetMs: 0,
+    serverNow: /** @type {string | null} */ (null),
+    startedAt: /** @type {string | null} */ (null),
+  });
   const pollId = poll?.id ?? null;
   /** QUESTION → RESULTS : séquence fade → interstice → résultats */
   const prevDsRef = useRef(/** @type {string | null} */ (null));
@@ -525,7 +520,11 @@ export function ScreenProjection({
 
   const secondesChronoVote = useMemo(() => {
     void chronoTick;
-    return chronoRestantSecondes(chronometreApi ?? null);
+    const offset = syncQuestionTimerClockOffset(
+      chronometreApi ?? null,
+      chronoClockSlotRef.current,
+    );
+    return chronoRestantSecondes(chronometreApi ?? null, Date.now(), offset);
   }, [chronometreApi, chronoTick]);
 
   const ds = displayState ?? deriveDisplayFromLive(liveScene);

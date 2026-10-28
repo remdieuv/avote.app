@@ -11,7 +11,11 @@ import {
 import { useSearchParams } from "next/navigation";
 import { io } from "socket.io-client";
 import { QRCodeSVG } from "qrcode.react";
-import { formatCountdownVerbose } from "@/lib/chronoFormat";
+import {
+  chronoRestantSecondes,
+  formatCountdownVerbose,
+  syncQuestionTimerClockOffset,
+} from "@/lib/chronoFormat";
 import { API_URL, SOCKET_URL } from "@/lib/config";
 import { getScreenDiffusionLabel, overlayMustStayTransparent } from "@/lib/diffusionUx";
 import { getContestParticipantPhaseLabel } from "@/lib/leadContestLiveFlow";
@@ -179,19 +183,6 @@ function glassTheme(theme) {
 }
 
 /** @param {Record<string, unknown> | null | undefined} tm */
-function chronoRestantSecondes(tm) {
-  if (!tm || typeof tm.totalSec !== "number") return null;
-  if (!tm.running || tm.isPaused) {
-    return typeof tm.remainingSec === "number" ? tm.remainingSec : null;
-  }
-  if (typeof tm.startedAt !== "string") return tm.remainingSec ?? null;
-  const seg = Math.floor(
-    (Date.now() - new Date(tm.startedAt).getTime()) / 1000,
-  );
-  const acc = typeof tm.accumulatedSec === "number" ? tm.accumulatedSec : 0;
-  return Math.max(0, tm.totalSec - acc - seg);
-}
-
 function contestEligibleCountFromPoll(poll) {
   const opts = Array.isArray(poll?.options) ? poll.options : [];
   const triggerId = String(poll?.leadTriggerOptionId || "");
@@ -291,6 +282,11 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
   const loadPollAbortRef = useRef(null);
   const finChronoRefetchEffectueRef = useRef(false);
   const panelFadeSkipRef = useRef(true);
+  const chronoClockSlotRef = useRef({
+    offsetMs: 0,
+    serverNow: /** @type {string | null} */ (null),
+    startedAt: /** @type {string | null} */ (null),
+  });
   const pollId = poll?.id ?? null;
   const isTestMode = poll?.eventIsLiveConsumed === false;
 
@@ -498,7 +494,11 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
 
   const secondesChronoVote = useMemo(() => {
     void chronoTick;
-    return chronoRestantSecondes(chronometreApi ?? null);
+    const offset = syncQuestionTimerClockOffset(
+      chronometreApi ?? null,
+      chronoClockSlotRef.current,
+    );
+    return chronoRestantSecondes(chronometreApi ?? null, Date.now(), offset);
   }, [chronometreApi, chronoTick]);
 
   const ds = displayState ?? deriveDisplayFromLive(liveScene);
