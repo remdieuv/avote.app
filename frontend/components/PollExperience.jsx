@@ -11,7 +11,11 @@ import {
 import { flushSync } from "react-dom";
 import { io } from "socket.io-client";
 import { getOrCreateVoterSessionId } from "@/lib/votes/voter-session";
-import { formatCountdownVerbose } from "@/lib/chronoFormat";
+import {
+  chronoRestantSecondes,
+  formatCountdownVerbose,
+  syncQuestionTimerClockOffset,
+} from "@/lib/chronoFormat";
 import {
   buildJoinRoomShellStyle,
   createJoinRoomPalette,
@@ -282,19 +286,6 @@ function CarteVoteTermineAttenteResultats({
 }
 
 /** @param {Record<string, unknown> | null | undefined} tm */
-function chronoRestantSecondes(tm) {
-  if (!tm || typeof tm.totalSec !== "number") return null;
-  if (!tm.running || tm.isPaused) {
-    return typeof tm.remainingSec === "number" ? tm.remainingSec : null;
-  }
-  if (typeof tm.startedAt !== "string") return tm.remainingSec ?? null;
-  const seg = Math.floor(
-    (Date.now() - new Date(tm.startedAt).getTime()) / 1000,
-  );
-  const acc = typeof tm.accumulatedSec === "number" ? tm.accumulatedSec : 0;
-  return Math.max(0, tm.totalSec - acc - seg);
-}
-
 /**
  * @param {{
  *   getPollUrl: () => string;
@@ -412,6 +403,11 @@ export function PollExperience({
   /** Invalide les réponses GET périmées (y compris silent) face à poll_updated / snapshot Join. */
   const loadPollGenerationRef = useRef(0);
   const finChronoRefetchEffectueRef = useRef(false);
+  const chronoClockSlotRef = useRef({
+    offsetMs: 0,
+    serverNow: /** @type {string | null} */ (null),
+    startedAt: /** @type {string | null} */ (null),
+  });
   const pollId = poll?.id ?? null;
 
   const loadEventMetaForBranding = useCallback(async () => {
@@ -903,7 +899,11 @@ export function PollExperience({
 
   const secondesChronoVote = useMemo(() => {
     void chronoTick;
-    return chronoRestantSecondes(chronometreApi ?? null);
+    const offset = syncQuestionTimerClockOffset(
+      chronometreApi ?? null,
+      chronoClockSlotRef.current,
+    );
+    return chronoRestantSecondes(chronometreApi ?? null, Date.now(), offset);
   }, [chronometreApi, chronoTick]);
 
   useEffect(() => {

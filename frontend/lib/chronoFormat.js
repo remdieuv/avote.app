@@ -2,6 +2,81 @@
 export const QUESTION_TIMER_MAX_SEC = 90 * 24 * 60 * 60;
 
 /**
+ * Offset horloge client − serveur (ms) au moment `nowMs`.
+ * Positif = client en avance sur le serveur.
+ * À figer via `syncQuestionTimerClockOffset` à la réception du snapshot
+ * (ne pas recalculer à chaque tick avec le même `serverNow`).
+ *
+ * @param {{ serverNow?: string | null } | null | undefined} tm
+ * @param {number} [nowMs]
+ */
+export function resolveQuestionTimerClockOffsetMs(tm, nowMs = Date.now()) {
+  if (!tm || typeof tm.serverNow !== "string") return 0;
+  const serverMs = Date.parse(tm.serverNow);
+  if (!Number.isFinite(serverMs)) return 0;
+  return nowMs - serverMs;
+}
+
+/**
+ * Figé l’offset tant que `serverNow` / `startedAt` du snapshot n’ont pas changé.
+ *
+ * @param {{
+ *   serverNow?: string | null;
+ *   startedAt?: string | null;
+ * } | null | undefined} tm
+ * @param {{
+ *   offsetMs: number;
+ *   serverNow: string | null;
+ *   startedAt: string | null;
+ * }} slot
+ * @param {number} [nowMs]
+ * @returns {number}
+ */
+export function syncQuestionTimerClockOffset(tm, slot, nowMs = Date.now()) {
+  const sn = typeof tm?.serverNow === "string" ? tm.serverNow : null;
+  const sa = typeof tm?.startedAt === "string" ? tm.startedAt : null;
+  if (sn !== slot.serverNow || sa !== slot.startedAt) {
+    slot.serverNow = sn;
+    slot.startedAt = sa;
+    slot.offsetMs = resolveQuestionTimerClockOffsetMs(tm, nowMs);
+  }
+  return slot.offsetMs;
+}
+
+/**
+ * Secondes restantes affichables (régie, Screen, overlay, salle).
+ * En running : aligne via `clockOffsetMs` (dérivé de `serverNow`) pour éviter
+ * d’ajouter des secondes si l’horloge client est en retard sur le serveur.
+ *
+ * @param {{
+ *   totalSec?: number | null;
+ *   remainingSec?: number | null;
+ *   accumulatedSec?: number | null;
+ *   startedAt?: string | null;
+ *   serverNow?: string | null;
+ *   running?: boolean;
+ *   isPaused?: boolean;
+ * } | null | undefined} tm
+ * @param {number} [nowMs]
+ * @param {number} [clockOffsetMs] clientNow − serverNow figé au snapshot
+ * @returns {number | null}
+ */
+export function chronoRestantSecondes(tm, nowMs = Date.now(), clockOffsetMs = 0) {
+  if (!tm || typeof tm.totalSec !== "number") return null;
+  if (!tm.running || tm.isPaused) {
+    return typeof tm.remainingSec === "number" ? tm.remainingSec : null;
+  }
+  if (typeof tm.startedAt !== "string") return tm.remainingSec ?? null;
+  const startedMs = Date.parse(tm.startedAt);
+  if (!Number.isFinite(startedMs)) return tm.remainingSec ?? null;
+  const offset = Number.isFinite(clockOffsetMs) ? clockOffsetMs : 0;
+  const nowServerApprox = nowMs - offset;
+  const seg = Math.max(0, Math.floor((nowServerApprox - startedMs) / 1000));
+  const acc = typeof tm.accumulatedSec === "number" ? tm.accumulatedSec : 0;
+  return Math.max(0, tm.totalSec - acc - seg);
+}
+
+/**
  * Compte à rebours lisible (régie, projection).
  * Ex. 90 j → "90 j 00:00:00", 3 h → "3:00:00", 2 min → "02:00"
  * @param {number | null | undefined} secondes
