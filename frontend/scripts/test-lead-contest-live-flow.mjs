@@ -9,6 +9,7 @@ import {
   CONTEST_WINNER_SELF_CONGRATS,
   CONTEST_WINNER_STATUS_ACTIVE,
   CONTEST_WINNER_STATUS_REPLACED,
+  LEAD_COLLECTION_CLOSED_MESSAGE,
   LEAD_SUBMIT_SUCCESS_MESSAGE,
   activeContestWinnersWithinQuota,
   buildPublicContestStatusFromWinners,
@@ -19,6 +20,7 @@ import {
   filterActiveContestWinners,
   formatPublicContestWinnerDisplayName,
   getContestParticipantPhaseLabel,
+  getLeadClosedParticipantMessage,
   getLeadContestClosedAwaitingLabel,
   getRegieResultsProjectionLabel,
   isContestEntryPoll,
@@ -30,6 +32,7 @@ import {
   shouldOfferShowResultsInPrimaryPath,
   shouldScheduleAutoRevealForPoll,
   shouldShowClosedAwaitingResultsCard,
+  shouldShowJoinHistoriqueResultsLink,
   shouldShowLeadCaptureForm,
   shouldShowPublicResponseDistribution,
   toPublicContestWinnerPayload,
@@ -220,7 +223,56 @@ test("Draft Lead serialisation (refresh)", () => {
 test("Correctifs QA : messages Lead / Concours + régie", () => {
   assert.equal(
     LEAD_SUBMIT_SUCCESS_MESSAGE,
-    "Merci, tes coordonnées ont bien été enregistrées.",
+    "Merci, votre réponse a bien été enregistrée.",
+  );
+  assert.equal(LEAD_COLLECTION_CLOSED_MESSAGE, "Collecte terminée");
+  assert.equal(
+    getLeadClosedParticipantMessage({
+      leadEnabled: true,
+      pollType: "SINGLE_CHOICE",
+      leadSubmitted: true,
+    }),
+    LEAD_SUBMIT_SUCCESS_MESSAGE,
+  );
+  assert.equal(
+    getLeadClosedParticipantMessage({
+      leadEnabled: true,
+      pollType: "SINGLE_CHOICE",
+      leadSubmitted: false,
+    }),
+    LEAD_COLLECTION_CLOSED_MESSAGE,
+  );
+  assert.equal(
+    getLeadClosedParticipantMessage({ pollType: "SINGLE_CHOICE" }),
+    null,
+  );
+  assert.ok(
+    !/résultats arrivent bientôt/i.test(
+      getLeadClosedParticipantMessage({
+        leadEnabled: true,
+        pollType: "QUIZ",
+        leadSubmitted: false,
+      }) || "",
+    ),
+  );
+  assert.equal(
+    shouldShowJoinHistoriqueResultsLink({
+      leadEnabled: true,
+      pollType: "SINGLE_CHOICE",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldShowJoinHistoriqueResultsLink({ pollType: "SINGLE_CHOICE" }),
+    true,
+  );
+  assert.equal(
+    shouldShowJoinHistoriqueResultsLink({ pollType: "QUIZ" }),
+    true,
+  );
+  assert.equal(
+    shouldShowJoinHistoriqueResultsLink({ pollType: "CONTEST_ENTRY" }),
+    true,
   );
   assert.equal(
     shouldShowClosedAwaitingResultsCard({

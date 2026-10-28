@@ -698,8 +698,15 @@ export function getParticipantFormNotice(input = {}) {
  * Source exclusive : `pastPolls` API — ne jamais préfixer la question active
  * (une copie jamais lancée a pastPolls=[] même si activePollId pointe Q1 ACTIVE).
  *
+ * Conserve `type` / `leadEnabled` quand l’API les expose (récap Lead vs résultats).
+ *
  * @param {unknown} pastPolls
- * @returns {{ id: string; label: string }[]}
+ * @returns {{
+ *   id: string;
+ *   label: string;
+ *   type?: string | null;
+ *   leadEnabled?: boolean;
+ * }[]}
  */
 export function resolveJoinHistoriqueQuestions(pastPolls) {
   if (!Array.isArray(pastPolls)) return [];
@@ -714,8 +721,27 @@ export function resolveJoinHistoriqueQuestions(pastPolls) {
         String(/** @type {{ label: string }} */ (x).label).trim(),
     )
     .map((x) => {
-      const row = /** @type {{ id: string; label: string }} */ (x);
-      return { id: row.id.trim(), label: row.label.trim() };
+      const row =
+        /** @type {{
+         *   id: string;
+         *   label: string;
+         *   type?: unknown;
+         *   leadEnabled?: unknown;
+         * }} */ (x);
+      /** @type {{
+       *   id: string;
+       *   label: string;
+       *   type?: string | null;
+       *   leadEnabled?: boolean;
+       * }} */
+      const out = { id: row.id.trim(), label: row.label.trim() };
+      if (typeof row.type === "string" && row.type.trim()) {
+        out.type = row.type.trim();
+      }
+      if (typeof row.leadEnabled === "boolean") {
+        out.leadEnabled = row.leadEnabled;
+      }
+      return out;
     });
 }
 

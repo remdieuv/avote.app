@@ -248,11 +248,16 @@ export function isScreenQuizAnswerRevealed(poll) {
  * Prioritaire sur ds=WAITING après Fermer (display WAITING + autoRevealShowResultsAt).
  * B indépendant : ne pas forcer — garder Attente / Question / Noir / Résultats choisis.
  *
+ * Si poll CLOSED dispo : préférer ScreenQuestion (Q+R + bandeau VOTE TERMINÉ +
+ * décompte en footer) — pas la scène countdown seule (C1).
+ *
  * @param {{
  *   pendingAutoReveal?: boolean;
  *   displayState?: string | null;
  *   screenId?: string | null;
  *   independent?: boolean;
+ *   uxState?: string | null;
+ *   hasPoll?: boolean;
  * }} [input]
  */
 export function shouldRenderScreenAutoRevealWait(input = {}) {
@@ -265,6 +270,15 @@ export function shouldRenderScreenAutoRevealWait(input = {}) {
     .trim()
     .toLowerCase();
   if (sid === "b" && input.independent === true) return false;
+  /** C1 — garder question + réponses sur CLOSED plutôt que la scène countdown. */
+  if (
+    input.hasPoll === true &&
+    String(input.uxState ?? "")
+      .trim()
+      .toUpperCase() === "CLOSED"
+  ) {
+    return false;
+  }
   return true;
 }
 

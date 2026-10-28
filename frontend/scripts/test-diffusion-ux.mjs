@@ -469,7 +469,40 @@ assert.equal(getScreenDiffusionLabel("RESULTS"), "RÉSULTATS");
     }),
     false,
   );
-  console.log("ok  Screen auto-reveal countdown vs WAITING / B indep");
+  assert.equal(
+    shouldRenderScreenAutoRevealWait({
+      pendingAutoReveal: true,
+      displayState: "waiting",
+      screenId: "a",
+      uxState: "CLOSED",
+      hasPoll: true,
+    }),
+    false,
+    "C1 — CLOSED + poll → garder ScreenQuestion (pas scène countdown seule)",
+  );
+  assert.equal(
+    shouldRenderScreenAutoRevealWait({
+      pendingAutoReveal: true,
+      displayState: "waiting",
+      screenId: "a",
+      uxState: "CLOSED",
+      hasPoll: false,
+    }),
+    true,
+    "CLOSED sans poll → countdown plein écran toujours possible",
+  );
+  assert.equal(
+    shouldRenderScreenAutoRevealWait({
+      pendingAutoReveal: true,
+      displayState: "waiting",
+      screenId: "a",
+      uxState: "WAITING",
+      hasPoll: true,
+    }),
+    true,
+    "WAITING + poll + pending → décompte (≠ CLOSED)",
+  );
+  console.log("ok  Screen auto-reveal countdown vs WAITING / B indep / C1 CLOSED");
 }
 assert.notEqual(
   getScreenDiffusionLabel("CLOSED"),
