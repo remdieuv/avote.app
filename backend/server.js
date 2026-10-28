@@ -2194,12 +2194,18 @@ app.get("/events/slug/:slug", async (req, res) => {
     const pollsOrdered = await prisma.poll.findMany({
       where: { eventId: eventApres.id },
       orderBy: { order: "asc" },
-      select: { id: true, question: true, title: true },
+      select: {
+        id: true,
+        question: true,
+        title: true,
+        type: true,
+        leadEnabled: true,
+      },
     });
     const pollsTotal = pollsOrdered.length;
     /** @type {{ current: number; total: number } | null} */
     let pollsProgress = null;
-    /** @type {{ id: string; label: string }[]} */
+    /** @type {{ id: string; label: string; type: string; leadEnabled: boolean }[]} */
     const pastPolls = [];
     if (eventApres.activePollId && pollsTotal > 0) {
       const idx = pollsOrdered.findIndex((x) => x.id === eventApres.activePollId);
@@ -2211,7 +2217,12 @@ app.get("/events/slug/:slug", async (req, res) => {
             (row.question && row.question.trim()) ||
             (row.title && row.title.trim()) ||
             `Question ${i + 1}`;
-          pastPolls.push({ id: row.id, label });
+          pastPolls.push({
+            id: row.id,
+            label,
+            type: String(row.type || ""),
+            leadEnabled: Boolean(row.leadEnabled),
+          });
         }
       }
     } else if (pollsTotal > 0 && String(eventApres.liveState || "").toLowerCase() === "finished") {
@@ -2222,7 +2233,12 @@ app.get("/events/slug/:slug", async (req, res) => {
           (row.question && row.question.trim()) ||
           (row.title && row.title.trim()) ||
           `Question ${i + 1}`;
-        pastPolls.push({ id: row.id, label });
+        pastPolls.push({
+          id: row.id,
+          label,
+          type: String(row.type || ""),
+          leadEnabled: Boolean(row.leadEnabled),
+        });
       }
     }
     const pastPollLabels = pastPolls.map((p) => p.label);

@@ -42,6 +42,7 @@ import { PollExperience } from "@/components/PollExperience";
 import {
   leadDraftStorageKey,
   leadSubmittedStorageKey,
+  shouldShowJoinHistoriqueResultsLink,
 } from "@/lib/leadContestLiveFlow";
 import {
   clearParticipantRepetitionMarkers,
@@ -332,7 +333,17 @@ export function JoinLiveHub({ slug }) {
             typeof x.label === "string" &&
             x.label.trim(),
         )
-        .map((x) => ({ id: x.id.trim(), label: x.label.trim() }));
+        .map((x) => {
+          /** @type {{ id: string; label: string; type?: string; leadEnabled?: boolean }} */
+          const row = { id: x.id.trim(), label: x.label.trim() };
+          if (typeof x.type === "string" && x.type.trim()) {
+            row.type = x.type.trim();
+          }
+          if (typeof x.leadEnabled === "boolean") {
+            row.leadEnabled = x.leadEnabled;
+          }
+          return row;
+        });
       pastPollIdsRef.current = nextPast.map((p) => p.id);
       setPastPolls(nextPast);
     } else {
@@ -1542,7 +1553,11 @@ export function JoinLiveHub({ slug }) {
                     <span style={{ display: "block", marginBottom: "0.22rem" }}>
                       {p.label}
                     </span>
-                    {p.id !== "__active__" ? (
+                    {p.id !== "__active__" &&
+                    shouldShowJoinHistoriqueResultsLink({
+                      pollType: p.type,
+                      leadEnabled: p.leadEnabled,
+                    }) ? (
                       <Link
                         href={`/p/${encodeURIComponent(slug)}?poll=${encodeURIComponent(p.id)}`}
                         style={{
@@ -1632,7 +1647,11 @@ export function JoinLiveHub({ slug }) {
                     <span style={{ display: "block", marginBottom: "0.3rem" }}>
                       {p.label}
                     </span>
-                    {p.id !== "__active__" ? (
+                    {p.id !== "__active__" &&
+                    shouldShowJoinHistoriqueResultsLink({
+                      pollType: p.type,
+                      leadEnabled: p.leadEnabled,
+                    }) ? (
                       <Link
                         href={`/p/${encodeURIComponent(slug)}?poll=${encodeURIComponent(p.id)}`}
                         style={{

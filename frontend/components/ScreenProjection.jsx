@@ -1302,6 +1302,8 @@ export function ScreenProjection({
       displayState: ds,
       screenId: normalizedScreenId,
       independent: screenBIndependent,
+      uxState: projectionPres.ux,
+      hasPoll: Boolean(poll),
     })
   ) {
     const autoAccent = `color-mix(in srgb, #14b8a6 50%, ${roomTopAccent})`;
@@ -1375,7 +1377,7 @@ export function ScreenProjection({
     );
   }
 
-  /** CLOSED : question + options visibles, sans résultats. */
+  /** CLOSED : question + options visibles, sans résultats ni QR participation. */
   if (projectionPres.ux === "CLOSED" && poll) {
     const shellVote = {
       ...shell,
@@ -1400,6 +1402,11 @@ export function ScreenProjection({
         joinSlug={slugPublic}
         questionProgress={questionProgress}
         closedBannerLabel={closedBannerLabel}
+        autoRevealUntilIso={
+          enAttenteAutoReveal && typeof autoRevealUntilIso === "string"
+            ? autoRevealUntilIso
+            : null
+        }
         qrScale={isModeQrFullscreen ? 2 : isModeXlargeQr ? 1.35 : isModeResultsFocus ? 1.42 : 1}
         compactQuestionText={isModeQrFullscreen || isModeXlargeQr}
         fullScreenQr={isModeQrFullscreen}

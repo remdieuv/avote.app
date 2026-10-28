@@ -1015,6 +1015,26 @@ test("Copie jamais lancée (dup A→B) → WAITING, pas vote confirmé, pas ques
     ]),
     [{ id: "past-1", label: "Question déjà jouée" }],
   );
+  assert.deepEqual(
+    resolveJoinHistoriqueQuestions([
+      {
+        id: "lead-1",
+        label: "Lead Q",
+        type: "SINGLE_CHOICE",
+        leadEnabled: true,
+      },
+      { id: "quiz-1", label: "Quiz Q", type: "QUIZ", leadEnabled: false },
+    ]),
+    [
+      {
+        id: "lead-1",
+        label: "Lead Q",
+        type: "SINGLE_CHOICE",
+        leadEnabled: true,
+      },
+      { id: "quiz-1", label: "Quiz Q", type: "QUIZ", leadEnabled: false },
+    ],
+  );
   assert.deepEqual(resolveJoinHistoriqueQuestions(null), []);
   assert.deepEqual(resolveJoinHistoriqueQuestions(undefined), []);
 });

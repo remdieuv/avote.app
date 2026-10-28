@@ -75,9 +75,12 @@ import {
   CONTEST_AWAITING_DRAW_LABEL,
   CONTEST_PUBLIC_WINNERS_ANNOUNCE_TITLE,
   CONTEST_WINNER_SELF_CONGRATS,
+  LEAD_COLLECTION_CLOSED_MESSAGE,
   LEAD_SUBMIT_SUCCESS_MESSAGE,
   canSubmitLeadCapture,
   getContestParticipantPhaseLabel,
+  getLeadClosedParticipantMessage,
+  isLeadCrmPoll,
   leadDraftStorageKey,
   leadSubmittedStorageKey,
   shouldShowClosedAwaitingResultsCard,
@@ -1862,16 +1865,45 @@ export function PollExperience({
   const votingLabel = getLiveStateLabel(LIVE_UX_STATE.VOTING);
   const voteTakenLabel = LIVE_UX_LABEL_VOTE_CONFIRMED;
   const hasVotedLocal = Boolean(merciPourVote || aDejaVoteEnStockage);
+  const isLeadCrm = isLeadCrmPoll({
+    pollType: poll?.type,
+    leadEnabled: Boolean(poll?.leadEnabled),
+  });
+  /**
+   * C2 — Lead fermé : jamais « Les résultats arrivent bientôt ».
+   * Soumis → confirmation ; sinon « Collecte terminée » (sauf form encore ouvert).
+   */
+  const leadClosedMessage = isLeadCrm
+    ? getLeadClosedParticipantMessage({
+        pollType: poll?.type,
+        leadEnabled: true,
+        leadSubmitted: leadSuccess,
+      })
+    : null;
+  const participantStateTitle =
+    pollUxPres.ux === LIVE_UX_STATE.CLOSED && isLeadCrm
+      ? leadSuccess
+        ? LEAD_SUBMIT_SUCCESS_MESSAGE
+        : showLeadForm
+          ? hasVotedLocal
+            ? voteTakenLabel
+            : "Vote fermé"
+          : LEAD_COLLECTION_CLOSED_MESSAGE
+      : pollUxPres.title;
   /**
    * Strip : masqué en VOTING après vote (Merci dans le bloc principal).
    * CLOSED : titre d’état ; Merci uniquement sur la carte.
+   * Lead fermé (succès ou collecte terminée) : strip masqué — message unique corps.
    */
-  const topUxLabel = resolveParticipantTopStripLabel({
-    hasVoted: hasVotedLocal,
-    voteOuvert,
-    voteConfirmedLabel: voteTakenLabel,
-    stateTitle: pollUxPres.title,
-  });
+  const topUxLabel =
+    isLeadCrm && !voteOuvert && (leadSuccess || !showLeadForm)
+      ? null
+      : resolveParticipantTopStripLabel({
+          hasVoted: hasVotedLocal,
+          voteOuvert,
+          voteConfirmedLabel: voteTakenLabel,
+          stateTitle: participantStateTitle,
+        });
 
   const pollUxTone = getLiveStateTone(pollUxPres.ux);
   const pollVisualTokens = useMemo(
@@ -2441,11 +2473,16 @@ export function PollExperience({
             </p>
           )}
 
-          {(merciPourVote || showLeadForm || leadSuccess) && (
+          {(merciPourVote ||
+            showLeadForm ||
+            leadSuccess ||
+            (isLeadCrm && !voteOuvert && !showLeadForm)) && (
             <>
               {(merciPourVote || aDejaVoteEnStockage) &&
               !showLeadForm &&
               !leadSuccess &&
+              // Lead fermé : message « Collecte terminée » (pas Merci vote seul).
+              !(isLeadCrm && !voteOuvert) &&
               // Carte décompte auto-reveal porte déjà la confirmation.
               !(attenteProjectionResultats && pendingAutoRevealCountdown) ? (
               <p
@@ -2477,6 +2514,27 @@ export function PollExperience({
                   }}
                 >
                   {LEAD_SUBMIT_SUCCESS_MESSAGE}
+                </p>
+              ) : null}
+              {isLeadCrm &&
+              !voteOuvert &&
+              !showLeadForm &&
+              !leadSuccess ? (
+                <p
+                  style={{
+                    marginBottom: "1rem",
+                    padding: "0.75rem 1rem",
+                    background: isDark
+                      ? "rgba(51, 65, 85, 0.45)"
+                      : "rgba(241, 245, 249, 0.95)",
+                    borderRadius: "12px",
+                    border: `1px solid ${palette.cardBorder}`,
+                    color: palette.fg,
+                    fontWeight: 600,
+                  }}
+                  role="status"
+                >
+                  {leadClosedMessage || LEAD_COLLECTION_CLOSED_MESSAGE}
                 </p>
               ) : null}
               {showLeadForm &&

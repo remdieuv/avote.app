@@ -219,7 +219,10 @@ export const CONTEST_WINNER_SELF_CONGRATS =
 
 /** Confirmation unique après envoi du formulaire Lead / Concours. */
 export const LEAD_SUBMIT_SUCCESS_MESSAGE =
-  "Merci, tes coordonnées ont bien été enregistrées.";
+  "Merci, votre réponse a bien été enregistrée.";
+
+/** Lead fermé sans formulaire soumis — neutre, jamais « résultats bientôt ». */
+export const LEAD_COLLECTION_CLOSED_MESSAGE = "Collecte terminée";
 
 /** Concours — avant tirage (participant / Screen CLOSED). */
 export const CONTEST_AWAITING_DRAW_LABEL = "Tirage au sort à venir";
@@ -233,6 +236,33 @@ export const CONTEST_DRAW_DONE_LABEL = "Tirage terminé";
  * @param {{ pollType?: string | null; leadEnabled?: boolean | null }} input
  */
 export function shouldShowClosedAwaitingResultsCard(input = {}) {
+  if (isLeadCrmPoll(input)) return false;
+  return true;
+}
+
+/**
+ * Message participant quand une question Lead est fermée.
+ * Formulaire soumis → confirmation ; sinon « Collecte terminée ».
+ * Ne jamais renvoyer « Les résultats arrivent bientôt ».
+ * @param {{
+ *   pollType?: string | null;
+ *   leadEnabled?: boolean | null;
+ *   leadSubmitted?: boolean;
+ * }} input
+ * @returns {string | null} `null` si ce n’est pas une question Lead CRM
+ */
+export function getLeadClosedParticipantMessage(input = {}) {
+  if (!isLeadCrmPoll(input)) return null;
+  if (input.leadSubmitted === true) return LEAD_SUBMIT_SUCCESS_MESSAGE;
+  return LEAD_COLLECTION_CLOSED_MESSAGE;
+}
+
+/**
+ * Récap /join : lien « Voir les résultats » — jamais pour Lead CRM
+ * (pas de barres publiques). Concours / sondage / quiz : oui.
+ * @param {{ pollType?: string | null; leadEnabled?: boolean | null }} input
+ */
+export function shouldShowJoinHistoriqueResultsLink(input = {}) {
   if (isLeadCrmPoll(input)) return false;
   return true;
 }

@@ -18,6 +18,7 @@ import {
   screenOptionLetter,
   sortScreenOptions,
 } from "@/lib/diffusionUx";
+import { formatAutoRevealCountdownLabel } from "@/lib/participantLiveFlow";
 import { useEventMode } from "@/lib/useEventMode";
 
 /**
@@ -102,6 +103,7 @@ function BlocQrSecondaire({ slug }) {
  *   joinSlug: string | null | undefined;
  *   questionProgress?: { current: number; total: number } | null;
  *   closedBannerLabel?: string | null;
+ *   autoRevealUntilIso?: string | null;
  *   qrScale?: number;
  *   compactQuestionText?: boolean;
  *   fullScreenQr?: boolean;
@@ -117,6 +119,7 @@ export function ScreenQuestion({
   joinSlug,
   questionProgress = null,
   closedBannerLabel = null,
+  autoRevealUntilIso = null,
   qrScale = 1,
   compactQuestionText = false,
   fullScreenQr = false,
@@ -165,12 +168,26 @@ export function ScreenQuestion({
   const quizRevealedClosed =
     !voteOuvert && isScreenQuizAnswerRevealed(poll);
 
+  /** C1 — décompte auto-reveal en footer, sans remplacer question + réponses. */
+  const autoRevealCountdownSec = useMemo(() => {
+    void chronoTick;
+    if (voteOuvert) return null;
+    if (typeof autoRevealUntilIso !== "string" || !autoRevealUntilIso.trim()) {
+      return null;
+    }
+    const t = new Date(autoRevealUntilIso).getTime();
+    if (Number.isNaN(t)) return null;
+    return Math.max(0, Math.ceil((t - Date.now()) / 1000));
+  }, [autoRevealUntilIso, chronoTick, voteOuvert]);
+
   const closedAwaitLabel = !voteOuvert
-    ? getScreenClosedAwaitingResultsLabel({
-        quizAnswerRevealed: quizRevealedClosed,
-        pollType: poll?.type,
-        leadEnabled: poll?.leadEnabled,
-      })
+    ? typeof autoRevealCountdownSec === "number"
+      ? formatAutoRevealCountdownLabel(autoRevealCountdownSec)
+      : getScreenClosedAwaitingResultsLabel({
+          quizAnswerRevealed: quizRevealedClosed,
+          pollType: poll?.type,
+          leadEnabled: poll?.leadEnabled,
+        })
     : null;
 
   const progressLabel = formatScreenQuestionProgressLabel(
