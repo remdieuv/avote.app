@@ -101,6 +101,33 @@ export function getTelecommandeVoteToggle(input = {}) {
 }
 
 /**
+ * Action chrono Télécommande (Démarrer / Pause / Reprendre) — mêmes flags régie.
+ * Mutuellement exclusifs ; pas d’Activer / Régler / Désactiver ici.
+ * @param {{
+ *   demarrer?: boolean;
+ *   pause?: boolean;
+ *   reprendre?: boolean;
+ * } | null | undefined} controls
+ * @returns {{
+ *   action: 'demarrer' | 'pause' | 'reprendre' | null;
+ *   label: string;
+ *   enabled: boolean;
+ * }}
+ */
+export function getTelecommandeChronoAction(controls = {}) {
+  if (controls?.pause) {
+    return { action: "pause", label: "Pause", enabled: true };
+  }
+  if (controls?.reprendre) {
+    return { action: "reprendre", label: "Reprendre", enabled: true };
+  }
+  if (controls?.demarrer) {
+    return { action: "demarrer", label: "Démarrer", enabled: true };
+  }
+  return { action: null, label: "Chrono", enabled: false };
+}
+
+/**
  * Bouton « Question suivante » (next-poll prioritaire, sinon skip).
  * @param {{
  *   canGoNext?: boolean;

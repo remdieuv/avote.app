@@ -6,9 +6,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { getRegieChronoControlFlags } from "../lib/chronoFormat.js";
 import {
   buildRegieModeHref,
   confirmTelecommandeFinish,
+  getTelecommandeChronoAction,
   getTelecommandeConnectionStatus,
   getTelecommandeNextAction,
   getTelecommandeVoteToggle,
@@ -109,6 +111,26 @@ test("Next — next-poll prioritaire sur skip", () => {
   );
 });
 
+test("Chrono télécommande — Démarrer / Pause / Reprendre via flags régie", () => {
+  assert.deepEqual(
+    getTelecommandeChronoAction(getRegieChronoControlFlags("stopped")),
+    { action: "demarrer", label: "Démarrer", enabled: true },
+  );
+  assert.deepEqual(
+    getTelecommandeChronoAction(getRegieChronoControlFlags("running")),
+    { action: "pause", label: "Pause", enabled: true },
+  );
+  assert.deepEqual(
+    getTelecommandeChronoAction(getRegieChronoControlFlags("paused")),
+    { action: "reprendre", label: "Reprendre", enabled: true },
+  );
+  assert.equal(
+    getTelecommandeChronoAction(getRegieChronoControlFlags("inactive"))
+      .enabled,
+    false,
+  );
+});
+
 test("Confirm Terminer exige le mot TERMINER", () => {
   assert.equal(
     confirmTelecommandeFinish({
@@ -147,7 +169,7 @@ test("Query full=1 et href mode", () => {
   );
 });
 
-test("Composant T-E1 expose les 4 actions + Régie complète", () => {
+test("Composant T-E1 expose les 4 actions + chrono + Régie complète", () => {
   assert.match(componentSrc, /data-testid="regie-telecommande"/);
   assert.match(componentSrc, /Télécommande/);
   assert.match(componentSrc, /Régie complète/);
@@ -156,22 +178,50 @@ test("Composant T-E1 expose les 4 actions + Régie complète", () => {
   assert.match(componentSrc, /Liste des questions/);
   assert.match(componentSrc, /telecommande-connection/);
   assert.match(componentSrc, /telecommande-chrono/);
+  assert.match(componentSrc, /telecommande-chrono-action/);
   assert.match(componentSrc, /getTelecommandeConnectionStatus/);
   assert.match(componentSrc, /IconNext|IconQr|IconFinish|IconVote/);
+  assert.match(componentSrc, /chronoAction/);
+  assert.match(componentSrc, /onChronoAction/);
+  assert.doesNotMatch(componentSrc, /Passer en live réel/);
+  assert.doesNotMatch(componentSrc, /Aucune activation disponible/);
+  assert.doesNotMatch(componentSrc, /canStartReal|onStartReal|startRealHint/);
   assert.doesNotMatch(componentSrc, /Projection avancée/);
   assert.doesNotMatch(componentSrc, /BlocProjectionEcran/);
   assert.doesNotMatch(componentSrc, /auto-rotate|autoRotate/i);
+  // Viewport mobile : colonne unique bornée (~390–430 px)
+  assert.match(componentSrc, /maxWidth:\s*"28rem"/);
+  assert.match(componentSrc, /width:\s*"100%"/);
+  assert.match(componentSrc, /safe-area-inset/);
 });
 
-test("page.jsx branche le chrome télécommande sans route dédiée", () => {
+test("page.jsx branche chrono télécommande ; live réel hors chrome T-E1", () => {
   assert.match(pageSrc, /shouldUseTelecommandeChrome/);
   assert.match(pageSrc, /RegieTelecommande/);
   assert.match(pageSrc, /openMobileFullRegie/);
   assert.match(pageSrc, /mobileFullRegie/);
   assert.match(pageSrc, /socketConnected=\{socketConnected\}/);
   assert.match(pageSrc, /socketReconnecting=\{socketReconnecting\}/);
+  assert.match(pageSrc, /getTelecommandeChronoAction/);
+  assert.match(pageSrc, /runTelecommandeChrono/);
+  assert.match(pageSrc, /chronoAction=\{telecommandeChronoAction\}/);
+  assert.match(pageSrc, /onChronoAction=\{runTelecommandeChrono\}/);
   assert.match(pageSrc, /PanneauQrParticipant/);
+  assert.match(pageSrc, /Passer en live réel/);
+  assert.match(
+    pageSrc,
+    /!String\(actionError\)\.includes\("Aucune activation disponible"\)/,
+  );
   assert.doesNotMatch(pageSrc, /admin\/event\/\[eventId\]\/remote/);
+  // Live réel + hint activation uniquement hors branche RegieTelecommande
+  const teleBlock = pageSrc.match(
+    /useTelecommandeChrome \? \(\s*<RegieTelecommande[\s\S]*?\) : null/,
+  );
+  assert.ok(teleBlock, "bloc RegieTelecommande introuvable");
+  assert.doesNotMatch(teleBlock[0], /Passer en live réel/);
+  assert.doesNotMatch(teleBlock[0], /onStartReal=/);
+  assert.doesNotMatch(teleBlock[0], /startRealHint=/);
+  assert.doesNotMatch(teleBlock[0], /canStartReal=/);
 });
 
 if (failed > 0) {
