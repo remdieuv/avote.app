@@ -118,6 +118,15 @@ import {
   buildSkipPollRequestBody,
   getRegieSkipQuestionState,
 } from "@/lib/regieSkipQuestion";
+import {
+  buildRegieModeHref,
+  confirmTelecommandeFinish,
+  getTelecommandeNextAction,
+  getTelecommandeVoteToggle,
+  readForceFullRegieFromSearch,
+  shouldUseTelecommandeChrome,
+} from "@/lib/regieTelecommande";
+import { RegieTelecommande } from "@/components/admin/RegieTelecommande";
 
 const VOTE_STATE_LABELS = {
   open: "Vote ouvert",
@@ -4913,6 +4922,13 @@ export default function RegieEventPage() {
   const eventId =
     typeof rawId === "string" ? rawId : Array.isArray(rawId) ? rawId[0] : null;
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setMobileFullRegie(
+      readForceFullRegieFromSearch(window.location.search),
+    );
+  }, [eventId]);
+
   const [eventData, setEventData] = useState(null);
   const [eventCredits, setEventCredits] = useState(/** @type {number | null} */ (null));
   const [activationsAvailable, setActivationsAvailable] = useState(
@@ -4931,6 +4947,11 @@ export default function RegieEventPage() {
   /** Tick 1 s — décompte Pilotage depuis Event.autoRevealShowResultsAt. */
   const [autoRevealTick, setAutoRevealTick] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  /** Mobile &lt;1024 : `?full=1` ou lien « Régie complète » → chrome régie dense. */
+  const [mobileFullRegie, setMobileFullRegie] = useState(false);
+  const [telecommandeQrOpen, setTelecommandeQrOpen] = useState(false);
+  const [telecommandeQuestionsOpen, setTelecommandeQuestionsOpen] =
+    useState(false);
   /** Aperçu /join intégré (desktop split) — persistant par événement */
   const [previewJoinOpen, setPreviewJoinOpen] = useState(false);
   const [mobileJoinPreviewOpen, setMobileJoinPreviewOpen] = useState(false);
@@ -7264,6 +7285,144 @@ export default function RegieEventPage() {
     setSelectedPollId(String(pollId || "") || null);
   }, []);
 
+  const useTelecommandeChrome = shouldUseTelecommandeChrome({
+    desktop,
+    forceFullRegie: mobileFullRegie,
+  });
+
+  const telecommandeVoteToggle = getTelecommandeVoteToggle({
+    canOpenVote,
+    canCloseVote,
+    canShowResults: canShowResultsForActive,
+    canDraw: canRunPrimaryDraw,
+    openLabel: openVoteButtonCopy.label,
+    closeLabel: "Fermer le vote",
+    showResultsLabel: getRegiePrimaryLiveActionLabel("show-results", {
+      pendingAutoReveal: pendingAutoRevealRegie,
+    }),
+    drawLabel: "Tirer au sort",
+  });
+
+  const telecommandeNextAction = getTelecommandeNextAction({
+    canGoNext,
+    canSkip: skipQuestionState.canSkip && !canGoNext,
+    skipLabel: skipQuestionState.buttonLabel || "Question suivante",
+    isLastQuestion: skipQuestionState.isLastQuestion,
+  });
+
+  const openMobileFullRegie = useCallback(() => {
+    setMobileFullRegie(true);
+    setTelecommandeQrOpen(false);
+    setTelecommandeQuestionsOpen(false);
+    if (typeof window === "undefined") return;
+    const next = buildRegieModeHref(window.location.href, true);
+    window.history.replaceState({}, "", next);
+  }, []);
+
+  const openMobileTelecommande = useCallback(() => {
+    setMobileFullRegie(false);
+    setMenuOpen(false);
+    if (typeof window === "undefined") return;
+    const next = buildRegieModeHref(window.location.href, false);
+    window.history.replaceState({}, "", next);
+  }, []);
+
+  const runTelecommandeVoteToggle = useCallback(async () => {
+    if (busy || !telecommandeVoteToggle.enabled) return;
+    const action = telecommandeVoteToggle.action;
+    if (action === "open") {
+      if (!activePollIdJs || !canOpenVote) return;
+      await postAction(`/polls/${activePollIdJs}/open`, "Vote ouvert");
+      return;
+    }
+    if (action === "close") {
+      if (!activePollIdJs || !canCloseVote) return;
+      await postAction(`/polls/${activePollIdJs}/close`, "Vote ferme");
+      return;
+    }
+    if (action === "show-results") {
+      if (!activePollIdJs || !canShowResultsForActive) return;
+      await postAction(
+        `/polls/${activePollIdJs}/show-results`,
+        "Resultats affiches",
+      );
+      return;
+    }
+    if (action === "draw") {
+      if (!canRunPrimaryDraw) return;
+      setContestDrawModalOpen(true);
+    }
+  }, [
+    busy,
+    telecommandeVoteToggle.enabled,
+    telecommandeVoteToggle.action,
+    activePollIdJs,
+    canOpenVote,
+    canCloseVote,
+    canShowResultsForActive,
+    canRunPrimaryDraw,
+    postAction,
+  ]);
+
+  const runTelecommandeNext = useCallback(async () => {
+    if (busy || !telecommandeNextAction.enabled) return;
+    if (telecommandeNextAction.mode === "next") {
+      if (!canGoNext) return;
+      await postAction(
+        `/events/${eventId}/next-poll`,
+        "Question suivante diffusee",
+      );
+      return;
+    }
+    if (telecommandeNextAction.mode === "skip") {
+      await handleSkipQuestion();
+    }
+  }, [
+    busy,
+    telecommandeNextAction.enabled,
+    telecommandeNextAction.mode,
+    canGoNext,
+    eventId,
+    postAction,
+    handleSkipQuestion,
+  ]);
+
+  const runTelecommandeFinish = useCallback(async () => {
+    if (busy || eventFinished || !allowedLiveActions.finish) return;
+    if (!confirmTelecommandeFinish()) return;
+    await postAction(`/events/${eventId}/finish`, "Evenement termine");
+  }, [busy, eventFinished, allowedLiveActions.finish, eventId, postAction]);
+
+  const telecommandeQuestions = useMemo(
+    () =>
+      pollsOrdonnes.map((poll, index) => ({
+        id: String(poll.id),
+        title: String(poll.question || poll.title || "Question"),
+        numberLabel: getRegieQuestionNumberLabel(index, pollsOrdonnes.length),
+        isActive: String(poll.id) === String(eventData?.activePollId || ""),
+        statusLabel: getRegiePollStatusLabel({
+          pollStatus: poll.status,
+          isActive: String(poll.id) === String(eventData?.activePollId || ""),
+          voteState:
+            String(poll.id) === String(eventData?.activePollId || "")
+              ? voteStateUi
+              : null,
+          displayState:
+            String(poll.id) === String(eventData?.activePollId || "")
+              ? projectionDisplayStateUi
+              : null,
+          pollType: poll.type,
+          leadEnabled: poll.leadEnabled,
+        }),
+      })),
+    [
+      pollsOrdonnes,
+      eventData?.activePollId,
+      voteStateUi,
+      projectionDisplayStateUi,
+    ],
+  );
+
   const handlePlaylistMove = useCallback(
     async (pollId, direction) => {
       if (!eventId || busy || eventLocked) return;
@@ -7802,7 +7961,7 @@ export default function RegieEventPage() {
           {error}
         </p>
       ) : null}
-      {actionError ? (
+      {actionError && !useTelecommandeChrome ? (
         <div
           style={{
             margin: "0 1rem 0.35rem",
@@ -8917,7 +9076,75 @@ export default function RegieEventPage() {
         </div>
       ) : null}
 
-      {shouldRenderRegieEventBody({ eventData, loading }) && (
+      {shouldRenderRegieEventBody({ eventData, loading }) &&
+      useTelecommandeChrome ? (
+        <RegieTelecommande
+          title={eventData.title}
+          modeBadge={modeBadge}
+          voteLabel={voteLabel}
+          voteIsOpen={voteIsOpen}
+          stateLabel={stateLabel}
+          participantsCounterLabel={participantsCounterLabel}
+          questionProgressSummary={questionProgressSummary}
+          activeQuestionTitle={activeQuestionTitle}
+          participationText={
+            activePoll
+              ? `${activeParticipationCount} ${activeParticipationUnit}`
+              : "Aucune question à l’antenne"
+          }
+          chronoText={chronoEtatLiveTexte}
+          chronoEnabled={chronoEnabled}
+          voteToggle={telecommandeVoteToggle}
+          onVoteToggle={() => void runTelecommandeVoteToggle()}
+          nextAction={telecommandeNextAction}
+          onNext={() => void runTelecommandeNext()}
+          finishEnabled={
+            !busy && !eventFinished && Boolean(allowedLiveActions.finish)
+          }
+          onFinish={() => void runTelecommandeFinish()}
+          onShowQr={() => setTelecommandeQrOpen(true)}
+          onOpenQuestions={() => setTelecommandeQuestionsOpen(true)}
+          onOpenFullRegie={openMobileFullRegie}
+          actionError={actionError}
+          busy={busy}
+          questionsSheetOpen={telecommandeQuestionsOpen}
+          onCloseQuestions={() => setTelecommandeQuestionsOpen(false)}
+          questions={telecommandeQuestions}
+          onSelectQuestion={(id) => {
+            handleSelectPlaylistPoll(id);
+            setTelecommandeQuestionsOpen(false);
+          }}
+          qrSheetOpen={telecommandeQrOpen}
+          onCloseQr={() => setTelecommandeQrOpen(false)}
+          qrChildren={
+            eventData.slug ? (
+              <PanneauQrParticipant
+                slug={eventData.slug}
+                liveState={liveState}
+                stateLabel={stateLabel}
+                variant="mobile"
+                sceneBadge={sceneBadge}
+              />
+            ) : (
+              <p style={{ margin: 0, color: "#64748b" }}>
+                Slug événement indisponible.
+              </p>
+            )
+          }
+          inTestMode={inTestMode}
+          canStartReal={canStartReal}
+          startRealDisabled={startRealDisabled}
+          onStartReal={handleStartRealClick}
+          startRealHint={
+            inTestMode && !canStartRealWithActivation
+              ? "Aucune activation disponible — ouvrez la régie complète ou Pricing."
+              : null
+          }
+        />
+      ) : null}
+
+      {shouldRenderRegieEventBody({ eventData, loading }) &&
+      !useTelecommandeChrome ? (
         <div
           style={
             desktop
@@ -9043,6 +9270,47 @@ export default function RegieEventPage() {
                   }}
                   newLeadCount={newLeadCount}
                 />
+                {mobileFullRegie ? (
+                  <div
+                    style={{
+                      ...CARD,
+                      padding: "0.55rem 0.85rem",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "0.5rem",
+                      background: "#f0fdfa",
+                      borderColor: "#99f6e4",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "0.78rem",
+                        fontWeight: 700,
+                        color: "#0f766e",
+                      }}
+                    >
+                      Régie complète (mobile)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={openMobileTelecommande}
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        padding: 0,
+                        fontSize: "0.78rem",
+                        fontWeight: 800,
+                        color: "#0f766e",
+                        textDecoration: "underline",
+                        textUnderlineOffset: "3px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Télécommande
+                    </button>
+                  </div>
+                ) : null}
                 <header
                   style={{
                     ...CARD,
