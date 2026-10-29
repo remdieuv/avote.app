@@ -121,6 +121,7 @@ import {
 import {
   buildRegieModeHref,
   confirmTelecommandeFinish,
+  getTelecommandeChronoAction,
   getTelecommandeNextAction,
   getTelecommandeVoteToggle,
   readForceFullRegieFromSearch,
@@ -7678,6 +7679,34 @@ export default function RegieEventPage() {
   const chronoRunningHint = getRegieChronoRunningHint(tm);
   const chronoControlMode = getRegieChronoControlMode(tm);
   const chronoControls = getRegieChronoControlFlags(chronoControlMode);
+  const telecommandeChronoAction = getTelecommandeChronoAction(chronoControls);
+
+  function runTelecommandeChrono() {
+    if (busy || !telecommandeChronoAction.enabled) return;
+    if (telecommandeChronoAction.action === "pause") {
+      void postQuestionTimer({ action: "pause" });
+      return;
+    }
+    if (telecommandeChronoAction.action === "reprendre") {
+      void postQuestionTimer({ action: "start" });
+      return;
+    }
+    if (telecommandeChronoAction.action === "demarrer") {
+      const total =
+        typeof tm?.totalSec === "number" && tm.totalSec > 0
+          ? tm.totalSec
+          : presetChronoSec;
+      if (total < 1) {
+        setActionError("Indique au moins 1 seconde.");
+        return;
+      }
+      void postQuestionTimer({
+        action: "start",
+        totalSec: total,
+      });
+    }
+  }
+
   /** Durée « live » seulement si le chrono est armé/actif côté serveur. */
   const secondesChronoActif =
     secondesChrono !== null
@@ -9094,6 +9123,8 @@ export default function RegieEventPage() {
           }
           chronoText={chronoEtatLiveTexte}
           chronoEnabled={chronoEnabled}
+          chronoAction={telecommandeChronoAction}
+          onChronoAction={runTelecommandeChrono}
           socketConnected={socketConnected}
           socketReconnecting={socketReconnecting}
           voteToggle={telecommandeVoteToggle}
@@ -9107,7 +9138,12 @@ export default function RegieEventPage() {
           onShowQr={() => setTelecommandeQrOpen(true)}
           onOpenQuestions={() => setTelecommandeQuestionsOpen(true)}
           onOpenFullRegie={openMobileFullRegie}
-          actionError={actionError}
+          actionError={
+            actionError &&
+            !String(actionError).includes("Aucune activation disponible")
+              ? actionError
+              : null
+          }
           busy={busy}
           questionsSheetOpen={telecommandeQuestionsOpen}
           onCloseQuestions={() => setTelecommandeQuestionsOpen(false)}
@@ -9132,15 +9168,6 @@ export default function RegieEventPage() {
                 Slug événement indisponible.
               </p>
             )
-          }
-          inTestMode={inTestMode}
-          canStartReal={canStartReal}
-          startRealDisabled={startRealDisabled}
-          onStartReal={handleStartRealClick}
-          startRealHint={
-            inTestMode && !canStartRealWithActivation
-              ? "Aucune activation disponible — ouvrez la régie complète ou Pricing."
-              : null
           }
         />
       ) : null}

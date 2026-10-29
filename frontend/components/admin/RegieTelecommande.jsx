@@ -101,6 +101,25 @@ function IconFinish() {
   );
 }
 
+function IconChronoPlay() {
+  return (
+    <TeleIcon>
+      <circle cx="12" cy="12" r="9" />
+      <polygon points="10,8 16,12 10,16" fill="currentColor" stroke="none" />
+    </TeleIcon>
+  );
+}
+
+function IconChronoPause() {
+  return (
+    <TeleIcon>
+      <circle cx="12" cy="12" r="9" />
+      <rect x="9" y="8" width="2.5" height="8" fill="currentColor" stroke="none" />
+      <rect x="12.5" y="8" width="2.5" height="8" fill="currentColor" stroke="none" />
+    </TeleIcon>
+  );
+}
+
 /**
  * @param {{
  *   title: string;
@@ -114,6 +133,8 @@ function IconFinish() {
  *   participationText: string;
  *   chronoText: string;
  *   chronoEnabled?: boolean;
+ *   chronoAction?: { label: string; enabled: boolean; action?: string | null };
+ *   onChronoAction?: () => void;
  *   socketConnected?: boolean;
  *   socketReconnecting?: boolean;
  *   voteToggle: { label: string; enabled: boolean };
@@ -140,11 +161,6 @@ function IconFinish() {
  *   qrSheetOpen?: boolean;
  *   onCloseQr?: () => void;
  *   qrChildren?: import("react").ReactNode;
- *   inTestMode?: boolean;
- *   canStartReal?: boolean;
- *   startRealDisabled?: boolean;
- *   onStartReal?: () => void;
- *   startRealHint?: string | null;
  * }} props
  */
 export function RegieTelecommande({
@@ -159,6 +175,8 @@ export function RegieTelecommande({
   participationText,
   chronoText,
   chronoEnabled = false,
+  chronoAction = { label: "Chrono", enabled: false, action: null },
+  onChronoAction,
   socketConnected = false,
   socketReconnecting = false,
   voteToggle,
@@ -179,11 +197,6 @@ export function RegieTelecommande({
   qrSheetOpen = false,
   onCloseQr,
   qrChildren = null,
-  inTestMode = false,
-  canStartReal = false,
-  startRealDisabled = true,
-  onStartReal,
-  startRealHint = null,
 }) {
   const connection = getTelecommandeConnectionStatus({
     connected: socketConnected,
@@ -340,38 +353,6 @@ export function RegieTelecommande({
         </div>
       </section>
 
-      {inTestMode && canStartReal && typeof onStartReal === "function" ? (
-        <button
-          type="button"
-          disabled={startRealDisabled || busy}
-          onClick={onStartReal}
-          style={{
-            ...btnBase,
-            borderColor: "#86efac",
-            background: "linear-gradient(180deg, #22c55e 0%, #16a34a 100%)",
-            color: "#fff",
-            opacity: startRealDisabled || busy ? 0.55 : 1,
-            cursor: startRealDisabled || busy ? "not-allowed" : "pointer",
-            minHeight: "2.6rem",
-            fontSize: "0.9rem",
-          }}
-        >
-          Passer en live réel
-        </button>
-      ) : null}
-      {inTestMode && startRealHint ? (
-        <p
-          style={{
-            margin: 0,
-            fontSize: "0.75rem",
-            fontWeight: 600,
-            color: "#92400e",
-          }}
-        >
-          {startRealHint}
-        </p>
-      ) : null}
-
       <section
         style={{
           borderRadius: "16px",
@@ -429,35 +410,67 @@ export function RegieTelecommande({
               : "#f8fafc",
             padding: "0.65rem 0.8rem",
             display: "grid",
-            gap: "0.12rem",
-            justifyItems: "start",
+            gap: "0.45rem",
           }}
         >
-          <span
-            style={{
-              fontSize: "0.68rem",
-              fontWeight: 800,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              color: chronoEnabled ? "#0f766e" : "#94a3b8",
-            }}
-          >
-            Chrono{chronoEnabled ? "" : " · inactif"}
-          </span>
-          <span
-            style={{
-              fontFamily:
-                "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-              fontVariantNumeric: "tabular-nums",
-              fontSize: "1.55rem",
-              fontWeight: 800,
-              letterSpacing: "-0.03em",
-              lineHeight: 1.15,
-              color: chronoEnabled ? "#0f172a" : "#94a3b8",
-            }}
-          >
-            {chronoText}
-          </span>
+          <div style={{ display: "grid", gap: "0.12rem", justifyItems: "start" }}>
+            <span
+              style={{
+                fontSize: "0.68rem",
+                fontWeight: 800,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                color: chronoEnabled ? "#0f766e" : "#94a3b8",
+              }}
+            >
+              Chrono{chronoEnabled ? "" : " · inactif"}
+            </span>
+            <span
+              style={{
+                fontFamily:
+                  "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                fontVariantNumeric: "tabular-nums",
+                fontSize: "1.55rem",
+                fontWeight: 800,
+                letterSpacing: "-0.03em",
+                lineHeight: 1.15,
+                color: chronoEnabled ? "#0f172a" : "#94a3b8",
+              }}
+            >
+              {chronoText}
+            </span>
+          </div>
+          {chronoAction?.enabled && typeof onChronoAction === "function" ? (
+            <button
+              type="button"
+              data-testid="telecommande-chrono-action"
+              disabled={busy}
+              onClick={onChronoAction}
+              style={{
+                ...btnBase,
+                minHeight: "2.55rem",
+                fontSize: "0.92rem",
+                borderColor:
+                  chronoAction.action === "pause"
+                    ? "#cbd5e1"
+                    : "rgba(13, 148, 136, 0.45)",
+                background:
+                  chronoAction.action === "pause"
+                    ? "linear-gradient(180deg, #fff 0%, #f8fafc 100%)"
+                    : "linear-gradient(180deg, #14b8a6 0%, #0d9488 100%)",
+                color: chronoAction.action === "pause" ? "#0f172a" : "#fff",
+                cursor: busy ? "not-allowed" : "pointer",
+                opacity: busy ? 0.65 : 1,
+              }}
+            >
+              {chronoAction.action === "pause" ? (
+                <IconChronoPause />
+              ) : (
+                <IconChronoPlay />
+              )}
+              <span>{chronoAction.label}</span>
+            </button>
+          ) : null}
         </div>
       </section>
 
