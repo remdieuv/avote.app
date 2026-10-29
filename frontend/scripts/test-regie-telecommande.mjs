@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import {
   buildRegieModeHref,
   confirmTelecommandeFinish,
+  getTelecommandeConnectionStatus,
   getTelecommandeNextAction,
   getTelecommandeVoteToggle,
   readForceFullRegieFromSearch,
@@ -50,6 +51,23 @@ test("Chrome télécommande si mobile et pas full", () => {
   assert.equal(
     shouldUseTelecommandeChrome({ desktop: false, forceFullRegie: true }),
     false,
+  );
+});
+
+test("Indicateur connexion — Connecté / Connexion en cours / Déconnecté", () => {
+  assert.equal(
+    getTelecommandeConnectionStatus({ connected: true }).label,
+    "Connecté",
+  );
+  assert.equal(
+    getTelecommandeConnectionStatus({ reconnecting: true }).label,
+    "Connexion en cours",
+  );
+  assert.equal(getTelecommandeConnectionStatus({}).label, "Déconnecté");
+  assert.equal(
+    getTelecommandeConnectionStatus({ connected: true, reconnecting: true })
+      .key,
+    "connected",
   );
 });
 
@@ -136,6 +154,10 @@ test("Composant T-E1 expose les 4 actions + Régie complète", () => {
   assert.match(componentSrc, /Afficher QR/);
   assert.match(componentSrc, /Terminer…/);
   assert.match(componentSrc, /Liste des questions/);
+  assert.match(componentSrc, /telecommande-connection/);
+  assert.match(componentSrc, /telecommande-chrono/);
+  assert.match(componentSrc, /getTelecommandeConnectionStatus/);
+  assert.match(componentSrc, /IconNext|IconQr|IconFinish|IconVote/);
   assert.doesNotMatch(componentSrc, /Projection avancée/);
   assert.doesNotMatch(componentSrc, /BlocProjectionEcran/);
   assert.doesNotMatch(componentSrc, /auto-rotate|autoRotate/i);
@@ -146,6 +168,8 @@ test("page.jsx branche le chrome télécommande sans route dédiée", () => {
   assert.match(pageSrc, /RegieTelecommande/);
   assert.match(pageSrc, /openMobileFullRegie/);
   assert.match(pageSrc, /mobileFullRegie/);
+  assert.match(pageSrc, /socketConnected=\{socketConnected\}/);
+  assert.match(pageSrc, /socketReconnecting=\{socketReconnecting\}/);
   assert.match(pageSrc, /PanneauQrParticipant/);
   assert.doesNotMatch(pageSrc, /admin\/event\/\[eventId\]\/remote/);
 });

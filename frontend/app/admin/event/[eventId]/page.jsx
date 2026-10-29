@@ -9094,6 +9094,8 @@ export default function RegieEventPage() {
           }
           chronoText={chronoEtatLiveTexte}
           chronoEnabled={chronoEnabled}
+          socketConnected={socketConnected}
+          socketReconnecting={socketReconnecting}
           voteToggle={telecommandeVoteToggle}
           onVoteToggle={() => void runTelecommandeVoteToggle()}
           nextAction={telecommandeNextAction}

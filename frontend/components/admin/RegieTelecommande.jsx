@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { getTelecommandeConnectionStatus } from "@/lib/regieTelecommande";
 
 /**
  * LOT-4 / P5 — Surface Télécommande live (T-E1 + sheets QR / questions).
@@ -17,7 +18,88 @@ const btnBase = {
   letterSpacing: "0.01em",
   boxSizing: "border-box",
   border: "1px solid transparent",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "0.55rem",
 };
+
+/** @param {{ children: import("react").ReactNode; title?: string }} props */
+function TeleIcon({ children, title }) {
+  return (
+    <span
+      aria-hidden={title ? undefined : true}
+      title={title}
+      style={{
+        display: "inline-flex",
+        width: "1.15rem",
+        height: "1.15rem",
+        flexShrink: 0,
+        opacity: 0.92,
+      }}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        width="100%"
+        height="100%"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {children}
+      </svg>
+    </span>
+  );
+}
+
+function IconVoteOpen() {
+  return (
+    <TeleIcon>
+      <circle cx="12" cy="12" r="9" />
+      <polygon points="10,8 16,12 10,16" fill="currentColor" stroke="none" />
+    </TeleIcon>
+  );
+}
+
+function IconVoteClose() {
+  return (
+    <TeleIcon>
+      <circle cx="12" cy="12" r="9" />
+      <rect x="8" y="8" width="8" height="8" rx="1" fill="currentColor" stroke="none" />
+    </TeleIcon>
+  );
+}
+
+function IconNext() {
+  return (
+    <TeleIcon>
+      <polyline points="9,6 15,12 9,18" />
+      <polyline points="14,6 20,12 14,18" />
+    </TeleIcon>
+  );
+}
+
+function IconQr() {
+  return (
+    <TeleIcon>
+      <rect x="4" y="4" width="7" height="7" rx="1" />
+      <rect x="13" y="4" width="7" height="7" rx="1" />
+      <rect x="4" y="13" width="7" height="7" rx="1" />
+      <path d="M14 14h2v2h-2zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z" />
+    </TeleIcon>
+  );
+}
+
+function IconFinish() {
+  return (
+    <TeleIcon>
+      <path d="M6 4v16" />
+      <path d="M6 5h10l-2 3 2 3H6" />
+    </TeleIcon>
+  );
+}
 
 /**
  * @param {{
@@ -32,6 +114,8 @@ const btnBase = {
  *   participationText: string;
  *   chronoText: string;
  *   chronoEnabled?: boolean;
+ *   socketConnected?: boolean;
+ *   socketReconnecting?: boolean;
  *   voteToggle: { label: string; enabled: boolean };
  *   onVoteToggle: () => void;
  *   nextAction: { label: string; enabled: boolean };
@@ -75,6 +159,8 @@ export function RegieTelecommande({
   participationText,
   chronoText,
   chronoEnabled = false,
+  socketConnected = false,
+  socketReconnecting = false,
   voteToggle,
   onVoteToggle,
   nextAction,
@@ -99,6 +185,12 @@ export function RegieTelecommande({
   onStartReal,
   startRealHint = null,
 }) {
+  const connection = getTelecommandeConnectionStatus({
+    connected: socketConnected,
+    reconnecting: socketReconnecting,
+  });
+  const voteIcon = voteIsOpen ? <IconVoteClose /> : <IconVoteOpen />;
+
   return (
     <div
       data-testid="regie-telecommande"
@@ -214,6 +306,13 @@ export function RegieTelecommande({
               border: voteIsOpen ? "#86efac" : "#cbd5e1",
             },
             {
+              label: connection.label,
+              color: connection.color,
+              bg: connection.bg,
+              border: connection.border,
+              testId: "telecommande-connection",
+            },
+            {
               label: participantsCounterLabel,
               color: "#1e3a8a",
               bg: "rgba(255,255,255,0.82)",
@@ -222,6 +321,7 @@ export function RegieTelecommande({
           ].map((pill) => (
             <span
               key={pill.label}
+              data-testid={pill.testId}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -279,7 +379,7 @@ export function RegieTelecommande({
           background: "#fff",
           padding: "0.9rem 1rem",
           display: "grid",
-          gap: "0.35rem",
+          gap: "0.45rem",
         }}
       >
         <p
@@ -307,7 +407,7 @@ export function RegieTelecommande({
         </h2>
         <p
           style={{
-            margin: "0.15rem 0 0 0",
+            margin: "0.05rem 0 0 0",
             fontSize: "0.9rem",
             fontWeight: 700,
             color: "#334155",
@@ -315,17 +415,50 @@ export function RegieTelecommande({
         >
           {participationText}
         </p>
-        <p
+        <div
+          data-testid="telecommande-chrono"
+          aria-label="Chrono"
           style={{
-            margin: 0,
-            fontSize: "0.82rem",
-            fontWeight: 700,
-            color: chronoEnabled ? "#0f766e" : "#94a3b8",
-            fontVariantNumeric: "tabular-nums",
+            marginTop: "0.2rem",
+            borderRadius: "12px",
+            border: chronoEnabled
+              ? "1px solid rgba(13, 148, 136, 0.35)"
+              : "1px solid #e2e8f0",
+            background: chronoEnabled
+              ? "linear-gradient(180deg, #f0fdfa 0%, #ccfbf1 100%)"
+              : "#f8fafc",
+            padding: "0.65rem 0.8rem",
+            display: "grid",
+            gap: "0.12rem",
+            justifyItems: "start",
           }}
         >
-          Chrono · {chronoText}
-        </p>
+          <span
+            style={{
+              fontSize: "0.68rem",
+              fontWeight: 800,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              color: chronoEnabled ? "#0f766e" : "#94a3b8",
+            }}
+          >
+            Chrono{chronoEnabled ? "" : " · inactif"}
+          </span>
+          <span
+            style={{
+              fontFamily:
+                "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+              fontVariantNumeric: "tabular-nums",
+              fontSize: "1.55rem",
+              fontWeight: 800,
+              letterSpacing: "-0.03em",
+              lineHeight: 1.15,
+              color: chronoEnabled ? "#0f172a" : "#94a3b8",
+            }}
+          >
+            {chronoText}
+          </span>
+        </div>
       </section>
 
       {actionError ? (
@@ -368,7 +501,8 @@ export function RegieTelecommande({
             opacity: voteToggle.enabled ? 1 : 0.65,
           }}
         >
-          {voteToggle.label}
+          {voteIcon}
+          <span>{voteToggle.label}</span>
         </button>
 
         <button
@@ -386,7 +520,8 @@ export function RegieTelecommande({
             opacity: nextAction.enabled ? 1 : 0.65,
           }}
         >
-          {nextAction.label}
+          <IconNext />
+          <span>{nextAction.label}</span>
         </button>
 
         <button
@@ -400,7 +535,8 @@ export function RegieTelecommande({
             cursor: "pointer",
           }}
         >
-          Afficher QR
+          <IconQr />
+          <span>Afficher QR</span>
         </button>
 
         <button
@@ -417,7 +553,8 @@ export function RegieTelecommande({
             fontSize: "0.92rem",
           }}
         >
-          Terminer…
+          <IconFinish />
+          <span>Terminer…</span>
         </button>
       </div>
 

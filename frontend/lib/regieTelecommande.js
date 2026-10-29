@@ -12,6 +12,45 @@ export function shouldUseTelecommandeChrome(input = {}) {
 }
 
 /**
+ * Indicateur connexion socket (libellés Télécommande).
+ * @param {{ connected?: boolean; reconnecting?: boolean }} input
+ * @returns {{
+ *   key: 'connected' | 'connecting' | 'disconnected';
+ *   label: string;
+ *   color: string;
+ *   bg: string;
+ *   border: string;
+ * }}
+ */
+export function getTelecommandeConnectionStatus(input = {}) {
+  if (input.connected === true) {
+    return {
+      key: "connected",
+      label: "Connecté",
+      color: "#166534",
+      bg: "#dcfce7",
+      border: "#86efac",
+    };
+  }
+  if (input.reconnecting === true) {
+    return {
+      key: "connecting",
+      label: "Connexion en cours",
+      color: "#92400e",
+      bg: "#fef3c7",
+      border: "#fcd34d",
+    };
+  }
+  return {
+    key: "disconnected",
+    label: "Déconnecté",
+    color: "#991b1b",
+    bg: "#fee2e2",
+    border: "#fecaca",
+  };
+}
+
+/**
  * Bouton primaire Ouvrir/Fermer (étendu aux étapes Afficher / Tirage du parcours live).
  * @param {{
  *   canOpenVote?: boolean;
