@@ -34,6 +34,7 @@ import {
   resolveParticipantTopStripLabel,
   shouldAutoNavigateJoinToPollPath,
   shouldEmbedPollSurfaceInRoom,
+  resolveJoinSocketOnlineTransition,
   shouldJoinApplySocketLiveAxesImmediately,
   shouldJoinSocketJoinActivePoll,
   shouldClearPollLoadingAfterFetch,
@@ -41,6 +42,7 @@ import {
   shouldPollFetchEventMetaBranding,
   shouldPollOpenOwnSocket,
   shouldPollRenderOfflineBanner,
+  shouldShowJoinOfflineBanner,
   shouldShowActiveVotingInstruction,
   shouldPollShowStandaloneArchiveResults,
   shouldShowParticipantFullUi,
@@ -320,6 +322,70 @@ test("OFFLINE libellé + préavis types", () => {
   assert.equal(
     getParticipantFormNotice({ pollType: "MULTIPLE_CHOICE" }),
     null,
+  );
+});
+
+test("Join socketOnline : refresh / connect / coupure / reconnexion", () => {
+  // Refresh : création socket sans forcer false (pas de flash).
+  assert.equal(
+    resolveJoinSocketOnlineTransition(null, "socket_created"),
+    null,
+  );
+  assert.equal(
+    shouldShowJoinOfflineBanner({ socketOnline: null, loading: false }),
+    false,
+  );
+  assert.equal(
+    shouldShowJoinOfflineBanner({ socketOnline: null, loading: true }),
+    false,
+  );
+
+  // Connect OK.
+  const online = resolveJoinSocketOnlineTransition(null, "connect");
+  assert.equal(online, true);
+  assert.equal(
+    shouldShowJoinOfflineBanner({ socketOnline: online, loading: false }),
+    false,
+  );
+
+  // Coupure réseau (vraie déconnexion).
+  const offline = resolveJoinSocketOnlineTransition(online, "disconnect");
+  assert.equal(offline, false);
+  assert.equal(
+    shouldShowJoinOfflineBanner({ socketOnline: offline, loading: false }),
+    true,
+  );
+  // Pendant loading meta : pas de bandeau même si offline connu.
+  assert.equal(
+    shouldShowJoinOfflineBanner({ socketOnline: offline, loading: true }),
+    false,
+  );
+
+  // Reconnexion.
+  const reonline = resolveJoinSocketOnlineTransition(offline, "connect");
+  assert.equal(reonline, true);
+  assert.equal(
+    shouldShowJoinOfflineBanner({ socketOnline: reonline, loading: false }),
+    false,
+  );
+
+  // connect_error (serveur injoignable dès l’init) → avertissement utile.
+  assert.equal(
+    resolveJoinSocketOnlineTransition(null, "connect_error"),
+    false,
+  );
+  assert.equal(
+    shouldShowJoinOfflineBanner({
+      socketOnline: resolveJoinSocketOnlineTransition(null, "connect_error"),
+      loading: false,
+    }),
+    true,
+  );
+
+  // Ancien anti-pattern : false prématuré ≡ bandeau flash — documenté comme non-voulu.
+  assert.equal(
+    shouldShowJoinOfflineBanner({ socketOnline: false, loading: false }),
+    true,
   );
 });
 
@@ -1403,6 +1469,21 @@ test("G15. JoinLiveHub source : pas de triple Merci FINISHED", () => {
 
   // Eyebrow conditionnellement masqué en FINISHED.
   assert.match(src, /!isFinishedUx\s*\?/);
+});
+
+test("JoinLiveHub source : pas de setSocketOnline(false) prématuré + connect_error", () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, "../components/JoinLiveHub.jsx"), "utf8");
+
+  assert.equal(
+    /else\s+setSocketOnline\(\s*false\s*\)/.test(src),
+    false,
+    "ne pas forcer false juste après io()",
+  );
+  assert.match(src, /resolveJoinSocketOnlineTransition/);
+  assert.match(src, /shouldShowJoinOfflineBanner/);
+  assert.match(src, /connect_error/);
+  assert.match(src, /socket_created/);
 });
 
 let failed = 0;

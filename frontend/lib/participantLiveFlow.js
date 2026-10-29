@@ -210,6 +210,37 @@ export function shouldPollRenderOfflineBanner(input = {}) {
 }
 
 /**
+ * Transitions `socketOnline` Join (`null` = init, pas encore de verdict).
+ * Ne force jamais `false` à la création du client — sinon flash « Connexion interrompue » au refresh.
+ *
+ * @param {boolean | null | undefined} prev
+ * @param {'socket_created' | 'connect' | 'disconnect' | 'connect_error'} event
+ * @returns {boolean | null}
+ */
+export function resolveJoinSocketOnlineTransition(prev, event) {
+  const cur = prev === true || prev === false ? prev : null;
+  switch (event) {
+    case "socket_created":
+      return cur;
+    case "connect":
+      return true;
+    case "disconnect":
+    case "connect_error":
+      return false;
+    default:
+      return cur;
+  }
+}
+
+/**
+ * Bandeau OFFLINE `/join` : uniquement offline **connu** (`false`), jamais pendant init (`null`).
+ * @param {{ socketOnline?: boolean | null; loading?: boolean }} input
+ */
+export function shouldShowJoinOfflineBanner(input = {}) {
+  return input.socketOnline === false && !input.loading;
+}
+
+/**
  * Meta branding slug déjà portée par Join — inutile en embedded.
  * @param {{ embedded?: boolean }} input
  */

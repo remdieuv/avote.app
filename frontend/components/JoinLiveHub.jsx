@@ -28,9 +28,11 @@ import {
   getParticipantOfflineLabel,
   resolveJoinFinishedCardContent,
   resolveJoinHistoriqueQuestions,
+  resolveJoinSocketOnlineTransition,
   shouldEmbedPollSurfaceInRoom,
   shouldJoinApplySocketLiveAxesImmediately,
   shouldJoinSocketJoinActivePoll,
+  shouldShowJoinOfflineBanner,
   shouldShowParticipantFullUi,
 } from "@/lib/participantLiveFlow";
 import {
@@ -592,7 +594,9 @@ export function JoinLiveHub({ slug }) {
     }
 
     function onConnect() {
-      setSocketOnline(true);
+      setSocketOnline((prev) =>
+        resolveJoinSocketOnlineTransition(prev, "connect"),
+      );
       socket.emit("join_event", eventId);
       syncPollRoom(activePollIdRef.current);
       setLiveSyncRevision((n) => n + 1);
@@ -600,7 +604,16 @@ export function JoinLiveHub({ slug }) {
     }
 
     function onDisconnect() {
-      setSocketOnline(false);
+      setSocketOnline((prev) =>
+        resolveJoinSocketOnlineTransition(prev, "disconnect"),
+      );
+    }
+
+    /** Échec handshake / serveur injoignable — offline connu (pas un délai cosmétique). */
+    function onConnectError() {
+      setSocketOnline((prev) =>
+        resolveJoinSocketOnlineTransition(prev, "connect_error"),
+      );
     }
 
     /** @param {any} payload */
@@ -720,8 +733,14 @@ export function JoinLiveHub({ slug }) {
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
+    socket.on("connect_error", onConnectError);
+    // Init : rester à null tant que ni connect ni erreur — ne pas forcer false (flash bandeau).
     if (socket.connected) onConnect();
-    else setSocketOnline(false);
+    else {
+      setSocketOnline((prev) =>
+        resolveJoinSocketOnlineTransition(prev, "socket_created"),
+      );
+    }
     socket.on("event_live_updated", onEventLive);
     socket.on("poll_updated", onPollUpdated);
     socket.on("event:customization_updated", onCustomizationUpdated);
@@ -733,6 +752,7 @@ export function JoinLiveHub({ slug }) {
       socket.emit("leave_event", eventId);
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
+      socket.off("connect_error", onConnectError);
       socket.off("event_live_updated", onEventLive);
       socket.off("poll_updated", onPollUpdated);
       socket.off("event:customization_updated", onCustomizationUpdated);
@@ -828,7 +848,10 @@ export function JoinLiveHub({ slug }) {
     isLocked,
     uxState: scene,
   });
-  const isOffline = socketOnline === false;
+  const showOfflineBanner = shouldShowJoinOfflineBanner({
+    socketOnline,
+    loading,
+  });
 
   /** Vote / confirmation / CLOSED / RESULTS — dans la Salle, sans quitter `/join`. */
   const embedPollSurface = shouldEmbedPollSurfaceInRoom({
@@ -1388,7 +1411,7 @@ export function JoinLiveHub({ slug }) {
       </ExperienceHeader>
 
       <div className="join-live-zone" style={zoneMain}>
-        {isOffline && !loading ? (
+        {showOfflineBanner ? (
           <div
             role="status"
             style={{
