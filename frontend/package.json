@@ -19,6 +19,7 @@
     "test:contest-replace": "node ../backend/scripts/test-contest-winner-replace.mjs",
     "test:regie-desktop": "node scripts/test-regie-desktop-layout.mjs",
     "test:regie-telecommande": "node scripts/test-regie-telecommande.mjs",
+    "test:telecommande-qr": "node scripts/test-telecommande-qr.mjs",
     "test:admin-widths": "node scripts/test-admin-desktop-widths.mjs",
     "test:marketing-widths": "node scripts/test-marketing-desktop-widths.mjs",
     "test:regie-chrono": "node scripts/test-regie-chrono-enabled.mjs",

@@ -128,6 +128,11 @@ import {
   shouldUseTelecommandeChrome,
 } from "@/lib/regieTelecommande";
 import { RegieTelecommande } from "@/components/admin/RegieTelecommande";
+import {
+  TelecommandeIcon,
+  TelecommandeQrModal,
+} from "@/components/admin/TelecommandeQrModal";
+import { TELECOMMANDE_QR_COPY } from "@/lib/telecommandeQr";
 
 const VOTE_STATE_LABELS = {
   open: "Vote ouvert",
@@ -4951,6 +4956,9 @@ export default function RegieEventPage() {
   /** Mobile &lt;1024 : `?full=1` ou lien « Régie complète » → chrome régie dense. */
   const [mobileFullRegie, setMobileFullRegie] = useState(false);
   const [telecommandeQrOpen, setTelecommandeQrOpen] = useState(false);
+  /** QR accès télécommande orga (≠ QR participant sheet). */
+  const [telecommandeAccessQrOpen, setTelecommandeAccessQrOpen] =
+    useState(false);
   const [telecommandeQuestionsOpen, setTelecommandeQuestionsOpen] =
     useState(false);
   /** Aperçu /join intégré (desktop split) — persistant par événement */
@@ -8063,6 +8071,14 @@ export default function RegieEventPage() {
           onSuccess={handleQuestionLiveAdded}
         />
       ) : null}
+      {eventId ? (
+        <TelecommandeQrModal
+          open={telecommandeAccessQrOpen}
+          onClose={() => setTelecommandeAccessQrOpen(false)}
+          eventId={eventId}
+          eventTitle={eventData?.title ?? null}
+        />
+      ) : null}
       {editPollModalOpen && editingPoll ? (
         <div
           role="dialog"
@@ -9468,17 +9484,47 @@ export default function RegieEventPage() {
                       {eventData.title}
                     </h2>
                   </div>
-                  {inTestMode && !eventLocked ? (
-                    <div
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      justifyContent: "flex-end",
+                      gap: "0.42rem 0.55rem",
+                      flexShrink: 0,
+                    }}
+                  >
+                  {desktop ? (
+                    <button
+                      type="button"
+                      onClick={() => setTelecommandeAccessQrOpen(true)}
+                      aria-label={TELECOMMANDE_QR_COPY.triggerAria}
+                      data-testid="regie-telecommande-qr-btn"
                       style={{
-                        display: "flex",
-                        flexWrap: "wrap",
+                        display: "inline-flex",
                         alignItems: "center",
-                        justifyContent: "flex-end",
-                        gap: "0.42rem 0.55rem",
-                        flexShrink: 0,
+                        justifyContent: "center",
+                        gap: "0.4rem",
+                        padding: "0.48rem 0.88rem",
+                        borderRadius: "999px",
+                        border: "1px solid rgba(45, 212, 191, 0.45)",
+                        background:
+                          "linear-gradient(180deg, rgba(20, 184, 166, 0.22) 0%, rgba(13, 148, 136, 0.28) 100%)",
+                        color: "#ccfbf1",
+                        fontSize: "0.76rem",
+                        fontWeight: 800,
+                        letterSpacing: "0.01em",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                        boxShadow: "0 10px 22px rgba(13, 148, 136, 0.18)",
                       }}
                     >
+                      <TelecommandeIcon size={15} stroke="#ccfbf1" />
+                      {TELECOMMANDE_QR_COPY.triggerButton}
+                    </button>
+                  ) : null}
+                  {inTestMode && !eventLocked ? (
+                    <>
                       {!activationsLoaded ? (
                         <span
                           style={{
@@ -9569,8 +9615,9 @@ export default function RegieEventPage() {
                           </span>
                         </div>
                       ) : null}
-                    </div>
+                    </>
                   ) : null}
+                  </div>
                 </div>
                 <div
                   style={{

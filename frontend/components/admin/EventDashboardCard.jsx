@@ -5,6 +5,11 @@ import { useEffect, useRef, useState } from "react";
 import { getEventUxState } from "@/lib/eventUxState";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { LiveMicroLabel } from "@/components/admin/LiveMicroIcon";
+import {
+  TelecommandeIcon,
+  TelecommandeQrModal,
+} from "@/components/admin/TelecommandeQrModal";
+import { TELECOMMANDE_QR_COPY } from "@/lib/telecommandeQr";
 
 /**
  * @param {{
@@ -58,11 +63,13 @@ export function EventDashboardCard({
   const [draftTitle, setDraftTitle] = useState("");
   const [renameError, setRenameError] = useState("");
   const [renameSaving, setRenameSaving] = useState(false);
+  const [telecommandeQrOpen, setTelecommandeQrOpen] = useState(false);
   const titleInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const skipBlurSaveRef = useRef(false);
 
   const isLiveUx = ux.key === "voting";
   const canRename = Boolean(onRename) && !ev._localOnly && Boolean(ev.id);
+  const canShowTelecommandeQr = !ev._localOnly && Boolean(ev.id);
 
   useEffect(() => {
     const prev = prevUxKeyRef.current;
@@ -342,6 +349,33 @@ export function EventDashboardCard({
                 ✏️
               </button>
             ) : null}
+            {!editingTitle && canShowTelecommandeQr ? (
+              <button
+                type="button"
+                onClick={() => setTelecommandeQrOpen(true)}
+                disabled={actionBusy}
+                aria-label={TELECOMMANDE_QR_COPY.triggerAria}
+                title={TELECOMMANDE_QR_COPY.triggerButton}
+                data-testid="event-card-telecommande-qr"
+                style={{
+                  flexShrink: 0,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "2rem",
+                  height: "2rem",
+                  padding: 0,
+                  borderRadius: "8px",
+                  border: "1px solid rgba(15, 118, 110, 0.28)",
+                  background: "rgba(20, 184, 166, 0.08)",
+                  color: "#0f766e",
+                  cursor: actionBusy ? "not-allowed" : "pointer",
+                  opacity: actionBusy ? 0.55 : 1,
+                }}
+              >
+                <TelecommandeIcon size={16} />
+              </button>
+            ) : null}
           </div>
           {editingTitle ? (
             <p
@@ -533,6 +567,15 @@ export function EventDashboardCard({
         >
           Ouvrir la régie
         </Link>
+
+        {canShowTelecommandeQr ? (
+          <TelecommandeQrModal
+            open={telecommandeQrOpen}
+            onClose={() => setTelecommandeQrOpen(false)}
+            eventId={ev.id}
+            eventTitle={ev.title}
+          />
+        ) : null}
 
         <div
           style={{
