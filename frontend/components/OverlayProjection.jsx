@@ -78,7 +78,7 @@ export function parseOverlayQuery(search) {
 const VARIANT = {
   compact: {
     maxWidth: 360,
-    maxResults: 3,
+    maxResults: 8,
     qrQuestion: 58,
     qrResults: 46,
     pad: "0.65rem 0.75rem",
@@ -94,7 +94,7 @@ const VARIANT = {
   },
   standard: {
     maxWidth: 560,
-    maxResults: 5,
+    maxResults: 8,
     qrQuestion: 78,
     qrResults: 56,
     pad: "0.85rem 1rem",
@@ -110,7 +110,7 @@ const VARIANT = {
   },
   large: {
     maxWidth: 780,
-    maxResults: 5,
+    maxResults: 8,
     qrQuestion: 104,
     qrResults: 72,
     pad: "1.05rem 1.2rem",
@@ -126,7 +126,7 @@ const VARIANT = {
   },
   minimal: {
     maxWidth: 320,
-    maxResults: 3,
+    maxResults: 8,
     qrQuestion: 48,
     qrResults: 40,
     pad: "0.5rem 0.58rem",
@@ -719,14 +719,15 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
 
   const topOptions = useMemo(() => {
     if (!poll?.options?.length) return [];
-    return [...poll.options]
-      .sort(
-        (a, b) =>
-          (Number(b.voteCount ?? b.votes ?? 0) || 0) -
-          (Number(a.voteCount ?? a.votes ?? 0) || 0),
-      )
-      .slice(0, v.maxResults);
-  }, [poll?.options, v.maxResults]);
+    return [...poll.options].sort((a, b) => {
+      const ao = Number(a?.order);
+      const bo = Number(b?.order);
+      if (Number.isFinite(ao) && Number.isFinite(bo) && ao !== bo) return ao - bo;
+      return 0;
+    });
+  }, [poll?.options]);
+  const visibleOptions = topOptions.slice(0, v.maxResults);
+  const hiddenResultCount = Math.max(0, topOptions.length - visibleOptions.length);
 
   const totalVotesResults = useMemo(() => {
     if (!poll?.options?.length) return 0;
@@ -737,11 +738,11 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
   }, [poll?.options]);
 
   const maxTop = useMemo(() => {
-    if (!topOptions.length) return 0;
+    if (!visibleOptions.length) return 0;
     return Math.max(
-      ...topOptions.map((o) => Number(o.voteCount ?? o.votes ?? 0) || 0),
+      ...visibleOptions.map((o) => Number(o.voteCount ?? o.votes ?? 0) || 0),
     );
-  }, [topOptions]);
+  }, [visibleOptions]);
 
   const resultsVoteSignature =
     effectivePanel === "results" && poll
@@ -1148,8 +1149,27 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
                 ) : null}
               </div>
             ) : (
+            <>
+            {questionText ? (
+              <p
+                style={{
+                  margin: "0 0 0.55rem 0",
+                  fontSize: v.questionRem,
+                  fontWeight: 700,
+                  lineHeight: 1.35,
+                  color: th.text,
+                  overflowWrap: "anywhere",
+                  display: "-webkit-box",
+                  WebkitLineClamp: 3,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                }}
+              >
+                {questionText}
+              </p>
+            ) : null}
             <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-              {topOptions.map((opt, i) => {
+              {visibleOptions.map((opt, i) => {
                 const optVotes =
                   Number(opt.voteCount ?? opt.votes ?? 0) || 0;
                 const percentRaw =
@@ -1169,7 +1189,7 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
                   <li
                     key={opt.id}
                     style={{
-                      marginBottom: i === topOptions.length - 1 ? 0 : "0.55rem",
+                      marginBottom: i === visibleOptions.length - 1 ? 0 : "0.55rem",
                       padding: isQuizCorrect ? "0.35rem 0.42rem" : 0,
                       borderRadius: isQuizCorrect ? "10px" : undefined,
                       background: isQuizCorrect
@@ -1245,6 +1265,19 @@ export function OverlayProjection({ slugPublic, getPollUrl }) {
                 );
               })}
             </ul>
+            {hiddenResultCount > 0 ? (
+              <p
+                style={{
+                  margin: "0.45rem 0 0 0",
+                  fontSize: v.muted,
+                  color: th.textMuted,
+                  fontWeight: 700,
+                }}
+              >
+                et {hiddenResultCount} autre{hiddenResultCount > 1 ? "s" : ""} choix
+              </p>
+            ) : null}
+            </>
             )}
             {showQR && joinUrl ? (
               <div
