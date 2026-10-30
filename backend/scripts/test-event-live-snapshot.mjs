@@ -157,8 +157,12 @@ test("server.js : join_event appelle emitEventLiveSnapshotToSocket", () => {
   assert.ok(src.includes("emitEventLiveSnapshotToSocket"));
   const joinIdx = src.indexOf('socket.on("join_event"');
   assert.ok(joinIdx > 0);
-  const joinBlock = src.slice(joinIdx, joinIdx + 450);
+  const joinBlock = src.slice(joinIdx, joinIdx + 700);
   assert.ok(joinBlock.includes("emitEventLiveSnapshotToSocket(socket, id)"));
+  assert.ok(
+    joinBlock.includes(".catch("),
+    "join_event doit intercepter les rejets du snapshot Prisma",
+  );
   assert.equal(
     joinBlock.includes('io.to(roomPourEvent'),
     false,
@@ -170,8 +174,9 @@ test("server.js : snapshot socket-only n’émet pas poll_updated", () => {
   const src = readFileSync(join(here, "../server.js"), "utf8");
   const fnIdx = src.indexOf("async function emitEventLiveSnapshotToSocket");
   assert.ok(fnIdx > 0);
-  const fnBody = src.slice(fnIdx, fnIdx + 350);
+  const fnBody = src.slice(fnIdx, fnIdx + 450);
   assert.ok(fnBody.includes('socket.emit("event_live_updated"'));
+  assert.ok(fnBody.includes("try {"), "snapshot doit try/catch Prisma");
   assert.equal(fnBody.includes("poll_updated"), false);
   assert.equal(fnBody.includes("io.to("), false);
 });

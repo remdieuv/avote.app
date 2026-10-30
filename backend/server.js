@@ -878,9 +878,13 @@ async function submitVote(input) {
 
 /** @param {import("socket.io").Server} io */
 async function emitPollUpdated(io, pollId) {
-  const poll = await loadPollFull(pollId);
-  if (poll) {
-    io.to(roomPourPoll(pollId)).emit("poll_updated", pollToJson(poll));
+  try {
+    const poll = await loadPollFull(pollId);
+    if (poll) {
+      io.to(roomPourPoll(pollId)).emit("poll_updated", pollToJson(poll));
+    }
+  } catch (e) {
+    console.error("emitPollUpdated", e);
   }
 }
 
@@ -955,9 +959,13 @@ async function emitEventLiveUpdated(io, eventId) {
  * @param {string} eventId
  */
 async function emitEventLiveSnapshotToSocket(socket, eventId) {
-  const bundle = await loadEventLiveUpdatedBundle(eventId);
-  if (!bundle) return;
-  socket.emit("event_live_updated", bundle.payload);
+  try {
+    const bundle = await loadEventLiveUpdatedBundle(eventId);
+    if (!bundle) return;
+    socket.emit("event_live_updated", bundle.payload);
+  } catch (e) {
+    console.error("emitEventLiveSnapshotToSocket", e);
+  }
 }
 
 /**
@@ -994,38 +1002,44 @@ async function annulationAutoRevealProgrammee(eventId) {
  * « Afficher les résultats » (`appliquerAffichageResultats`) — pas un 2ᵉ chemin.
  */
 async function appliquerAutoRevealResultats(io, eventId) {
-  clearAutoRevealTimer(eventId);
-  const fresh = await prisma.event.findUnique({ where: { id: eventId } });
-  if (!fresh?.activePollId) return;
-  if (String(fresh.voteState).toUpperCase() !== "CLOSED") return;
-  if (String(fresh.displayState).toUpperCase() === "RESULTS") {
-    await prisma.event.update({
-      where: { id: eventId },
-      data: { autoRevealShowResultsAt: null },
+  try {
+    clearAutoRevealTimer(eventId);
+    const fresh = await prisma.event.findUnique({ where: { id: eventId } });
+    if (!fresh?.activePollId) return;
+    if (String(fresh.voteState).toUpperCase() !== "CLOSED") return;
+    if (String(fresh.displayState).toUpperCase() === "RESULTS") {
+      await prisma.event.update({
+        where: { id: eventId },
+        data: { autoRevealShowResultsAt: null },
+      });
+      await emitEventLiveUpdated(io, eventId);
+      return;
+    }
+    const activePoll = await prisma.poll.findUnique({
+      where: { id: fresh.activePollId },
+      select: { type: true, leadEnabled: true },
     });
-    await emitEventLiveUpdated(io, eventId);
-    return;
+    // LOT-2 — Lead / Concours : pas d’auto-affichage RESULTS.
+    if (!shouldScheduleAutoRevealForPoll(activePoll)) {
+      await prisma.event.update({
+        where: { id: eventId },
+        data: { autoRevealShowResultsAt: null },
+      });
+      await emitEventLiveUpdated(io, eventId);
+      return;
+    }
+    await appliquerAffichageResultats(io, fresh.activePollId);
+  } catch (e) {
+    console.error("appliquerAutoRevealResultats", e);
   }
-  const activePoll = await prisma.poll.findUnique({
-    where: { id: fresh.activePollId },
-    select: { type: true, leadEnabled: true },
-  });
-  // LOT-2 — Lead / Concours : pas d’auto-affichage RESULTS.
-  if (!shouldScheduleAutoRevealForPoll(activePoll)) {
-    await prisma.event.update({
-      where: { id: eventId },
-      data: { autoRevealShowResultsAt: null },
-    });
-    await emitEventLiveUpdated(io, eventId);
-    return;
-  }
-  await appliquerAffichageResultats(io, fresh.activePollId);
 }
 
 function planifierTimeoutAutoReveal(io, eventId, delayMs) {
   clearAutoRevealTimer(eventId);
   const t = setTimeout(() => {
-    void appliquerAutoRevealResultats(io, eventId);
+    void appliquerAutoRevealResultats(io, eventId).catch((e) =>
+      console.error("timer auto-reveal", e),
+    );
   }, delayMs);
   autoRevealTimers.set(String(eventId), t);
 }
@@ -5327,7 +5341,9 @@ app.post("/polls/:pollId/vote", voteLimiter, async (req, res) => {
       const poll = await loadPollFull(pollId);
       res.json(pollToJson(poll));
 
-      void emitPollUpdated(io, pollId);
+      void emitPollUpdated(io, pollId).catch((e) =>
+        console.error("emitPollUpdated (vote)", e),
+      );
       return;
     }
 
@@ -7592,9 +7608,15 @@ io.on("connection", (socket) => {
     const id = String(rawEventId);
     socket.join(roomPourEvent(id));
     /** Nouveau participant / reconnect : état courant sans action régisseur. */
-    void emitEventLiveSnapshotToSocket(socket, id);
-    void emitScreenCountToAdmins(io, id);
-    void emitAllScreenPresenceToAdmins(io, id);
+    void emitEventLiveSnapshotToSocket(socket, id).catch((e) =>
+      console.error("join_event snapshot", e),
+    );
+    void emitScreenCountToAdmins(io, id).catch((e) =>
+      console.error("join_event screen:count", e),
+    );
+    void emitAllScreenPresenceToAdmins(io, id).catch((e) =>
+      console.error("join_event screen:presence", e),
+    );
   });
 
   socket.on("leave_event", (rawEventId) => {
@@ -7617,8 +7639,12 @@ io.on("connection", (socket) => {
     socket.data.screenPresenceId = presenceId;
     socket.data.screenId = screenId;
     socket.data.screenEventId = eventId;
-    void emitScreenCountToAdmins(io, eventId);
-    void emitScreenPresenceToAdmins(io, eventId, presenceId);
+    void emitScreenCountToAdmins(io, eventId).catch((e) =>
+      console.error("screen:join screen:count", e),
+    );
+    void emitScreenPresenceToAdmins(io, eventId, presenceId).catch((e) =>
+      console.error("screen:join screen:presence", e),
+    );
     // F5 / reconnect B indépendant : rejouer le display mémorisé (mémoire process).
     if (presenceId === "b") {
       const stored = getScreenBIndependentDisplay(eventId);
@@ -7668,11 +7694,17 @@ io.on("connection", (socket) => {
       socket.data.screenPresenceId = null;
       socket.data.screenId = null;
     }
-    void emitScreenCountToAdmins(io, eventId);
+    void emitScreenCountToAdmins(io, eventId).catch((e) =>
+      console.error("screen:leave screen:count", e),
+    );
     if (presenceId) {
-      void emitScreenPresenceToAdmins(io, eventId, String(presenceId));
+      void emitScreenPresenceToAdmins(io, eventId, String(presenceId)).catch(
+        (e) => console.error("screen:leave screen:presence", e),
+      );
     } else {
-      void emitAllScreenPresenceToAdmins(io, eventId);
+      void emitAllScreenPresenceToAdmins(io, eventId).catch((e) =>
+        console.error("screen:leave screen:presence-all", e),
+      );
     }
   });
 
@@ -7856,10 +7888,19 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     const id = socket.data.screenEventId;
     if (id) {
-      void emitScreenCountToAdmins(io, id);
-      void emitAllScreenPresenceToAdmins(io, id);
+      void emitScreenCountToAdmins(io, id).catch((e) =>
+        console.error("disconnect screen:count", e),
+      );
+      void emitAllScreenPresenceToAdmins(io, id).catch((e) =>
+        console.error("disconnect screen:presence", e),
+      );
     }
   });
+});
+
+/** Empêche qu’un rejet Prisma non intercepté tue le process Railway. */
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason);
 });
 
 const ENABLE_TIMERS = process.env.ENABLE_TIMERS === "true";
