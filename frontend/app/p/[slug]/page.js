@@ -5,6 +5,7 @@ import { Suspense, useMemo } from "react";
 /** Évite une page /p servie depuis un cache statique avec une ancienne version du bundle. */
 export const dynamic = "force-dynamic";
 import { useParams, useSearchParams } from "next/navigation";
+import { JoinDemoExperience } from "@/components/JoinDemoExperience";
 import { PollExperience } from "@/components/PollExperience";
 import { API_URL } from "@/lib/config";
 
@@ -52,6 +53,11 @@ export default function PublicEventPollPage() {
         <p>Lien d’événement invalide.</p>
       </main>
     );
+  }
+
+  /** Même garde que /join/[slug] : slug réservé « demo » = UI statique, pas d’API. */
+  if (slug === "demo") {
+    return <JoinDemoExperience variant="poll" />;
   }
 
   return (
