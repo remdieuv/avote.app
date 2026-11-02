@@ -21,9 +21,10 @@ const DEMO_OPTIONS = [
 ];
 
 /**
- * Démo interactive sans API.
+ * Démo interactive sans API — expérience **participant** uniquement.
  * - `hub` : /join/demo (salle live + QR)
- * - `poll` : /p/demo (écran de vote, retour salle)
+ * - `poll` : /p/demo (vote mobile, retour salle)
+ * La projection Screen/OBS est `/screen/demo` (`ScreenDemoExperience`).
  *
  * @param {{ variant?: "hub" | "poll" }} [props]
  */
@@ -155,7 +156,7 @@ export function JoinDemoExperience({ variant = "hub" } = {}) {
         title={isPollVariant ? "Vote" : "Démo Avote"}
         subtitle={
           isPollVariant
-            ? "Écran de vote participant — démo locale, sans compte ni événement en base."
+            ? "Vote participant — démo locale, sans compte ni événement en base."
             : "Voici à quoi ressemble une session côté participant — sans compte ni installation."
         }
         palette={palette}

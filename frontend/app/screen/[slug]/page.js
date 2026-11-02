@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { QrAccesVoteEcran } from "@/components/QrAccesVoteEcran";
+import { ScreenDemoExperience } from "@/components/ScreenDemoExperience";
 import { ScreenProjection } from "@/components/ScreenProjection";
 import { API_URL } from "@/lib/config";
 
@@ -43,6 +44,11 @@ export default function ProjectionSallePage() {
         <p>Lien d’affichage invalide.</p>
       </main>
     );
+  }
+
+  /** Même garde que /join et /p : slug réservé « demo » = UI statique, pas d’API. */
+  if (slug === "demo") {
+    return <ScreenDemoExperience />;
   }
 
   const showCornerQr =
