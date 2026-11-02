@@ -20,8 +20,15 @@ const DEMO_OPTIONS = [
   { id: "proj", label: "Projection écran", pct: 25 },
 ];
 
-/** Hub /join/demo — démo interactive sans API. */
-export function JoinDemoExperience() {
+/**
+ * Démo interactive sans API.
+ * - `hub` : /join/demo (salle live + QR)
+ * - `poll` : /p/demo (écran de vote, retour salle)
+ *
+ * @param {{ variant?: "hub" | "poll" }} [props]
+ */
+export function JoinDemoExperience({ variant = "hub" } = {}) {
+  const isPollVariant = variant === "poll";
   const [prefersDark, setPrefersDark] = useState(true);
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
@@ -78,11 +85,12 @@ export function JoinDemoExperience() {
   const [phase, setPhase] = useState(/** @type {"vote" | "results"} */ ("vote"));
   const [selectedId, setSelectedId] = useState(/** @type {string | null} */ (null));
   const [barsAnimated, setBarsAnimated] = useState(false);
-  const [demoJoinUrl, setDemoJoinUrl] = useState("");
+  const [demoSelfUrl, setDemoSelfUrl] = useState("");
 
   useEffect(() => {
-    setDemoJoinUrl(`${window.location.origin}/join/demo`);
-  }, []);
+    const path = isPollVariant ? "/p/demo" : "/join/demo";
+    setDemoSelfUrl(`${window.location.origin}${path}`);
+  }, [isPollVariant]);
 
   useEffect(() => {
     if (phase !== "results") {
@@ -142,10 +150,14 @@ export function JoinDemoExperience() {
         }
       `}</style>
       <ExperienceHeader
-        backHref="/"
-        backLabel="← Accueil"
-        title="Démo Avote"
-        subtitle="Voici à quoi ressemble une session côté participant — sans compte ni installation."
+        backHref={isPollVariant ? "/join/demo" : "/"}
+        backLabel={isPollVariant ? "← Retour à la salle" : "← Accueil"}
+        title={isPollVariant ? "Vote" : "Démo Avote"}
+        subtitle={
+          isPollVariant
+            ? "Écran de vote participant — démo locale, sans compte ni événement en base."
+            : "Voici à quoi ressemble une session côté participant — sans compte ni installation."
+        }
         palette={palette}
         isDark={isDark}
       />
@@ -334,9 +346,9 @@ export function JoinDemoExperience() {
                       lineHeight: 0,
                     }}
                   >
-                    {demoJoinUrl ? (
+                    {demoSelfUrl ? (
                       <QRCodeSVG
-                        value={demoJoinUrl}
+                        value={demoSelfUrl}
                         size={148}
                         level="M"
                         includeMargin
@@ -368,7 +380,7 @@ export function JoinDemoExperience() {
                       lineHeight: 1.35,
                     }}
                   >
-                    {demoJoinUrl || "Chargement du lien…"}
+                    {demoSelfUrl || "Chargement du lien…"}
                   </p>
                 </aside>
               </div>
