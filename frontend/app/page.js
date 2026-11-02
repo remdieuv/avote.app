@@ -1,5 +1,10 @@
 import Link from "next/link";
 import { LandingHeader } from "@/components/landing/LandingHeader";
+import {
+  HERO_FEATURE_CATEGORIES,
+  HERO_SUPPORT_TEXT,
+  HERO_TITLE,
+} from "@/lib/landingHero";
 import { marketingContentShellStyle } from "@/lib/marketingLayout";
 
 const shell = {
@@ -42,6 +47,77 @@ const sectionY = {
   paddingTop: "clamp(4rem, 10vw, 6.25rem)",
   paddingBottom: "clamp(4rem, 10vw, 6.25rem)",
 };
+
+/** Icônes SVG compactes du bandeau catégories Hero (décoratif). */
+function HeroCategoryIcon({ name }) {
+  const common = {
+    width: 16,
+    height: 16,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    "aria-hidden": true,
+  };
+  if (name === "quiz") {
+    return (
+      <svg {...common}>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1.9-1.1 1.8" />
+        <circle cx="12" cy="17" r="0.8" fill="currentColor" stroke="none" />
+      </svg>
+    );
+  }
+  if (name === "contest") {
+    return (
+      <svg {...common}>
+        <path d="M8 4h8v3a4 4 0 0 1-8 0V4z" />
+        <path d="M8 5H5a2 2 0 0 0 2 3" />
+        <path d="M16 5h3a2 2 0 0 1-2 3" />
+        <path d="M12 11v3" />
+        <path d="M9 20h6" />
+        <path d="M10 14h4v3a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-3z" />
+      </svg>
+    );
+  }
+  if (name === "lead") {
+    return (
+      <svg {...common}>
+        <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
+        <circle cx="9.5" cy="7" r="3.5" />
+        <path d="M19 8v6" />
+        <path d="M22 11h-6" />
+      </svg>
+    );
+  }
+  // poll / sondages
+  return (
+    <svg {...common}>
+      <path d="M4 19V9" />
+      <path d="M10 19V5" />
+      <path d="M16 19v-7" />
+      <path d="M22 19V8" />
+    </svg>
+  );
+}
+
+function HeroFeatureStrip() {
+  if (HERO_FEATURE_CATEGORIES.length === 0) return null;
+  return (
+    <ul className="hero-feature-strip" aria-label="Types d’interactions disponibles">
+      {HERO_FEATURE_CATEGORIES.map((item) => (
+        <li key={item.id} className="hero-feature-chip">
+          <span className="hero-feature-icon">
+            <HeroCategoryIcon name={item.icon} />
+          </span>
+          <span className="hero-feature-label">{item.label}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function HeroMockup() {
   return (
@@ -660,18 +736,9 @@ export default function HomePage() {
         <section id="hero" className="landing-hero" style={{ ...sectionY }}>
           <div className="landing-hero-text">
             <span className="hero-eyebrow">Vote interactif en direct</span>
-            <h1 className="hero-title">
-              Faites voter
-              <br />
-              votre&nbsp;audience
-              <br />
-              en direct.
-            </h1>
-            <p className="hero-subtitle">
-              <span>Un QR code.</span>
-              <span>Quelques secondes pour répondre.</span>
-              <span>Résultats affichés instantanément sur écran.</span>
-            </p>
+            <h1 className="hero-title">{HERO_TITLE}</h1>
+            <HeroFeatureStrip />
+            <p className="hero-subtitle">{HERO_SUPPORT_TEXT}</p>
             <div className="hero-cta-row">
               <Link href="/join/demo" style={btnPrimary} className="hero-cta-primary">
                 Tester en live
@@ -1225,23 +1292,49 @@ export default function HomePage() {
         .hero-title {
           margin: 0;
           font-size: clamp(2rem, 5.4vw, 3.25rem);
-          line-height: 1.05;
+          line-height: 1.08;
           letter-spacing: -0.04em;
           font-weight: 830;
           color: #0f172a;
-          max-width: 16ch;
+          max-width: 18ch;
+        }
+        .hero-feature-strip {
+          list-style: none;
+          margin: 1.05rem 0 0;
+          padding: 0;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.45rem;
+          max-width: 36rem;
+        }
+        .hero-feature-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.35rem;
+          padding: 0.32rem 0.62rem;
+          border-radius: 999px;
+          border: 1px solid #ddd6fe;
+          background: rgba(255, 255, 255, 0.92);
+          color: #5b21b6;
+          font-size: 0.78rem;
+          font-weight: 650;
+          line-height: 1.2;
+          box-shadow: 0 1px 2px rgba(91, 33, 182, 0.04);
+        }
+        .hero-feature-icon {
+          display: inline-flex;
+          color: #7c3aed;
+          flex-shrink: 0;
+        }
+        .hero-feature-label {
+          white-space: nowrap;
         }
         .hero-subtitle {
           margin: 1rem 0 0;
-          max-width: 48ch;
+          max-width: 42ch;
           font-size: clamp(1rem, 2vw, 1.14rem);
           color: #475569;
           line-height: 1.6;
-          display: grid;
-          gap: 0.18rem;
-        }
-        .hero-subtitle > span {
-          display: block;
         }
         .hero-cta-row {
           display: flex;
@@ -1488,6 +1581,13 @@ export default function HomePage() {
           .hero-subtitle,
           .hero-reassurance {
             text-align: left;
+          }
+          .hero-feature-strip {
+            max-width: 100%;
+          }
+          .hero-feature-chip {
+            font-size: 0.74rem;
+            padding: 0.28rem 0.55rem;
           }
           .hero-cta-row {
             justify-content: flex-start;
