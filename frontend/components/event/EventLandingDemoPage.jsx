@@ -308,7 +308,7 @@ export function EventLandingDemoPage() {
             <Link href="/join/demo" className="ev-landing-hero-cta">
               Rejoindre la salle live
             </Link>
-            <Link href="/p/demo" className="ev-demo-cta-secondary">
+            <Link href="/screen/demo" className="ev-demo-cta-secondary">
               Voir l’écran de vote
             </Link>
           </div>
