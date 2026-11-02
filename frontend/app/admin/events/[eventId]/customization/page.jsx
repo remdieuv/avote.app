@@ -15,7 +15,15 @@ import {
   adminContentMaxWidth,
   adminContentShellStyle,
 } from "@/lib/adminLayout";
+import {
+  LANDING_PHOTO_TOO_HEAVY_MESSAGE,
+  prepareLandingPhotoForUpload,
+} from "@/lib/compressLandingPhoto";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
+
+/** Limites alignées sur l’API (affichage orga, pas de nouvelle règle métier). */
+const LANDING_SHOWCASE_MAX = 30;
+const LANDING_LIVE_PHOTOS_MAX = 50;
 
 function mapApiError(body, status, fallbackPrefix = "Erreur") {
   const code = String(body?.error || "").trim();
@@ -246,12 +254,22 @@ export function EventCustomizationEditor({ mode = "live" }) {
   const [landingDescription, setLandingDescription] = useState("");
   /** @type {{ id: string; url: string; createdAt: string }[]} */
   const [showcasePhotos, setShowcasePhotos] = useState([]);
-  const [landingLivePhotosCount, setLandingLivePhotosCount] = useState(0);
+  /** @type {{ id: string; url: string; createdAt: string }[]} */
+  const [landingLivePhotos, setLandingLivePhotos] = useState([]);
   const [showcasePhotoBusy, setShowcasePhotoBusy] = useState(false);
+  const [livePhotoBusy, setLivePhotoBusy] = useState(false);
+  const [landingLinkCopied, setLandingLinkCopied] = useState(false);
+  /** Force le reload de l’iframe aperçu après save / photos immédiates. */
+  const [previewNonce, setPreviewNonce] = useState(0);
   const previewIframeRef = useRef(null);
   const [previewIframeReady, setPreviewIframeReady] = useState(false);
   /** Mobile (<900px) : bascule Réglages / Aperçu sans changer le layout desktop. */
   const [mobilePanel, setMobilePanel] = useState(/** @type {"form" | "preview"} */ ("form"));
+
+  const bumpLandingPreview = useCallback(() => {
+    if (!isLandingPage) return;
+    setPreviewNonce((n) => n + 1);
+  }, [isLandingPage]);
 
   /** Brouillon aligné sur le formulaire → postMessage vers l’iframe /join (sans API). */
   const draftCustomization = useMemo(
@@ -521,7 +539,17 @@ export function EventCustomizationEditor({ mode = "live" }) {
       } else {
         setShowcasePhotos([]);
       }
-      setLandingLivePhotosCount(landingPhotos.length);
+      setLandingLivePhotos(
+        landingPhotos
+          .map((p) => ({
+            id: String(p?.id || ""),
+            url:
+              typeof p?.url === "string" ? resolveApiAssetUrl(p.url) : "",
+            createdAt:
+              typeof p?.createdAt === "string" ? p.createdAt : "",
+          }))
+          .filter((p) => p.id && p.url),
+      );
 
       setBaseline({
         description: desc,
@@ -677,7 +705,11 @@ export function EventCustomizationEditor({ mode = "live" }) {
       if (!res.ok) {
         throw new Error(mapApiError(body, res.status));
       }
-      setToast("Personnalisation enregistrée");
+      setToast(
+        isLandingPage
+          ? "Landing enregistrée"
+          : "Personnalisation enregistrée",
+      );
       window.setTimeout(() => setToast(null), 3200);
       setBaseline({
         description: description.trim() === "" ? "" : description.trim(),
@@ -711,6 +743,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
         landingTitle: landingTitle.trim(),
         landingDescription: landingDescription.trim(),
       });
+      if (isLandingPage) bumpLandingPreview();
     } catch (e) {
       setSaveError(e.message || "Enregistrement impossible.");
     } finally {
@@ -758,8 +791,9 @@ export function EventCustomizationEditor({ mode = "live" }) {
           ]);
         }
       }
-      setToast("Photos ajoutées");
+      setToast("Galerie événement mise à jour");
       window.setTimeout(() => setToast(null), 2400);
+      bumpLandingPreview();
     } catch (e) {
       setSaveError(e.message || "Envoi photo impossible.");
     } finally {
@@ -781,8 +815,9 @@ export function EventCustomizationEditor({ mode = "live" }) {
         throw new Error(mapApiError(body, res.status));
       }
       setShowcasePhotos((prev) => prev.filter((p) => p.id !== photoId));
-      setToast("Photo supprimée");
+      setToast("Photo retirée de la galerie événement");
       window.setTimeout(() => setToast(null), 2200);
+      bumpLandingPreview();
     } catch (e) {
       setSaveError(e.message || "Suppression impossible.");
     } finally {
@@ -790,8 +825,104 @@ export function EventCustomizationEditor({ mode = "live" }) {
     }
   }
 
+  async function addLiveMomentPhotos(fileList) {
+    if (!eventId || !fileList?.length) return;
+    const files = Array.from(fileList).filter(Boolean);
+    if (!files.length) return;
+    setLivePhotoBusy(true);
+    setSaveError(null);
+    try {
+      for (const file of files) {
+        const prepared = await prepareLandingPhotoForUpload(file);
+        const fd = new FormData();
+        fd.append("file", prepared);
+        const res = await adminFetch(
+          `${apiBaseBrowser()}/events/${eventId}/landing/photos`,
+          { method: "POST", body: fd },
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(mapApiError(body, res.status, "Moment live"));
+        }
+        if (typeof body.id === "string" && typeof body.url === "string") {
+          setLandingLivePhotos((prev) => [
+            {
+              id: body.id,
+              url: resolveApiAssetUrl(body.url),
+              createdAt:
+                typeof body.createdAt === "string" ? body.createdAt : "",
+            },
+            ...prev,
+          ]);
+        }
+      }
+      setToast("Moment live publié");
+      window.setTimeout(() => setToast(null), 2400);
+      bumpLandingPreview();
+    } catch (e) {
+      const msg = e?.message || "Publication impossible.";
+      setSaveError(
+        msg === LANDING_PHOTO_TOO_HEAVY_MESSAGE ||
+          String(msg).includes("trop volumineux")
+          ? LANDING_PHOTO_TOO_HEAVY_MESSAGE
+          : msg,
+      );
+    } finally {
+      setLivePhotoBusy(false);
+    }
+  }
+
+  async function removeLiveMomentPhoto(photoId) {
+    if (!eventId || !photoId) return;
+    setLivePhotoBusy(true);
+    setSaveError(null);
+    try {
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/events/${eventId}/landing/photos/${encodeURIComponent(photoId)}`,
+        { method: "DELETE" },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(mapApiError(body, res.status));
+      }
+      setLandingLivePhotos((prev) => prev.filter((p) => p.id !== photoId));
+      setToast("Moment live retiré");
+      window.setTimeout(() => setToast(null), 2200);
+      bumpLandingPreview();
+    } catch (e) {
+      setSaveError(e.message || "Suppression impossible.");
+    } finally {
+      setLivePhotoBusy(false);
+    }
+  }
+
   const joinPath = slug ? `/join/${encodeURIComponent(slug)}` : null;
   const landingPath = slug ? `/e/${encodeURIComponent(slug)}` : null;
+  const photosBusy = showcasePhotoBusy || livePhotoBusy;
+  /** Aperçu iframe seulement si la landing est réellement publiée (évite /join). */
+  const landingPreviewActive =
+    Boolean(landingEnabled) && Boolean(baseline?.landingEnabled);
+
+  async function copyLandingPublicLink() {
+    if (!landingPath || typeof window === "undefined") return;
+    const url = `${window.location.origin}${landingPath}`;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = url;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      setLandingLinkCopied(true);
+      window.setTimeout(() => setLandingLinkCopied(false), 2200);
+    } catch {
+      setSaveError("Impossible de copier le lien.");
+    }
+  }
 
   if (!eventId) {
     return (
@@ -869,7 +1000,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
           </h1>
           <p style={{ margin: 0, color: "#64748b", fontSize: "0.95rem" }}>
             {isLandingPage
-              ? "Créez la vitrine immersive de votre événement avant et pendant le live."
+              ? "Page centrale facultative (/e) : teaser, galerie événement et moments live."
               : "Configurez l’expérience interactive et visuelle de votre salle de vote."}
           </p>
           <EditorModeSwitch eventId={eventId} current={isLandingPage ? "landing" : "live"} />
@@ -895,7 +1026,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
           </p>
         ) : null}
 
-        {!loading && isLivePage ? (
+        {!loading ? (
           <div
             className="customization-mobile-tabs"
             role="tablist"
@@ -942,7 +1073,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
               boxSizing: "border-box",
             }}
             className="customization-layout"
-            data-mobile-panel={isLivePage ? mobilePanel : "form"}
+            data-mobile-panel={mobilePanel}
           >
             <div
               className="customization-form-col"
@@ -955,10 +1086,11 @@ export function EventCustomizationEditor({ mode = "live" }) {
             >
               {isLandingPage ? (
                 <>
+                  {/* 1. Publication */}
                   <section style={card}>
                     <h2
                       style={{
-                        margin: "0 0 0.85rem",
+                        margin: "0 0 0.55rem",
                         fontSize: "0.72rem",
                         fontWeight: 800,
                         letterSpacing: "0.08em",
@@ -966,32 +1098,12 @@ export function EventCustomizationEditor({ mode = "live" }) {
                         color: "#64748b",
                       }}
                     >
-                      Landing page
+                      Publication
                     </h2>
-                    <p
-                      style={{
-                        margin: "0 0 0.85rem",
-                        fontSize: "0.77rem",
-                        color: "#64748b",
-                        lineHeight: 1.45,
-                      }}
-                    >
-                      Vitrine publique <code style={{ fontSize: "0.76rem" }}>/e/[slug]</code>{" "}
-                      : teaser, storytelling visuel, galerie événement et photos publiées
-                      en direct.
-                      {landingPath ? (
-                        <>
-                          {" "}
-                          <Link
-                            href={landingPath}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ color: "#2563eb", fontWeight: 600 }}
-                          >
-                            Ouvrir la landing
-                          </Link>
-                        </>
-                      ) : null}
+                    <p style={{ ...fieldHintStyle, margin: "0 0 0.85rem" }}>
+                      Landing événement = page centrale facultative. Désactivée, le
+                      lien <code style={{ fontSize: "0.72rem" }}>/e</code> redirige
+                      vers la salle live.
                     </p>
                     <label
                       style={{
@@ -1001,7 +1113,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
                         fontSize: "0.85rem",
                         color: "#334155",
                         cursor: "pointer",
-                        marginBottom: "0.85rem",
+                        marginBottom: "0.75rem",
                       }}
                     >
                       <input
@@ -1011,6 +1123,100 @@ export function EventCustomizationEditor({ mode = "live" }) {
                       />
                       Activer la landing événement
                     </label>
+                    <p
+                      style={{
+                        margin: "0 0 0.85rem",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: landingEnabled ? "#15803d" : "#b45309",
+                      }}
+                    >
+                      {landingEnabled
+                        ? "État : activée — visible sur /e"
+                        : "État : désactivée — /e redirige vers la salle live"}
+                    </p>
+                    {landingPath ? (
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: "0.5rem",
+                          alignItems: "center",
+                        }}
+                      >
+                        <code
+                          style={{
+                            fontSize: "0.78rem",
+                            padding: "0.4rem 0.55rem",
+                            borderRadius: "8px",
+                            background: "#f8fafc",
+                            border: "1px solid #e2e8f0",
+                            color: "#334155",
+                            maxWidth: "100%",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {landingPath}
+                        </code>
+                        <button
+                          type="button"
+                          style={btnSecondary}
+                          onClick={() => void copyLandingPublicLink()}
+                        >
+                          {landingLinkCopied ? "Lien copié" : "Copier"}
+                        </button>
+                        <button
+                          type="button"
+                          style={btnSecondary}
+                          onClick={() =>
+                            window.open(
+                              `${window.location.origin}${landingPath}`,
+                              "_blank",
+                              "noopener,noreferrer",
+                            )
+                          }
+                        >
+                          Ouvrir
+                        </button>
+                      </div>
+                    ) : (
+                      <p style={{ ...fieldHintStyle, margin: 0 }}>Slug manquant.</p>
+                    )}
+                  </section>
+
+                  {/* 2. Personnalisation */}
+                  <section style={card}>
+                    <h2
+                      style={{
+                        margin: "0 0 0.55rem",
+                        fontSize: "0.72rem",
+                        fontWeight: 800,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "#64748b",
+                      }}
+                    >
+                      Personnalisation
+                    </h2>
+                    <p style={{ ...fieldHintStyle, margin: "0 0 0.85rem" }}>
+                      Couverture, titre et accroche : à valider avec{" "}
+                      <strong style={{ fontWeight: 700, color: "#475569" }}>
+                        Enregistrer la landing
+                      </strong>
+                      . Logo et couleur d’accent viennent de la{" "}
+                      {eventId ? (
+                        <Link
+                          href={`/admin/events/${encodeURIComponent(eventId)}/live`}
+                          style={{ color: "#2563eb", fontWeight: 600 }}
+                        >
+                          Salle live
+                        </Link>
+                      ) : (
+                        "Salle live"
+                      )}
+                      .
+                    </p>
 
                     <p
                       style={{
@@ -1049,18 +1255,18 @@ export function EventCustomizationEditor({ mode = "live" }) {
                           ...btnSecondary,
                           display: "inline-block",
                           cursor:
-                            uploadKind !== null || showcasePhotoBusy
+                            uploadKind !== null || photosBusy
                               ? "not-allowed"
                               : "pointer",
                           opacity:
-                            uploadKind !== null || showcasePhotoBusy ? 0.65 : 1,
+                            uploadKind !== null || photosBusy ? 0.65 : 1,
                         }}
                       >
                         <input
                           type="file"
                           accept="image/jpeg,image/png,image/webp,image/gif"
                           style={{ display: "none" }}
-                          disabled={uploadKind !== null || showcasePhotoBusy}
+                          disabled={uploadKind !== null || photosBusy}
                           onChange={(e) => {
                             const f = e.target.files?.[0];
                             e.target.value = "";
@@ -1075,7 +1281,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
                         <button
                           type="button"
                           style={btnDanger}
-                          disabled={showcasePhotoBusy}
+                          disabled={photosBusy}
                           onClick={clearLandingCover}
                         >
                           Retirer
@@ -1092,7 +1298,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
                         marginBottom: "0.35rem",
                       }}
                     >
-                      Titre affiché sur la landing (optionnel)
+                      Titre landing (optionnel)
                     </label>
                     <input
                       type="text"
@@ -1124,7 +1330,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
                         marginBottom: "0.35rem",
                       }}
                     >
-                      Description courte (optionnelle)
+                      Accroche (optionnelle)
                     </label>
                     <textarea
                       value={landingDescription}
@@ -1141,38 +1347,68 @@ export function EventCustomizationEditor({ mode = "live" }) {
                         fontSize: "0.88rem",
                         resize: "vertical",
                         fontFamily: "inherit",
-                        marginBottom: "0.85rem",
+                        marginBottom: 0,
                       }}
                     />
+                  </section>
 
-                    <h3
+                  {/* 3. Galerie événement */}
+                  <section style={card}>
+                    <div
                       style={{
-                        margin: "0 0 0.35rem",
-                        fontSize: "1rem",
-                        fontWeight: 800,
-                        color: "#0f172a",
+                        display: "flex",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "0.5rem",
+                        marginBottom: "0.45rem",
                       }}
                     >
-                      ✨ Galerie événement
-                    </h3>
-                    <p
-                      style={{
-                        margin: "0 0 0.65rem",
-                        fontSize: "0.8rem",
-                        color: "#64748b",
-                        lineHeight: 1.45,
-                      }}
-                    >
-                      Teaser, ambiance, lieu, sponsors : ces visuels sont affichés sur la
-                      landing avant et pendant le live. Les moments live se publient
-                      depuis la régie ou la landing.
+                      <h2
+                        style={{
+                          margin: 0,
+                          fontSize: "0.72rem",
+                          fontWeight: 800,
+                          letterSpacing: "0.08em",
+                          textTransform: "uppercase",
+                          color: "#64748b",
+                        }}
+                      >
+                        Galerie événement
+                      </h2>
+                      <span
+                        style={{
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          color: "#0f766e",
+                          background: "#ecfdf5",
+                          border: "1px solid #a7f3d0",
+                          borderRadius: "999px",
+                          padding: "0.22rem 0.55rem",
+                        }}
+                      >
+                        En ligne dès l’ajout
+                      </span>
+                    </div>
+                    <p style={{ ...fieldHintStyle, margin: "0 0 0.65rem" }}>
+                      Teaser / ambiance (avant et pendant le live).{" "}
+                      {showcasePhotos.length}/{LANDING_SHOWCASE_MAX} photos — pas
+                      besoin d’Enregistrer.
                     </p>
                     <label
                       style={{
                         ...btnPrimary,
                         display: "inline-block",
-                        cursor: showcasePhotoBusy ? "not-allowed" : "pointer",
-                        opacity: showcasePhotoBusy ? 0.65 : 1,
+                        cursor:
+                          showcasePhotoBusy ||
+                          showcasePhotos.length >= LANDING_SHOWCASE_MAX
+                            ? "not-allowed"
+                            : "pointer",
+                        opacity:
+                          showcasePhotoBusy ||
+                          showcasePhotos.length >= LANDING_SHOWCASE_MAX
+                            ? 0.65
+                            : 1,
                         marginBottom: "0.65rem",
                       }}
                     >
@@ -1181,7 +1417,10 @@ export function EventCustomizationEditor({ mode = "live" }) {
                         accept="image/jpeg,image/png,image/webp,image/gif"
                         multiple
                         style={{ display: "none" }}
-                        disabled={showcasePhotoBusy}
+                        disabled={
+                          showcasePhotoBusy ||
+                          showcasePhotos.length >= LANDING_SHOWCASE_MAX
+                        }
                         onChange={(e) => {
                           const raw = e.target.files;
                           const files = raw?.length ? Array.from(raw) : [];
@@ -1194,7 +1433,8 @@ export function EventCustomizationEditor({ mode = "live" }) {
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
+                        gridTemplateColumns:
+                          "repeat(auto-fill, minmax(96px, 1fr))",
                         gap: "0.5rem",
                       }}
                     >
@@ -1224,6 +1464,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
                             type="button"
                             onClick={() => void removeShowcasePhoto(ph.id)}
                             disabled={showcasePhotoBusy}
+                            aria-label="Retirer de la galerie événement"
                             style={{
                               position: "absolute",
                               top: 4,
@@ -1235,7 +1476,9 @@ export function EventCustomizationEditor({ mode = "live" }) {
                               border: "1px solid #fecaca",
                               background: "rgba(254,242,242,0.95)",
                               color: "#b91c1c",
-                              cursor: showcasePhotoBusy ? "not-allowed" : "pointer",
+                              cursor: showcasePhotoBusy
+                                ? "not-allowed"
+                                : "pointer",
                             }}
                           >
                             ✕
@@ -1243,148 +1486,171 @@ export function EventCustomizationEditor({ mode = "live" }) {
                         </div>
                       ))}
                     </div>
-                  </section>
-
-                  <section style={card}>
-                    <h2
-                      style={{
-                        margin: "0 0 0.85rem",
-                        fontSize: "0.72rem",
-                        fontWeight: 800,
-                        letterSpacing: "0.08em",
-                        textTransform: "uppercase",
-                        color: "#64748b",
-                      }}
-                    >
-                      Moments live
-                    </h2>
-                    <p
-                      style={{
-                        margin: "0 0 0.75rem",
-                        fontSize: "0.77rem",
-                        color: "#64748b",
-                        lineHeight: 1.45,
-                      }}
-                    >
-                      Les photos publiées pendant l’événement enrichissent la landing en
-                      temps réel. Leur publication se pilote depuis la régie ou la
-                      landing publique.
-                    </p>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                        gap: "0.65rem",
-                        marginBottom: "0.85rem",
-                      }}
-                    >
-                      <div
-                        style={{
-                          borderRadius: "10px",
-                          border: "1px solid #e2e8f0",
-                          background: "#f8fafc",
-                          padding: "0.75rem 0.8rem",
-                        }}
-                      >
-                        <p
-                          style={{
-                            margin: "0 0 0.2rem",
-                            fontSize: "0.72rem",
-                            fontWeight: 700,
-                            color: "#64748b",
-                          }}
-                        >
-                          Galerie événement
-                        </p>
-                        <p
-                          style={{
-                            margin: 0,
-                            fontSize: "1.2rem",
-                            fontWeight: 800,
-                            color: "#0f172a",
-                          }}
-                        >
-                          {showcasePhotos.length}
-                        </p>
-                      </div>
-                      <div
-                        style={{
-                          borderRadius: "10px",
-                          border: "1px solid #e2e8f0",
-                          background: "#f8fafc",
-                          padding: "0.75rem 0.8rem",
-                        }}
-                      >
-                        <p
-                          style={{
-                            margin: "0 0 0.2rem",
-                            fontSize: "0.72rem",
-                            fontWeight: 700,
-                            color: "#64748b",
-                          }}
-                        >
-                          Photos live publiées
-                        </p>
-                        <p
-                          style={{
-                            margin: 0,
-                            fontSize: "1.2rem",
-                            fontWeight: 800,
-                            color: "#0f172a",
-                          }}
-                        >
-                          {landingLivePhotosCount}
-                        </p>
-                      </div>
-                    </div>
-                    {eventId ? (
-                      <Link
-                        href={`/admin/event/${encodeURIComponent(eventId)}`}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          padding: "0.55rem 0.9rem",
-                          borderRadius: "10px",
-                          textDecoration: "none",
-                          border: "1px solid #cbd5e1",
-                          background: "#fff",
-                          color: "#334155",
-                          fontSize: "0.84rem",
-                          fontWeight: 700,
-                        }}
-                      >
-                        Ouvrir la régie
-                      </Link>
+                    {showcasePhotos.length === 0 ? (
+                      <p style={{ ...fieldHintStyle, margin: "0.55rem 0 0" }}>
+                        Aucune photo pour l’instant.
+                      </p>
                     ) : null}
                   </section>
 
+                  {/* 4. Moments live */}
                   <section style={card}>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem" }}>
-                      <button
-                        type="button"
-                        style={{ ...btnPrimary, opacity: saving ? 0.7 : 1 }}
-                        disabled={saving}
-                        onClick={() => void handleSave()}
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "0.5rem",
+                        marginBottom: "0.45rem",
+                      }}
+                    >
+                      <h2
+                        style={{
+                          margin: 0,
+                          fontSize: "0.72rem",
+                          fontWeight: 800,
+                          letterSpacing: "0.08em",
+                          textTransform: "uppercase",
+                          color: "#64748b",
+                        }}
                       >
-                        {saving ? "Enregistrement…" : "Enregistrer la landing"}
-                      </button>
-                      {landingPath ? (
-                        <button
-                          type="button"
-                          style={btnSecondary}
-                          onClick={() =>
-                            window.open(
-                              `${window.location.origin}${landingPath}`,
-                              "_blank",
-                              "noopener,noreferrer",
-                            )
+                        Moments live
+                      </h2>
+                      <span
+                        style={{
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          color: "#0f766e",
+                          background: "#ecfdf5",
+                          border: "1px solid #a7f3d0",
+                          borderRadius: "999px",
+                          padding: "0.22rem 0.55rem",
+                        }}
+                      >
+                        En ligne dès l’ajout
+                      </span>
+                    </div>
+                    <p style={{ ...fieldHintStyle, margin: "0 0 0.65rem" }}>
+                      Photos pendant l’événement, visibles sur /e.{" "}
+                      {landingLivePhotos.length}/{LANDING_LIVE_PHOTOS_MAX} — aussi
+                      publiables depuis la régie.
+                    </p>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "0.5rem",
+                        marginBottom: "0.75rem",
+                      }}
+                    >
+                      <label
+                        style={{
+                          ...btnPrimary,
+                          display: "inline-block",
+                          cursor:
+                            livePhotoBusy ||
+                            landingLivePhotos.length >= LANDING_LIVE_PHOTOS_MAX
+                              ? "not-allowed"
+                              : "pointer",
+                          opacity:
+                            livePhotoBusy ||
+                            landingLivePhotos.length >= LANDING_LIVE_PHOTOS_MAX
+                              ? 0.65
+                              : 1,
+                        }}
+                      >
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/gif"
+                          multiple
+                          style={{ display: "none" }}
+                          disabled={
+                            livePhotoBusy ||
+                            landingLivePhotos.length >= LANDING_LIVE_PHOTOS_MAX
                           }
+                          onChange={(e) => {
+                            const raw = e.target.files;
+                            const files = raw?.length ? Array.from(raw) : [];
+                            e.target.value = "";
+                            if (files.length) void addLiveMomentPhotos(files);
+                          }}
+                        />
+                        {livePhotoBusy ? "Publication…" : "Publier une photo"}
+                      </label>
+                      {eventId ? (
+                        <Link
+                          href={`/admin/event/${encodeURIComponent(eventId)}`}
+                          style={{
+                            ...btnSecondary,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            textDecoration: "none",
+                          }}
                         >
-                          Voir la landing
-                        </button>
+                          Ouvrir la régie
+                        </Link>
                       ) : null}
                     </div>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fill, minmax(96px, 1fr))",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      {landingLivePhotos.map((ph) => (
+                        <div
+                          key={ph.id}
+                          style={{
+                            position: "relative",
+                            borderRadius: "10px",
+                            overflow: "hidden",
+                            border: "1px solid #e2e8f0",
+                            aspectRatio: "1",
+                            background: "#f8fafc",
+                          }}
+                        >
+                          <img
+                            src={ph.url}
+                            alt=""
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                              display: "block",
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void removeLiveMomentPhoto(ph.id)}
+                            disabled={livePhotoBusy}
+                            aria-label="Retirer le moment live"
+                            style={{
+                              position: "absolute",
+                              top: 4,
+                              right: 4,
+                              padding: "0.2rem 0.45rem",
+                              fontSize: "0.68rem",
+                              fontWeight: 700,
+                              borderRadius: "6px",
+                              border: "1px solid #fecaca",
+                              background: "rgba(254,242,242,0.95)",
+                              color: "#b91c1c",
+                              cursor: livePhotoBusy ? "not-allowed" : "pointer",
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    {landingLivePhotos.length === 0 ? (
+                      <p style={{ ...fieldHintStyle, margin: "0.55rem 0 0" }}>
+                        Aucun moment live publié.
+                      </p>
+                    ) : null}
                   </section>
                 </>
               ) : (
@@ -2092,10 +2358,62 @@ export function EventCustomizationEditor({ mode = "live" }) {
               </h2>
               <p style={{ margin: "0 0 0.85rem", fontSize: "0.82rem", color: "#64748b" }}>
                 {isLandingPage
-                  ? "Prévisualisation de la vitrine publique. L’aperçu reflète la dernière version enregistrée."
+                  ? landingPreviewActive
+                    ? "Dernière version enregistrée + galeries déjà en ligne. « Enregistrer » met à jour titre, accroche, couverture et publication."
+                    : "Activez puis enregistrez la landing pour prévisualiser /e ici (sans afficher la salle live)."
                   : "Brouillon en direct dans cette page (mise en page, couleurs, médias). Les participants voient uniquement la version enregistrée. Cet aperçu ne simule pas les étapes de vote."}
               </p>
-              {(isLandingPage ? landingPath : joinPath) ? (
+              {isLandingPage && !landingPreviewActive ? (
+                <div
+                  style={{
+                    borderRadius: "18px",
+                    border: "1px dashed #cbd5e1",
+                    background: "#f8fafc",
+                    minHeight: "min(420px, 52vh)",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "0.75rem",
+                    padding: "1.5rem",
+                    textAlign: "center",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "0.95rem",
+                      fontWeight: 700,
+                      color: "#334155",
+                    }}
+                  >
+                    {landingEnabled
+                      ? "Enregistrez pour activer l’aperçu"
+                      : "Landing désactivée"}
+                  </p>
+                  <p style={{ margin: 0, fontSize: "0.82rem", color: "#64748b", maxWidth: "22rem" }}>
+                    {landingEnabled
+                      ? "La case est cochée : cliquez « Enregistrer la landing » pour publier /e et charger l’aperçu."
+                      : "Cochez « Activer la landing événement », puis enregistrez. Tant qu’elle est off, /e redirige vers la salle."}
+                  </p>
+                  {landingPath && !landingEnabled ? (
+                    <button
+                      type="button"
+                      style={btnSecondary}
+                      onClick={() =>
+                        window.open(
+                          `${window.location.origin}${landingPath}`,
+                          "_blank",
+                          "noopener,noreferrer",
+                        )
+                      }
+                    >
+                      Ouvrir /e (redirige vers la salle)
+                    </button>
+                  ) : null}
+                </div>
+              ) : (isLandingPage ? landingPath : joinPath) ? (
                 <>
                   <div
                     style={{
@@ -2125,7 +2443,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
                     />
                     <iframe
                       ref={previewIframeRef}
-                      key={`${mode}-${slug ?? "preview"}`}
+                      key={`${mode}-${slug ?? "preview"}-${previewNonce}`}
                       title={isLandingPage ? "Aperçu landing" : "Aperçu salle"}
                       src={isLandingPage ? landingPath : joinPath}
                       sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
@@ -2165,7 +2483,12 @@ export function EventCustomizationEditor({ mode = "live" }) {
                       La salle publiée ignore le brouillon non enregistré de
                       cette page.
                     </p>
-                  ) : null}
+                  ) : (
+                    <p style={{ ...fieldHintStyle, marginTop: "0.45rem" }}>
+                      Galerie événement et moments live sont déjà publics ; titre,
+                      accroche, couverture et activation suivent « Enregistrer ».
+                    </p>
+                  )}
                 </>
               ) : (
                 <p style={{ color: "#64748b", margin: 0 }}>Slug manquant.</p>
@@ -2195,8 +2518,12 @@ export function EventCustomizationEditor({ mode = "live" }) {
               {isLivePage && hasLiveFieldErrors
                 ? "Corrigez les champs en erreur avant d’enregistrer"
                 : dirty
-                  ? "Modifications non enregistrées"
-                  : "Tout est enregistré"}
+                  ? isLandingPage
+                    ? "Publication / personnalisation non enregistrées (galeries déjà en ligne)"
+                    : "Modifications non enregistrées"
+                  : isLandingPage
+                    ? "Publication & personnalisation à jour · galeries immédiates"
+                    : "Tout est enregistré"}
             </p>
             <button
               type="button"
