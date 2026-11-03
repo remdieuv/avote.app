@@ -777,6 +777,30 @@ export function resolveJoinHistoriqueQuestions(pastPolls) {
 }
 
 /**
+ * Poll IDs éligibles au GET `/p/:slug/contest-status`.
+ * La route backend n’accepte que `CONTEST_ENTRY` — les autres types renvoient 404.
+ * Filtre l’historique Join pour ne sonder que les concours (actif ou terminé).
+ *
+ * @param {unknown} historiqueQuestions — sortie de `resolveJoinHistoriqueQuestions`
+ * @returns {string[]}
+ */
+export function resolveJoinContestStatusPollIds(historiqueQuestions) {
+  if (!Array.isArray(historiqueQuestions)) return [];
+  const ids = [];
+  for (const row of historiqueQuestions) {
+    if (!row || typeof row !== "object") continue;
+    const id = String(/** @type {{ id?: unknown }} */ (row).id || "").trim();
+    if (!id || id === "__active__") continue;
+    const type = String(
+      /** @type {{ type?: unknown }} */ (row).type || "",
+    ).toUpperCase();
+    if (type !== "CONTEST_ENTRY") continue;
+    ids.push(id);
+  }
+  return ids;
+}
+
+/**
  * Barres / stats Salle : uniquement quand la régie a projeté RESULTS.
  * Jamais dès « j’ai voté » pendant VOTING (évite révélation prématurée).
  * @param {{ affichageResultatsPublic?: boolean }} input

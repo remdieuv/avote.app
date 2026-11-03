@@ -30,6 +30,7 @@ import {
   isParticipantRoomFull,
   resolveEventLandingPhase,
   resolveJoinHistoriqueQuestions,
+  resolveJoinContestStatusPollIds,
   countParticipantVoteConfirmedSurfaces,
   resolveParticipantTopStripLabel,
   shouldAutoNavigateJoinToPollPath,
@@ -1105,6 +1106,35 @@ test("Copie jamais lancée (dup A→B) → WAITING, pas vote confirmé, pas ques
   assert.deepEqual(resolveJoinHistoriqueQuestions(undefined), []);
 });
 
+test("contest-status Join : uniquement les CONTEST_ENTRY de l’historique", () => {
+  const historique = resolveJoinHistoriqueQuestions([
+    { id: "q1", label: "Sondage", type: "SINGLE_CHOICE" },
+    { id: "q2", label: "Lead", type: "LEAD", leadEnabled: true },
+    { id: "q3", label: "Concours", type: "CONTEST_ENTRY" },
+    { id: "q4", label: "Quiz", type: "QUIZ" },
+    { id: "q5", label: "Multi concours", type: "contest_entry" },
+    { id: "__active__", label: "Active", type: "CONTEST_ENTRY" },
+    { id: "q6", label: "Sans type" },
+  ]);
+  assert.deepEqual(resolveJoinContestStatusPollIds(historique), [
+    "q3",
+    "q5",
+  ]);
+  // Fin d’événement : historique complet sans concours → aucun appel
+  assert.deepEqual(
+    resolveJoinContestStatusPollIds(
+      resolveJoinHistoriqueQuestions([
+        { id: "a", label: "A", type: "SINGLE_CHOICE" },
+        { id: "b", label: "B", type: "QUIZ" },
+      ]),
+    ),
+    [],
+  );
+  assert.deepEqual(resolveJoinContestStatusPollIds(null), []);
+  assert.deepEqual(resolveJoinContestStatusPollIds(undefined), []);
+  assert.deepEqual(resolveJoinContestStatusPollIds([]), []);
+});
+
 test("/p standalone : socket + OFFLINE + meta branding autonomes", () => {
   assert.equal(shouldPollOpenOwnSocket({ embedded: false }), true);
   assert.equal(shouldPollOpenOwnSocket({}), true);
@@ -1484,6 +1514,21 @@ test("JoinLiveHub source : pas de setSocketOnline(false) prématuré + connect_e
   assert.match(src, /shouldShowJoinOfflineBanner/);
   assert.match(src, /connect_error/);
   assert.match(src, /socket_created/);
+});
+
+test("JoinLiveHub source : contest-status filtré CONTEST_ENTRY (pas tout l’historique)", () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, "../components/JoinLiveHub.jsx"), "utf8");
+  assert.match(src, /resolveJoinContestStatusPollIds/);
+  assert.match(
+    src,
+    /const pollIds = resolveJoinContestStatusPollIds\(historiqueQuestions\)/,
+  );
+  // Régression : ne plus dériver pollIds de tout l’historique sans filtre type
+  assert.equal(
+    /const pollIds = historiqueQuestions\s*\n\s*\.map\(/.test(src),
+    false,
+  );
 });
 
 let failed = 0;

@@ -1581,27 +1581,15 @@ export default function EventLandingPage() {
             "--ev-accent": accent,
           }}
         >
-          {afterLive ? (
-            <Link
-              href={joinHref}
-              className="ev-landing-footer-cta"
-              style={{
-                ...footerCta,
-                background: "#e2e8f0",
-                color: "#0f172a",
-                boxShadow: "0 4px 16px rgba(15,23,42,0.08)",
-              }}
-            >
-              Revoir la salle
-            </Link>
-          ) : (
+          {/* Après l’événement : pas de lien salle (ni Accéder / Revoir). CTA live inchangé. */}
+          {!afterLive ? (
             <Link href={joinHref} className="ev-landing-footer-link">
               Accéder à la salle
             </Link>
-          )}
+          ) : null}
           <p
             style={{
-              margin: "1.1rem auto 0",
+              margin: afterLive ? "0 auto" : "1.1rem auto 0",
               fontSize: "0.92rem",
               color: "#64748b",
               maxWidth: "22rem",

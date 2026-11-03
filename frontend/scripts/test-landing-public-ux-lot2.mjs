@@ -55,10 +55,11 @@ test("un CTA dominant par phase", () => {
   assert.match(page, /ev-landing-hero-cta-during/);
   assert.match(page, /ev-landing-sticky-join/);
   assert.match(page, /Participer au live/);
-  // Footer avant/pendant = lien texte ; après = bouton plein
+  // Footer avant/pendant = lien texte « Accéder à la salle » ; après = masqué
   assert.match(page, /ev-landing-footer-link/);
   assert.match(page, /Accéder à la salle/);
-  assert.match(page, /Revoir la salle/);
+  assert.match(page, /!afterLive\s*\?\s*\(/);
+  assert.doesNotMatch(page, /Revoir la salle/);
   // Plus de CTA milieu pendant (desktop dupliqué)
   assert.doesNotMatch(page, /ev-landing-live-cta-desktop/);
 });
