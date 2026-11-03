@@ -14,6 +14,10 @@ import {
   CameraIcon,
   LandingHybridFeed,
 } from "@/components/event/LandingHybridFeed";
+import {
+  LandingPhotoLightbox,
+  normalizeLightboxPhotos,
+} from "@/components/event/LandingPhotoLightbox";
 import { getOrCreateVoterSessionId } from "@/lib/votes/voter-session";
 import { resolveEventLandingPhase } from "@/lib/participantLiveFlow";
 
@@ -32,6 +36,7 @@ function LandingGalleryPhoto({
   isDeleting,
   isExiting,
   onDelete = () => {},
+  onOpen = null,
 }) {
   const wrapClass =
     variant === "slide" ? "ev-gallery-slide" : "ev-gallery-card";
@@ -44,8 +49,20 @@ function LandingGalleryPhoto({
     <div className={`${wrapClass}${exitingClass}`}>
       <div className="ev-gallery-frame">
         <figure>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={url} alt="" loading="lazy" />
+          {onOpen ? (
+            <button
+              type="button"
+              className="ev-landing-showcase-photo-btn"
+              aria-label="Agrandir la photo"
+              onClick={() => onOpen(photoId)}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt="" loading="lazy" />
+            </button>
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={url} alt="" loading="lazy" />
+          )}
         </figure>
         {canManage ? (
           <button
@@ -90,6 +107,9 @@ export default function EventLandingPage() {
   const showcaseScrollRef = useRef(null);
   const showcaseCarouselRafRef = useRef(0);
   const [showcaseCarouselIndex, setShowcaseCarouselIndex] = useState(0);
+  const [showcaseLightboxIndex, setShowcaseLightboxIndex] = useState(
+    /** @type {number | null} */ (null),
+  );
   const [visitorKey, setVisitorKey] = useState("");
   const [likeBusyId, setLikeBusyId] = useState(/** @type {string | null} */ (null));
 
@@ -641,6 +661,18 @@ export default function EventLandingPage() {
   const showShowcaseBlock = showcasePhotosList.length > 0;
   const feedItems = Array.isArray(payload.feed) ? payload.feed : [];
   const showFeedBlock = feedItems.length > 0 || canUploadLanding;
+  const showcaseLightboxPhotos = useMemo(() => {
+    const raw = [];
+    for (const p of showcasePhotosList) {
+      const u =
+        typeof p?.url === "string"
+          ? resolveApiAssetUrlNullable(p.url.trim())
+          : null;
+      if (!u) continue;
+      raw.push({ id: String(p.id ?? u), url: u });
+    }
+    return normalizeLightboxPhotos(raw);
+  }, [showcasePhotosList]);
 
   const showcaseEyebrow = afterLive
     ? "Souvenirs"
@@ -962,6 +994,22 @@ export default function EventLandingPage() {
           color: #94a3b8;
           min-width: 2.5rem;
           text-align: center;
+        }
+        .ev-landing-showcase-photo-btn {
+          display: block;
+          width: 100%;
+          height: 100%;
+          padding: 0;
+          margin: 0;
+          border: none;
+          background: transparent;
+          cursor: zoom-in;
+        }
+        .ev-landing-showcase-photo-btn img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
         }
         @media (min-width: 768px) {
           .ev-landing-gallery-scroll {
@@ -1343,6 +1391,12 @@ export default function EventLandingPage() {
                       canManage={false}
                       isDeleting={false}
                       isExiting={false}
+                      onOpen={(id) => {
+                        const idx = showcaseLightboxPhotos.findIndex(
+                          (x) => x.id === String(id),
+                        );
+                        if (idx >= 0) setShowcaseLightboxIndex(idx);
+                      }}
                     />
                   );
                 })}
@@ -1384,12 +1438,26 @@ export default function EventLandingPage() {
                     canManage={false}
                     isDeleting={false}
                     isExiting={false}
+                    onOpen={(id) => {
+                      const idx = showcaseLightboxPhotos.findIndex(
+                        (x) => x.id === String(id),
+                      );
+                      if (idx >= 0) setShowcaseLightboxIndex(idx);
+                    }}
                   />
                 );
               })}
             </div>
           </section>
         ) : null}
+
+        <LandingPhotoLightbox
+          open={showcaseLightboxIndex != null && showcaseLightboxPhotos.length > 0}
+          photos={showcaseLightboxPhotos}
+          index={showcaseLightboxIndex ?? 0}
+          onClose={() => setShowcaseLightboxIndex(null)}
+          onIndexChange={setShowcaseLightboxIndex}
+        />
 
         {!livePriority && !afterLive ? (
         <section

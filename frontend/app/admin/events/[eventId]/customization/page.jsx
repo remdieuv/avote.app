@@ -166,6 +166,9 @@ function EditorModeSwitch({ eventId, current }) {
   const landingHref = eventId
     ? `/admin/events/${encodeURIComponent(eventId)}/landing`
     : "/admin/events";
+  const regieHref = eventId
+    ? `/admin/event/${encodeURIComponent(eventId)}`
+    : "/admin/events";
 
   function linkStyle(active) {
     return {
@@ -209,6 +212,14 @@ function EditorModeSwitch({ eventId, current }) {
         style={linkStyle(current === "landing")}
       >
         ✨ Landing événement
+      </Link>
+      <Link
+        href={regieHref}
+        className="editor-universe-link editor-universe-link--regie"
+        style={linkStyle(false)}
+        data-testid="landing-admin-regie-link"
+      >
+        Régie
       </Link>
     </div>
   );
@@ -2563,6 +2574,11 @@ export function EventCustomizationEditor({ mode = "live" }) {
           border-color: rgba(168, 85, 247, 0.24) !important;
           color: #6d28d9 !important;
         }
+        .editor-universe-link--regie {
+          background: rgba(15, 23, 42, 0.06) !important;
+          border-color: rgba(15, 23, 42, 0.12) !important;
+          color: #0f172a !important;
+        }
         @media (hover: hover) {
           .editor-universe-link--live:hover {
             background: rgba(59, 130, 246, 0.18) !important;
@@ -2571,6 +2587,10 @@ export function EventCustomizationEditor({ mode = "live" }) {
           .editor-universe-link--landing:hover {
             background: rgba(168, 85, 247, 0.18) !important;
             border-color: rgba(168, 85, 247, 0.32) !important;
+          }
+          .editor-universe-link--regie:hover {
+            background: rgba(15, 23, 42, 0.1) !important;
+            border-color: rgba(15, 23, 42, 0.18) !important;
           }
         }
         .customization-section-summary::-webkit-details-marker {

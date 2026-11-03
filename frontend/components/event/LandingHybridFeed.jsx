@@ -1,6 +1,11 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { resolveApiAssetUrlNullable } from "@/lib/assetUrl";
+import {
+  LandingPhotoLightbox,
+  normalizeLightboxPhotos,
+} from "@/components/event/LandingPhotoLightbox";
 
 /**
  * Fil chronologique Landing hybride — photos Moments, résultats, messages orga.
@@ -48,6 +53,25 @@ function HeartIcon({ filled, size = 18 }) {
 }
 
 /**
+ * Photos du fil (ordre chronologique du feed) pour la lightbox.
+ * @param {Array<Record<string, unknown>>} items
+ * @returns {Array<{ id: string; url: string }>}
+ */
+export function collectFeedLightboxPhotos(items) {
+  if (!Array.isArray(items)) return [];
+  const raw = [];
+  for (const item of items) {
+    if (String(item?.type || "") !== "photo" || !item?.photo) continue;
+    const photo = /** @type {{ id?: unknown; url?: unknown }} */ (item.photo);
+    const rawUrl = typeof photo.url === "string" ? photo.url : "";
+    const url = resolveApiAssetUrlNullable(rawUrl.trim()) || rawUrl.trim();
+    if (!url) continue;
+    raw.push({ id: String(photo.id || url), url });
+  }
+  return normalizeLightboxPhotos(raw);
+}
+
+/**
  * @param {{
  *   accent: string;
  *   items: Array<Record<string, unknown>>;
@@ -72,7 +96,20 @@ export function LandingHybridFeed({
   emptyHint = null,
 }) {
   const hasItems = Array.isArray(items) && items.length > 0;
+  const lightboxPhotos = useMemo(
+    () => collectFeedLightboxPhotos(items),
+    [items],
+  );
+  const [lightboxIndex, setLightboxIndex] = useState(/** @type {number | null} */ (null));
+  const lightboxOpen = lightboxIndex != null && lightboxPhotos.length > 0;
+
   if (!hasItems && !headerAction && !emptyHint) return null;
+
+  function openPhoto(photoId) {
+    const idx = lightboxPhotos.findIndex((p) => p.id === String(photoId));
+    if (idx < 0) return;
+    setLightboxIndex(idx);
+  }
 
   return (
     <section
@@ -146,48 +183,94 @@ export function LandingHybridFeed({
       ) : null}
 
       {hasItems ? (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "1rem",
-          }}
-        >
+        <div className="ev-landing-feed-list" data-testid="landing-hybrid-feed-list">
           {items.map((item) => {
             const type = String(item?.type || "");
             const key = String(item?.id || Math.random());
             if (type === "photo" && item.photo) {
               return (
-                <FeedPhotoCard
-                  key={key}
-                  photo={item.photo}
-                  accent={accent}
-                  busy={likeBusyId === String(item.photo.id)}
-                  onToggleLike={onToggleLike}
-                  canManage={canManage}
-                  onDeletePhoto={onDeletePhoto}
-                  isDeleting={deletingPhotoId === String(item.photo.id)}
-                />
+                <div key={key} className="ev-landing-feed-item ev-landing-feed-item--photo">
+                  <FeedPhotoCard
+                    photo={item.photo}
+                    accent={accent}
+                    busy={likeBusyId === String(item.photo.id)}
+                    onToggleLike={onToggleLike}
+                    canManage={canManage}
+                    onDeletePhoto={onDeletePhoto}
+                    isDeleting={deletingPhotoId === String(item.photo.id)}
+                    onOpenLightbox={() => openPhoto(item.photo.id)}
+                  />
+                </div>
               );
             }
             if (type === "message" && item.message) {
               return (
-                <FeedMessageCard
-                  key={key}
-                  message={item.message}
-                  accent={accent}
-                />
+                <div key={key} className="ev-landing-feed-item ev-landing-feed-item--wide">
+                  <FeedMessageCard
+                    message={item.message}
+                    accent={accent}
+                  />
+                </div>
               );
             }
             if (type === "result" && item.result) {
               return (
-                <FeedResultCard key={key} result={item.result} accent={accent} />
+                <div key={key} className="ev-landing-feed-item ev-landing-feed-item--wide">
+                  <FeedResultCard result={item.result} accent={accent} />
+                </div>
               );
             }
             return null;
           })}
         </div>
       ) : null}
+
+      <LandingPhotoLightbox
+        open={lightboxOpen}
+        photos={lightboxPhotos}
+        index={lightboxIndex ?? 0}
+        onClose={() => setLightboxIndex(null)}
+        onIndexChange={setLightboxIndex}
+      />
+
+      <style>{`
+        .ev-landing-feed-list {
+          display: flex;
+          flex-direction: column;
+          gap: 0.85rem;
+        }
+        @media (min-width: 768px) {
+          .ev-landing-feed-list {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 0.85rem 1rem;
+            align-items: start;
+          }
+          .ev-landing-feed-item--wide {
+            grid-column: 1 / -1;
+          }
+          .ev-landing-feed-item--photo .ev-landing-feed-photo-img {
+            max-height: 240px;
+          }
+        }
+        .ev-landing-feed-photo-btn {
+          display: block;
+          width: 100%;
+          padding: 0;
+          margin: 0;
+          border: none;
+          background: transparent;
+          cursor: zoom-in;
+          text-align: left;
+        }
+        .ev-landing-feed-photo-img {
+          display: block;
+          width: 100%;
+          max-height: min(58vw, 320px);
+          object-fit: cover;
+          background: #e2e8f0;
+        }
+      `}</style>
     </section>
   );
 }
@@ -195,11 +278,12 @@ export function LandingHybridFeed({
 function FeedCardShell({ children, eyebrow }) {
   return (
     <article
+      className="ev-landing-feed-card"
       style={{
-        borderRadius: "20px",
+        borderRadius: "16px",
         border: "1px solid rgba(15,23,42,0.06)",
         background: "#fff",
-        boxShadow: "0 12px 36px rgba(15,23,42,0.06)",
+        boxShadow: "0 8px 24px rgba(15,23,42,0.05)",
         overflow: "hidden",
       }}
     >
@@ -207,7 +291,7 @@ function FeedCardShell({ children, eyebrow }) {
         <p
           style={{
             margin: 0,
-            padding: "0.75rem 1rem 0",
+            padding: "0.65rem 0.9rem 0",
             fontSize: "0.65rem",
             fontWeight: 800,
             letterSpacing: "0.16em",
@@ -231,6 +315,7 @@ function FeedPhotoCard({
   canManage,
   onDeletePhoto,
   isDeleting,
+  onOpenLightbox,
 }) {
   const raw = typeof photo?.url === "string" ? photo.url : "";
   const url = resolveApiAssetUrlNullable(raw.trim()) || raw;
@@ -241,26 +326,30 @@ function FeedPhotoCard({
   return (
     <FeedCardShell eyebrow="Moment">
       <div style={{ position: "relative" }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={url}
-          alt=""
-          loading="lazy"
-          style={{
-            display: "block",
-            width: "100%",
-            maxHeight: "min(70vw, 420px)",
-            objectFit: "cover",
-            background: "#e2e8f0",
-          }}
-        />
+        <button
+          type="button"
+          className="ev-landing-feed-photo-btn"
+          aria-label="Agrandir la photo"
+          onClick={() => onOpenLightbox?.()}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={url}
+            alt=""
+            loading="lazy"
+            className="ev-landing-feed-photo-img"
+          />
+        </button>
         {canManage && onDeletePhoto ? (
           <button
             type="button"
             className="ev-gallery-delete-btn"
             disabled={isDeleting}
             aria-label="Supprimer cette photo"
-            onClick={() => onDeletePhoto(id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeletePhoto(id);
+            }}
             style={{
               position: "absolute",
               top: "0.75rem",
@@ -274,27 +363,31 @@ function FeedPhotoCard({
         <button
           type="button"
           disabled={busy || !onToggleLike}
-          onClick={() => onToggleLike?.(id, liked)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleLike?.(id, liked);
+          }}
           aria-label={liked ? "Retirer le like" : "Aimer cette photo"}
           aria-pressed={liked}
           style={{
             position: "absolute",
-            right: "0.85rem",
-            bottom: "0.85rem",
+            right: "0.75rem",
+            bottom: "0.75rem",
+            zIndex: 2,
             display: "inline-flex",
             alignItems: "center",
-            gap: "0.4rem",
-            padding: "0.45rem 0.75rem",
+            gap: "0.35rem",
+            padding: "0.4rem 0.65rem",
             borderRadius: "999px",
             border: "none",
             cursor: busy ? "wait" : "pointer",
             fontWeight: 700,
-            fontSize: "0.88rem",
+            fontSize: "0.84rem",
             color: liked ? "#fff" : "#0f172a",
             background: liked
               ? `linear-gradient(180deg, ${accent}, color-mix(in srgb, ${accent} 78%, #000))`
               : "rgba(255,255,255,0.92)",
-            boxShadow: "0 8px 24px rgba(15,23,42,0.22)",
+            boxShadow: "0 6px 18px rgba(15,23,42,0.2)",
             backdropFilter: "blur(8px)",
           }}
         >
@@ -311,11 +404,11 @@ function FeedMessageCard({ message, accent }) {
   if (!body) return null;
   return (
     <FeedCardShell eyebrow="Organisateur">
-      <div style={{ padding: "0.65rem 1.1rem 1.15rem" }}>
+      <div style={{ padding: "0.55rem 1rem 1rem" }}>
         <p
           style={{
             margin: 0,
-            fontSize: "1.05rem",
+            fontSize: "1.02rem",
             lineHeight: 1.55,
             color: "#0f172a",
             whiteSpace: "pre-wrap",
@@ -340,11 +433,11 @@ function FeedResultCard({ result, accent }) {
     : [];
   return (
     <FeedCardShell eyebrow="Résultat">
-      <div style={{ padding: "0.55rem 1.1rem 1.2rem" }}>
+      <div style={{ padding: "0.5rem 1rem 1.05rem" }}>
         <h3
           style={{
-            margin: "0 0 0.85rem",
-            fontSize: "1.08rem",
+            margin: "0 0 0.75rem",
+            fontSize: "1.05rem",
             fontWeight: 750,
             letterSpacing: "-0.02em",
             color: "#0f172a",
@@ -353,7 +446,7 @@ function FeedResultCard({ result, accent }) {
         >
           {question}
         </h3>
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           {options.map((opt) => {
             const votes = Number(opt?.votes || 0);
             const pct = Math.round((votes / maxVotes) * 100);
@@ -364,7 +457,7 @@ function FeedResultCard({ result, accent }) {
                     display: "flex",
                     justifyContent: "space-between",
                     gap: "0.75rem",
-                    fontSize: "0.9rem",
+                    fontSize: "0.88rem",
                     marginBottom: "0.25rem",
                   }}
                 >
@@ -400,8 +493,8 @@ function FeedResultCard({ result, accent }) {
         {winners.length > 0 ? (
           <p
             style={{
-              margin: "0.9rem 0 0",
-              fontSize: "0.9rem",
+              margin: "0.85rem 0 0",
+              fontSize: "0.88rem",
               color: "#475569",
             }}
           >
