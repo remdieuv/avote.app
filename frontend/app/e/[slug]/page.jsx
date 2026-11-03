@@ -136,6 +136,77 @@ export default function EventLandingPage() {
     };
   }, [slug, router, isDemoSlug]);
 
+  const softRefreshLiveState =
+    typeof payload?.liveState === "string" ? payload.liveState : null;
+  const softRefreshVoteState =
+    typeof payload?.voteState === "string" ? payload.voteState : null;
+  const softRefreshDisplayState =
+    typeof payload?.displayState === "string" ? payload.displayState : null;
+  const softRefreshReady = Boolean(payload) && !isDemoSlug && Boolean(slug);
+
+  /** Soft-refresh moments (GET landing) ~30s pendant le live — pas de reload page. */
+  useEffect(() => {
+    if (!softRefreshReady || !slug) return undefined;
+    const phase = resolveEventLandingPhase({
+      liveState: softRefreshLiveState,
+      voteState: softRefreshVoteState,
+      displayState: softRefreshDisplayState,
+    });
+    if (phase !== "during") return undefined;
+    let cancelled = false;
+    const SOFT_MS = 30_000;
+    const softRefresh = async () => {
+      try {
+        const res = await adminFetch(
+          `${apiBaseBrowser()}/events/slug/${encodeURIComponent(slug)}/landing`,
+          { cache: "no-store" },
+        );
+        if (cancelled || !res.ok) return;
+        const data = await res.json();
+        if (cancelled || !data || data.enabled === false) return;
+        setPayload((prev) => {
+          if (!prev || typeof prev !== "object") return prev;
+          return {
+            ...prev,
+            photos: Array.isArray(data.photos) ? data.photos : prev.photos,
+            showcasePhotos: Array.isArray(data.showcasePhotos)
+              ? data.showcasePhotos
+              : prev.showcasePhotos,
+            liveState:
+              typeof data.liveState === "string"
+                ? data.liveState
+                : prev.liveState,
+            voteState:
+              typeof data.voteState === "string"
+                ? data.voteState
+                : prev.voteState,
+            displayState:
+              typeof data.displayState === "string"
+                ? data.displayState
+                : prev.displayState,
+            infoShowOnFinished:
+              typeof data.infoShowOnFinished === "boolean"
+                ? data.infoShowOnFinished
+                : prev.infoShowOnFinished,
+          };
+        });
+      } catch {
+        /* soft-refresh silencieux */
+      }
+    };
+    const id = window.setInterval(softRefresh, SOFT_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [
+    slug,
+    softRefreshReady,
+    softRefreshLiveState,
+    softRefreshVoteState,
+    softRefreshDisplayState,
+  ]);
+
   const triggerLandingPhotoPicker = useCallback(() => {
     setUploadError(null);
     fileInputRef.current?.click();
@@ -506,11 +577,14 @@ export default function EventLandingPage() {
     typeof payload.infoSecondaryCtaUrl === "string"
       ? payload.infoSecondaryCtaUrl.trim()
       : "";
+  const infoShowOnFinished = payload.infoShowOnFinished !== false;
+  const hasInfoContent =
+    Boolean(infoTitle) ||
+    Boolean(infoText) ||
+    Boolean(ipL && ipU) ||
+    Boolean(isL && isU);
   const showInfo =
-    infoTitle ||
-    infoText ||
-    (ipL && ipU) ||
-    (isL && isU);
+    hasInfoContent && !(afterLive && !infoShowOnFinished);
 
   const canUploadLanding =
     payload.canUploadLandingPhoto === true &&
@@ -518,6 +592,26 @@ export default function EventLandingPage() {
     String(payload.landingPhotoUploadEventId).trim() !== "";
   const showShowcaseBlock = showcasePhotosList.length > 0;
   const showLiveBlock = photos.length > 0 || canUploadLanding;
+
+  const showcaseEyebrow = afterLive
+    ? "Souvenirs"
+    : "Galerie événement";
+  const showcaseTitle = "L'événement";
+  const showcaseLead = afterLive
+    ? "Retrouvez l'ambiance et les temps forts de l'événement."
+    : "Découvrez l'ambiance et les temps forts de l'événement.";
+
+  const momentsEyebrow = afterLive
+    ? "Pendant le live"
+    : livePriority
+      ? "En direct"
+      : "Moments";
+  const momentsTitle = livePriority ? "🔴 Moments live" : "Moments live";
+  const momentsLead = afterLive
+    ? "Les moments capturés pendant le live."
+    : livePriority
+      ? "Les photos ajoutées pendant le live apparaissent ici."
+      : "Les photos du live apparaîtront ici.";
 
   const footerCta = {
     display: "inline-flex",
@@ -540,7 +634,11 @@ export default function EventLandingPage() {
 
   return (
     <main
-      className="ev-landing-shell"
+      className={
+        livePriority
+          ? "ev-landing-shell ev-landing-shell--sticky-join"
+          : "ev-landing-shell"
+      }
       style={{
         minHeight: "100vh",
         background: "#f1f5f9",
@@ -958,7 +1056,7 @@ export default function EventLandingPage() {
           position: fixed;
           right: max(1rem, env(safe-area-inset-right));
           bottom: max(1rem, env(safe-area-inset-bottom));
-          z-index: 60;
+          z-index: 61;
           width: 3.5rem;
           height: 3.5rem;
           padding: 0;
@@ -974,7 +1072,13 @@ export default function EventLandingPage() {
           box-shadow:
             0 12px 36px rgba(15, 23, 42, 0.28),
             0 0 0 1px rgba(255, 255, 255, 0.12) inset;
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
+          transition: transform 0.2s ease, box-shadow 0.2s ease, bottom 0.2s ease;
+        }
+        /* Pendant live + sticky : FAB au-dessus de la barre Participer */
+        @media (max-width: 767px) {
+          .ev-landing-upload-fab--above-sticky {
+            bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+          }
         }
         .ev-landing-upload-fab:not(:disabled):hover {
           transform: scale(1.06);
@@ -1036,8 +1140,9 @@ export default function EventLandingPage() {
         .ev-landing-sticky-join {
           display: none;
         }
-        @media (max-width: 720px) {
-          .ev-landing-live-cta-desktop {
+        /* Mobile pendant : sticky = CTA dominant ; hero CTA masqué (aligné galerie 768) */
+        @media (max-width: 767px) {
+          .ev-landing-hero-cta-during {
             display: none;
           }
           .ev-landing-sticky-join {
@@ -1066,9 +1171,21 @@ export default function EventLandingPage() {
             background: linear-gradient(180deg, var(--ev-accent, #2563eb), color-mix(in srgb, var(--ev-accent, #2563eb) 82%, #000));
             box-shadow: 0 10px 28px color-mix(in srgb, var(--ev-accent, #2563eb) 35%, rgba(15,23,42,0.2));
           }
-          .ev-landing-shell {
+          .ev-landing-shell--sticky-join {
             padding-bottom: 5.5rem;
           }
+        }
+        .ev-landing-footer-link {
+          display: inline-block;
+          font-size: 0.92rem;
+          font-weight: 600;
+          color: #64748b;
+          text-decoration: underline;
+          text-underline-offset: 0.18em;
+          transition: color 0.2s ease;
+        }
+        .ev-landing-footer-link:hover {
+          color: var(--ev-accent, #2563eb);
         }
       `}</style>
 
@@ -1103,7 +1220,10 @@ export default function EventLandingPage() {
             <p className="ev-landing-hero-desc">{description}</p>
           ) : null}
           {livePriority ? (
-            <div style={{ marginTop: "1.25rem" }}>
+            <div
+              className="ev-landing-hero-cta-during"
+              style={{ marginTop: "1.25rem" }}
+            >
               <Link href={joinHref} className="ev-landing-hero-cta">
                 Participer au live
               </Link>
@@ -1120,7 +1240,7 @@ export default function EventLandingPage() {
           boxSizing: "border-box",
         }}
       >
-        {showShowcaseBlock && !livePriority ? (
+        {showShowcaseBlock ? (
           <section
             className="ev-landing-gallery-section"
             style={{
@@ -1139,7 +1259,7 @@ export default function EventLandingPage() {
                   color: "#64748b",
                 }}
               >
-                Avant le live
+                {showcaseEyebrow}
               </p>
               <h2
                 style={{
@@ -1151,7 +1271,7 @@ export default function EventLandingPage() {
                   lineHeight: 1.15,
                 }}
               >
-                ✨ L&apos;événement
+                ✨ {showcaseTitle}
               </h2>
               <p
                 style={{
@@ -1162,7 +1282,7 @@ export default function EventLandingPage() {
                   lineHeight: 1.45,
                 }}
               >
-                Découvrez l&apos;ambiance et les temps forts de l&apos;événement.
+                {showcaseLead}
               </p>
             </div>
             <div className="ev-landing-carousel-mobile-wrap">
@@ -1243,7 +1363,7 @@ export default function EventLandingPage() {
           }}
         >
           <Link href={joinHref} className="ev-landing-hero-cta">
-            Participer au live
+            Rejoindre la salle
           </Link>
           <p
             style={{
@@ -1259,92 +1379,6 @@ export default function EventLandingPage() {
             Accès à la salle interactive : votes et animations en direct.
           </p>
         </section>
-        ) : null}
-
-        {livePriority ? (
-        <section
-          style={{
-            textAlign: "center",
-            marginBottom: "clamp(1.25rem, 4vw, 2rem)",
-            padding: "0.15rem 0 0.35rem",
-          }}
-          className="ev-landing-live-cta-desktop"
-        >
-          <Link href={joinHref} className="ev-landing-hero-cta">
-            Participer au live
-          </Link>
-          <p
-            style={{
-              margin: "0.75rem 0 0",
-              fontSize: "0.9rem",
-              color: "#64748b",
-              maxWidth: "26rem",
-              marginLeft: "auto",
-              marginRight: "auto",
-              lineHeight: 1.45,
-            }}
-          >
-            Le live a commencé — entre dans la salle pour participer.
-          </p>
-        </section>
-        ) : null}
-
-        {showShowcaseBlock && livePriority ? (
-          <section
-            className="ev-landing-gallery-section"
-            style={{
-              marginBottom: "clamp(1.75rem, 5vw, 2.5rem)",
-              "--ev-accent": accent,
-            }}
-          >
-            <div style={{ marginBottom: "1.15rem" }}>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "0.68rem",
-                  fontWeight: 800,
-                  letterSpacing: "0.2em",
-                  textTransform: "uppercase",
-                  color: "#64748b",
-                }}
-              >
-                L&apos;événement
-              </p>
-              <h2
-                style={{
-                  margin: "0.35rem 0 0",
-                  fontSize: "clamp(1.45rem, 4vw, 1.85rem)",
-                  fontWeight: 800,
-                  letterSpacing: "-0.03em",
-                  color: "#0f172a",
-                  lineHeight: 1.15,
-                }}
-              >
-                Photos & infos
-              </h2>
-            </div>
-            <div className="ev-landing-gallery-grid">
-              {showcasePhotosList.map((p) => {
-                const u =
-                  typeof p?.url === "string"
-                    ? resolveApiAssetUrlNullable(p.url.trim())
-                    : null;
-                if (!u) return null;
-                const pid = String(p.id ?? "");
-                return (
-                  <LandingGalleryPhoto
-                    key={`sg-live-${p.id}`}
-                    url={u}
-                    photoId={pid}
-                    variant="card"
-                    canManage={false}
-                    isDeleting={false}
-                    isExiting={false}
-                  />
-                );
-              })}
-            </div>
-          </section>
         ) : null}
 
         {showLiveBlock ? (
@@ -1376,7 +1410,7 @@ export default function EventLandingPage() {
                     color: "#64748b",
                   }}
                 >
-                  En direct
+                  {momentsEyebrow}
                 </p>
                 <h2
                   style={{
@@ -1388,7 +1422,7 @@ export default function EventLandingPage() {
                     lineHeight: 1.15,
                   }}
                 >
-                  🔴 Moments live
+                  {momentsTitle}
                 </h2>
                 <p
                   style={{
@@ -1399,7 +1433,7 @@ export default function EventLandingPage() {
                     lineHeight: 1.45,
                   }}
                 >
-                  Les photos ajoutées pendant le live apparaissent ici.
+                  {momentsLead}
                 </p>
               </div>
               {canUploadLanding ? (
@@ -1625,28 +1659,27 @@ export default function EventLandingPage() {
             padding: afterLive
               ? "clamp(1rem, 3vw, 1.5rem) 0 2.5rem"
               : "clamp(1.5rem, 4vw, 2.5rem) 0 2.5rem",
+            "--ev-accent": accent,
           }}
         >
-          <Link
-            href={joinHref}
-            className="ev-landing-footer-cta"
-            style={{
-              ...footerCta,
-              background: afterLive
-                ? "#e2e8f0"
-                : `linear-gradient(180deg, ${accent}, color-mix(in srgb, ${accent} 82%, #000))`,
-              color: afterLive ? "#0f172a" : "#fff",
-              boxShadow: afterLive
-                ? "0 4px 16px rgba(15,23,42,0.08)"
-                : footerCta.boxShadow,
-            }}
-          >
-            {afterLive
-              ? "Revoir la salle"
-              : livePriority
-                ? "Participer au live"
-                : "Rejoindre la salle"}
-          </Link>
+          {afterLive ? (
+            <Link
+              href={joinHref}
+              className="ev-landing-footer-cta"
+              style={{
+                ...footerCta,
+                background: "#e2e8f0",
+                color: "#0f172a",
+                boxShadow: "0 4px 16px rgba(15,23,42,0.08)",
+              }}
+            >
+              Revoir la salle
+            </Link>
+          ) : (
+            <Link href={joinHref} className="ev-landing-footer-link">
+              Accéder à la salle
+            </Link>
+          )}
           <p
             style={{
               margin: "1.1rem auto 0",
@@ -1677,7 +1710,11 @@ export default function EventLandingPage() {
       {canUploadLanding ? (
         <button
           type="button"
-          className="ev-landing-upload-fab"
+          className={
+            livePriority
+              ? "ev-landing-upload-fab ev-landing-upload-fab--above-sticky"
+              : "ev-landing-upload-fab"
+          }
           disabled={uploadBusy}
           onClick={triggerLandingPhotoPicker}
           aria-label="Ajouter un moment live"
