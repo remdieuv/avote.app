@@ -118,6 +118,19 @@ test("Pas de changement API / schéma dans ce lot", () => {
   assert.doesNotMatch(lightbox, /fetch\(/);
 });
 
+test("React #310 : showcaseLightboxPhotos useMemo avant if (loading)", () => {
+  const start = page.indexOf("export default function EventLandingPage");
+  assert.ok(start >= 0);
+  const body = page.slice(start);
+  const memoIdx = body.search(/showcaseLightboxPhotos\s*=\s*useMemo/);
+  const loadingIdx = body.search(/\n  if \(loading\) \{/);
+  assert.ok(memoIdx >= 0 && loadingIdx >= 0);
+  assert.ok(
+    memoIdx < loadingIdx,
+    "useMemo après if (loading) → React #310 au passage chargement→contenu",
+  );
+});
+
 if (failed > 0) {
   console.error(`\n${failed} test(s) échoué(s)`);
   process.exit(1);

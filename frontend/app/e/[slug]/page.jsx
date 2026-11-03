@@ -532,6 +532,28 @@ export default function EventLandingPage() {
       : "#2563eb";
   }, [payload]);
 
+  /**
+   * Hooks AVANT tout early return (loading / erreur / demo).
+   * Sinon : React #310 « Rendered more hooks than during the previous render »
+   * au passage Chargement → contenu (régression PR #41).
+   */
+  const showcaseLightboxPhotos = useMemo(() => {
+    const list =
+      payload && typeof payload === "object" && Array.isArray(payload.showcasePhotos)
+        ? payload.showcasePhotos
+        : [];
+    const raw = [];
+    for (const p of list) {
+      const u =
+        typeof p?.url === "string"
+          ? resolveApiAssetUrlNullable(p.url.trim())
+          : null;
+      if (!u) continue;
+      raw.push({ id: String(p.id ?? u), url: u });
+    }
+    return normalizeLightboxPhotos(raw);
+  }, [payload]);
+
   if (!slug) {
     return (
       <main style={{ padding: "2rem", fontFamily: "system-ui" }}>
@@ -661,18 +683,6 @@ export default function EventLandingPage() {
   const showShowcaseBlock = showcasePhotosList.length > 0;
   const feedItems = Array.isArray(payload.feed) ? payload.feed : [];
   const showFeedBlock = feedItems.length > 0 || canUploadLanding;
-  const showcaseLightboxPhotos = useMemo(() => {
-    const raw = [];
-    for (const p of showcasePhotosList) {
-      const u =
-        typeof p?.url === "string"
-          ? resolveApiAssetUrlNullable(p.url.trim())
-          : null;
-      if (!u) continue;
-      raw.push({ id: String(p.id ?? u), url: u });
-    }
-    return normalizeLightboxPhotos(raw);
-  }, [showcasePhotosList]);
 
   const showcaseEyebrow = afterLive
     ? "Souvenirs"
