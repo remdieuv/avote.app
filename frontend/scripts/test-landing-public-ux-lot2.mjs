@@ -39,13 +39,13 @@ test("showcase pendant : carrousel mobile (pas grille seule)", () => {
   assert.doesNotMatch(page, /showShowcaseBlock && !livePriority/);
 });
 
-test("labels après : pas « Avant le live » ; souvenirs / moments", () => {
+test("labels après : pas « Avant le live » ; souvenirs / galerie", () => {
   assert.doesNotMatch(page, /Avant le live/);
   assert.match(page, /Souvenirs/);
   assert.match(page, /Galerie événement/);
-  assert.match(page, /Pendant le live/);
-  assert.match(page, /momentsEyebrow/);
-  assert.match(page, /momentsTitle/);
+  assert.match(page, /Live en cours|Événement terminé/);
+  // Lot hybride : Moments remplacé par le fil chronologique
+  assert.match(page, /LandingHybridFeed/);
 });
 
 test("un CTA dominant par phase", () => {
@@ -93,9 +93,9 @@ test("infoShowOnFinished exposé API + respecté côté public", () => {
   assert.match(page, /afterLive && !infoShowOnFinished/);
 });
 
-test("vocabulaire public Moments live / Galerie événement", () => {
-  assert.match(page, /Moments live/);
+test("vocabulaire public Galerie événement + fil (hybride)", () => {
   assert.match(page, /Galerie événement/);
+  assert.match(page, /Partager une photo|LandingHybridFeed/);
   assert.doesNotMatch(page, /Galerie live/);
 });
 

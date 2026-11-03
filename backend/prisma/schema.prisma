@@ -85,6 +85,7 @@ model User {
   reportShareTokens AccountReportShareToken[]
   payments          Payment[]
   eventActivations  EventActivation[]
+  landingMessages   EventLandingMessage[]
 }
 
 model Event {
@@ -150,6 +151,10 @@ model Event {
   landingCoverUrl    String?
   landingTitle       String?
   landingDescription String?
+  /** Après l’événement : quels types restent visibles dans le fil (défaut = comportement actuel). */
+  landingKeepPhotosAfter   Boolean @default(true)
+  landingKeepResultsAfter  Boolean @default(true)
+  landingKeepMessagesAfter Boolean @default(true)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
@@ -158,6 +163,7 @@ model Event {
   contestDraws ContestDraw[]
   landingPhotos         EventLandingPhoto[]
   landingShowcasePhotos EventLandingShowcasePhoto[]
+  landingMessages       EventLandingMessage[]
 
   @@index([userId])
 }
@@ -184,8 +190,40 @@ model EventLandingPhoto {
   createdAt          DateTime @default(now())
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  likes EventLandingPhotoLike[]
 
   @@index([eventId, createdAt])
+}
+
+/** Message court organisateur — fil chronologique landing. */
+model EventLandingMessage {
+  id              String   @id @default(cuid())
+  eventId         String
+  body            String
+  /** Masqué du fil public (conservé en base pour l’orga). */
+  hidden          Boolean  @default(false)
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  event     Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdBy User? @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([eventId, createdAt])
+  @@index([eventId, hidden, createdAt])
+}
+
+/** Like anonyme sur un Moment live (visitorKey = voterSessionId client). */
+model EventLandingPhotoLike {
+  id          String   @id @default(cuid())
+  photoId     String
+  visitorKey  String
+  createdAt   DateTime @default(now())
+
+  photo EventLandingPhoto @relation(fields: [photoId], references: [id], onDelete: Cascade)
+
+  @@unique([photoId, visitorKey])
+  @@index([photoId])
 }
 
 model Poll {
@@ -205,6 +243,8 @@ model Poll {
   formSchemaVersion  Int       @default(1)
   status    PollStatus @default(DRAFT)
   order     Int        @default(0)
+  /** Orga : masquer ce résultat du fil landing (publication auto sinon). */
+  landingResultHidden Boolean @default(false)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
