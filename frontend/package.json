@@ -24,6 +24,7 @@
     "test:marketing-widths": "node scripts/test-marketing-desktop-widths.mjs",
     "test:landing-hero": "node scripts/test-landing-hero.mjs",
     "test:landing-admin-ux-lot1": "node scripts/test-landing-admin-ux-lot1.mjs",
+    "test:landing-public-ux-lot2": "node scripts/test-landing-public-ux-lot2.mjs",
     "test:regie-chrono": "node scripts/test-regie-chrono-enabled.mjs",
     "test:regie-quiz-edit": "node scripts/test-regie-quiz-edit.mjs",
     "test:regie-poll-edit-guards": "node scripts/test-regie-poll-edit-guards.mjs",

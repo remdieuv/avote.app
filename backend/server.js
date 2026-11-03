@@ -2374,6 +2374,7 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       infoPrimaryCtaUrl: info.infoPrimaryCtaUrl,
       infoSecondaryCtaLabel: info.infoSecondaryCtaLabel,
       infoSecondaryCtaUrl: info.infoSecondaryCtaUrl,
+      infoShowOnFinished: info.infoShowOnFinished !== false,
       joinPath: `/join/${event.slug}`,
       /** Phase Page événement (LOT-1/7) — pas de nouvel enum ; axes live existants. */
       liveState: String(event.liveState || "").toLowerCase(),
