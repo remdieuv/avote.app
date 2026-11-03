@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { LiveMicroLabel } from "@/components/admin/LiveMicroIcon";
+import { LandingFeedAdminPanel } from "@/components/event/LandingFeedAdminPanel";
 import { resolveApiAssetUrl } from "@/lib/assetUrl";
 import {
   adminContentMaxWidth,
@@ -260,6 +261,10 @@ export function EventCustomizationEditor({ mode = "live" }) {
   const [showcasePhotos, setShowcasePhotos] = useState([]);
   /** @type {{ id: string; url: string; createdAt: string }[]} */
   const [landingLivePhotos, setLandingLivePhotos] = useState([]);
+  /** Questions CLOSED pour masquage fil (Lead CRM exclu côté panel). */
+  const [closedLandingPolls, setClosedLandingPolls] = useState(
+    /** @type {{ id: string; question?: string; title?: string; status?: string; type?: string; leadEnabled?: boolean; landingResultHidden?: boolean }[]} */ ([]),
+  );
   const [showcasePhotoBusy, setShowcasePhotoBusy] = useState(false);
   const [livePhotoBusy, setLivePhotoBusy] = useState(false);
   const [landingLinkCopied, setLandingLinkCopied] = useState(false);
@@ -574,6 +579,20 @@ export function EventCustomizationEditor({ mode = "live" }) {
               typeof p?.createdAt === "string" ? p.createdAt : "",
           }))
           .filter((p) => p.id && p.url),
+      );
+      const pollsRaw = Array.isArray(data.polls) ? data.polls : [];
+      setClosedLandingPolls(
+        pollsRaw
+          .filter((p) => String(p?.status || "").toUpperCase() === "CLOSED")
+          .map((p) => ({
+            id: String(p.id),
+            question: typeof p.question === "string" ? p.question : "",
+            title: typeof p.title === "string" ? p.title : "",
+            status: String(p.status || ""),
+            type: typeof p.type === "string" ? p.type : "",
+            leadEnabled: Boolean(p.leadEnabled),
+            landingResultHidden: Boolean(p.landingResultHidden),
+          })),
       );
 
       setBaseline({
@@ -1527,165 +1546,27 @@ export function EventCustomizationEditor({ mode = "live" }) {
                     ) : null}
                   </section>
 
-                  {/* 4. Moments live */}
-                  <section style={card}>
-                    <div
-                      style={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: "0.5rem",
-                        marginBottom: "0.45rem",
+                  {/* 4. Fil de l’événement (messages · Moments · résultats) */}
+                  {eventId ? (
+                    <LandingFeedAdminPanel
+                      eventId={eventId}
+                      photos={landingLivePhotos}
+                      photosMax={LANDING_LIVE_PHOTOS_MAX}
+                      photoBusy={livePhotoBusy}
+                      onAddPhotos={(files) => void addLiveMomentPhotos(files)}
+                      onRemovePhoto={(id) => void removeLiveMomentPhoto(id)}
+                      closedPolls={closedLandingPolls}
+                      onToast={(msg) => {
+                        setToast(msg);
+                        window.setTimeout(() => setToast(null), 2400);
                       }}
-                    >
-                      <h2
-                        style={{
-                          margin: 0,
-                          fontSize: "0.72rem",
-                          fontWeight: 800,
-                          letterSpacing: "0.08em",
-                          textTransform: "uppercase",
-                          color: "#64748b",
-                        }}
-                      >
-                        Moments live
-                      </h2>
-                      <span
-                        style={{
-                          fontSize: "0.72rem",
-                          fontWeight: 700,
-                          color: "#0f766e",
-                          background: "#ecfdf5",
-                          border: "1px solid #a7f3d0",
-                          borderRadius: "999px",
-                          padding: "0.22rem 0.55rem",
-                        }}
-                      >
-                        En ligne dès l’ajout
-                      </span>
-                    </div>
-                    <p style={{ ...fieldHintStyle, margin: "0 0 0.65rem" }}>
-                      Photos pendant l’événement, visibles sur /e.{" "}
-                      {landingLivePhotos.length}/{LANDING_LIVE_PHOTOS_MAX} — aussi
-                      publiables depuis la régie.
-                    </p>
-                    <div
-                      style={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        gap: "0.5rem",
-                        marginBottom: "0.75rem",
-                      }}
-                    >
-                      <label
-                        style={{
-                          ...btnPrimary,
-                          display: "inline-block",
-                          cursor:
-                            livePhotoBusy ||
-                            landingLivePhotos.length >= LANDING_LIVE_PHOTOS_MAX
-                              ? "not-allowed"
-                              : "pointer",
-                          opacity:
-                            livePhotoBusy ||
-                            landingLivePhotos.length >= LANDING_LIVE_PHOTOS_MAX
-                              ? 0.65
-                              : 1,
-                        }}
-                      >
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp,image/gif"
-                          multiple
-                          style={{ display: "none" }}
-                          disabled={
-                            livePhotoBusy ||
-                            landingLivePhotos.length >= LANDING_LIVE_PHOTOS_MAX
-                          }
-                          onChange={(e) => {
-                            const raw = e.target.files;
-                            const files = raw?.length ? Array.from(raw) : [];
-                            e.target.value = "";
-                            if (files.length) void addLiveMomentPhotos(files);
-                          }}
-                        />
-                        {livePhotoBusy ? "Publication…" : "Publier une photo"}
-                      </label>
-                      {eventId ? (
-                        <Link
-                          href={`/admin/event/${encodeURIComponent(eventId)}`}
-                          style={{
-                            ...btnSecondary,
-                            display: "inline-flex",
-                            alignItems: "center",
-                            textDecoration: "none",
-                          }}
-                        >
-                          Ouvrir la régie
-                        </Link>
-                      ) : null}
-                    </div>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns:
-                          "repeat(auto-fill, minmax(96px, 1fr))",
-                        gap: "0.5rem",
-                      }}
-                    >
-                      {landingLivePhotos.map((ph) => (
-                        <div
-                          key={ph.id}
-                          style={{
-                            position: "relative",
-                            borderRadius: "10px",
-                            overflow: "hidden",
-                            border: "1px solid #e2e8f0",
-                            aspectRatio: "1",
-                            background: "#f8fafc",
-                          }}
-                        >
-                          <img
-                            src={ph.url}
-                            alt=""
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              objectFit: "cover",
-                              display: "block",
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => void removeLiveMomentPhoto(ph.id)}
-                            disabled={livePhotoBusy}
-                            aria-label="Retirer le moment live"
-                            style={{
-                              position: "absolute",
-                              top: 4,
-                              right: 4,
-                              padding: "0.2rem 0.45rem",
-                              fontSize: "0.68rem",
-                              fontWeight: 700,
-                              borderRadius: "6px",
-                              border: "1px solid #fecaca",
-                              background: "rgba(254,242,242,0.95)",
-                              color: "#b91c1c",
-                              cursor: livePhotoBusy ? "not-allowed" : "pointer",
-                            }}
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                    {landingLivePhotos.length === 0 ? (
-                      <p style={{ ...fieldHintStyle, margin: "0.55rem 0 0" }}>
-                        Aucun moment live publié.
-                      </p>
-                    ) : null}
-                  </section>
+                      onChanged={() => bumpLandingPreview()}
+                      cardStyle={card}
+                      btnPrimaryStyle={btnPrimary}
+                      btnSecondaryStyle={btnSecondary}
+                      hintStyle={fieldHintStyle}
+                    />
+                  ) : null}
 
                   {/* 5. Visibilité après l’événement (H5) */}
                   <section style={card}>
@@ -2605,7 +2486,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
                     </p>
                   ) : (
                     <p style={{ ...fieldHintStyle, marginTop: "0.45rem" }}>
-                      Galerie événement et moments live sont déjà publics ; titre,
+                      Galerie événement et fil (photos) sont déjà publics ; titre,
                       accroche, couverture et activation suivent « Enregistrer ».
                     </p>
                   )}
