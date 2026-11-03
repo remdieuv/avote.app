@@ -26,6 +26,7 @@ import {
 import {
   getParticipantFullLabel,
   getParticipantOfflineLabel,
+  resolveJoinContestStatusPollIds,
   resolveJoinFinishedCardContent,
   resolveJoinHistoriqueQuestions,
   resolveJoinSocketOnlineTransition,
@@ -891,19 +892,15 @@ export function JoinLiveHub({ slug }) {
   );
 
   useEffect(() => {
-    if (!slug || !Array.isArray(historiqueQuestions) || historiqueQuestions.length === 0) {
+    // contest-status = CONTEST_ENTRY uniquement (sinon 404 serveur). Historique
+    // conservé pour toutes les questions ; seul le sondage gagnant est filtré.
+    const pollIds = resolveJoinContestStatusPollIds(historiqueQuestions);
+    if (!slug || pollIds.length === 0) {
       setContestWinByPollId({});
       return;
     }
     const voterSessionId = getOrCreateVoterSessionId();
     if (!voterSessionId) {
-      setContestWinByPollId({});
-      return;
-    }
-    const pollIds = historiqueQuestions
-      .map((p) => String(p?.id || "").trim())
-      .filter((id) => id && id !== "__active__");
-    if (pollIds.length === 0) {
       setContestWinByPollId({});
       return;
     }
@@ -927,7 +924,7 @@ export function JoinLiveHub({ slug }) {
             next[pollId] = true;
           }
         } catch {
-          // Ignore non-concours / indisponible
+          // Réseau / parse — ne pas masquer un 404 attendu (déjà filtré)
         }
       }
       if (!cancelled) {
