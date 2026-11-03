@@ -31,6 +31,10 @@ const {
   assertPollOwnedBy,
 } = require("./lib/eventAccess");
 const {
+  isLandingFeedLeadCrm,
+  buildLandingFeedItems,
+} = require("./lib/landingFeed");
+const {
   STATUS_ACTIVE,
   STATUS_REPLACED,
   createPollExclusiveQueue,
@@ -150,6 +154,9 @@ function eventCustomizationJson(event) {
       landingCoverUrl: null,
       landingTitle: null,
       landingDescription: null,
+      landingKeepPhotosAfter: true,
+      landingKeepResultsAfter: true,
+      landingKeepMessagesAfter: true,
     };
   }
   return {
@@ -174,8 +181,20 @@ function eventCustomizationJson(event) {
     landingCoverUrl: absolutizeStoredAssetUrl(event.landingCoverUrl),
     landingTitle: event.landingTitle ?? null,
     landingDescription: event.landingDescription ?? null,
+    landingKeepPhotosAfter: event.landingKeepPhotosAfter !== false,
+    landingKeepResultsAfter: event.landingKeepResultsAfter !== false,
+    landingKeepMessagesAfter: event.landingKeepMessagesAfter !== false,
   };
 }
+
+const LANDING_MESSAGE_MAX_LEN = 500;
+const landingLikeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Trop de likes. Réessayez plus tard." },
+});
 
 const CUSTOM_THEME_MODES = new Set(["dark", "light", "auto"]);
 const CUSTOM_OVERLAY = new Set(["low", "medium", "strong"]);
@@ -2298,11 +2317,20 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
     if (!slug) {
       return res.status(400).json({ error: "Slug invalide." });
     }
+    const visitorKeyRaw =
+      typeof req.query.visitorKey === "string" ? req.query.visitorKey.trim() : "";
+    const visitorKey =
+      visitorKeyRaw && visitorKeyRaw.length <= 80 ? visitorKeyRaw : "";
+
     const event = await prisma.event.findUnique({
       where: { slug },
       include: {
         landingPhotos: { orderBy: { createdAt: "desc" } },
         landingShowcasePhotos: { orderBy: { createdAt: "asc" } },
+        landingMessages: {
+          where: { hidden: false },
+          orderBy: { createdAt: "desc" },
+        },
       },
     });
     if (!event) {
@@ -2333,6 +2361,7 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
         : event.description ?? null;
 
     let canUploadLandingPhoto = false;
+    let canManageLandingFeed = false;
     let landingPhotoUploadEventId = null;
     const token = readTokenFromRequest(req);
     const authPayload = verifyToken(token);
@@ -2343,6 +2372,7 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
     if (sessionUserId) {
       if (event.userId && event.userId === sessionUserId) {
         canUploadLandingPhoto = true;
+        canManageLandingFeed = true;
         landingPhotoUploadEventId = event.id;
       } else {
         const sessionUser = await prisma.user.findUnique({
@@ -2351,10 +2381,97 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
         });
         if (String(sessionUser?.role || "").toUpperCase() === "ADMIN") {
           canUploadLandingPhoto = true;
+          canManageLandingFeed = true;
           landingPhotoUploadEventId = event.id;
         }
       }
     }
+
+    const photoIds = (event.landingPhotos || []).map((p) => p.id);
+    /** @type {Record<string, number>} */
+    const likeCounts = {};
+    const likedPhotoIds = new Set();
+    if (photoIds.length > 0) {
+      const grouped = await prisma.eventLandingPhotoLike.groupBy({
+        by: ["photoId"],
+        where: { photoId: { in: photoIds } },
+        _count: { _all: true },
+      });
+      for (const g of grouped) {
+        likeCounts[g.photoId] = g._count._all;
+      }
+      if (visitorKey) {
+        const mine = await prisma.eventLandingPhotoLike.findMany({
+          where: { photoId: { in: photoIds }, visitorKey },
+          select: { photoId: true },
+        });
+        for (const row of mine) likedPhotoIds.add(row.photoId);
+      }
+    }
+
+    const closedPolls = await prisma.poll.findMany({
+      where: { eventId: event.id, status: "CLOSED" },
+      include: {
+        options: { orderBy: { order: "asc" } },
+        votes: { select: { optionId: true, voterSessionId: true } },
+        event: {
+          select: {
+            isLiveConsumed: true,
+            displayState: true,
+          },
+        },
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    const contestPollIds = closedPolls
+      .filter(
+        (p) =>
+          String(p.type || "").toUpperCase() === "CONTEST_ENTRY" &&
+          !p.landingResultHidden &&
+          !isLandingFeedLeadCrm(p),
+      )
+      .map((p) => p.id);
+    /** @type {Record<string, { displayName: string }[]>} */
+    const winnersByPollId = {};
+    if (contestPollIds.length > 0) {
+      const winners = await prisma.contestDrawWinner.findMany({
+        where: { pollId: { in: contestPollIds }, status: STATUS_ACTIVE },
+        orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+        select: {
+          pollId: true,
+          firstName: true,
+          lastName: true,
+          position: true,
+        },
+      });
+      for (const w of winners) {
+        if (!winnersByPollId[w.pollId]) winnersByPollId[w.pollId] = [];
+        winnersByPollId[w.pollId].push({
+          displayName: winnerDisplayNameForPublic(
+            w.firstName,
+            w.lastName,
+            w.position,
+          ),
+        });
+      }
+    }
+
+    const afterLive = String(event.liveState || "").toLowerCase() === "finished";
+    const feed = buildLandingFeedItems({
+      event,
+      photos: (event.landingPhotos || []).map((p) => ({
+        id: p.id,
+        url: absolutizeStoredAssetUrl(p.url),
+        createdAt: p.createdAt,
+      })),
+      likeCounts,
+      likedPhotoIds,
+      messages: event.landingMessages || [],
+      closedPolls,
+      winnersByPollId,
+      afterLive,
+    });
 
     return res.json({
       enabled: true,
@@ -2366,7 +2483,9 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       logoUrl: info.logoUrl,
       photos,
       showcasePhotos,
+      feed,
       canUploadLandingPhoto,
+      canManageLandingFeed,
       landingPhotoUploadEventId,
       infoSectionTitle: info.infoSectionTitle,
       infoSectionText: info.infoSectionText,
@@ -2375,6 +2494,9 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       infoSecondaryCtaLabel: info.infoSecondaryCtaLabel,
       infoSecondaryCtaUrl: info.infoSecondaryCtaUrl,
       infoShowOnFinished: info.infoShowOnFinished !== false,
+      landingKeepPhotosAfter: info.landingKeepPhotosAfter !== false,
+      landingKeepResultsAfter: info.landingKeepResultsAfter !== false,
+      landingKeepMessagesAfter: info.landingKeepMessagesAfter !== false,
       joinPath: `/join/${event.slug}`,
       /** Phase Page événement (LOT-1/7) — pas de nouvel enum ; axes live existants. */
       liveState: String(event.liveState || "").toLowerCase(),
@@ -2472,6 +2594,7 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
         type: p.type,
         leadEnabled: Boolean(p.leadEnabled),
         leadTriggerOptionId: p.leadTriggerOptionId ?? null,
+        landingResultHidden: Boolean(p.landingResultHidden),
         voteCount: p._count.votes,
         options: (p.options || []).map((option) => {
           const n = optionVoteCounts[option.id] || 0;
@@ -2806,6 +2929,19 @@ app.patch("/events/:eventId/customization", requireAuth, async (req, res) => {
       data.landingEnabled = body.landingEnabled;
     }
 
+    for (const keepKey of [
+      "landingKeepPhotosAfter",
+      "landingKeepResultsAfter",
+      "landingKeepMessagesAfter",
+    ]) {
+      if (!Object.prototype.hasOwnProperty.call(body, keepKey)) continue;
+      const v = body[keepKey];
+      if (typeof v !== "boolean") {
+        return res.status(400).json({ error: `${keepKey} invalide.` });
+      }
+      data[keepKey] = v;
+    }
+
     if (Object.prototype.hasOwnProperty.call(body, "landingCoverUrl")) {
       const v = normalizeAssetUrlInput(body.landingCoverUrl);
       if (v === undefined) {
@@ -2984,6 +3120,299 @@ app.delete(
       await prisma.eventLandingPhoto.delete({ where: { id: pid } });
       void destroyCloudinaryByPublicId(existing.cloudinaryPublicId);
       return res.json({ ok: true });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: "Erreur serveur." });
+    }
+  },
+);
+
+/** Messages orga — fil landing. */
+app.get("/events/:eventId/landing/messages", requireAuth, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const owned = await assertEventOwnedByOrPlatformAdmin(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    const rows = await prisma.eventLandingMessage.findMany({
+      where: { eventId },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+    return res.json({
+      messages: rows.map((m) => ({
+        id: m.id,
+        body: m.body,
+        hidden: Boolean(m.hidden),
+        createdAt: m.createdAt.toISOString(),
+        updatedAt: m.updatedAt.toISOString(),
+      })),
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+app.post("/events/:eventId/landing/messages", requireAuth, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const owned = await assertEventOwnedByOrPlatformAdmin(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    const raw = req.body?.body;
+    if (typeof raw !== "string") {
+      return res.status(400).json({ error: "Message invalide." });
+    }
+    const body = raw.trim().slice(0, LANDING_MESSAGE_MAX_LEN);
+    if (!body) {
+      return res.status(400).json({ error: "Message vide." });
+    }
+    const row = await prisma.eventLandingMessage.create({
+      data: {
+        eventId,
+        body,
+        createdByUserId: req.userId || null,
+      },
+    });
+    return res.status(201).json({
+      id: row.id,
+      body: row.body,
+      hidden: Boolean(row.hidden),
+      createdAt: row.createdAt.toISOString(),
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+app.patch(
+  "/events/:eventId/landing/messages/:messageId",
+  requireAuth,
+  async (req, res) => {
+    try {
+      const { eventId, messageId } = req.params;
+      const owned = await assertEventOwnedByOrPlatformAdmin(eventId, req.userId);
+      if (!owned.ok) {
+        return res.status(owned.status).json({ error: "Événement introuvable." });
+      }
+      const mid = typeof messageId === "string" ? messageId.trim() : "";
+      if (!mid) {
+        return res.status(400).json({ error: "messageId invalide." });
+      }
+      const existing = await prisma.eventLandingMessage.findFirst({
+        where: { id: mid, eventId },
+      });
+      if (!existing) {
+        return res.status(404).json({ error: "Message introuvable." });
+      }
+      /** @type {Record<string, unknown>} */
+      const data = {};
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, "hidden")) {
+        if (typeof req.body.hidden !== "boolean") {
+          return res.status(400).json({ error: "hidden invalide." });
+        }
+        data.hidden = req.body.hidden;
+      }
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, "body")) {
+        if (typeof req.body.body !== "string") {
+          return res.status(400).json({ error: "Message invalide." });
+        }
+        const t = req.body.body.trim().slice(0, LANDING_MESSAGE_MAX_LEN);
+        if (!t) return res.status(400).json({ error: "Message vide." });
+        data.body = t;
+      }
+      if (Object.keys(data).length === 0) {
+        return res.status(400).json({ error: "Rien à mettre à jour." });
+      }
+      const row = await prisma.eventLandingMessage.update({
+        where: { id: mid },
+        data,
+      });
+      return res.json({
+        id: row.id,
+        body: row.body,
+        hidden: Boolean(row.hidden),
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+      });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: "Erreur serveur." });
+    }
+  },
+);
+
+app.delete(
+  "/events/:eventId/landing/messages/:messageId",
+  requireAuth,
+  async (req, res) => {
+    try {
+      const { eventId, messageId } = req.params;
+      const owned = await assertEventOwnedByOrPlatformAdmin(eventId, req.userId);
+      if (!owned.ok) {
+        return res.status(owned.status).json({ error: "Événement introuvable." });
+      }
+      const mid = typeof messageId === "string" ? messageId.trim() : "";
+      if (!mid) {
+        return res.status(400).json({ error: "messageId invalide." });
+      }
+      const existing = await prisma.eventLandingMessage.findFirst({
+        where: { id: mid, eventId },
+      });
+      if (!existing) {
+        return res.status(404).json({ error: "Message introuvable." });
+      }
+      await prisma.eventLandingMessage.delete({ where: { id: mid } });
+      return res.json({ ok: true });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: "Erreur serveur." });
+    }
+  },
+);
+
+/** Masquer / réafficher un résultat question dans le fil landing. */
+app.patch(
+  "/events/:eventId/polls/:pollId/landing-result",
+  requireAuth,
+  async (req, res) => {
+    try {
+      const { eventId, pollId } = req.params;
+      const owned = await assertEventOwnedByOrPlatformAdmin(eventId, req.userId);
+      if (!owned.ok) {
+        return res.status(owned.status).json({ error: "Événement introuvable." });
+      }
+      const pid = typeof pollId === "string" ? pollId.trim() : "";
+      if (!pid) return res.status(400).json({ error: "pollId invalide." });
+      if (typeof req.body?.hidden !== "boolean") {
+        return res.status(400).json({ error: "hidden invalide." });
+      }
+      const poll = await prisma.poll.findFirst({
+        where: { id: pid, eventId },
+        select: { id: true, status: true, landingResultHidden: true },
+      });
+      if (!poll) {
+        return res.status(404).json({ error: "Question introuvable." });
+      }
+      const row = await prisma.poll.update({
+        where: { id: pid },
+        data: { landingResultHidden: req.body.hidden },
+        select: {
+          id: true,
+          landingResultHidden: true,
+          question: true,
+          title: true,
+          status: true,
+        },
+      });
+      return res.json({
+        id: row.id,
+        landingResultHidden: Boolean(row.landingResultHidden),
+        status: row.status,
+        question:
+          (row.question && row.question.trim()) ||
+          (row.title && row.title.trim()) ||
+          "Question",
+      });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: "Erreur serveur." });
+    }
+  },
+);
+
+/** Like / unlike Moment (anonyme via visitorKey). */
+app.post(
+  "/events/slug/:slug/landing/photos/:photoId/like",
+  landingLikeLimiter,
+  async (req, res) => {
+    try {
+      const slug =
+        typeof req.params.slug === "string" ? req.params.slug.trim() : "";
+      const photoId =
+        typeof req.params.photoId === "string" ? req.params.photoId.trim() : "";
+      const visitorKey =
+        typeof req.body?.visitorKey === "string"
+          ? req.body.visitorKey.trim().slice(0, 80)
+          : "";
+      if (!slug || !photoId || !visitorKey) {
+        return res.status(400).json({ error: "Paramètres invalides." });
+      }
+      const event = await prisma.event.findUnique({
+        where: { slug },
+        select: { id: true, landingEnabled: true },
+      });
+      if (!event || !event.landingEnabled) {
+        return res.status(404).json({ error: "Landing introuvable." });
+      }
+      const photo = await prisma.eventLandingPhoto.findFirst({
+        where: { id: photoId, eventId: event.id },
+        select: { id: true },
+      });
+      if (!photo) {
+        return res.status(404).json({ error: "Photo introuvable." });
+      }
+      await prisma.eventLandingPhotoLike.upsert({
+        where: {
+          photoId_visitorKey: { photoId, visitorKey },
+        },
+        create: { photoId, visitorKey },
+        update: {},
+      });
+      const likeCount = await prisma.eventLandingPhotoLike.count({
+        where: { photoId },
+      });
+      return res.json({ ok: true, liked: true, likeCount });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: "Erreur serveur." });
+    }
+  },
+);
+
+app.delete(
+  "/events/slug/:slug/landing/photos/:photoId/like",
+  landingLikeLimiter,
+  async (req, res) => {
+    try {
+      const slug =
+        typeof req.params.slug === "string" ? req.params.slug.trim() : "";
+      const photoId =
+        typeof req.params.photoId === "string" ? req.params.photoId.trim() : "";
+      const visitorKey =
+        typeof req.body?.visitorKey === "string"
+          ? req.body.visitorKey.trim().slice(0, 80)
+          : typeof req.query.visitorKey === "string"
+            ? req.query.visitorKey.trim().slice(0, 80)
+            : "";
+      if (!slug || !photoId || !visitorKey) {
+        return res.status(400).json({ error: "Paramètres invalides." });
+      }
+      const event = await prisma.event.findUnique({
+        where: { slug },
+        select: { id: true, landingEnabled: true },
+      });
+      if (!event || !event.landingEnabled) {
+        return res.status(404).json({ error: "Landing introuvable." });
+      }
+      const photo = await prisma.eventLandingPhoto.findFirst({
+        where: { id: photoId, eventId: event.id },
+        select: { id: true },
+      });
+      if (!photo) {
+        return res.status(404).json({ error: "Photo introuvable." });
+      }
+      await prisma.eventLandingPhotoLike.deleteMany({
+        where: { photoId, visitorKey },
+      });
+      const likeCount = await prisma.eventLandingPhotoLike.count({
+        where: { photoId },
+      });
+      return res.json({ ok: true, liked: false, likeCount });
     } catch (e) {
       console.error(e);
       return res.status(500).json({ error: "Erreur serveur." });

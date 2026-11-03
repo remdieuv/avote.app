@@ -10,6 +10,11 @@ import {
   prepareLandingPhotoForUpload,
 } from "@/lib/compressLandingPhoto";
 import { EventLandingDemoPage } from "@/components/event/EventLandingDemoPage";
+import {
+  CameraIcon,
+  LandingHybridFeed,
+} from "@/components/event/LandingHybridFeed";
+import { getOrCreateVoterSessionId } from "@/lib/votes/voter-session";
 import { resolveEventLandingPhase } from "@/lib/participantLiveFlow";
 
 function mapApiError(body, status) {
@@ -82,12 +87,15 @@ export default function EventLandingPage() {
   const [deletingPhotoId, setDeletingPhotoId] = useState(null);
   const [exitingPhotoId, setExitingPhotoId] = useState(null);
   const fileInputRef = useRef(null);
-  const liveGalleryScrollRef = useRef(null);
-  const liveCarouselRafRef = useRef(0);
-  const [liveCarouselIndex, setLiveCarouselIndex] = useState(0);
   const showcaseScrollRef = useRef(null);
   const showcaseCarouselRafRef = useRef(0);
   const [showcaseCarouselIndex, setShowcaseCarouselIndex] = useState(0);
+  const [visitorKey, setVisitorKey] = useState("");
+  const [likeBusyId, setLikeBusyId] = useState(/** @type {string | null} */ (null));
+
+  useEffect(() => {
+    setVisitorKey(getOrCreateVoterSessionId());
+  }, []);
 
   useEffect(() => {
     if (!slug) return undefined;
@@ -103,8 +111,12 @@ export default function EventLandingPage() {
       setError(null);
       let redirected = false;
       try {
+        const vk = getOrCreateVoterSessionId();
+        const qs = vk
+          ? `?visitorKey=${encodeURIComponent(vk)}`
+          : "";
         const res = await adminFetch(
-          `${apiBaseBrowser()}/events/slug/${encodeURIComponent(slug)}/landing`,
+          `${apiBaseBrowser()}/events/slug/${encodeURIComponent(slug)}/landing${qs}`,
           { cache: "no-store" },
         );
         if (res.status === 404) {
@@ -144,7 +156,7 @@ export default function EventLandingPage() {
     typeof payload?.displayState === "string" ? payload.displayState : null;
   const softRefreshReady = Boolean(payload) && !isDemoSlug && Boolean(slug);
 
-  /** Soft-refresh moments (GET landing) ~30s pendant le live — pas de reload page. */
+  /** Soft-refresh fil (GET landing) ~30s pendant / après le live — pas de reload page. */
   useEffect(() => {
     if (!softRefreshReady || !slug) return undefined;
     const phase = resolveEventLandingPhase({
@@ -152,13 +164,15 @@ export default function EventLandingPage() {
       voteState: softRefreshVoteState,
       displayState: softRefreshDisplayState,
     });
-    if (phase !== "during") return undefined;
+    if (phase !== "during" && phase !== "after") return undefined;
     let cancelled = false;
     const SOFT_MS = 30_000;
     const softRefresh = async () => {
       try {
+        const vk = visitorKey || getOrCreateVoterSessionId();
+        const qs = vk ? `?visitorKey=${encodeURIComponent(vk)}` : "";
         const res = await adminFetch(
-          `${apiBaseBrowser()}/events/slug/${encodeURIComponent(slug)}/landing`,
+          `${apiBaseBrowser()}/events/slug/${encodeURIComponent(slug)}/landing${qs}`,
           { cache: "no-store" },
         );
         if (cancelled || !res.ok) return;
@@ -172,6 +186,7 @@ export default function EventLandingPage() {
             showcasePhotos: Array.isArray(data.showcasePhotos)
               ? data.showcasePhotos
               : prev.showcasePhotos,
+            feed: Array.isArray(data.feed) ? data.feed : prev.feed,
             liveState:
               typeof data.liveState === "string"
                 ? data.liveState
@@ -188,6 +203,18 @@ export default function EventLandingPage() {
               typeof data.infoShowOnFinished === "boolean"
                 ? data.infoShowOnFinished
                 : prev.infoShowOnFinished,
+            landingKeepPhotosAfter:
+              typeof data.landingKeepPhotosAfter === "boolean"
+                ? data.landingKeepPhotosAfter
+                : prev.landingKeepPhotosAfter,
+            landingKeepResultsAfter:
+              typeof data.landingKeepResultsAfter === "boolean"
+                ? data.landingKeepResultsAfter
+                : prev.landingKeepResultsAfter,
+            landingKeepMessagesAfter:
+              typeof data.landingKeepMessagesAfter === "boolean"
+                ? data.landingKeepMessagesAfter
+                : prev.landingKeepMessagesAfter,
           };
         });
       } catch {
@@ -205,6 +232,7 @@ export default function EventLandingPage() {
     softRefreshLiveState,
     softRefreshVoteState,
     softRefreshDisplayState,
+    visitorKey,
   ]);
 
   const triggerLandingPhotoPicker = useCallback(() => {
@@ -248,9 +276,26 @@ export default function EventLandingPage() {
           setPayload((prev) => {
             if (!prev || typeof prev !== "object") return prev;
             const prevPhotos = Array.isArray(prev.photos) ? prev.photos : [];
+            const prevFeed = Array.isArray(prev.feed) ? prev.feed : [];
+            const feedItem = {
+              type: "photo",
+              id: `photo:${id}`,
+              occurredAt: createdAt,
+              photo: {
+                id,
+                url,
+                createdAt,
+                likeCount: 0,
+                likedByMe: false,
+              },
+            };
             return {
               ...prev,
               photos: [{ id, url, createdAt }, ...prevPhotos],
+              feed: [
+                feedItem,
+                ...prevFeed.filter((x) => String(x?.id) !== `photo:${id}`),
+              ],
             };
           });
         }
@@ -298,23 +343,31 @@ export default function EventLandingPage() {
         const reduceMotion =
           typeof window !== "undefined" &&
           window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const removePhotoFromPayload = (prev) => {
+          if (!prev || typeof prev !== "object") return prev;
+          const ph = Array.isArray(prev.photos) ? prev.photos : [];
+          const feed = Array.isArray(prev.feed) ? prev.feed : [];
+          return {
+            ...prev,
+            photos: ph.filter((x) => String(x?.id) !== pid),
+            feed: feed.filter(
+              (x) =>
+                !(
+                  x?.type === "photo" &&
+                  String(x?.photo?.id || "") === pid
+                ),
+            ),
+          };
+        };
         if (reduceMotion) {
-          setPayload((prev) => {
-            if (!prev || typeof prev !== "object") return prev;
-            const ph = Array.isArray(prev.photos) ? prev.photos : [];
-            return { ...prev, photos: ph.filter((x) => String(x?.id) !== pid) };
-          });
+          setPayload(removePhotoFromPayload);
           setToastNotif("🗑 Photo supprimée");
           window.setTimeout(() => setToastNotif(null), 2600);
           return;
         }
         setExitingPhotoId(pid);
         window.setTimeout(() => {
-          setPayload((prev) => {
-            if (!prev || typeof prev !== "object") return prev;
-            const ph = Array.isArray(prev.photos) ? prev.photos : [];
-            return { ...prev, photos: ph.filter((x) => String(x?.id) !== pid) };
-          });
+          setPayload(removePhotoFromPayload);
           setExitingPhotoId(null);
           setToastNotif("🗑 Photo supprimée");
           window.setTimeout(() => setToastNotif(null), 2600);
@@ -327,17 +380,61 @@ export default function EventLandingPage() {
     [payload],
   );
 
-  const livePhotoIdsKey = useMemo(() => {
-    if (!payload || typeof payload !== "object") return "";
-    const ph = Array.isArray(payload.photos) ? payload.photos : [];
-    return ph.map((p) => String(p?.id ?? "")).join(",");
-  }, [payload]);
-
-  const livePhotoCount = useMemo(() => {
-    if (!payload || typeof payload !== "object") return 0;
-    const ph = Array.isArray(payload.photos) ? payload.photos : [];
-    return ph.length;
-  }, [payload]);
+  const handleTogglePhotoLike = useCallback(
+    async (photoId, currentlyLiked) => {
+      if (!slug || !photoId) return;
+      const vk = visitorKey || getOrCreateVoterSessionId();
+      if (!vk) return;
+      setLikeBusyId(photoId);
+      try {
+        const url = `${apiBaseBrowser()}/events/slug/${encodeURIComponent(slug)}/landing/photos/${encodeURIComponent(photoId)}/like`;
+        const res = currentlyLiked
+          ? await fetch(url, {
+              method: "DELETE",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ visitorKey: vk }),
+            })
+          : await fetch(url, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ visitorKey: vk }),
+            });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(mapApiError(body, res.status));
+        const likeCount = Number(body?.likeCount || 0);
+        const liked = Boolean(body?.liked);
+        setPayload((prev) => {
+          if (!prev || typeof prev !== "object") return prev;
+          const feed = Array.isArray(prev.feed) ? prev.feed : [];
+          return {
+            ...prev,
+            feed: feed.map((item) => {
+              if (
+                item?.type === "photo" &&
+                item?.photo &&
+                String(item.photo.id) === String(photoId)
+              ) {
+                return {
+                  ...item,
+                  photo: {
+                    ...item.photo,
+                    likeCount,
+                    likedByMe: liked,
+                  },
+                };
+              }
+              return item;
+            }),
+          };
+        });
+      } catch {
+        /* ignore like errors soft */
+      } finally {
+        setLikeBusyId(null);
+      }
+    },
+    [slug, visitorKey],
+  );
 
   const showcasePhotoIdsKey = useMemo(() => {
     if (!payload || typeof payload !== "object") return "";
@@ -354,29 +451,6 @@ export default function EventLandingPage() {
       : [];
     return ph.length;
   }, [payload]);
-
-  const updateLiveCarouselIndexFromScroll = useCallback(() => {
-    const root = liveGalleryScrollRef.current;
-    if (!root) return;
-    const slides = root.querySelectorAll(".ev-gallery-slide");
-    if (!slides.length) return;
-    const rootRect = root.getBoundingClientRect();
-    const cs = getComputedStyle(root);
-    const pad =
-      parseFloat(cs.scrollPaddingLeft) || parseFloat(cs.paddingLeft) || 16;
-    const anchor = rootRect.left + pad;
-    let bestI = 0;
-    let bestD = Infinity;
-    slides.forEach((slide, i) => {
-      const r = slide.getBoundingClientRect();
-      const d = Math.abs(r.left - anchor);
-      if (d < bestD) {
-        bestD = d;
-        bestI = i;
-      }
-    });
-    setLiveCarouselIndex((prev) => (prev !== bestI ? bestI : prev));
-  }, []);
 
   const updateShowcaseCarouselIndexFromScroll = useCallback(() => {
     const root = showcaseScrollRef.current;
@@ -402,36 +476,10 @@ export default function EventLandingPage() {
   }, []);
 
   useEffect(() => {
-    setLiveCarouselIndex(0);
-    const root = liveGalleryScrollRef.current;
-    if (root) root.scrollLeft = 0;
-  }, [livePhotoIdsKey]);
-
-  useEffect(() => {
     setShowcaseCarouselIndex(0);
     const root = showcaseScrollRef.current;
     if (root) root.scrollLeft = 0;
   }, [showcasePhotoIdsKey]);
-
-  useEffect(() => {
-    const root = liveGalleryScrollRef.current;
-    if (!root || livePhotoCount < 2) return undefined;
-    const tick = () => {
-      if (liveCarouselRafRef.current) return;
-      liveCarouselRafRef.current = requestAnimationFrame(() => {
-        liveCarouselRafRef.current = 0;
-        updateLiveCarouselIndexFromScroll();
-      });
-    };
-    const onScrollEnd = () => updateLiveCarouselIndexFromScroll();
-    root.addEventListener("scroll", tick, { passive: true });
-    root.addEventListener("scrollend", onScrollEnd);
-    tick();
-    return () => {
-      root.removeEventListener("scroll", tick);
-      root.removeEventListener("scrollend", onScrollEnd);
-    };
-  }, [livePhotoCount, livePhotoIdsKey, updateLiveCarouselIndexFromScroll]);
 
   useEffect(() => {
     const root = showcaseScrollRef.current;
@@ -533,7 +581,6 @@ export default function EventLandingPage() {
     typeof payload.logoUrl === "string"
       ? resolveApiAssetUrlNullable(payload.logoUrl.trim())
       : null;
-  const photos = Array.isArray(payload.photos) ? payload.photos : [];
   const showcasePhotosList = Array.isArray(payload.showcasePhotos)
     ? payload.showcasePhotos
     : [];
@@ -590,8 +637,10 @@ export default function EventLandingPage() {
     payload.canUploadLandingPhoto === true &&
     typeof payload.landingPhotoUploadEventId === "string" &&
     String(payload.landingPhotoUploadEventId).trim() !== "";
+  const canManageFeed = payload.canManageLandingFeed === true || canUploadLanding;
   const showShowcaseBlock = showcasePhotosList.length > 0;
-  const showLiveBlock = photos.length > 0 || canUploadLanding;
+  const feedItems = Array.isArray(payload.feed) ? payload.feed : [];
+  const showFeedBlock = feedItems.length > 0 || canUploadLanding;
 
   const showcaseEyebrow = afterLive
     ? "Souvenirs"
@@ -600,18 +649,6 @@ export default function EventLandingPage() {
   const showcaseLead = afterLive
     ? "Retrouvez l'ambiance et les temps forts de l'événement."
     : "Découvrez l'ambiance et les temps forts de l'événement.";
-
-  const momentsEyebrow = afterLive
-    ? "Pendant le live"
-    : livePriority
-      ? "En direct"
-      : "Moments";
-  const momentsTitle = livePriority ? "🔴 Moments live" : "Moments live";
-  const momentsLead = afterLive
-    ? "Les moments capturés pendant le live."
-    : livePriority
-      ? "Les photos ajoutées pendant le live apparaissent ici."
-      : "Les photos du live apparaîtront ici.";
 
   const footerCta = {
     display: "inline-flex",
@@ -1381,62 +1418,44 @@ export default function EventLandingPage() {
         </section>
         ) : null}
 
-        {showLiveBlock ? (
-          <section
-            className="ev-landing-gallery-section"
+        {canUploadLanding ? (
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={onLandingPhotoSelected}
+          />
+        ) : null}
+        {uploadError ? (
+          <p
             style={{
-              marginBottom: "clamp(2rem, 5vw, 3rem)",
-              "--ev-accent": accent,
+              margin: "0 0 0.75rem",
+              fontSize: "0.88rem",
+              color: "#b91c1c",
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                alignItems: "flex-end",
-                justifyContent: "space-between",
-                gap: "1rem",
-                marginBottom: "1.15rem",
-              }}
-            >
-              <div>
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "0.68rem",
-                    fontWeight: 800,
-                    letterSpacing: "0.2em",
-                    textTransform: "uppercase",
-                    color: "#64748b",
-                  }}
-                >
-                  {momentsEyebrow}
-                </p>
-                <h2
-                  style={{
-                    margin: "0.35rem 0 0",
-                    fontSize: "clamp(1.45rem, 4vw, 1.85rem)",
-                    fontWeight: 800,
-                    letterSpacing: "-0.03em",
-                    color: "#0f172a",
-                    lineHeight: 1.15,
-                  }}
-                >
-                  {momentsTitle}
-                </h2>
-                <p
-                  style={{
-                    margin: "0.4rem 0 0",
-                    fontSize: "0.95rem",
-                    color: "#64748b",
-                    maxWidth: "28rem",
-                    lineHeight: 1.45,
-                  }}
-                >
-                  {momentsLead}
-                </p>
-              </div>
-              {canUploadLanding ? (
+            {uploadError}
+          </p>
+        ) : null}
+        {showFeedBlock ? (
+          <LandingHybridFeed
+            accent={accent}
+            items={feedItems}
+            onToggleLike={handleTogglePhotoLike}
+            likeBusyId={likeBusyId}
+            canManage={canManageFeed}
+            onDeletePhoto={
+              canManageFeed ? handleDeleteLandingPhoto : undefined
+            }
+            deletingPhotoId={deletingPhotoId || exitingPhotoId}
+            emptyHint={
+              canUploadLanding && feedItems.length === 0
+                ? "Le fil est vide — partagez une photo pour lancer le journal."
+                : null
+            }
+            headerAction={
+              canUploadLanding ? (
                 <button
                   type="button"
                   className="ev-landing-upload-desktop"
@@ -1444,116 +1463,16 @@ export default function EventLandingPage() {
                   onClick={triggerLandingPhotoPicker}
                   style={{ color: accent }}
                 >
+                  <CameraIcon size={16} />
                   {uploadPhase === "optimizing"
-                    ? "Optimisation de la photo…"
+                    ? "Optimisation…"
                     : uploadPhase === "uploading"
-                      ? "Envoi en cours…"
-                      : "📸 Ajouter un moment live"}
+                      ? "Envoi…"
+                      : "Partager une photo"}
                 </button>
-              ) : null}
-            </div>
-            {canUploadLanding ? (
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                style={{ display: "none" }}
-                onChange={onLandingPhotoSelected}
-              />
-            ) : null}
-            {uploadError ? (
-              <p
-                style={{
-                  margin: "0 0 0.75rem",
-                  fontSize: "0.88rem",
-                  color: "#b91c1c",
-                }}
-              >
-                {uploadError}
-              </p>
-            ) : null}
-            {photos.length === 0 && canUploadLanding ? (
-              <p
-                style={{
-                  margin: "0 0 1rem",
-                  fontSize: "0.95rem",
-                  color: "#64748b",
-                  lineHeight: 1.5,
-                }}
-              >
-                Aucun moment pour l’instant — ajoutez une photo pour donner vie
-                à cette page.
-              </p>
-            ) : null}
-            <div className="ev-landing-carousel-mobile-wrap">
-              <div
-                ref={liveGalleryScrollRef}
-                className="ev-landing-gallery-scroll"
-              >
-                {photos.map((p) => {
-                  const u =
-                    typeof p?.url === "string"
-                      ? resolveApiAssetUrlNullable(p.url.trim())
-                      : null;
-                  if (!u) return null;
-                  const pid = String(p.id ?? "");
-                  return (
-                    <LandingGalleryPhoto
-                      key={p.id}
-                      url={u}
-                      photoId={pid}
-                      variant="slide"
-                      canManage={canUploadLanding}
-                      isDeleting={deletingPhotoId === pid}
-                      isExiting={exitingPhotoId === pid}
-                      onDelete={handleDeleteLandingPhoto}
-                    />
-                  );
-                })}
-              </div>
-              {photos.length > 1 ? (
-                <div className="ev-landing-carousel-progress">
-                  <div className="ev-landing-carousel-dots" aria-hidden="true">
-                    {photos.map((p, i) => (
-                      <span
-                        key={p.id}
-                        className={
-                          i === liveCarouselIndex
-                            ? "ev-landing-carousel-dot ev-landing-carousel-dot--active"
-                            : "ev-landing-carousel-dot"
-                        }
-                      />
-                    ))}
-                  </div>
-                  <span className="ev-landing-carousel-fraction">
-                    {liveCarouselIndex + 1} / {photos.length}
-                  </span>
-                </div>
-              ) : null}
-            </div>
-            <div className="ev-landing-gallery-grid">
-              {photos.map((p) => {
-                const u =
-                  typeof p?.url === "string"
-                    ? resolveApiAssetUrlNullable(p.url.trim())
-                    : null;
-                if (!u) return null;
-                const pid = String(p.id ?? "");
-                return (
-                  <LandingGalleryPhoto
-                    key={`g-${p.id}`}
-                    url={u}
-                    photoId={pid}
-                    variant="card"
-                    canManage={canUploadLanding}
-                    isDeleting={deletingPhotoId === pid}
-                    isExiting={exitingPhotoId === pid}
-                    onDelete={handleDeleteLandingPhoto}
-                  />
-                );
-              })}
-            </div>
-          </section>
+              ) : null
+            }
+          />
         ) : null}
 
         {showInfo ? (
@@ -1717,12 +1636,13 @@ export default function EventLandingPage() {
           }
           disabled={uploadBusy}
           onClick={triggerLandingPhotoPicker}
-          aria-label="Ajouter un moment live"
+          aria-label="Partager une photo"
+          title="Partager une photo"
           style={{
             background: `linear-gradient(160deg, ${accent}, color-mix(in srgb, ${accent} 72%, #0f172a))`,
           }}
         >
-          📸
+          <CameraIcon size={22} />
         </button>
       ) : null}
 

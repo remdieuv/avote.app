@@ -252,6 +252,10 @@ export function EventCustomizationEditor({ mode = "live" }) {
   const [landingCoverUrl, setLandingCoverUrl] = useState("");
   const [landingTitle, setLandingTitle] = useState("");
   const [landingDescription, setLandingDescription] = useState("");
+  const [landingKeepPhotosAfter, setLandingKeepPhotosAfter] = useState(true);
+  const [landingKeepResultsAfter, setLandingKeepResultsAfter] = useState(true);
+  const [landingKeepMessagesAfter, setLandingKeepMessagesAfter] =
+    useState(true);
   /** @type {{ id: string; url: string; createdAt: string }[]} */
   const [showcasePhotos, setShowcasePhotos] = useState([]);
   /** @type {{ id: string; url: string; createdAt: string }[]} */
@@ -365,7 +369,10 @@ export function EventCustomizationEditor({ mode = "live" }) {
         landingEnabled !== baseline.landingEnabled ||
         landingCoverUrl !== baseline.landingCoverUrl ||
         landingTitle !== baseline.landingTitle ||
-        landingDescription !== baseline.landingDescription
+        landingDescription !== baseline.landingDescription ||
+        landingKeepPhotosAfter !== baseline.landingKeepPhotosAfter ||
+        landingKeepResultsAfter !== baseline.landingKeepResultsAfter ||
+        landingKeepMessagesAfter !== baseline.landingKeepMessagesAfter
       );
     }
     return (
@@ -405,6 +412,9 @@ export function EventCustomizationEditor({ mode = "live" }) {
     landingCoverUrl,
     landingTitle,
     landingDescription,
+    landingKeepPhotosAfter,
+    landingKeepResultsAfter,
+    landingKeepMessagesAfter,
   ]);
 
   const liveFieldErrors = useMemo(() => {
@@ -483,6 +493,18 @@ export function EventCustomizationEditor({ mode = "live" }) {
       const lcov = data.landingCoverUrl;
       const ltit = data.landingTitle;
       const ldesc = data.landingDescription;
+      const keepPhotos =
+        typeof data.landingKeepPhotosAfter === "boolean"
+          ? data.landingKeepPhotosAfter
+          : true;
+      const keepResults =
+        typeof data.landingKeepResultsAfter === "boolean"
+          ? data.landingKeepResultsAfter
+          : true;
+      const keepMessages =
+        typeof data.landingKeepMessagesAfter === "boolean"
+          ? data.landingKeepMessagesAfter
+          : true;
       const landingPhotos = Array.isArray(data.landingPhotos) ? data.landingPhotos : [];
 
       setDescription(desc);
@@ -522,6 +544,9 @@ export function EventCustomizationEditor({ mode = "live" }) {
       );
       setLandingTitle(typeof ltit === "string" ? ltit : "");
       setLandingDescription(typeof ldesc === "string" ? ldesc : "");
+      setLandingKeepPhotosAfter(keepPhotos);
+      setLandingKeepResultsAfter(keepResults);
+      setLandingKeepMessagesAfter(keepMessages);
       if (Array.isArray(data.landingShowcasePhotos)) {
         setShowcasePhotos(
           data.landingShowcasePhotos
@@ -583,6 +608,9 @@ export function EventCustomizationEditor({ mode = "live" }) {
           typeof lcov === "string" ? resolveApiAssetUrl(lcov) : "",
         landingTitle: typeof ltit === "string" ? ltit : "",
         landingDescription: typeof ldesc === "string" ? ldesc : "",
+        landingKeepPhotosAfter: keepPhotos,
+        landingKeepResultsAfter: keepResults,
+        landingKeepMessagesAfter: keepMessages,
       });
     } catch (e) {
       setLoadError(e.message || "Chargement impossible.");
@@ -692,6 +720,9 @@ export function EventCustomizationEditor({ mode = "live" }) {
           landingDescription.trim() === ""
             ? null
             : landingDescription.trim().slice(0, 1200),
+        landingKeepPhotosAfter: Boolean(landingKeepPhotosAfter),
+        landingKeepResultsAfter: Boolean(landingKeepResultsAfter),
+        landingKeepMessagesAfter: Boolean(landingKeepMessagesAfter),
       };
       const res = await adminFetch(
         `${apiBaseBrowser()}/events/${eventId}/customization`,
@@ -742,6 +773,9 @@ export function EventCustomizationEditor({ mode = "live" }) {
         landingCoverUrl: landingCoverUrl.trim(),
         landingTitle: landingTitle.trim(),
         landingDescription: landingDescription.trim(),
+        landingKeepPhotosAfter: Boolean(landingKeepPhotosAfter),
+        landingKeepResultsAfter: Boolean(landingKeepResultsAfter),
+        landingKeepMessagesAfter: Boolean(landingKeepMessagesAfter),
       });
       if (isLandingPage) bumpLandingPreview();
     } catch (e) {
@@ -1651,6 +1685,92 @@ export function EventCustomizationEditor({ mode = "live" }) {
                         Aucun moment live publié.
                       </p>
                     ) : null}
+                  </section>
+
+                  {/* 5. Visibilité après l’événement (H5) */}
+                  <section style={card}>
+                    <h2
+                      style={{
+                        margin: "0 0 0.45rem",
+                        fontSize: "0.72rem",
+                        fontWeight: 800,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "#64748b",
+                      }}
+                    >
+                      Après l’événement
+                    </h2>
+                    <p style={{ ...fieldHintStyle, margin: "0 0 0.75rem" }}>
+                      Choisissez ce qui reste visible dans le fil public une
+                      fois l’événement terminé. Par défaut, tout reste affiché
+                      (comportement actuel).
+                    </p>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.55rem",
+                      }}
+                    >
+                      <label
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                          fontSize: "0.84rem",
+                          color: "#334155",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={landingKeepPhotosAfter}
+                          onChange={(e) =>
+                            setLandingKeepPhotosAfter(e.target.checked)
+                          }
+                        />
+                        Conserver les photos (Moments)
+                      </label>
+                      <label
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                          fontSize: "0.84rem",
+                          color: "#334155",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={landingKeepResultsAfter}
+                          onChange={(e) =>
+                            setLandingKeepResultsAfter(e.target.checked)
+                          }
+                        />
+                        Conserver les résultats des questions
+                      </label>
+                      <label
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                          fontSize: "0.84rem",
+                          color: "#334155",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={landingKeepMessagesAfter}
+                          onChange={(e) =>
+                            setLandingKeepMessagesAfter(e.target.checked)
+                          }
+                        />
+                        Conserver les messages organisateur
+                      </label>
+                    </div>
                   </section>
                 </>
               ) : (
