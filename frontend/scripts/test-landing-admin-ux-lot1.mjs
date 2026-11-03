@@ -18,6 +18,10 @@ const landingEntry = readFileSync(
   join(root, "app/admin/events/[eventId]/landing/page.jsx"),
   "utf8",
 );
+const feedAdmin = readFileSync(
+  join(root, "components/event/LandingFeedAdminPanel.jsx"),
+  "utf8",
+);
 
 let failed = 0;
 /** @param {string} name @param {() => void} fn */
@@ -37,21 +41,22 @@ test("landing route réutilise EventCustomizationEditor mode=landing", () => {
   assert.match(landingEntry, /mode=["']landing["']/);
 });
 
-test("quatre blocs orga stables", () => {
+test("blocs orga stables (Publication → Fil)", () => {
   // Titres de section h2 (commentaire de lot + libellé affiché)
   assert.match(page, /\{\/\* 1\. Publication \*\/\}/);
   assert.match(page, /\{\/\* 2\. Personnalisation \*\/\}/);
   assert.match(page, /\{\/\* 3\. Galerie événement \*\/\}/);
-  assert.match(page, /\{\/\* 4\. Moments live \*\/\}/);
+  assert.match(page, /\{\/\* 4\. Fil de l/);
   assert.match(page, />\s*Publication\s*</);
   assert.match(page, />\s*Personnalisation\s*</);
   assert.match(page, />\s*Galerie événement\s*</);
-  assert.match(page, />\s*Moments live\s*</);
+  assert.match(page, /LandingFeedAdminPanel/);
+  assert.match(page, /Fil de l/);
 });
 
-test("vocabulaire canonique Moments live / Galerie événement", () => {
-  assert.match(page, /Moments live/);
+test("vocabulaire canonique Galerie événement + Fil", () => {
   assert.match(page, /Galerie événement/);
+  assert.match(page, /LandingFeedAdminPanel|Fil de l/);
   assert.doesNotMatch(page, /Galerie live/);
   assert.doesNotMatch(page, /Photos live publiées/);
 });
@@ -70,21 +75,22 @@ test("onglets mobile Réglages / Aperçu aussi en mode landing", () => {
 });
 
 test("distinction Enregistrer vs galeries immédiates", () => {
-  assert.match(page, /En ligne dès l’ajout/);
+  assert.match(feedAdmin, /En ligne dès l’ajout/);
   assert.match(page, /Publication \/ personnalisation non enregistrées \(galeries déjà en ligne\)/);
   assert.match(page, /Publication & personnalisation à jour · galeries immédiates/);
   assert.match(page, /LANDING_SHOWCASE_MAX/);
   assert.match(page, /LANDING_LIVE_PHOTOS_MAX/);
 });
 
-test("moments live : miniatures + publish + régie (API existante)", () => {
+test("fil admin : photos via API existante + panel centralisé", () => {
   assert.match(page, /addLiveMomentPhotos/);
   assert.match(page, /removeLiveMomentPhoto/);
   assert.match(page, /landing\/photos/);
   assert.match(page, /prepareLandingPhotoForUpload/);
-  assert.match(page, /Publier une photo/);
-  assert.match(page, /Ouvrir la régie/);
-  assert.match(page, /landingLivePhotos\.map/);
+  assert.match(page, /LandingFeedAdminPanel/);
+  assert.match(page, /closedLandingPolls/);
+  assert.match(page, /onAddPhotos/);
+  assert.match(page, /onRemovePhoto/);
 });
 
 test("reload aperçu après save / photos", () => {

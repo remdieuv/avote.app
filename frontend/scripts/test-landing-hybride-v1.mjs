@@ -16,8 +16,8 @@ const feedUi = readFileSync(
   join(root, "components/event/LandingHybridFeed.jsx"),
   "utf8",
 );
-const regiePanel = readFileSync(
-  join(root, "components/event/RegieLandingJournalPanel.jsx"),
+const feedAdmin = readFileSync(
+  join(root, "components/event/LandingFeedAdminPanel.jsx"),
   "utf8",
 );
 const customization = readFileSync(
@@ -211,14 +211,16 @@ test("soft-refresh feed pendant et après", () => {
   assert.match(page, /landingKeepPhotosAfter/);
 });
 
-test("régie messages + hide résultat", () => {
-  assert.match(regiePage, /RegieLandingJournalPanel/);
-  assert.match(regiePage, /onToggleLandingResult/);
-  assert.match(regiePage, /landing-result/);
-  assert.match(regiePage, /Masquer du fil/);
-  assert.match(regiePanel, /landing\/messages/);
-  assert.match(regiePanel, /Masquer/);
-  assert.match(regiePanel, /Supprimer/);
+test("fil admin centralisé (pas régie messages / hide)", () => {
+  assert.doesNotMatch(regiePage, /RegieLandingJournalPanel/);
+  assert.doesNotMatch(regiePage, /onToggleLandingResult/);
+  assert.doesNotMatch(regiePage, /Masquer du fil/);
+  assert.match(customization, /LandingFeedAdminPanel/);
+  assert.match(feedAdmin, /landing\/messages/);
+  assert.match(feedAdmin, /landing-result/);
+  assert.match(feedAdmin, /Masquer du fil/);
+  assert.match(feedAdmin, /Publier le message/);
+  assert.match(feedAdmin, /Fil de l&apos;événement|Fil de l'événement/);
 });
 
 test("admin landing H5 rétention", () => {

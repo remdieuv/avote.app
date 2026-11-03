@@ -133,7 +133,6 @@ import {
   TelecommandeQrModal,
 } from "@/components/admin/TelecommandeQrModal";
 import { TELECOMMANDE_QR_COPY } from "@/lib/telecommandeQr";
-import { RegieLandingJournalPanel } from "@/components/event/RegieLandingJournalPanel";
 
 const VOTE_STATE_LABELS = {
   open: "Vote ouvert",
@@ -457,8 +456,6 @@ function PollCard({
   onMoveUp = null,
   onMoveDown = null,
   onDelete = null,
-  /** Masquer / réafficher le résultat dans le fil landing (questions CLOSED). */
-  onToggleLandingResult = null,
 }) {
   const statusLabel = getRegiePollStatusLabel({
     pollStatus: poll.status,
@@ -490,11 +487,6 @@ function PollCard({
     voteOuvertSurCeSondage;
   const disableStop = busy || poll.status !== "ACTIVE";
   const isLeadOrContest = isLeadPoll(poll) || isContestPoll(poll);
-  const showLandingHideToggle =
-    typeof onToggleLandingResult === "function" &&
-    String(poll.status || "").toUpperCase() === "CLOSED" &&
-    !isLeadPoll(poll);
-  const landingResultHidden = Boolean(poll.landingResultHidden);
   /** LOT-2 — Afficher hors parcours principal Lead / Concours. */
   const disableResultats = busy || isLeadOrContest;
   const resultsButtonTitle = isLeadOrContest
@@ -505,26 +497,6 @@ function PollCard({
       ? "Affiche les résultats finaux à la salle et à l’écran. Si le vote est fermé, révèle aussi la bonne réponse et le verdict participant."
       : "Affiche les résultats finaux à la salle et à l’écran (le vote peut rester ouvert).";
   const contestDrawDisabled = busy || voteOuvertSurCeSondage;
-
-  const landingHideBtn = showLandingHideToggle ? (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={() => onToggleLandingResult(poll.id, !landingResultHidden)}
-      title={
-        landingResultHidden
-          ? "Réafficher ce résultat dans le fil landing"
-          : "Masquer ce résultat du fil landing"
-      }
-      style={{
-        ...btnSecondary(busy),
-        fontSize: compact ? "0.68rem" : "0.78rem",
-        padding: compact ? "0.32rem 0.5rem" : "0.45rem 0.75rem",
-      }}
-    >
-      {landingResultHidden ? "Fil : masqué" : "Masquer du fil"}
-    </button>
-  ) : null;
 
   const boutons = liveActions ? (
     <>
@@ -1090,9 +1062,6 @@ function PollCard({
               Voir les leads
             </button>
           ) : null}
-          {landingHideBtn ? (
-            <div style={{ width: "100%" }}>{landingHideBtn}</div>
-          ) : null}
           {editAction ? (
             <button
               type="button"
@@ -1160,7 +1129,6 @@ function PollCard({
             }}
           >
             {boutons}
-            {landingHideBtn}
             {quickAction}
             {editAction}
           </div>
@@ -1224,7 +1192,6 @@ function PollCard({
           {titre}
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
             {boutons}
-            {landingHideBtn}
             {quickAction}
             {editAction}
           </div>
@@ -3744,7 +3711,6 @@ function SidebarPartageDroit({
               publiée{landingPhotosCount > 1 ? "s" : ""}
             </p>
           </section>
-          {eventId ? <RegieLandingJournalPanel eventId={eventId} /> : null}
           <SectionPartageLandingEvenement
             slug={slug}
             landingEnabled={Boolean(landingEnabled)}
@@ -7542,51 +7508,6 @@ export default function RegieEventPage() {
     [busy, eventLocked, fetchEvent],
   );
 
-  const handleToggleLandingResult = useCallback(
-    async (pollId, hidden) => {
-      if (!eventId || !pollId || busy) return;
-      setBusy(true);
-      setActionError(null);
-      try {
-        const res = await adminFetch(
-          `${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/polls/${encodeURIComponent(pollId)}/landing-result`,
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ hidden: Boolean(hidden) }),
-          },
-        );
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(mapApiError(body, res.status));
-        }
-        setEventData((prev) => {
-          if (!prev?.polls) return prev;
-          return {
-            ...prev,
-            polls: prev.polls.map((p) =>
-              String(p.id) === String(pollId)
-                ? {
-                    ...p,
-                    landingResultHidden: Boolean(body.landingResultHidden),
-                  }
-                : p,
-            ),
-          };
-        });
-        setToastNotif(
-          hidden ? "Résultat masqué du fil" : "Résultat visible sur le fil",
-        );
-        window.setTimeout(() => setToastNotif(null), 2200);
-      } catch (e) {
-        setActionError(e.message || "Mise à jour impossible.");
-      } finally {
-        setBusy(false);
-      }
-    },
-    [eventId, busy],
-  );
-
   const selectedReplayGate = canOfferReplayTestPoll({
     isTestMode: inTestMode,
     voteState: voteStateUi,
@@ -7748,7 +7669,6 @@ export default function RegieEventPage() {
             onMoveUp={(id) => handlePlaylistMove(id, "up")}
             onMoveDown={(id) => handlePlaylistMove(id, "down")}
             onDelete={handlePlaylistDelete}
-            onToggleLandingResult={handleToggleLandingResult}
           />
         ))}
       </div>
