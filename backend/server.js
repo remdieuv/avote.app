@@ -35,6 +35,19 @@ const {
   buildLandingFeedItems,
 } = require("./lib/landingFeed");
 const {
+  CAPTION_MAX,
+  PROGRAM_TITLE_MAX,
+  PROGRAM_TIME_MAX,
+  META_DATE_MAX,
+  META_VENUE_MAX,
+  META_HOURS_MAX,
+  PROGRAM_MAX_ITEMS,
+  programSortOrderFromTimeLabel,
+  sortLandingProgramItems,
+  normalizeOptionalBoundedText,
+  normalizeLandingCaption,
+} = require("./lib/landingEventPresentation");
+const {
   STATUS_ACTIVE,
   STATUS_REPLACED,
   createPollExclusiveQueue,
@@ -154,6 +167,9 @@ function eventCustomizationJson(event) {
       landingCoverUrl: null,
       landingTitle: null,
       landingDescription: null,
+      landingEventDate: null,
+      landingVenue: null,
+      landingHours: null,
       landingKeepPhotosAfter: true,
       landingKeepResultsAfter: true,
       landingKeepMessagesAfter: true,
@@ -181,6 +197,9 @@ function eventCustomizationJson(event) {
     landingCoverUrl: absolutizeStoredAssetUrl(event.landingCoverUrl),
     landingTitle: event.landingTitle ?? null,
     landingDescription: event.landingDescription ?? null,
+    landingEventDate: event.landingEventDate ?? null,
+    landingVenue: event.landingVenue ?? null,
+    landingHours: event.landingHours ?? null,
     landingKeepPhotosAfter: event.landingKeepPhotosAfter !== false,
     landingKeepResultsAfter: event.landingKeepResultsAfter !== false,
     landingKeepMessagesAfter: event.landingKeepMessagesAfter !== false,
@@ -1786,6 +1805,16 @@ app.post("/events/:eventId/duplicate", requireAuth, async (req, res) => {
             typeof source.infoShowOnFinished === "boolean"
               ? source.infoShowOnFinished
               : true,
+          landingEnabled: Boolean(source.landingEnabled),
+          landingCoverUrl: source.landingCoverUrl ?? null,
+          landingTitle: source.landingTitle ?? null,
+          landingDescription: source.landingDescription ?? null,
+          landingEventDate: source.landingEventDate ?? null,
+          landingVenue: source.landingVenue ?? null,
+          landingHours: source.landingHours ?? null,
+          landingKeepPhotosAfter: source.landingKeepPhotosAfter !== false,
+          landingKeepResultsAfter: source.landingKeepResultsAfter !== false,
+          landingKeepMessagesAfter: source.landingKeepMessagesAfter !== false,
           slug,
           status: "PUBLISHED",
           liveState: "WAITING",
@@ -1803,6 +1832,21 @@ app.post("/events/:eventId/duplicate", requireAuth, async (req, res) => {
           questionTimerIsPaused: true,
         },
       });
+
+      const sourceProgram = await tx.eventLandingProgramItem.findMany({
+        where: { eventId: source.id },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      });
+      for (const step of sourceProgram) {
+        await tx.eventLandingProgramItem.create({
+          data: {
+            eventId: event.id,
+            timeLabel: step.timeLabel,
+            title: step.title,
+            sortOrder: step.sortOrder,
+          },
+        });
+      }
 
       let firstPollId = null;
       for (let i = 0; i < source.polls.length; i++) {
@@ -2331,6 +2375,9 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
           where: { hidden: false },
           orderBy: { createdAt: "desc" },
         },
+        landingProgramItems: {
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        },
       },
     });
     if (!event) {
@@ -2343,12 +2390,29 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
     const photos = (event.landingPhotos || []).map((p) => ({
       id: p.id,
       url: absolutizeStoredAssetUrl(p.url),
+      caption:
+        typeof p.caption === "string" && p.caption.trim()
+          ? p.caption.trim()
+          : null,
       createdAt: p.createdAt.toISOString(),
     }));
     const showcasePhotos = (event.landingShowcasePhotos || []).map((p) => ({
       id: p.id,
       url: absolutizeStoredAssetUrl(p.url),
+      caption:
+        typeof p.caption === "string" && p.caption.trim()
+          ? p.caption.trim()
+          : null,
       createdAt: p.createdAt.toISOString(),
+    }));
+    const programItems = sortLandingProgramItems(
+      event.landingProgramItems || [],
+    ).map((step) => ({
+      id: step.id,
+      timeLabel: step.timeLabel,
+      title: step.title,
+      sortOrder: step.sortOrder,
+      createdAt: step.createdAt.toISOString(),
     }));
     const titleEffective =
       (event.landingTitle && event.landingTitle.trim()) ||
@@ -2463,6 +2527,10 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       photos: (event.landingPhotos || []).map((p) => ({
         id: p.id,
         url: absolutizeStoredAssetUrl(p.url),
+        caption:
+          typeof p.caption === "string" && p.caption.trim()
+            ? p.caption.trim()
+            : null,
         createdAt: p.createdAt,
       })),
       likeCounts,
@@ -2483,10 +2551,14 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       logoUrl: info.logoUrl,
       photos,
       showcasePhotos,
+      programItems,
       feed,
       canUploadLandingPhoto,
       canManageLandingFeed,
       landingPhotoUploadEventId,
+      landingEventDate: info.landingEventDate,
+      landingVenue: info.landingVenue,
+      landingHours: info.landingHours,
       infoSectionTitle: info.infoSectionTitle,
       infoSectionText: info.infoSectionText,
       infoPrimaryCtaLabel: info.infoPrimaryCtaLabel,
@@ -2535,6 +2607,9 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
         },
         landingShowcasePhotos: {
           orderBy: { createdAt: "asc" },
+        },
+        landingProgramItems: {
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
         },
       },
     });
@@ -2616,12 +2691,29 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
       landingPhotos: (event.landingPhotos || []).map((ph) => ({
         id: ph.id,
         url: absolutizeStoredAssetUrl(ph.url),
+        caption:
+          typeof ph.caption === "string" && ph.caption.trim()
+            ? ph.caption.trim()
+            : null,
         createdAt: ph.createdAt.toISOString(),
       })),
       landingShowcasePhotos: (event.landingShowcasePhotos || []).map((ph) => ({
         id: ph.id,
         url: absolutizeStoredAssetUrl(ph.url),
+        caption:
+          typeof ph.caption === "string" && ph.caption.trim()
+            ? ph.caption.trim()
+            : null,
         createdAt: ph.createdAt.toISOString(),
+      })),
+      landingProgramItems: sortLandingProgramItems(
+        event.landingProgramItems || [],
+      ).map((step) => ({
+        id: step.id,
+        timeLabel: step.timeLabel,
+        title: step.title,
+        sortOrder: step.sortOrder,
+        createdAt: step.createdAt.toISOString(),
       })),
     });
   } catch (e) {
@@ -2974,6 +3066,19 @@ app.patch("/events/:eventId/customization", requireAuth, async (req, res) => {
       }
     }
 
+    for (const [metaKey, maxLen] of [
+      ["landingEventDate", META_DATE_MAX],
+      ["landingVenue", META_VENUE_MAX],
+      ["landingHours", META_HOURS_MAX],
+    ]) {
+      if (!Object.prototype.hasOwnProperty.call(body, metaKey)) continue;
+      const normalized = normalizeOptionalBoundedText(body[metaKey], maxLen);
+      if (normalized === undefined) {
+        return res.status(400).json({ error: `${metaKey} invalide.` });
+      }
+      data[metaKey] = normalized;
+    }
+
     if (Object.keys(data).length === 0) {
       return res.status(400).json({ error: "Aucun champ à enregistrer." });
     }
@@ -3086,6 +3191,7 @@ app.post("/events/:eventId/landing/photos", requireAuth, async (req, res) => {
     return res.status(201).json({
       id: row.id,
       url: absolutizeStoredAssetUrl(row.url),
+      caption: null,
       createdAt: row.createdAt.toISOString(),
     });
   } catch (e) {
@@ -3096,6 +3202,52 @@ app.post("/events/:eventId/landing/photos", requireAuth, async (req, res) => {
     return res.status(500).json({ error: e?.message || "Upload impossible." });
   }
 });
+
+app.patch(
+  "/events/:eventId/landing/photos/:photoId",
+  requireAuth,
+  async (req, res) => {
+    try {
+      const { eventId, photoId } = req.params;
+      const owned = await assertEventOwnedByOrPlatformAdmin(eventId, req.userId);
+      if (!owned.ok) {
+        return res.status(owned.status).json({ error: "Événement introuvable." });
+      }
+      const pid = typeof photoId === "string" ? photoId.trim() : "";
+      if (!pid) {
+        return res.status(400).json({ error: "photoId invalide." });
+      }
+      if (!Object.prototype.hasOwnProperty.call(req.body || {}, "caption")) {
+        return res.status(400).json({ error: "caption requis." });
+      }
+      const caption = normalizeLandingCaption(req.body.caption);
+      if (caption === undefined) {
+        return res
+          .status(400)
+          .json({ error: `caption invalide (max ${CAPTION_MAX}).` });
+      }
+      const existing = await prisma.eventLandingPhoto.findFirst({
+        where: { id: pid, eventId },
+      });
+      if (!existing) {
+        return res.status(404).json({ error: "Photo introuvable." });
+      }
+      const row = await prisma.eventLandingPhoto.update({
+        where: { id: pid },
+        data: { caption },
+      });
+      return res.json({
+        id: row.id,
+        url: absolutizeStoredAssetUrl(row.url),
+        caption: row.caption,
+        createdAt: row.createdAt.toISOString(),
+      });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: "Erreur serveur." });
+    }
+  },
+);
 
 app.delete(
   "/events/:eventId/landing/photos/:photoId",
@@ -3460,6 +3612,7 @@ app.post("/events/:eventId/landing/showcase-photos", requireAuth, async (req, re
     return res.status(201).json({
       id: row.id,
       url: absolutizeStoredAssetUrl(row.url),
+      caption: null,
       createdAt: row.createdAt.toISOString(),
     });
   } catch (e) {
@@ -3470,6 +3623,52 @@ app.post("/events/:eventId/landing/showcase-photos", requireAuth, async (req, re
     return res.status(500).json({ error: e?.message || "Upload impossible." });
   }
 });
+
+app.patch(
+  "/events/:eventId/landing/showcase-photos/:photoId",
+  requireAuth,
+  async (req, res) => {
+    try {
+      const { eventId, photoId } = req.params;
+      const owned = await assertEventOwnedByOrPlatformAdmin(eventId, req.userId);
+      if (!owned.ok) {
+        return res.status(owned.status).json({ error: "Événement introuvable." });
+      }
+      const pid = typeof photoId === "string" ? photoId.trim() : "";
+      if (!pid) {
+        return res.status(400).json({ error: "photoId invalide." });
+      }
+      if (!Object.prototype.hasOwnProperty.call(req.body || {}, "caption")) {
+        return res.status(400).json({ error: "caption requis." });
+      }
+      const caption = normalizeLandingCaption(req.body.caption);
+      if (caption === undefined) {
+        return res
+          .status(400)
+          .json({ error: `caption invalide (max ${CAPTION_MAX}).` });
+      }
+      const existing = await prisma.eventLandingShowcasePhoto.findFirst({
+        where: { id: pid, eventId },
+      });
+      if (!existing) {
+        return res.status(404).json({ error: "Photo introuvable." });
+      }
+      const row = await prisma.eventLandingShowcasePhoto.update({
+        where: { id: pid },
+        data: { caption },
+      });
+      return res.json({
+        id: row.id,
+        url: absolutizeStoredAssetUrl(row.url),
+        caption: row.caption,
+        createdAt: row.createdAt.toISOString(),
+      });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: "Erreur serveur." });
+    }
+  },
+);
 
 app.delete(
   "/events/:eventId/landing/showcase-photos/:photoId",
@@ -3493,6 +3692,175 @@ app.delete(
       }
       await prisma.eventLandingShowcasePhoto.delete({ where: { id: pid } });
       void destroyCloudinaryByPublicId(existing.cloudinaryPublicId);
+      return res.json({ ok: true });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: "Erreur serveur." });
+    }
+  },
+);
+
+/** Programme Landing — CRUD orga. */
+app.get("/events/:eventId/landing/program", requireAuth, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const owned = await assertEventOwnedByOrPlatformAdmin(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    const rows = await prisma.eventLandingProgramItem.findMany({
+      where: { eventId },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    });
+    return res.json({
+      items: sortLandingProgramItems(rows).map((step) => ({
+        id: step.id,
+        timeLabel: step.timeLabel,
+        title: step.title,
+        sortOrder: step.sortOrder,
+        createdAt: step.createdAt.toISOString(),
+        updatedAt: step.updatedAt.toISOString(),
+      })),
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+app.post("/events/:eventId/landing/program", requireAuth, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const owned = await assertEventOwnedByOrPlatformAdmin(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    const count = await prisma.eventLandingProgramItem.count({
+      where: { eventId },
+    });
+    if (count >= PROGRAM_MAX_ITEMS) {
+      return res.status(400).json({
+        error: `Programme limité à ${PROGRAM_MAX_ITEMS} étapes.`,
+      });
+    }
+    const timeLabel = normalizeOptionalBoundedText(
+      req.body?.timeLabel,
+      PROGRAM_TIME_MAX,
+    );
+    const title = normalizeOptionalBoundedText(
+      req.body?.title,
+      PROGRAM_TITLE_MAX,
+    );
+    if (timeLabel === undefined || timeLabel === null) {
+      return res.status(400).json({ error: "timeLabel invalide." });
+    }
+    if (title === undefined || title === null) {
+      return res.status(400).json({ error: "title invalide." });
+    }
+    const sortOrder = programSortOrderFromTimeLabel(timeLabel);
+    const row = await prisma.eventLandingProgramItem.create({
+      data: { eventId, timeLabel, title, sortOrder },
+    });
+    return res.status(201).json({
+      id: row.id,
+      timeLabel: row.timeLabel,
+      title: row.title,
+      sortOrder: row.sortOrder,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+app.patch(
+  "/events/:eventId/landing/program/:itemId",
+  requireAuth,
+  async (req, res) => {
+    try {
+      const { eventId, itemId } = req.params;
+      const owned = await assertEventOwnedByOrPlatformAdmin(eventId, req.userId);
+      if (!owned.ok) {
+        return res.status(owned.status).json({ error: "Événement introuvable." });
+      }
+      const id = typeof itemId === "string" ? itemId.trim() : "";
+      if (!id) {
+        return res.status(400).json({ error: "itemId invalide." });
+      }
+      const existing = await prisma.eventLandingProgramItem.findFirst({
+        where: { id, eventId },
+      });
+      if (!existing) {
+        return res.status(404).json({ error: "Étape introuvable." });
+      }
+      /** @type {{ timeLabel?: string; title?: string; sortOrder?: number }} */
+      const data = {};
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, "timeLabel")) {
+        const timeLabel = normalizeOptionalBoundedText(
+          req.body.timeLabel,
+          PROGRAM_TIME_MAX,
+        );
+        if (timeLabel === undefined || timeLabel === null) {
+          return res.status(400).json({ error: "timeLabel invalide." });
+        }
+        data.timeLabel = timeLabel;
+        data.sortOrder = programSortOrderFromTimeLabel(timeLabel);
+      }
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, "title")) {
+        const title = normalizeOptionalBoundedText(
+          req.body.title,
+          PROGRAM_TITLE_MAX,
+        );
+        if (title === undefined || title === null) {
+          return res.status(400).json({ error: "title invalide." });
+        }
+        data.title = title;
+      }
+      if (Object.keys(data).length === 0) {
+        return res.status(400).json({ error: "Aucun champ à enregistrer." });
+      }
+      const row = await prisma.eventLandingProgramItem.update({
+        where: { id },
+        data,
+      });
+      return res.json({
+        id: row.id,
+        timeLabel: row.timeLabel,
+        title: row.title,
+        sortOrder: row.sortOrder,
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+      });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: "Erreur serveur." });
+    }
+  },
+);
+
+app.delete(
+  "/events/:eventId/landing/program/:itemId",
+  requireAuth,
+  async (req, res) => {
+    try {
+      const { eventId, itemId } = req.params;
+      const owned = await assertEventOwnedByOrPlatformAdmin(eventId, req.userId);
+      if (!owned.ok) {
+        return res.status(owned.status).json({ error: "Événement introuvable." });
+      }
+      const id = typeof itemId === "string" ? itemId.trim() : "";
+      if (!id) {
+        return res.status(400).json({ error: "itemId invalide." });
+      }
+      const existing = await prisma.eventLandingProgramItem.findFirst({
+        where: { id, eventId },
+      });
+      if (!existing) {
+        return res.status(404).json({ error: "Étape introuvable." });
+      }
+      await prisma.eventLandingProgramItem.delete({ where: { id } });
       return res.json({ ok: true });
     } catch (e) {
       console.error(e);

@@ -151,6 +151,10 @@ model Event {
   landingCoverUrl    String?
   landingTitle       String?
   landingDescription String?
+  /** Présentation ✨ L'événement — textes libres optionnels (pas de timezone). */
+  landingEventDate String?
+  landingVenue     String?
+  landingHours     String?
   /** Après l’événement : quels types restent visibles dans le fil (défaut = comportement actuel). */
   landingKeepPhotosAfter   Boolean @default(true)
   landingKeepResultsAfter  Boolean @default(true)
@@ -164,8 +168,25 @@ model Event {
   landingPhotos         EventLandingPhoto[]
   landingShowcasePhotos EventLandingShowcasePhoto[]
   landingMessages       EventLandingMessage[]
+  landingProgramItems   EventLandingProgramItem[]
 
   @@index([userId])
+}
+
+/** Étape de programme Landing (heure + titre), ordre chronologique. */
+model EventLandingProgramItem {
+  id        String   @id @default(cuid())
+  eventId   String
+  timeLabel String
+  title     String
+  /** Minutes depuis minuit quand parsable ; sinon grand pour fin de liste. */
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, sortOrder, createdAt])
 }
 
 /** Photos « galerie événement » (teaser / ambiance), uniquement depuis customization. */
@@ -174,6 +195,8 @@ model EventLandingShowcasePhoto {
   eventId            String
   url                String
   cloudinaryPublicId String?
+  /** Légende facultative (orga). */
+  caption            String?
   createdAt          DateTime @default(now())
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -187,6 +210,8 @@ model EventLandingPhoto {
   eventId            String
   url                String
   cloudinaryPublicId String?
+  /** Légende facultative (orga, y compris après publication). */
+  caption            String?
   createdAt          DateTime @default(now())
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)

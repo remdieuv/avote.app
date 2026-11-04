@@ -114,6 +114,10 @@ function buildLandingFeedItems(args) {
           id: pid,
           url: p.url,
           createdAt: new Date(p.createdAt).toISOString(),
+          caption:
+            typeof p.caption === "string" && p.caption.trim()
+              ? p.caption.trim()
+              : null,
           likeCount: Number(likeCounts[pid] || 0),
           likedByMe: likedPhotoIds.has(pid),
         },

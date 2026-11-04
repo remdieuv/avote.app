@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef } from "react";
  *
  * @param {{
  *   open: boolean;
- *   photos: Array<{ id?: string; url: string }>;
+ *   photos: Array<{ id?: string; url: string; caption?: string | null }>;
  *   index: number;
  *   onClose: () => void;
  *   onIndexChange: (next: number) => void;
@@ -28,6 +28,10 @@ export function LandingPhotoLightbox({
       : Math.min(Math.max(0, Number(index) || 0), list.length - 1);
   const current = list[safeIndex] || null;
   const hasNav = list.length > 1;
+  const currentCaption =
+    typeof current?.caption === "string" && current.caption.trim()
+      ? current.caption.trim()
+      : "";
 
   const goPrev = useCallback(() => {
     if (list.length < 2) return;
@@ -126,14 +130,21 @@ export function LandingPhotoLightbox({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={current.url}
-            alt=""
+            alt={currentCaption || ""}
             className="ev-landing-lightbox-img"
             draggable={false}
           />
-          {hasNav ? (
-            <p className="ev-landing-lightbox-counter" aria-live="polite">
-              {safeIndex + 1} / {list.length}
-            </p>
+          {currentCaption || hasNav ? (
+            <div className="ev-landing-lightbox-meta">
+              {currentCaption ? (
+                <p className="ev-landing-lightbox-caption">{currentCaption}</p>
+              ) : null}
+              {hasNav ? (
+                <p className="ev-landing-lightbox-counter" aria-live="polite">
+                  {safeIndex + 1} / {list.length}
+                </p>
+              ) : null}
+            </div>
           ) : null}
         </div>
 
@@ -172,13 +183,15 @@ export function LandingPhotoLightbox({
           max-width: min(96vw, 1100px);
           max-height: min(88svh, 900px);
           display: flex;
+          flex-direction: column;
           align-items: center;
           justify-content: center;
+          gap: 0.65rem;
         }
         .ev-landing-lightbox-img {
           display: block;
           max-width: min(96vw, 1100px);
-          max-height: min(84svh, 860px);
+          max-height: min(78svh, 800px);
           width: auto;
           height: auto;
           object-fit: contain;
@@ -187,6 +200,12 @@ export function LandingPhotoLightbox({
           user-select: none;
           -webkit-user-drag: none;
           touch-action: pan-y;
+        }
+        .ev-landing-lightbox-meta {
+          max-width: min(90vw, 36rem);
+          text-align: center;
+          padding: 0 0.5rem;
+          box-sizing: border-box;
         }
         .ev-landing-lightbox-close {
           position: absolute;
@@ -220,12 +239,15 @@ export function LandingPhotoLightbox({
         }
         .ev-landing-lightbox-nav--prev { left: max(0.5rem, env(safe-area-inset-left)); }
         .ev-landing-lightbox-nav--next { right: max(0.5rem, env(safe-area-inset-right)); }
-        .ev-landing-lightbox-counter {
-          position: absolute;
-          left: 50%;
-          bottom: -1.75rem;
-          transform: translateX(-50%);
+        .ev-landing-lightbox-caption {
           margin: 0;
+          font-size: 0.9rem;
+          font-weight: 500;
+          line-height: 1.4;
+          color: rgba(248, 250, 252, 0.92);
+        }
+        .ev-landing-lightbox-counter {
+          margin: 0.35rem 0 0;
           font-size: 0.82rem;
           font-weight: 600;
           color: rgba(255, 255, 255, 0.82);
@@ -246,8 +268,8 @@ export function LandingPhotoLightbox({
 
 /**
  * Extrait les photos navigables (url résolue) d’une liste hétérogène.
- * @param {Array<{ id?: string; url?: string } | null | undefined>} photos
- * @returns {Array<{ id: string; url: string }>}
+ * @param {Array<{ id?: string; url?: string; caption?: string | null } | null | undefined>} photos
+ * @returns {Array<{ id: string; url: string; caption: string | null }>}
  */
 export function normalizeLightboxPhotos(photos) {
   if (!Array.isArray(photos)) return [];
@@ -256,9 +278,14 @@ export function normalizeLightboxPhotos(photos) {
     if (!p || typeof p !== "object") continue;
     const url = typeof p.url === "string" ? p.url.trim() : "";
     if (!url) continue;
+    const caption =
+      typeof p.caption === "string" && p.caption.trim()
+        ? p.caption.trim()
+        : null;
     out.push({
       id: String(p.id || url),
       url,
+      caption,
     });
   }
   return out;

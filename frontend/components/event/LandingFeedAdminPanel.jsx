@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
+import { LANDING_CAPTION_MAX } from "@/lib/landingEventPresentation";
 
 const MESSAGE_MAX = 500;
 
@@ -11,11 +12,12 @@ const MESSAGE_MAX = 500;
  *
  * @param {{
  *   eventId: string;
- *   photos: { id: string; url: string; createdAt?: string }[];
+ *   photos: { id: string; url: string; createdAt?: string; caption?: string | null }[];
  *   photosMax?: number;
  *   photoBusy?: boolean;
  *   onAddPhotos?: (files: File[]) => void | Promise<void>;
  *   onRemovePhoto?: (photoId: string) => void | Promise<void>;
+ *   onPhotoCaptionSaved?: (photoId: string, caption: string | null) => void;
  *   closedPolls?: {
  *     id: string;
  *     question?: string;
@@ -40,6 +42,7 @@ export function LandingFeedAdminPanel({
   photoBusy = false,
   onAddPhotos,
   onRemovePhoto,
+  onPhotoCaptionSaved,
   closedPolls = [],
   onToast,
   onChanged,
@@ -60,6 +63,27 @@ export function LandingFeedAdminPanel({
   const [pollHidden, setPollHidden] = useState(
     /** @type {Record<string, boolean>} */ ({}),
   );
+  /** Brouillons légendes Moments (id → texte). */
+  const [captionDrafts, setCaptionDrafts] = useState(
+    /** @type {Record<string, string>} */ ({}),
+  );
+  const [captionBusyId, setCaptionBusyId] = useState(
+    /** @type {string | null} */ (null),
+  );
+
+  useEffect(() => {
+    /** @type {Record<string, string>} */
+    const next = {};
+    for (const ph of photos) {
+      const id = String(ph.id || "");
+      if (!id) continue;
+      next[id] =
+        typeof ph.caption === "string" && ph.caption.trim()
+          ? ph.caption.trim()
+          : "";
+    }
+    setCaptionDrafts(next);
+  }, [photos]);
 
   useEffect(() => {
     /** @type {Record<string, boolean>} */
@@ -298,6 +322,57 @@ export function LandingFeedAdminPanel({
     }
   }
 
+  async function savePhotoCaption(photoId, overrideText) {
+    if (!eventId || !photoId || captionBusyId) return;
+    const draft =
+      overrideText !== undefined
+        ? String(overrideText)
+        : String(captionDrafts[photoId] ?? "");
+    const existing = photos.find((p) => String(p.id) === String(photoId));
+    const current =
+      typeof existing?.caption === "string" && existing.caption.trim()
+        ? existing.caption.trim()
+        : "";
+    const next = draft.trim();
+    if (next === current) {
+      onToast?.("Légende à jour");
+      return;
+    }
+    setCaptionBusyId(photoId);
+    setError(null);
+    try {
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/landing/photos/${encodeURIComponent(photoId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ caption: next === "" ? null : next }),
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          typeof data?.error === "string" ? data.error : "Légende non enregistrée.",
+        );
+      }
+      const saved =
+        typeof data.caption === "string" && data.caption.trim()
+          ? data.caption.trim()
+          : null;
+      setCaptionDrafts((prev) => ({
+        ...prev,
+        [photoId]: saved || "",
+      }));
+      onPhotoCaptionSaved?.(photoId, saved);
+      onToast?.(saved ? "Légende enregistrée" : "Légende retirée");
+      onChanged?.();
+    } catch (e) {
+      setError(e?.message || "Légende non enregistrée.");
+    } finally {
+      setCaptionBusyId(null);
+    }
+  }
+
   const atMaxPhotos = photos.length >= photosMax;
   const actionsLocked = busy || photoBusy;
 
@@ -483,6 +558,14 @@ export function LandingFeedAdminPanel({
           {timeline.map((item) => {
             if (item.type === "photo" && item.photo) {
               const ph = item.photo;
+              const pid = String(ph.id);
+              const captionDraft = captionDrafts[pid] ?? "";
+              const savedCaption =
+                typeof ph.caption === "string" && ph.caption.trim()
+                  ? ph.caption.trim()
+                  : "";
+              const captionDirty = captionDraft.trim() !== savedCaption;
+              const captionSaving = captionBusyId === pid;
               return (
                 <li
                   key={item.key}
@@ -490,7 +573,7 @@ export function LandingFeedAdminPanel({
                     display: "grid",
                     gridTemplateColumns: "72px 1fr",
                     gap: "0.65rem",
-                    alignItems: "center",
+                    alignItems: "start",
                     padding: "0.5rem",
                     borderRadius: "12px",
                     border: "1px solid #e2e8f0",
@@ -531,29 +614,103 @@ export function LandingFeedAdminPanel({
                     >
                       Moment
                     </p>
-                    <p
+                    <label
                       style={{
-                        margin: "0.2rem 0 0.45rem",
+                        display: "block",
+                        margin: "0.35rem 0 0.25rem",
+                        fontSize: "0.72rem",
+                        fontWeight: 600,
+                        color: "#64748b",
+                      }}
+                    >
+                      Légende (facultative)
+                    </label>
+                    <textarea
+                      value={captionDraft}
+                      maxLength={LANDING_CAPTION_MAX}
+                      rows={2}
+                      disabled={captionSaving || actionsLocked}
+                      onChange={(e) =>
+                        setCaptionDrafts((prev) => ({
+                          ...prev,
+                          [pid]: e.target.value,
+                        }))
+                      }
+                      placeholder="Ex. Arrivée des invités"
+                      style={{
+                        width: "100%",
+                        boxSizing: "border-box",
+                        resize: "vertical",
+                        minHeight: "2.6rem",
+                        padding: "0.4rem 0.5rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
                         fontSize: "0.8rem",
-                        color: "#475569",
+                        fontFamily: "inherit",
+                        color: "#0f172a",
                       }}
-                    >
-                      Photo publiée sur le fil
-                    </p>
-                    <button
-                      type="button"
-                      disabled={actionsLocked}
-                      onClick={() => void onRemovePhoto?.(String(ph.id))}
+                    />
+                    <div
                       style={{
-                        ...secondary,
-                        color: "#b91c1c",
-                        borderColor: "#fecaca",
-                        background: "#fff",
-                        cursor: actionsLocked ? "not-allowed" : "pointer",
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "0.35rem",
+                        marginTop: "0.4rem",
+                        alignItems: "center",
                       }}
                     >
-                      Supprimer
-                    </button>
+                      <button
+                        type="button"
+                        disabled={
+                          captionSaving || actionsLocked || !captionDirty
+                        }
+                        onClick={() => void savePhotoCaption(pid)}
+                        style={{
+                          ...secondary,
+                          cursor:
+                            captionSaving || actionsLocked || !captionDirty
+                              ? "not-allowed"
+                              : "pointer",
+                          opacity:
+                            captionSaving || actionsLocked || !captionDirty
+                              ? 0.65
+                              : 1,
+                        }}
+                      >
+                        {captionSaving ? "…" : "Enregistrer la légende"}
+                      </button>
+                      {savedCaption || captionDraft.trim() ? (
+                        <button
+                          type="button"
+                          disabled={captionSaving || actionsLocked}
+                          onClick={() => void savePhotoCaption(pid, "")}
+                          style={{
+                            ...secondary,
+                            color: "#64748b",
+                            cursor:
+                              captionSaving || actionsLocked
+                                ? "not-allowed"
+                                : "pointer",
+                          }}
+                        >
+                          Effacer
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        disabled={actionsLocked}
+                        onClick={() => void onRemovePhoto?.(pid)}
+                        style={{
+                          ...secondary,
+                          color: "#b91c1c",
+                          borderColor: "#fecaca",
+                          background: "#fff",
+                          cursor: actionsLocked ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        Supprimer
+                      </button>
+                    </div>
                   </div>
                 </li>
               );

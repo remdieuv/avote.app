@@ -21,10 +21,20 @@ import {
   prepareLandingPhotoForUpload,
 } from "@/lib/compressLandingPhoto";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
+import {
+  LANDING_CAPTION_MAX,
+  LANDING_META_DATE_MAX,
+  LANDING_META_HOURS_MAX,
+  LANDING_META_VENUE_MAX,
+  LANDING_PROGRAM_TIME_MAX,
+  LANDING_PROGRAM_TITLE_MAX,
+  sortLandingProgramItems,
+} from "@/lib/landingEventPresentation";
 
 /** Limites alignées sur l’API (affichage orga, pas de nouvelle règle métier). */
 const LANDING_SHOWCASE_MAX = 30;
 const LANDING_LIVE_PHOTOS_MAX = 50;
+const LANDING_PROGRAM_MAX = 40;
 
 function mapApiError(body, status, fallbackPrefix = "Erreur") {
   const code = String(body?.error || "").trim();
@@ -264,14 +274,34 @@ export function EventCustomizationEditor({ mode = "live" }) {
   const [landingCoverUrl, setLandingCoverUrl] = useState("");
   const [landingTitle, setLandingTitle] = useState("");
   const [landingDescription, setLandingDescription] = useState("");
+  const [landingEventDate, setLandingEventDate] = useState("");
+  const [landingVenue, setLandingVenue] = useState("");
+  const [landingHours, setLandingHours] = useState("");
   const [landingKeepPhotosAfter, setLandingKeepPhotosAfter] = useState(true);
   const [landingKeepResultsAfter, setLandingKeepResultsAfter] = useState(true);
   const [landingKeepMessagesAfter, setLandingKeepMessagesAfter] =
     useState(true);
-  /** @type {{ id: string; url: string; createdAt: string }[]} */
+  /** @type {{ id: string; url: string; createdAt: string; caption?: string | null }[]} */
   const [showcasePhotos, setShowcasePhotos] = useState([]);
-  /** @type {{ id: string; url: string; createdAt: string }[]} */
+  /** Brouillons légendes galerie événement. */
+  const [showcaseCaptionDrafts, setShowcaseCaptionDrafts] = useState(
+    /** @type {Record<string, string>} */ ({}),
+  );
+  const [showcaseCaptionBusyId, setShowcaseCaptionBusyId] = useState(
+    /** @type {string | null} */ (null),
+  );
+  /** @type {{ id: string; url: string; createdAt: string; caption?: string | null }[]} */
   const [landingLivePhotos, setLandingLivePhotos] = useState([]);
+  /** @type {{ id: string; timeLabel: string; title: string; sortOrder?: number; createdAt?: string }[]} */
+  const [programItems, setProgramItems] = useState([]);
+  const [programDraftTime, setProgramDraftTime] = useState("");
+  const [programDraftTitle, setProgramDraftTitle] = useState("");
+  const [programBusy, setProgramBusy] = useState(false);
+  const [programEditId, setProgramEditId] = useState(
+    /** @type {string | null} */ (null),
+  );
+  const [programEditTime, setProgramEditTime] = useState("");
+  const [programEditTitle, setProgramEditTitle] = useState("");
   /** Questions CLOSED pour masquage fil (Lead CRM exclu côté panel). */
   const [closedLandingPolls, setClosedLandingPolls] = useState(
     /** @type {{ id: string; question?: string; title?: string; status?: string; type?: string; leadEnabled?: boolean; landingResultHidden?: boolean }[]} */ ([]),
@@ -386,6 +416,9 @@ export function EventCustomizationEditor({ mode = "live" }) {
         landingCoverUrl !== baseline.landingCoverUrl ||
         landingTitle !== baseline.landingTitle ||
         landingDescription !== baseline.landingDescription ||
+        landingEventDate !== baseline.landingEventDate ||
+        landingVenue !== baseline.landingVenue ||
+        landingHours !== baseline.landingHours ||
         landingKeepPhotosAfter !== baseline.landingKeepPhotosAfter ||
         landingKeepResultsAfter !== baseline.landingKeepResultsAfter ||
         landingKeepMessagesAfter !== baseline.landingKeepMessagesAfter
@@ -428,6 +461,9 @@ export function EventCustomizationEditor({ mode = "live" }) {
     landingCoverUrl,
     landingTitle,
     landingDescription,
+    landingEventDate,
+    landingVenue,
+    landingHours,
     landingKeepPhotosAfter,
     landingKeepResultsAfter,
     landingKeepMessagesAfter,
@@ -509,6 +545,12 @@ export function EventCustomizationEditor({ mode = "live" }) {
       const lcov = data.landingCoverUrl;
       const ltit = data.landingTitle;
       const ldesc = data.landingDescription;
+      const ldate =
+        typeof data.landingEventDate === "string" ? data.landingEventDate : "";
+      const lvenue =
+        typeof data.landingVenue === "string" ? data.landingVenue : "";
+      const lhours =
+        typeof data.landingHours === "string" ? data.landingHours : "";
       const keepPhotos =
         typeof data.landingKeepPhotosAfter === "boolean"
           ? data.landingKeepPhotosAfter
@@ -560,25 +602,35 @@ export function EventCustomizationEditor({ mode = "live" }) {
       );
       setLandingTitle(typeof ltit === "string" ? ltit : "");
       setLandingDescription(typeof ldesc === "string" ? ldesc : "");
+      setLandingEventDate(ldate);
+      setLandingVenue(lvenue);
+      setLandingHours(lhours);
       setLandingKeepPhotosAfter(keepPhotos);
       setLandingKeepResultsAfter(keepResults);
       setLandingKeepMessagesAfter(keepMessages);
       if (Array.isArray(data.landingShowcasePhotos)) {
-        setShowcasePhotos(
-          data.landingShowcasePhotos
-            .map((p) => ({
-              id: String(p?.id || ""),
-              url:
-                typeof p?.url === "string"
-                  ? resolveApiAssetUrl(p.url)
-                  : "",
-              createdAt:
-                typeof p?.createdAt === "string" ? p.createdAt : "",
-            }))
-            .filter((p) => p.id && p.url),
-        );
+        const showcaseMapped = data.landingShowcasePhotos
+          .map((p) => ({
+            id: String(p?.id || ""),
+            url:
+              typeof p?.url === "string" ? resolveApiAssetUrl(p.url) : "",
+            createdAt: typeof p?.createdAt === "string" ? p.createdAt : "",
+            caption:
+              typeof p?.caption === "string" && p.caption.trim()
+                ? p.caption.trim()
+                : null,
+          }))
+          .filter((p) => p.id && p.url);
+        setShowcasePhotos(showcaseMapped);
+        /** @type {Record<string, string>} */
+        const drafts = {};
+        for (const ph of showcaseMapped) {
+          drafts[ph.id] = ph.caption || "";
+        }
+        setShowcaseCaptionDrafts(drafts);
       } else {
         setShowcasePhotos([]);
+        setShowcaseCaptionDrafts({});
       }
       setLandingLivePhotos(
         landingPhotos
@@ -588,9 +640,30 @@ export function EventCustomizationEditor({ mode = "live" }) {
               typeof p?.url === "string" ? resolveApiAssetUrl(p.url) : "",
             createdAt:
               typeof p?.createdAt === "string" ? p.createdAt : "",
+            caption:
+              typeof p?.caption === "string" && p.caption.trim()
+                ? p.caption.trim()
+                : null,
           }))
           .filter((p) => p.id && p.url),
       );
+      if (Array.isArray(data.landingProgramItems)) {
+        setProgramItems(
+          sortLandingProgramItems(
+            data.landingProgramItems.map((step) => ({
+              id: String(step?.id || ""),
+              timeLabel: String(step?.timeLabel || ""),
+              title: String(step?.title || ""),
+              sortOrder:
+                typeof step?.sortOrder === "number" ? step.sortOrder : 0,
+              createdAt:
+                typeof step?.createdAt === "string" ? step.createdAt : "",
+            })),
+          ).filter((step) => step.id && step.timeLabel && step.title),
+        );
+      } else {
+        setProgramItems([]);
+      }
       const pollsRaw = Array.isArray(data.polls) ? data.polls : [];
       setClosedLandingPolls(
         pollsRaw
@@ -638,6 +711,9 @@ export function EventCustomizationEditor({ mode = "live" }) {
           typeof lcov === "string" ? resolveApiAssetUrl(lcov) : "",
         landingTitle: typeof ltit === "string" ? ltit : "",
         landingDescription: typeof ldesc === "string" ? ldesc : "",
+        landingEventDate: ldate,
+        landingVenue: lvenue,
+        landingHours: lhours,
         landingKeepPhotosAfter: keepPhotos,
         landingKeepResultsAfter: keepResults,
         landingKeepMessagesAfter: keepMessages,
@@ -750,6 +826,18 @@ export function EventCustomizationEditor({ mode = "live" }) {
           landingDescription.trim() === ""
             ? null
             : landingDescription.trim().slice(0, 1200),
+        landingEventDate:
+          landingEventDate.trim() === ""
+            ? null
+            : landingEventDate.trim().slice(0, LANDING_META_DATE_MAX),
+        landingVenue:
+          landingVenue.trim() === ""
+            ? null
+            : landingVenue.trim().slice(0, LANDING_META_VENUE_MAX),
+        landingHours:
+          landingHours.trim() === ""
+            ? null
+            : landingHours.trim().slice(0, LANDING_META_HOURS_MAX),
         landingKeepPhotosAfter: Boolean(landingKeepPhotosAfter),
         landingKeepResultsAfter: Boolean(landingKeepResultsAfter),
         landingKeepMessagesAfter: Boolean(landingKeepMessagesAfter),
@@ -803,6 +891,9 @@ export function EventCustomizationEditor({ mode = "live" }) {
         landingCoverUrl: landingCoverUrl.trim(),
         landingTitle: landingTitle.trim(),
         landingDescription: landingDescription.trim(),
+        landingEventDate: landingEventDate.trim(),
+        landingVenue: landingVenue.trim(),
+        landingHours: landingHours.trim(),
         landingKeepPhotosAfter: Boolean(landingKeepPhotosAfter),
         landingKeepResultsAfter: Boolean(landingKeepResultsAfter),
         landingKeepMessagesAfter: Boolean(landingKeepMessagesAfter),
@@ -851,8 +942,10 @@ export function EventCustomizationEditor({ mode = "live" }) {
               url: resolveApiAssetUrl(body.url),
               createdAt:
                 typeof body.createdAt === "string" ? body.createdAt : "",
+              caption: null,
             },
           ]);
+          setShowcaseCaptionDrafts((prev) => ({ ...prev, [body.id]: "" }));
         }
       }
       setToast("Galerie événement mise à jour");
@@ -879,6 +972,11 @@ export function EventCustomizationEditor({ mode = "live" }) {
         throw new Error(mapApiError(body, res.status));
       }
       setShowcasePhotos((prev) => prev.filter((p) => p.id !== photoId));
+      setShowcaseCaptionDrafts((prev) => {
+        const next = { ...prev };
+        delete next[photoId];
+        return next;
+      });
       setToast("Photo retirée de la galerie événement");
       window.setTimeout(() => setToast(null), 2200);
       bumpLandingPreview();
@@ -886,6 +984,200 @@ export function EventCustomizationEditor({ mode = "live" }) {
       setSaveError(e.message || "Suppression impossible.");
     } finally {
       setShowcasePhotoBusy(false);
+    }
+  }
+
+  async function saveShowcaseCaption(photoId, overrideText) {
+    if (!eventId || !photoId || showcaseCaptionBusyId) return;
+    const draft =
+      overrideText !== undefined
+        ? String(overrideText)
+        : String(showcaseCaptionDrafts[photoId] ?? "");
+    const existing = showcasePhotos.find((p) => p.id === photoId);
+    const current =
+      typeof existing?.caption === "string" && existing.caption.trim()
+        ? existing.caption.trim()
+        : "";
+    const next = draft.trim();
+    if (next === current) {
+      setToast("Légende à jour");
+      window.setTimeout(() => setToast(null), 1800);
+      return;
+    }
+    setShowcaseCaptionBusyId(photoId);
+    setSaveError(null);
+    try {
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/events/${eventId}/landing/showcase-photos/${encodeURIComponent(photoId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ caption: next === "" ? null : next }),
+        },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(mapApiError(body, res.status, "Légende"));
+      }
+      const saved =
+        typeof body.caption === "string" && body.caption.trim()
+          ? body.caption.trim()
+          : null;
+      setShowcasePhotos((prev) =>
+        prev.map((p) => (p.id === photoId ? { ...p, caption: saved } : p)),
+      );
+      setShowcaseCaptionDrafts((prev) => ({
+        ...prev,
+        [photoId]: saved || "",
+      }));
+      setToast(saved ? "Légende enregistrée" : "Légende retirée");
+      window.setTimeout(() => setToast(null), 2200);
+      bumpLandingPreview();
+    } catch (e) {
+      setSaveError(e.message || "Légende non enregistrée.");
+    } finally {
+      setShowcaseCaptionBusyId(null);
+    }
+  }
+
+  async function addProgramItem() {
+    if (!eventId || programBusy) return;
+    const timeLabel = programDraftTime.trim();
+    const title = programDraftTitle.trim();
+    if (!timeLabel || !title) {
+      setSaveError("Heure et titre requis pour une étape du programme.");
+      return;
+    }
+    if (programItems.length >= LANDING_PROGRAM_MAX) {
+      setSaveError(`Programme limité à ${LANDING_PROGRAM_MAX} étapes.`);
+      return;
+    }
+    setProgramBusy(true);
+    setSaveError(null);
+    try {
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/events/${eventId}/landing/program`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            timeLabel: timeLabel.slice(0, LANDING_PROGRAM_TIME_MAX),
+            title: title.slice(0, LANDING_PROGRAM_TITLE_MAX),
+          }),
+        },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(mapApiError(body, res.status, "Programme"));
+      }
+      setProgramItems((prev) =>
+        sortLandingProgramItems([
+          ...prev,
+          {
+            id: String(body.id),
+            timeLabel: String(body.timeLabel || timeLabel),
+            title: String(body.title || title),
+            sortOrder:
+              typeof body.sortOrder === "number" ? body.sortOrder : 0,
+            createdAt:
+              typeof body.createdAt === "string" ? body.createdAt : "",
+          },
+        ]),
+      );
+      setProgramDraftTime("");
+      setProgramDraftTitle("");
+      setToast("Étape ajoutée au programme");
+      window.setTimeout(() => setToast(null), 2200);
+      bumpLandingPreview();
+    } catch (e) {
+      setSaveError(e.message || "Ajout programme impossible.");
+    } finally {
+      setProgramBusy(false);
+    }
+  }
+
+  async function saveProgramEdit() {
+    if (!eventId || !programEditId || programBusy) return;
+    const timeLabel = programEditTime.trim();
+    const title = programEditTitle.trim();
+    if (!timeLabel || !title) {
+      setSaveError("Heure et titre requis.");
+      return;
+    }
+    setProgramBusy(true);
+    setSaveError(null);
+    try {
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/events/${eventId}/landing/program/${encodeURIComponent(programEditId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            timeLabel: timeLabel.slice(0, LANDING_PROGRAM_TIME_MAX),
+            title: title.slice(0, LANDING_PROGRAM_TITLE_MAX),
+          }),
+        },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(mapApiError(body, res.status, "Programme"));
+      }
+      setProgramItems((prev) =>
+        sortLandingProgramItems(
+          prev.map((step) =>
+            step.id === programEditId
+              ? {
+                  ...step,
+                  timeLabel: String(body.timeLabel || timeLabel),
+                  title: String(body.title || title),
+                  sortOrder:
+                    typeof body.sortOrder === "number"
+                      ? body.sortOrder
+                      : step.sortOrder,
+                }
+              : step,
+          ),
+        ),
+      );
+      setProgramEditId(null);
+      setProgramEditTime("");
+      setProgramEditTitle("");
+      setToast("Étape mise à jour");
+      window.setTimeout(() => setToast(null), 2200);
+      bumpLandingPreview();
+    } catch (e) {
+      setSaveError(e.message || "Modification programme impossible.");
+    } finally {
+      setProgramBusy(false);
+    }
+  }
+
+  async function removeProgramItem(itemId) {
+    if (!eventId || !itemId || programBusy) return;
+    setProgramBusy(true);
+    setSaveError(null);
+    try {
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/events/${eventId}/landing/program/${encodeURIComponent(itemId)}`,
+        { method: "DELETE" },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(mapApiError(body, res.status));
+      }
+      setProgramItems((prev) => prev.filter((step) => step.id !== itemId));
+      if (programEditId === itemId) {
+        setProgramEditId(null);
+        setProgramEditTime("");
+        setProgramEditTitle("");
+      }
+      setToast("Étape retirée");
+      window.setTimeout(() => setToast(null), 2000);
+      bumpLandingPreview();
+    } catch (e) {
+      setSaveError(e.message || "Suppression programme impossible.");
+    } finally {
+      setProgramBusy(false);
     }
   }
 
@@ -915,6 +1207,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
               url: resolveApiAssetUrl(body.url),
               createdAt:
                 typeof body.createdAt === "string" ? body.createdAt : "",
+              caption: null,
             },
             ...prev,
           ]);
@@ -1411,12 +1704,418 @@ export function EventCustomizationEditor({ mode = "live" }) {
                         fontSize: "0.88rem",
                         resize: "vertical",
                         fontFamily: "inherit",
+                        marginBottom: "0.85rem",
+                      }}
+                    />
+
+                    <p
+                      style={{
+                        margin: "0 0 0.55rem",
+                        fontSize: "0.72rem",
+                        fontWeight: 800,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "#64748b",
+                      }}
+                    >
+                      ✨ L&apos;événement — infos structurées
+                    </p>
+                    <p style={{ ...fieldHintStyle, margin: "0 0 0.65rem" }}>
+                      Date, lieu et horaires facultatifs. Source unique pour la
+                      landing — pas de doublon avec Infos pratiques. Blocs vides
+                      masqués sur /e. À valider avec Enregistrer.
+                    </p>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: "#475569",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Date (facultative)
+                    </label>
+                    <input
+                      type="text"
+                      value={landingEventDate}
+                      maxLength={LANDING_META_DATE_MAX}
+                      onChange={(e) => setLandingEventDate(e.target.value)}
+                      placeholder="Ex. Samedi 12 avril 2026"
+                      style={{
+                        width: "100%",
+                        boxSizing: "border-box",
+                        padding: "0.5rem 0.65rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.88rem",
+                        marginBottom: "0.75rem",
+                      }}
+                    />
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: "#475569",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Lieu (facultatif)
+                    </label>
+                    <input
+                      type="text"
+                      value={landingVenue}
+                      maxLength={LANDING_META_VENUE_MAX}
+                      onChange={(e) => setLandingVenue(e.target.value)}
+                      placeholder="Ex. Villa des Pins, Lyon"
+                      style={{
+                        width: "100%",
+                        boxSizing: "border-box",
+                        padding: "0.5rem 0.65rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.88rem",
+                        marginBottom: "0.75rem",
+                      }}
+                    />
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: "#475569",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Horaires (facultatifs)
+                    </label>
+                    <input
+                      type="text"
+                      value={landingHours}
+                      maxLength={LANDING_META_HOURS_MAX}
+                      onChange={(e) => setLandingHours(e.target.value)}
+                      placeholder="Ex. 19h – 23h"
+                      style={{
+                        width: "100%",
+                        boxSizing: "border-box",
+                        padding: "0.5rem 0.65rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.88rem",
                         marginBottom: 0,
                       }}
                     />
                   </section>
 
-                  {/* 3. Galerie événement */}
+                  {/* 3. Programme */}
+                  <section style={card}>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "0.5rem",
+                        marginBottom: "0.45rem",
+                      }}
+                    >
+                      <h2
+                        style={{
+                          margin: 0,
+                          fontSize: "0.72rem",
+                          fontWeight: 800,
+                          letterSpacing: "0.08em",
+                          textTransform: "uppercase",
+                          color: "#64748b",
+                        }}
+                      >
+                        Programme
+                      </h2>
+                      <span
+                        style={{
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          color: "#0f766e",
+                          background: "#ecfdf5",
+                          border: "1px solid #a7f3d0",
+                          borderRadius: "999px",
+                          padding: "0.22rem 0.55rem",
+                        }}
+                      >
+                        En ligne dès l’ajout
+                      </span>
+                    </div>
+                    <p style={{ ...fieldHintStyle, margin: "0 0 0.65rem" }}>
+                      Heure + titre. Affiché dans l’ordre chronologique sur /e.
+                      {" "}
+                      {programItems.length}/{LANDING_PROGRAM_MAX} étapes.
+                    </p>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "5.5rem 1fr auto",
+                        gap: "0.45rem",
+                        marginBottom: "0.75rem",
+                        alignItems: "end",
+                      }}
+                    >
+                      <div>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "0.72rem",
+                            fontWeight: 600,
+                            color: "#64748b",
+                            marginBottom: "0.25rem",
+                          }}
+                        >
+                          Heure
+                        </label>
+                        <input
+                          type="text"
+                          value={programDraftTime}
+                          maxLength={LANDING_PROGRAM_TIME_MAX}
+                          onChange={(e) => setProgramDraftTime(e.target.value)}
+                          placeholder="19h30"
+                          disabled={programBusy}
+                          style={{
+                            width: "100%",
+                            boxSizing: "border-box",
+                            padding: "0.45rem 0.5rem",
+                            borderRadius: "8px",
+                            border: "1px solid #cbd5e1",
+                            fontSize: "0.84rem",
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "0.72rem",
+                            fontWeight: 600,
+                            color: "#64748b",
+                            marginBottom: "0.25rem",
+                          }}
+                        >
+                          Titre
+                        </label>
+                        <input
+                          type="text"
+                          value={programDraftTitle}
+                          maxLength={LANDING_PROGRAM_TITLE_MAX}
+                          onChange={(e) => setProgramDraftTitle(e.target.value)}
+                          placeholder="Cocktail d’accueil"
+                          disabled={programBusy}
+                          style={{
+                            width: "100%",
+                            boxSizing: "border-box",
+                            padding: "0.45rem 0.5rem",
+                            borderRadius: "8px",
+                            border: "1px solid #cbd5e1",
+                            fontSize: "0.84rem",
+                          }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        style={{
+                          ...btnPrimary,
+                          opacity:
+                            programBusy ||
+                            !programDraftTime.trim() ||
+                            !programDraftTitle.trim()
+                              ? 0.65
+                              : 1,
+                          cursor:
+                            programBusy ||
+                            !programDraftTime.trim() ||
+                            !programDraftTitle.trim()
+                              ? "not-allowed"
+                              : "pointer",
+                        }}
+                        disabled={
+                          programBusy ||
+                          !programDraftTime.trim() ||
+                          !programDraftTitle.trim()
+                        }
+                        onClick={() => void addProgramItem()}
+                      >
+                        Ajouter
+                      </button>
+                    </div>
+                    {programItems.length === 0 ? (
+                      <p style={{ ...fieldHintStyle, margin: 0 }}>
+                        Aucune étape pour l’instant.
+                      </p>
+                    ) : (
+                      <ul
+                        style={{
+                          listStyle: "none",
+                          margin: 0,
+                          padding: 0,
+                          display: "grid",
+                          gap: "0.45rem",
+                        }}
+                      >
+                        {programItems.map((step) => {
+                          const editing = programEditId === step.id;
+                          return (
+                            <li
+                              key={step.id}
+                              style={{
+                                padding: "0.55rem 0.65rem",
+                                borderRadius: "10px",
+                                border: "1px solid #e2e8f0",
+                                background: "#fff",
+                              }}
+                            >
+                              {editing ? (
+                                <div
+                                  style={{
+                                    display: "grid",
+                                    gap: "0.4rem",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      display: "grid",
+                                      gridTemplateColumns: "5.5rem 1fr",
+                                      gap: "0.4rem",
+                                    }}
+                                  >
+                                    <input
+                                      type="text"
+                                      value={programEditTime}
+                                      maxLength={LANDING_PROGRAM_TIME_MAX}
+                                      onChange={(e) =>
+                                        setProgramEditTime(e.target.value)
+                                      }
+                                      disabled={programBusy}
+                                      style={{
+                                        width: "100%",
+                                        boxSizing: "border-box",
+                                        padding: "0.4rem 0.5rem",
+                                        borderRadius: "8px",
+                                        border: "1px solid #cbd5e1",
+                                        fontSize: "0.84rem",
+                                      }}
+                                    />
+                                    <input
+                                      type="text"
+                                      value={programEditTitle}
+                                      maxLength={LANDING_PROGRAM_TITLE_MAX}
+                                      onChange={(e) =>
+                                        setProgramEditTitle(e.target.value)
+                                      }
+                                      disabled={programBusy}
+                                      style={{
+                                        width: "100%",
+                                        boxSizing: "border-box",
+                                        padding: "0.4rem 0.5rem",
+                                        borderRadius: "8px",
+                                        border: "1px solid #cbd5e1",
+                                        fontSize: "0.84rem",
+                                      }}
+                                    />
+                                  </div>
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      flexWrap: "wrap",
+                                      gap: "0.35rem",
+                                    }}
+                                  >
+                                    <button
+                                      type="button"
+                                      style={btnPrimary}
+                                      disabled={programBusy}
+                                      onClick={() => void saveProgramEdit()}
+                                    >
+                                      Enregistrer
+                                    </button>
+                                    <button
+                                      type="button"
+                                      style={btnSecondary}
+                                      disabled={programBusy}
+                                      onClick={() => {
+                                        setProgramEditId(null);
+                                        setProgramEditTime("");
+                                        setProgramEditTitle("");
+                                      }}
+                                    >
+                                      Annuler
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexWrap: "wrap",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    gap: "0.5rem",
+                                  }}
+                                >
+                                  <p
+                                    style={{
+                                      margin: 0,
+                                      fontSize: "0.88rem",
+                                      color: "#0f172a",
+                                    }}
+                                  >
+                                    <strong style={{ fontWeight: 700 }}>
+                                      {step.timeLabel}
+                                    </strong>
+                                    {" · "}
+                                    {step.title}
+                                  </p>
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      flexWrap: "wrap",
+                                      gap: "0.35rem",
+                                    }}
+                                  >
+                                    <button
+                                      type="button"
+                                      style={btnSecondary}
+                                      disabled={programBusy}
+                                      onClick={() => {
+                                        setProgramEditId(step.id);
+                                        setProgramEditTime(step.timeLabel);
+                                        setProgramEditTitle(step.title);
+                                      }}
+                                    >
+                                      Modifier
+                                    </button>
+                                    <button
+                                      type="button"
+                                      style={{
+                                        ...btnSecondary,
+                                        color: "#b91c1c",
+                                        borderColor: "#fecaca",
+                                      }}
+                                      disabled={programBusy}
+                                      onClick={() =>
+                                        void removeProgramItem(step.id)
+                                      }
+                                    >
+                                      Supprimer
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </section>
+
+                  {/* 4. Galerie événement */}
                   <section style={card}>
                     <div
                       style={{
@@ -1455,9 +2154,10 @@ export function EventCustomizationEditor({ mode = "live" }) {
                       </span>
                     </div>
                     <p style={{ ...fieldHintStyle, margin: "0 0 0.65rem" }}>
-                      Teaser / ambiance (avant et pendant le live).{" "}
-                      {showcasePhotos.length}/{LANDING_SHOWCASE_MAX} photos — pas
-                      besoin d’Enregistrer.
+                      Teaser / ambiance (avant et pendant le live). Légende
+                      facultative par photo.{" "}
+                      {showcasePhotos.length}/{LANDING_SHOWCASE_MAX} photos —
+                      pas besoin d’Enregistrer pour les images.
                     </p>
                     <label
                       style={{
@@ -1497,58 +2197,158 @@ export function EventCustomizationEditor({ mode = "live" }) {
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns:
-                          "repeat(auto-fill, minmax(96px, 1fr))",
-                        gap: "0.5rem",
+                        gap: "0.65rem",
                       }}
                     >
-                      {showcasePhotos.map((ph) => (
-                        <div
-                          key={ph.id}
-                          style={{
-                            position: "relative",
-                            borderRadius: "10px",
-                            overflow: "hidden",
-                            border: "1px solid #e2e8f0",
-                            aspectRatio: "1",
-                            background: "#f8fafc",
-                          }}
-                        >
-                          <img
-                            src={ph.url}
-                            alt=""
+                      {showcasePhotos.map((ph) => {
+                        const draft = showcaseCaptionDrafts[ph.id] ?? "";
+                        const saved =
+                          typeof ph.caption === "string" && ph.caption.trim()
+                            ? ph.caption.trim()
+                            : "";
+                        const dirty = draft.trim() !== saved;
+                        const saving = showcaseCaptionBusyId === ph.id;
+                        return (
+                          <div
+                            key={ph.id}
                             style={{
-                              width: "100%",
-                              height: "100%",
-                              objectFit: "cover",
-                              display: "block",
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => void removeShowcasePhoto(ph.id)}
-                            disabled={showcasePhotoBusy}
-                            aria-label="Retirer de la galerie événement"
-                            style={{
-                              position: "absolute",
-                              top: 4,
-                              right: 4,
-                              padding: "0.2rem 0.45rem",
-                              fontSize: "0.68rem",
-                              fontWeight: 700,
-                              borderRadius: "6px",
-                              border: "1px solid #fecaca",
-                              background: "rgba(254,242,242,0.95)",
-                              color: "#b91c1c",
-                              cursor: showcasePhotoBusy
-                                ? "not-allowed"
-                                : "pointer",
+                              display: "grid",
+                              gridTemplateColumns: "96px 1fr",
+                              gap: "0.65rem",
+                              alignItems: "start",
+                              padding: "0.5rem",
+                              borderRadius: "12px",
+                              border: "1px solid #e2e8f0",
+                              background: "#fff",
                             }}
                           >
-                            ✕
-                          </button>
-                        </div>
-                      ))}
+                            <div
+                              style={{
+                                position: "relative",
+                                borderRadius: "10px",
+                                overflow: "hidden",
+                                border: "1px solid #e2e8f0",
+                                aspectRatio: "1",
+                                background: "#f8fafc",
+                              }}
+                            >
+                              <img
+                                src={ph.url}
+                                alt=""
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  objectFit: "cover",
+                                  display: "block",
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => void removeShowcasePhoto(ph.id)}
+                                disabled={showcasePhotoBusy}
+                                aria-label="Retirer de la galerie événement"
+                                style={{
+                                  position: "absolute",
+                                  top: 4,
+                                  right: 4,
+                                  padding: "0.2rem 0.45rem",
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  borderRadius: "6px",
+                                  border: "1px solid #fecaca",
+                                  background: "rgba(254,242,242,0.95)",
+                                  color: "#b91c1c",
+                                  cursor: showcasePhotoBusy
+                                    ? "not-allowed"
+                                    : "pointer",
+                                }}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <label
+                                style={{
+                                  display: "block",
+                                  fontSize: "0.72rem",
+                                  fontWeight: 600,
+                                  color: "#64748b",
+                                  marginBottom: "0.25rem",
+                                }}
+                              >
+                                Légende (facultative)
+                              </label>
+                              <textarea
+                                value={draft}
+                                maxLength={LANDING_CAPTION_MAX}
+                                rows={2}
+                                disabled={saving || showcasePhotoBusy}
+                                onChange={(e) =>
+                                  setShowcaseCaptionDrafts((prev) => ({
+                                    ...prev,
+                                    [ph.id]: e.target.value,
+                                  }))
+                                }
+                                placeholder="Ex. Vue de la salle"
+                                style={{
+                                  width: "100%",
+                                  boxSizing: "border-box",
+                                  resize: "vertical",
+                                  minHeight: "2.6rem",
+                                  padding: "0.4rem 0.5rem",
+                                  borderRadius: "8px",
+                                  border: "1px solid #cbd5e1",
+                                  fontSize: "0.8rem",
+                                  fontFamily: "inherit",
+                                }}
+                              />
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexWrap: "wrap",
+                                  gap: "0.35rem",
+                                  marginTop: "0.4rem",
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  style={{
+                                    ...btnSecondary,
+                                    opacity:
+                                      saving || showcasePhotoBusy || !dirty
+                                        ? 0.65
+                                        : 1,
+                                    cursor:
+                                      saving || showcasePhotoBusy || !dirty
+                                        ? "not-allowed"
+                                        : "pointer",
+                                  }}
+                                  disabled={
+                                    saving || showcasePhotoBusy || !dirty
+                                  }
+                                  onClick={() =>
+                                    void saveShowcaseCaption(ph.id)
+                                  }
+                                >
+                                  {saving ? "…" : "Enregistrer la légende"}
+                                </button>
+                                {saved || draft.trim() ? (
+                                  <button
+                                    type="button"
+                                    style={btnSecondary}
+                                    disabled={saving || showcasePhotoBusy}
+                                    onClick={() =>
+                                      void saveShowcaseCaption(ph.id, "")
+                                    }
+                                  >
+                                    Effacer
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                     {showcasePhotos.length === 0 ? (
                       <p style={{ ...fieldHintStyle, margin: "0.55rem 0 0" }}>
@@ -1557,7 +2357,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
                     ) : null}
                   </section>
 
-                  {/* 4. Fil de l’événement (messages · Moments · résultats) */}
+                  {/* 5. Fil de l’événement (messages · Moments · résultats) */}
                   {eventId ? (
                     <LandingFeedAdminPanel
                       eventId={eventId}
@@ -1566,6 +2366,13 @@ export function EventCustomizationEditor({ mode = "live" }) {
                       photoBusy={livePhotoBusy}
                       onAddPhotos={(files) => void addLiveMomentPhotos(files)}
                       onRemovePhoto={(id) => void removeLiveMomentPhoto(id)}
+                      onPhotoCaptionSaved={(photoId, caption) => {
+                        setLandingLivePhotos((prev) =>
+                          prev.map((p) =>
+                            p.id === photoId ? { ...p, caption } : p,
+                          ),
+                        );
+                      }}
                       closedPolls={closedLandingPolls}
                       onToast={(msg) => {
                         setToast(msg);
@@ -1801,10 +2608,11 @@ export function EventCustomizationEditor({ mode = "live" }) {
                     summaryHint="Optionnel"
                   >
                     <p style={{ ...fieldHintStyle, marginBottom: "0.75rem" }}>
-                      Bloc d’information affiché sur la salle participant{" "}
-                      <code style={{ fontSize: "0.72rem" }}>/join</code>. Les
-                      boutons n’apparaissent que si libellé et URL sont tous les
-                      deux renseignés.
+                      Textes et liens complémentaires pour la salle{" "}
+                      <code style={{ fontSize: "0.72rem" }}>/join</code> et la
+                      landing — pas la date, le lieu ni le programme (ceux-ci
+                      sont dans ✨ L&apos;événement). Les boutons n’apparaissent
+                      que si libellé et URL sont tous les deux renseignés.
                     </p>
                     <label
                       style={{
