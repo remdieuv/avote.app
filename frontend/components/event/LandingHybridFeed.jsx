@@ -55,18 +55,25 @@ function HeartIcon({ filled, size = 18 }) {
 /**
  * Photos du fil (ordre chronologique du feed) pour la lightbox.
  * @param {Array<Record<string, unknown>>} items
- * @returns {Array<{ id: string; url: string }>}
+ * @returns {Array<{ id: string; url: string; caption: string | null }>}
  */
 export function collectFeedLightboxPhotos(items) {
   if (!Array.isArray(items)) return [];
   const raw = [];
   for (const item of items) {
     if (String(item?.type || "") !== "photo" || !item?.photo) continue;
-    const photo = /** @type {{ id?: unknown; url?: unknown }} */ (item.photo);
+    const photo =
+      /** @type {{ id?: unknown; url?: unknown; caption?: unknown }} */ (
+        item.photo
+      );
     const rawUrl = typeof photo.url === "string" ? photo.url : "";
     const url = resolveApiAssetUrlNullable(rawUrl.trim()) || rawUrl.trim();
     if (!url) continue;
-    raw.push({ id: String(photo.id || url), url });
+    const caption =
+      typeof photo.caption === "string" && photo.caption.trim()
+        ? photo.caption.trim()
+        : null;
+    raw.push({ id: String(photo.id || url), url, caption });
   }
   return normalizeLightboxPhotos(raw);
 }
@@ -322,6 +329,10 @@ function FeedPhotoCard({
   const id = String(photo?.id || "");
   const liked = Boolean(photo?.likedByMe);
   const count = Number(photo?.likeCount || 0);
+  const caption =
+    typeof photo?.caption === "string" && photo.caption.trim()
+      ? photo.caption.trim()
+      : "";
   if (!url) return null;
   return (
     <FeedCardShell eyebrow="Moment">
@@ -335,7 +346,7 @@ function FeedPhotoCard({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={url}
-            alt=""
+            alt={caption || ""}
             loading="lazy"
             className="ev-landing-feed-photo-img"
           />
@@ -395,6 +406,20 @@ function FeedPhotoCard({
           <span>{count}</span>
         </button>
       </div>
+      {caption ? (
+        <p
+          data-testid="landing-feed-photo-caption"
+          style={{
+            margin: 0,
+            padding: "0.55rem 0.9rem 0.85rem",
+            fontSize: "0.88rem",
+            lineHeight: 1.45,
+            color: "#475569",
+          }}
+        >
+          {caption}
+        </p>
+      ) : null}
     </FeedCardShell>
   );
 }
