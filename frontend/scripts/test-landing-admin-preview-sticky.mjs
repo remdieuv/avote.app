@@ -1,6 +1,10 @@
 /**
- * Admin Landing — aperçu sticky desktop + hint photos messages.
+ * Admin Landing — aperçu sticky desktop (containing block correct).
  * Exécution : node frontend/scripts/test-landing-admin-preview-sticky.mjs
+ *
+ * Cause #48 : sticky appliqué directement sur l’item grille avec
+ * align-items:start → containing block = hauteur de la carte seule →
+ * l’aperçu décroche en scrollant un formulaire long (colonne droite vide).
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -31,45 +35,67 @@ function test(name, fn) {
   }
 }
 
-test("desktop : sticky + max-height viewport + actions visibles", () => {
-  const desktop = page.match(
-    /@media \(min-width: 901px\) \{([\s\S]*?)\}[\s\n]*@media \(max-width: 900px\)/,
+test("structure : colonne stretch + carte sticky (pas sticky sur item grille seul)", () => {
+  assert.match(page, /className="customization-preview-col"/);
+  assert.match(page, /className="customization-preview-card"/);
+  assert.match(page, /alignItems:\s*"start"/);
+  // Ordre DOM : preview-col enveloppe preview-card
+  const colIdx = page.indexOf('className="customization-preview-col"');
+  const cardIdx = page.indexOf(
+    'className="customization-preview-card"',
+    colIdx,
   );
-  assert.ok(desktop, "bloc media desktop attendu");
-  const css = desktop[1];
-  assert.match(css, /\.customization-preview-card/);
-  assert.match(css, /position:\s*sticky/);
-  assert.match(css, /max-height:\s*calc\(100vh/);
-  assert.match(css, /display:\s*flex/);
-  assert.match(css, /flex-direction:\s*column/);
+  assert.ok(colIdx >= 0 && cardIdx > colIdx, "card doit être dans preview-col");
+  // Sticky sur la carte, stretch sur la colonne
+  assert.match(
+    page,
+    /\.customization-preview-col\s*\{[^}]*align-self:\s*stretch/s,
+  );
+  assert.match(
+    page,
+    /\.customization-preview-card\s*\{[^}]*position:\s*sticky/s,
+  );
+  // Anti-régression : ne plus sticky-er uniquement l’item grille sans wrapper
+  assert.match(page, /containing block sticky = colonne stretch/i);
+});
+
+test("desktop : taille confortable + actions + max-height viewport", () => {
+  assert.match(page, /min-height:\s*min\(520px,\s*62vh\)/);
+  assert.match(page, /min-height:\s*min\(520px,\s*calc\(100vh - 14rem\)\)/);
+  assert.match(page, /max-height:\s*calc\(100vh - 1rem - 5\.25rem\)/);
   assert.match(page, /customization-preview-actions/);
   assert.match(page, /Ouvrir la landing publiée/);
-  assert.match(page, /gridTemplateColumns:\s*"minmax\(340px, 42%\) minmax\(320px, 1fr\)"/);
-});
-
-test("mobile : tabs + pas de sticky flottant", () => {
-  assert.match(page, /customization-mobile-tabs/);
-  assert.match(page, /data-mobile-panel=\{mobilePanel\}/);
-  const mobile = page.match(/@media \(max-width: 900px\) \{([\s\S]*?)\}[\s\n]*`\}<\/style>/);
-  assert.ok(mobile, "bloc media mobile attendu");
-  const css = mobile[1];
-  assert.match(css, /position:\s*static/);
-  assert.match(css, /max-height:\s*none/);
   assert.match(
-    css,
-    /customization-layout\[data-mobile-panel="form"\] \.customization-preview-card/,
+    page,
+    /gridTemplateColumns:\s*"minmax\(340px, 42%\) minmax\(320px, 1fr\)"/,
+  );
+  // Ne pas réintroduire le min-height trop bas qui réduisait l’aperçu
+  assert.doesNotMatch(
+    page,
+    /\.customization-preview-iframe\s*\{[^}]*min-height:\s*240px/s,
   );
 });
 
-test("hint message organisateur mis à jour", () => {
-  assert.match(page, /photo directement/);
-  assert.match(page, /galerie événement/);
-  assert.doesNotMatch(page, /pas de nouvel upload/);
+test("mobile : tabs + masque la colonne (pas sticky flottant)", () => {
+  assert.match(page, /customization-mobile-tabs/);
+  assert.match(page, /data-mobile-panel=\{mobilePanel\}/);
+  assert.match(
+    page,
+    /customization-layout\[data-mobile-panel="form"\] \.customization-preview-col/,
+  );
+  assert.match(
+    page,
+    /customization-layout\[data-mobile-panel="preview"\] \.customization-form-col/,
+  );
+  assert.match(
+    page,
+    /@media \(max-width: 900px\)[\s\S]*?\.customization-preview-card\s*\{[\s\S]*?position:\s*static/,
+  );
 });
 
-test("pas de changement surface publique /e", () => {
+test("hint message organisateur + pas de surface publique", () => {
+  assert.match(page, /photo directement/);
   assert.doesNotMatch(page, /resolveEventLandingPhase/);
-  // Ce lot ne touche pas le fil /e
   assert.match(publicLanding, /LandingHybridFeed/);
 });
 

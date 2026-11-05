@@ -4027,129 +4027,142 @@ export function EventCustomizationEditor({ mode = "live" }) {
               )}
             </div>
 
-            <div style={card} className="customization-preview-card">
-              <div className="customization-preview-header">
-                <h2
-                  style={{
-                    margin: "0 0 0.15rem",
-                    fontSize: "1rem",
-                    fontWeight: 800,
-                  }}
-                >
-                  {isLandingPage ? "Aperçu landing" : "Aperçu brouillon"}
-                </h2>
-                <p
-                  style={{
-                    margin: "0 0 0.85rem",
-                    fontSize: "0.82rem",
-                    color: "#64748b",
-                  }}
-                >
-                  {isLandingPage
-                    ? landingPreviewActive
-                      ? "Dernière version enregistrée + galeries déjà en ligne. « Enregistrer » met à jour titre, accroche, couverture et publication."
-                      : "Activez puis enregistrez la landing pour prévisualiser /e ici (sans afficher la salle live)."
-                    : "Brouillon en direct dans cette page (mise en page, couleurs, médias). Les participants voient uniquement la version enregistrée. Cet aperçu ne simule pas les étapes de vote."}
-                </p>
-              </div>
-              {isLandingPage && !landingPreviewActive ? (
-                <div className="customization-preview-empty">
-                  <p
+            {/*
+              Colonne stretch (= hauteur du formulaire) + carte sticky à l’intérieur.
+              Sans ce wrapper, sticky sur l’item grille (align-items:start) a un
+              containing block trop bas → l’aperçu décroche et laisse la colonne vide.
+            */}
+            <div className="customization-preview-col">
+              <div style={card} className="customization-preview-card">
+                <div className="customization-preview-header">
+                  <h2
                     style={{
-                      margin: 0,
-                      fontSize: "0.95rem",
-                      fontWeight: 700,
-                      color: "#334155",
+                      margin: "0 0 0.15rem",
+                      fontSize: "1rem",
+                      fontWeight: 800,
                     }}
                   >
-                    {landingEnabled
-                      ? "Enregistrez pour activer l’aperçu"
-                      : "Landing désactivée"}
-                  </p>
+                    {isLandingPage ? "Aperçu landing" : "Aperçu brouillon"}
+                  </h2>
                   <p
                     style={{
-                      margin: 0,
+                      margin: "0 0 0.85rem",
                       fontSize: "0.82rem",
                       color: "#64748b",
-                      maxWidth: "22rem",
                     }}
                   >
-                    {landingEnabled
-                      ? "La case est cochée : cliquez « Enregistrer la landing » pour publier /e et charger l’aperçu."
-                      : "Cochez « Activer la landing événement », puis enregistrez. Tant qu’elle est off, /e redirige vers la salle."}
+                    {isLandingPage
+                      ? landingPreviewActive
+                        ? "Dernière version enregistrée + galeries déjà en ligne. « Enregistrer » met à jour titre, accroche, couverture et publication."
+                        : "Activez puis enregistrez la landing pour prévisualiser /e ici (sans afficher la salle live)."
+                      : "Brouillon en direct dans cette page (mise en page, couleurs, médias). Les participants voient uniquement la version enregistrée. Cet aperçu ne simule pas les étapes de vote."}
                   </p>
-                  {landingPath && !landingEnabled ? (
-                    <button
-                      type="button"
-                      style={btnSecondary}
-                      onClick={() =>
-                        window.open(
-                          `${window.location.origin}${landingPath}`,
-                          "_blank",
-                          "noopener,noreferrer",
-                        )
-                      }
-                    >
-                      Ouvrir /e (redirige vers la salle)
-                    </button>
-                  ) : null}
                 </div>
-              ) : (isLandingPage ? landingPath : joinPath) ? (
-                <>
-                  <div className="customization-preview-frame">
-                    <div
-                      className="customization-preview-notch"
-                      aria-hidden
-                    />
-                    <iframe
-                      ref={previewIframeRef}
-                      className="customization-preview-iframe"
-                      key={`${mode}-${slug ?? "preview"}-${previewNonce}`}
-                      title={isLandingPage ? "Aperçu landing" : "Aperçu salle"}
-                      src={isLandingPage ? landingPath : joinPath}
-                      sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-                      onLoad={() => {
-                        if (!isLivePage) return;
-                        setPreviewIframeReady(true);
-                        window.requestAnimationFrame(() => {
-                          postPreviewToIframe();
-                        });
+                {isLandingPage && !landingPreviewActive ? (
+                  <div className="customization-preview-empty">
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "0.95rem",
+                        fontWeight: 700,
+                        color: "#334155",
                       }}
-                    />
-                  </div>
-                  <div className="customization-preview-actions">
-                    <button
-                      type="button"
-                      style={{ ...btnSecondary, width: "100%" }}
-                      onClick={() =>
-                        window.open(
-                          `${window.location.origin}${isLandingPage ? landingPath : joinPath}`,
-                          "_blank",
-                          "noopener,noreferrer",
-                        )
-                      }
                     >
-                      {isLandingPage
-                        ? "Ouvrir la landing publiée"
-                        : "Ouvrir la salle publiée"}
-                    </button>
-                    {isLivePage ? (
-                      <p style={{ ...fieldHintStyle, marginTop: "0.45rem" }}>
-                        La salle publiée ignore le brouillon non enregistré de
-                        cette page.
-                      </p>
-                    ) : (
-                      <p style={{ ...fieldHintStyle, marginTop: "0.45rem" }}>
-                        Galerie événement et fil (photos) sont déjà publics ;
-                        titre, accroche, couverture et activation suivent «
-                        Enregistrer ».
-                      </p>
-                    )}
+                      {landingEnabled
+                        ? "Enregistrez pour activer l’aperçu"
+                        : "Landing désactivée"}
+                    </p>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "0.82rem",
+                        color: "#64748b",
+                        maxWidth: "22rem",
+                      }}
+                    >
+                      {landingEnabled
+                        ? "La case est cochée : cliquez « Enregistrer la landing » pour publier /e et charger l’aperçu."
+                        : "Cochez « Activer la landing événement », puis enregistrez. Tant qu’elle est off, /e redirige vers la salle."}
+                    </p>
+                    {landingPath && !landingEnabled ? (
+                      <button
+                        type="button"
+                        style={btnSecondary}
+                        onClick={() =>
+                          window.open(
+                            `${window.location.origin}${landingPath}`,
+                            "_blank",
+                            "noopener,noreferrer",
+                          )
+                        }
+                      >
+                        Ouvrir /e (redirige vers la salle)
+                      </button>
+                    ) : null}
                   </div>
-                </>
-              ) : (
-                <p style={{ color: "#64748b", margin: 0 }}>Slug manquant.</p>
-              )}
+                ) : (isLandingPage ? landingPath : joinPath) ? (
+                  <>
+                    <div className="customization-preview-frame">
+                      <div
+                        className="customization-preview-notch"
+                        aria-hidden
+                      />
+                      <iframe
+                        ref={previewIframeRef}
+                        className="customization-preview-iframe"
+                        key={`${mode}-${slug ?? "preview"}-${previewNonce}`}
+                        title={
+                          isLandingPage ? "Aperçu landing" : "Aperçu salle"
+                        }
+                        src={isLandingPage ? landingPath : joinPath}
+                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                        onLoad={() => {
+                          if (!isLivePage) return;
+                          setPreviewIframeReady(true);
+                          window.requestAnimationFrame(() => {
+                            postPreviewToIframe();
+                          });
+                        }}
+                      />
+                    </div>
+                    <div className="customization-preview-actions">
+                      <button
+                        type="button"
+                        style={{ ...btnSecondary, width: "100%" }}
+                        onClick={() =>
+                          window.open(
+                            `${window.location.origin}${isLandingPage ? landingPath : joinPath}`,
+                            "_blank",
+                            "noopener,noreferrer",
+                          )
+                        }
+                      >
+                        {isLandingPage
+                          ? "Ouvrir la landing publiée"
+                          : "Ouvrir la salle publiée"}
+                      </button>
+                      {isLivePage ? (
+                        <p
+                          style={{ ...fieldHintStyle, marginTop: "0.45rem" }}
+                        >
+                          La salle publiée ignore le brouillon non enregistré de
+                          cette page.
+                        </p>
+                      ) : (
+                        <p
+                          style={{ ...fieldHintStyle, marginTop: "0.45rem" }}
+                        >
+                          Galerie événement et fil (photos) sont déjà publics ;
+                          titre, accroche, couverture et activation suivent «
+                          Enregistrer ».
+                        </p>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <p style={{ color: "#64748b", margin: 0 }}>Slug manquant.</p>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -4297,6 +4310,9 @@ export function EventCustomizationEditor({ mode = "live" }) {
           box-sizing: border-box;
           width: 100%;
         }
+        .customization-preview-col {
+          min-width: 0;
+        }
         .customization-preview-frame {
           border-radius: 18px;
           overflow: hidden;
@@ -4306,6 +4322,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
             0 24px 48px rgba(15, 23, 42, 0.15),
             inset 0 1px 0 rgba(255, 255, 255, 0.06);
           position: relative;
+          /* Taille confortable (équivalente au layout pré-#48). */
           min-height: min(520px, 62vh);
         }
         .customization-preview-notch {
@@ -4346,29 +4363,35 @@ export function EventCustomizationEditor({ mode = "live" }) {
           margin-top: 0.75rem;
         }
         @media (min-width: 901px) {
-          /* Colonne aperçu collée à la fenêtre pendant le scroll du formulaire. */
+          /*
+            Containing block sticky = colonne stretch (hauteur du formulaire).
+            Sticky sur l’item grille direct + align-items:start → boîte trop basse,
+            l’aperçu décroche et laisse la colonne droite vide.
+          */
+          .customization-preview-col {
+            align-self: stretch;
+          }
           .customization-preview-card {
             position: sticky;
             top: 1rem;
-            /* Hauteur utile : viewport − marge haut − barre d’enregistrement. */
             max-height: calc(100vh - 1rem - 5.25rem);
             display: flex;
             flex-direction: column;
-            overflow: hidden;
-            align-self: start;
+            box-sizing: border-box;
           }
-          .customization-preview-header {
+          .customization-preview-header,
+          .customization-preview-actions {
             flex: 0 0 auto;
           }
           .customization-preview-frame,
           .customization-preview-empty {
             flex: 1 1 auto;
-            min-height: 0;
-            height: auto;
+            /* Garde une hauteur lisible même dans le panneau sticky borné. */
+            min-height: min(520px, calc(100vh - 14rem));
           }
           .customization-preview-iframe {
             height: 100%;
-            min-height: 240px;
+            min-height: min(520px, calc(100vh - 14rem));
           }
         }
         @media (max-width: 900px) {
@@ -4378,17 +4401,19 @@ export function EventCustomizationEditor({ mode = "live" }) {
           .customization-mobile-tabs {
             display: flex;
           }
-          .customization-layout[data-mobile-panel="form"] .customization-preview-card {
+          .customization-layout[data-mobile-panel="form"] .customization-preview-col {
             display: none;
           }
           .customization-layout[data-mobile-panel="preview"] .customization-form-col {
             display: none;
           }
           /* Pas d’aperçu flottant / sticky sur smartphone. */
+          .customization-preview-col {
+            align-self: auto;
+          }
           .customization-preview-card {
             position: static;
             max-height: none;
-            overflow: visible;
           }
           .customization-preview-iframe {
             height: min(420px, 58vh);

@@ -112,22 +112,20 @@ test("layout desktop sticky + mobile tabs CSS", () => {
   assert.match(page, />\s*Aperçu\s*</);
   assert.match(
     page,
-    /customization-layout\[data-mobile-panel="form"\] \.customization-preview-card/,
+    /customization-layout\[data-mobile-panel="form"\] \.customization-preview-col/,
   );
   assert.match(
     page,
     /customization-layout\[data-mobile-panel="preview"\] \.customization-form-col/,
   );
-  // Desktop : aperçu sticky borné à la fenêtre + scroll iframe indépendant
+  // Desktop : colonne stretch + carte sticky (containing block = hauteur formulaire)
+  assert.match(page, /customization-preview-col/);
+  assert.match(page, /align-self:\s*stretch/);
   assert.match(page, /customization-preview-card[\s\S]*?position:\s*sticky/);
   assert.match(page, /max-height:\s*calc\(100vh/);
   assert.match(page, /customization-preview-iframe/);
   assert.match(page, /Ouvrir la landing publiée/);
-  // Mobile : pas d’aperçu flottant
-  assert.match(
-    page,
-    /Pas d’aperçu flottant \/ sticky sur smartphone|position:\s*static/,
-  );
+  assert.match(page, /position:\s*static/);
 });
 
 test("message organisateur : hint upload direct ou galerie", () => {
