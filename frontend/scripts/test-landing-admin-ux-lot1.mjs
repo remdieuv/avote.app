@@ -45,8 +45,8 @@ test("blocs orga stables (Publication → Fil)", () => {
   // Titres de section h2 (commentaire de lot + libellé affiché)
   assert.match(page, /\{\/\* 1\. Publication \*\/\}/);
   assert.match(page, /\{\/\* 2\. Personnalisation \*\/\}/);
-  assert.match(page, /\{\/\* 3\. Galerie événement \*\/\}/);
-  assert.match(page, /\{\/\* 4\. Fil de l/);
+  assert.match(page, /\{\/\* 4\. Galerie événement \*\/\}/);
+  assert.match(page, /\{\/\* 5\. Fil de l/);
   assert.match(page, />\s*Publication\s*</);
   assert.match(page, />\s*Personnalisation\s*</);
   assert.match(page, />\s*Galerie événement\s*</);
@@ -117,6 +117,27 @@ test("layout desktop sticky + mobile tabs CSS", () => {
   assert.match(
     page,
     /customization-layout\[data-mobile-panel="preview"\] \.customization-form-col/,
+  );
+  // Desktop : aperçu sticky borné à la fenêtre + scroll iframe indépendant
+  assert.match(page, /customization-preview-card[\s\S]*?position:\s*sticky/);
+  assert.match(page, /max-height:\s*calc\(100vh/);
+  assert.match(page, /customization-preview-iframe/);
+  assert.match(page, /Ouvrir la landing publiée/);
+  // Mobile : pas d’aperçu flottant
+  assert.match(
+    page,
+    /Pas d’aperçu flottant \/ sticky sur smartphone|position:\s*static/,
+  );
+});
+
+test("message organisateur : hint upload direct ou galerie", () => {
+  assert.match(
+    page,
+    /ajoutant une\s+photo directement|choisissant des photos déjà\s+présentes dans la galerie/,
+  );
+  assert.doesNotMatch(
+    page,
+    /Illustrations = photos de la galerie\s+événement \(pas de nouvel upload\)/,
   );
 });
 
