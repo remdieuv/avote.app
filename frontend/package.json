@@ -24,6 +24,7 @@
     "test:marketing-widths": "node scripts/test-marketing-desktop-widths.mjs",
     "test:landing-hero": "node scripts/test-landing-hero.mjs",
     "test:landing-admin-ux-lot1": "node scripts/test-landing-admin-ux-lot1.mjs",
+    "test:landing-admin-preview-sticky": "node scripts/test-landing-admin-preview-sticky.mjs",
     "test:landing-public-ux-lot2": "node scripts/test-landing-public-ux-lot2.mjs",
     "test:landing-hybride-v1": "node scripts/test-landing-hybride-v1.mjs",
     "test:landing-fil-admin-centralise": "node scripts/test-landing-fil-admin-centralise.mjs",
