@@ -30,6 +30,7 @@
     "test:landing-evenement-enrichi": "node scripts/test-landing-evenement-enrichi.mjs",
     "test:landing-evenement-v2-visuel": "node scripts/test-landing-evenement-v2-visuel.mjs",
     "test:landing-evenement-v3-messages": "node scripts/test-landing-evenement-v3-messages.mjs",
+    "test:landing-message-photos-direct": "node scripts/test-landing-message-photos-direct.mjs",
     "test:regie-chrono": "node scripts/test-regie-chrono-enabled.mjs",
     "test:regie-quiz-edit": "node scripts/test-regie-quiz-edit.mjs",
     "test:regie-poll-edit-guards": "node scripts/test-regie-poll-edit-guards.mjs",

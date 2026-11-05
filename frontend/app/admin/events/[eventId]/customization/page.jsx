@@ -295,8 +295,17 @@ export function EventCustomizationEditor({ mode = "live" }) {
   const [landingKeepResultsAfter, setLandingKeepResultsAfter] = useState(true);
   const [landingKeepMessagesAfter, setLandingKeepMessagesAfter] =
     useState(true);
-  /** @type {{ id: string; url: string; createdAt: string; caption?: string | null }[]} */
+  /** Galerie événement (showInGallery) — hors photos message-only. */
+  /** @type {{ id: string; url: string; createdAt: string; caption?: string | null; showInGallery?: boolean }[]} */
   const [showcasePhotos, setShowcasePhotos] = useState([]);
+  /** Pool complet (galerie + uploads directs messages) pour résoudre les IDs. */
+  /** @type {{ id: string; url: string; createdAt: string; caption?: string | null; showInGallery?: boolean }[]} */
+  const [messagePhotoAssets, setMessagePhotoAssets] = useState([]);
+  /** Panneau « Choisir dans la galerie » ouvert pour intro | thanks. */
+  const [messageGalleryPicker, setMessageGalleryPicker] = useState(
+    /** @type {null | "intro" | "thanks"} */ (null),
+  );
+  const [messagePhotoBusy, setMessagePhotoBusy] = useState(false);
   /** Brouillons légendes galerie événement. */
   const [showcaseCaptionDrafts, setShowcaseCaptionDrafts] = useState(
     /** @type {Record<string, string>} */ ({}),
@@ -665,16 +674,22 @@ export function EventCustomizationEditor({ mode = "live" }) {
               typeof p?.caption === "string" && p.caption.trim()
                 ? p.caption.trim()
                 : null,
+            showInGallery: p?.showInGallery !== false,
           }))
           .filter((p) => p.id && p.url);
-        setShowcasePhotos(showcaseMapped);
+        setMessagePhotoAssets(showcaseMapped);
+        const galleryOnly = showcaseMapped.filter(
+          (p) => p.showInGallery !== false,
+        );
+        setShowcasePhotos(galleryOnly);
         /** @type {Record<string, string>} */
         const drafts = {};
-        for (const ph of showcaseMapped) {
+        for (const ph of galleryOnly) {
           drafts[ph.id] = ph.caption || "";
         }
         setShowcaseCaptionDrafts(drafts);
       } else {
+        setMessagePhotoAssets([]);
         setShowcasePhotos([]);
         setShowcaseCaptionDrafts({});
       }
@@ -998,6 +1013,88 @@ export function EventCustomizationEditor({ mode = "live" }) {
     });
   }
 
+  function removeMessagePhoto(kind, photoId) {
+    const setter =
+      kind === "intro" ? setLandingIntroPhotoIds : setLandingThanksPhotoIds;
+    setter((prev) => prev.filter((id) => id !== photoId));
+  }
+
+  /**
+   * Upload direct dans un message (hors galerie). Association immédiate côté API.
+   * @param {"intro" | "thanks"} kind
+   * @param {FileList | File[] | null | undefined} fileList
+   */
+  async function addMessagePhotos(kind, fileList) {
+    if (!eventId || !fileList?.length) return;
+    const files = Array.from(fileList).filter(Boolean);
+    if (!files.length) return;
+    let selectedCount =
+      kind === "intro"
+        ? landingIntroPhotoIds.length
+        : landingThanksPhotoIds.length;
+    if (selectedCount >= LANDING_MESSAGE_PHOTOS_MAX) {
+      setSaveError(
+        `Maximum ${LANDING_MESSAGE_PHOTOS_MAX} photos par message.`,
+      );
+      return;
+    }
+    setMessagePhotoBusy(true);
+    setSaveError(null);
+    try {
+      for (const file of files) {
+        if (selectedCount >= LANDING_MESSAGE_PHOTOS_MAX) break;
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await adminFetch(
+          `${apiBaseBrowser()}/events/${eventId}/landing/message-photos?attach=${encodeURIComponent(kind)}`,
+          { method: "POST", body: fd },
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(mapApiError(body, res.status, "Photo"));
+        }
+        const photo = body?.photo;
+        if (typeof photo?.id === "string" && typeof photo?.url === "string") {
+          const mapped = {
+            id: photo.id,
+            url: resolveApiAssetUrl(photo.url),
+            createdAt:
+              typeof photo.createdAt === "string" ? photo.createdAt : "",
+            caption: null,
+            showInGallery: false,
+          };
+          setMessagePhotoAssets((prev) => {
+            if (prev.some((p) => p.id === mapped.id)) return prev;
+            return [...prev, mapped];
+          });
+        }
+        if (Array.isArray(body.landingIntroPhotoIds)) {
+          const nextIntro = body.landingIntroPhotoIds
+            .map((id) => String(id || "").trim())
+            .filter(Boolean)
+            .slice(0, LANDING_MESSAGE_PHOTOS_MAX);
+          setLandingIntroPhotoIds(nextIntro);
+          if (kind === "intro") selectedCount = nextIntro.length;
+        }
+        if (Array.isArray(body.landingThanksPhotoIds)) {
+          const nextThanks = body.landingThanksPhotoIds
+            .map((id) => String(id || "").trim())
+            .filter(Boolean)
+            .slice(0, LANDING_MESSAGE_PHOTOS_MAX);
+          setLandingThanksPhotoIds(nextThanks);
+          if (kind === "thanks") selectedCount = nextThanks.length;
+        }
+      }
+      setToast("Photo ajoutée au message");
+      window.setTimeout(() => setToast(null), 2200);
+      bumpLandingPreview();
+    } catch (e) {
+      setSaveError(e.message || "Envoi photo impossible.");
+    } finally {
+      setMessagePhotoBusy(false);
+    }
+  }
+
   function clearLogo() {
     setLogoUrl("");
   }
@@ -1027,16 +1124,19 @@ export function EventCustomizationEditor({ mode = "live" }) {
           throw new Error(mapApiError(body, res.status, "Photo"));
         }
         if (typeof body.id === "string" && typeof body.url === "string") {
-          setShowcasePhotos((prev) => [
-            ...prev,
-            {
-              id: body.id,
-              url: resolveApiAssetUrl(body.url),
-              createdAt:
-                typeof body.createdAt === "string" ? body.createdAt : "",
-              caption: null,
-            },
-          ]);
+          const mapped = {
+            id: body.id,
+            url: resolveApiAssetUrl(body.url),
+            createdAt:
+              typeof body.createdAt === "string" ? body.createdAt : "",
+            caption: null,
+            showInGallery: body.showInGallery !== false,
+          };
+          setShowcasePhotos((prev) => [...prev, mapped]);
+          setMessagePhotoAssets((prev) => {
+            if (prev.some((p) => p.id === mapped.id)) return prev;
+            return [...prev, mapped];
+          });
           setShowcaseCaptionDrafts((prev) => ({ ...prev, [body.id]: "" }));
         }
       }
@@ -1064,6 +1164,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
         throw new Error(mapApiError(body, res.status));
       }
       setShowcasePhotos((prev) => prev.filter((p) => p.id !== photoId));
+      setMessagePhotoAssets((prev) => prev.filter((p) => p.id !== photoId));
       setShowcaseCaptionDrafts((prev) => {
         const next = { ...prev };
         delete next[photoId];
@@ -1981,45 +2082,108 @@ export function EventCustomizationEditor({ mode = "live" }) {
                     />
                     <p style={{ ...fieldHintStyle, margin: "0 0 0.45rem" }}>
                       Photos d&apos;illustration ({landingIntroPhotoIds.length}/
-                      {LANDING_MESSAGE_PHOTOS_MAX}) — cocher dans la galerie
-                      ci-dessous.
+                      {LANDING_MESSAGE_PHOTOS_MAX}). Upload direct hors galerie,
+                      ou sélection depuis la galerie (sans duplication).
                     </p>
-                    {showcasePhotos.length === 0 ? (
-                      <p style={{ ...fieldHintStyle, margin: 0 }}>
-                        Ajoutez d&apos;abord des photos à la galerie événement.
-                      </p>
-                    ) : (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "0.45rem",
+                        marginBottom: "0.55rem",
+                      }}
+                    >
+                      <label
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          padding: "0.4rem 0.7rem",
+                          borderRadius: "8px",
+                          border: "1px solid #2563eb",
+                          background: "#eff6ff",
+                          color: "#1d4ed8",
+                          fontSize: "0.8rem",
+                          fontWeight: 650,
+                          cursor:
+                            messagePhotoBusy ||
+                            landingIntroPhotoIds.length >=
+                              LANDING_MESSAGE_PHOTOS_MAX
+                              ? "not-allowed"
+                              : "pointer",
+                          opacity:
+                            messagePhotoBusy ||
+                            landingIntroPhotoIds.length >=
+                              LANDING_MESSAGE_PHOTOS_MAX
+                              ? 0.55
+                              : 1,
+                        }}
+                      >
+                        + Ajouter une photo
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          disabled={
+                            messagePhotoBusy ||
+                            landingIntroPhotoIds.length >=
+                              LANDING_MESSAGE_PHOTOS_MAX
+                          }
+                          style={{ display: "none" }}
+                          onChange={(e) => {
+                            const files = e.target.files;
+                            e.target.value = "";
+                            if (files?.length) void addMessagePhotos("intro", files);
+                          }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setMessageGalleryPicker((prev) =>
+                            prev === "intro" ? null : "intro",
+                          )
+                        }
+                        style={{
+                          padding: "0.4rem 0.7rem",
+                          borderRadius: "8px",
+                          border: "1px solid #cbd5e1",
+                          background:
+                            messageGalleryPicker === "intro"
+                              ? "#f1f5f9"
+                              : "#fff",
+                          color: "#334155",
+                          fontSize: "0.8rem",
+                          fontWeight: 650,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Choisir dans la galerie
+                      </button>
+                    </div>
+                    {landingIntroPhotoIds.length > 0 ? (
                       <div
                         style={{
                           display: "grid",
                           gridTemplateColumns:
                             "repeat(auto-fill, minmax(72px, 1fr))",
                           gap: "0.45rem",
+                          marginBottom:
+                            messageGalleryPicker === "intro" ? "0.65rem" : 0,
                         }}
                       >
-                        {showcasePhotos.map((ph) => {
-                          const selected = landingIntroPhotoIds.includes(ph.id);
+                        {landingIntroPhotoIds.map((id) => {
+                          const ph = messagePhotoAssets.find((p) => p.id === id);
+                          if (!ph) return null;
                           return (
-                            <button
-                              key={`intro-${ph.id}`}
-                              type="button"
-                              onClick={() => toggleMessagePhoto("intro", ph.id)}
-                              aria-pressed={selected}
-                              title={
-                                selected
-                                  ? "Retirer du message"
-                                  : "Illustrer le message"
-                              }
+                            <div
+                              key={`intro-sel-${id}`}
                               style={{
                                 position: "relative",
-                                padding: 0,
                                 borderRadius: "10px",
                                 overflow: "hidden",
-                                border: selected
-                                  ? "2px solid #2563eb"
-                                  : "1px solid #e2e8f0",
+                                border: "2px solid #2563eb",
                                 aspectRatio: "1",
-                                cursor: "pointer",
                                 background: "#f8fafc",
                               }}
                             >
@@ -2034,11 +2198,139 @@ export function EventCustomizationEditor({ mode = "live" }) {
                                   display: "block",
                                 }}
                               />
-                            </button>
+                              <span
+                                aria-hidden
+                                style={{
+                                  position: "absolute",
+                                  top: 4,
+                                  left: 4,
+                                  width: 20,
+                                  height: 20,
+                                  borderRadius: "999px",
+                                  background: "#2563eb",
+                                  color: "#fff",
+                                  fontSize: "0.7rem",
+                                  fontWeight: 800,
+                                  display: "grid",
+                                  placeItems: "center",
+                                }}
+                              >
+                                ✓
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => removeMessagePhoto("intro", id)}
+                                title="Retirer du message"
+                                aria-label="Retirer du message"
+                                style={{
+                                  position: "absolute",
+                                  top: 4,
+                                  right: 4,
+                                  width: 22,
+                                  height: 22,
+                                  borderRadius: "999px",
+                                  border: "none",
+                                  background: "rgba(15,23,42,0.72)",
+                                  color: "#fff",
+                                  fontSize: "0.85rem",
+                                  lineHeight: 1,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                ×
+                              </button>
+                            </div>
                           );
                         })}
                       </div>
+                    ) : (
+                      <p style={{ ...fieldHintStyle, margin: "0 0 0.35rem" }}>
+                        Aucune photo associée pour l&apos;instant.
+                      </p>
                     )}
+                    {messageGalleryPicker === "intro" ? (
+                      showcasePhotos.length === 0 ? (
+                        <p style={{ ...fieldHintStyle, margin: 0 }}>
+                          Galerie événement vide — utilisez « + Ajouter une
+                          photo » ou alimentez la galerie plus bas.
+                        </p>
+                      ) : (
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns:
+                              "repeat(auto-fill, minmax(72px, 1fr))",
+                            gap: "0.45rem",
+                          }}
+                        >
+                          {showcasePhotos.map((ph) => {
+                            const selected = landingIntroPhotoIds.includes(
+                              ph.id,
+                            );
+                            return (
+                              <button
+                                key={`intro-gal-${ph.id}`}
+                                type="button"
+                                onClick={() =>
+                                  toggleMessagePhoto("intro", ph.id)
+                                }
+                                aria-pressed={selected}
+                                title={
+                                  selected
+                                    ? "Retirer du message"
+                                    : "Illustrer le message"
+                                }
+                                style={{
+                                  position: "relative",
+                                  padding: 0,
+                                  borderRadius: "10px",
+                                  overflow: "hidden",
+                                  border: selected
+                                    ? "2px solid #2563eb"
+                                    : "1px solid #e2e8f0",
+                                  aspectRatio: "1",
+                                  cursor: "pointer",
+                                  background: "#f8fafc",
+                                }}
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={ph.url}
+                                  alt=""
+                                  style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
+                                    display: "block",
+                                  }}
+                                />
+                                {selected ? (
+                                  <span
+                                    aria-hidden
+                                    style={{
+                                      position: "absolute",
+                                      top: 4,
+                                      left: 4,
+                                      width: 20,
+                                      height: 20,
+                                      borderRadius: "999px",
+                                      background: "#2563eb",
+                                      color: "#fff",
+                                      fontSize: "0.7rem",
+                                      fontWeight: 800,
+                                      display: "grid",
+                                      placeItems: "center",
+                                    }}
+                                  >
+                                    ✓
+                                  </span>
+                                ) : null}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )
+                    ) : null}
                   </section>
 
                   {/* Remerciements */}
@@ -2118,41 +2410,109 @@ export function EventCustomizationEditor({ mode = "live" }) {
                     />
                     <p style={{ ...fieldHintStyle, margin: "0 0 0.45rem" }}>
                       Photos d&apos;illustration ({landingThanksPhotoIds.length}/
-                      {LANDING_MESSAGE_PHOTOS_MAX}).
+                      {LANDING_MESSAGE_PHOTOS_MAX}). Upload direct hors galerie,
+                      ou sélection depuis la galerie.
                     </p>
-                    {showcasePhotos.length === 0 ? (
-                      <p style={{ ...fieldHintStyle, margin: 0 }}>
-                        Ajoutez d&apos;abord des photos à la galerie événement.
-                      </p>
-                    ) : (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "0.45rem",
+                        marginBottom: "0.55rem",
+                      }}
+                    >
+                      <label
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          padding: "0.4rem 0.7rem",
+                          borderRadius: "8px",
+                          border: "1px solid #16a34a",
+                          background: "#f0fdf4",
+                          color: "#15803d",
+                          fontSize: "0.8rem",
+                          fontWeight: 650,
+                          cursor:
+                            messagePhotoBusy ||
+                            landingThanksPhotoIds.length >=
+                              LANDING_MESSAGE_PHOTOS_MAX
+                              ? "not-allowed"
+                              : "pointer",
+                          opacity:
+                            messagePhotoBusy ||
+                            landingThanksPhotoIds.length >=
+                              LANDING_MESSAGE_PHOTOS_MAX
+                              ? 0.55
+                              : 1,
+                        }}
+                      >
+                        + Ajouter une photo
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          disabled={
+                            messagePhotoBusy ||
+                            landingThanksPhotoIds.length >=
+                              LANDING_MESSAGE_PHOTOS_MAX
+                          }
+                          style={{ display: "none" }}
+                          onChange={(e) => {
+                            const files = e.target.files;
+                            e.target.value = "";
+                            if (files?.length)
+                              void addMessagePhotos("thanks", files);
+                          }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setMessageGalleryPicker((prev) =>
+                            prev === "thanks" ? null : "thanks",
+                          )
+                        }
+                        style={{
+                          padding: "0.4rem 0.7rem",
+                          borderRadius: "8px",
+                          border: "1px solid #cbd5e1",
+                          background:
+                            messageGalleryPicker === "thanks"
+                              ? "#f1f5f9"
+                              : "#fff",
+                          color: "#334155",
+                          fontSize: "0.8rem",
+                          fontWeight: 650,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Choisir dans la galerie
+                      </button>
+                    </div>
+                    {landingThanksPhotoIds.length > 0 ? (
                       <div
                         style={{
                           display: "grid",
                           gridTemplateColumns:
                             "repeat(auto-fill, minmax(72px, 1fr))",
                           gap: "0.45rem",
+                          marginBottom:
+                            messageGalleryPicker === "thanks" ? "0.65rem" : 0,
                         }}
                       >
-                        {showcasePhotos.map((ph) => {
-                          const selected = landingThanksPhotoIds.includes(ph.id);
+                        {landingThanksPhotoIds.map((id) => {
+                          const ph = messagePhotoAssets.find((p) => p.id === id);
+                          if (!ph) return null;
                           return (
-                            <button
-                              key={`thanks-${ph.id}`}
-                              type="button"
-                              onClick={() =>
-                                toggleMessagePhoto("thanks", ph.id)
-                              }
-                              aria-pressed={selected}
+                            <div
+                              key={`thanks-sel-${id}`}
                               style={{
                                 position: "relative",
-                                padding: 0,
                                 borderRadius: "10px",
                                 overflow: "hidden",
-                                border: selected
-                                  ? "2px solid #16a34a"
-                                  : "1px solid #e2e8f0",
+                                border: "2px solid #16a34a",
                                 aspectRatio: "1",
-                                cursor: "pointer",
                                 background: "#f8fafc",
                               }}
                             >
@@ -2167,11 +2527,141 @@ export function EventCustomizationEditor({ mode = "live" }) {
                                   display: "block",
                                 }}
                               />
-                            </button>
+                              <span
+                                aria-hidden
+                                style={{
+                                  position: "absolute",
+                                  top: 4,
+                                  left: 4,
+                                  width: 20,
+                                  height: 20,
+                                  borderRadius: "999px",
+                                  background: "#16a34a",
+                                  color: "#fff",
+                                  fontSize: "0.7rem",
+                                  fontWeight: 800,
+                                  display: "grid",
+                                  placeItems: "center",
+                                }}
+                              >
+                                ✓
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  removeMessagePhoto("thanks", id)
+                                }
+                                title="Retirer du message"
+                                aria-label="Retirer du message"
+                                style={{
+                                  position: "absolute",
+                                  top: 4,
+                                  right: 4,
+                                  width: 22,
+                                  height: 22,
+                                  borderRadius: "999px",
+                                  border: "none",
+                                  background: "rgba(15,23,42,0.72)",
+                                  color: "#fff",
+                                  fontSize: "0.85rem",
+                                  lineHeight: 1,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                ×
+                              </button>
+                            </div>
                           );
                         })}
                       </div>
+                    ) : (
+                      <p style={{ ...fieldHintStyle, margin: "0 0 0.35rem" }}>
+                        Aucune photo associée pour l&apos;instant.
+                      </p>
                     )}
+                    {messageGalleryPicker === "thanks" ? (
+                      showcasePhotos.length === 0 ? (
+                        <p style={{ ...fieldHintStyle, margin: 0 }}>
+                          Galerie événement vide — utilisez « + Ajouter une
+                          photo » ou alimentez la galerie plus bas.
+                        </p>
+                      ) : (
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns:
+                              "repeat(auto-fill, minmax(72px, 1fr))",
+                            gap: "0.45rem",
+                          }}
+                        >
+                          {showcasePhotos.map((ph) => {
+                            const selected = landingThanksPhotoIds.includes(
+                              ph.id,
+                            );
+                            return (
+                              <button
+                                key={`thanks-gal-${ph.id}`}
+                                type="button"
+                                onClick={() =>
+                                  toggleMessagePhoto("thanks", ph.id)
+                                }
+                                aria-pressed={selected}
+                                title={
+                                  selected
+                                    ? "Retirer du message"
+                                    : "Illustrer le message"
+                                }
+                                style={{
+                                  position: "relative",
+                                  padding: 0,
+                                  borderRadius: "10px",
+                                  overflow: "hidden",
+                                  border: selected
+                                    ? "2px solid #16a34a"
+                                    : "1px solid #e2e8f0",
+                                  aspectRatio: "1",
+                                  cursor: "pointer",
+                                  background: "#f8fafc",
+                                }}
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={ph.url}
+                                  alt=""
+                                  style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
+                                    display: "block",
+                                  }}
+                                />
+                                {selected ? (
+                                  <span
+                                    aria-hidden
+                                    style={{
+                                      position: "absolute",
+                                      top: 4,
+                                      left: 4,
+                                      width: 20,
+                                      height: 20,
+                                      borderRadius: "999px",
+                                      background: "#16a34a",
+                                      color: "#fff",
+                                      fontSize: "0.7rem",
+                                      fontWeight: 800,
+                                      display: "grid",
+                                      placeItems: "center",
+                                    }}
+                                  >
+                                    ✓
+                                  </span>
+                                ) : null}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )
+                    ) : null}
                   </section>
 
                   {/* Programme */}
