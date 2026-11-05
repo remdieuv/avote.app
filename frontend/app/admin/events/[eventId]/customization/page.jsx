@@ -2131,9 +2131,11 @@ export function EventCustomizationEditor({ mode = "live" }) {
                           }
                           style={{ display: "none" }}
                           onChange={(e) => {
-                            const files = e.target.files;
+                            // Snapshot avant reset : FileList est live (sinon length → 0).
+                            const raw = e.target.files;
+                            const files = raw?.length ? Array.from(raw) : [];
                             e.target.value = "";
-                            if (files?.length) void addMessagePhotos("intro", files);
+                            if (files.length) void addMessagePhotos("intro", files);
                           }}
                         />
                       </label>
@@ -2459,9 +2461,11 @@ export function EventCustomizationEditor({ mode = "live" }) {
                           }
                           style={{ display: "none" }}
                           onChange={(e) => {
-                            const files = e.target.files;
+                            // Snapshot avant reset : FileList est live (sinon length → 0).
+                            const raw = e.target.files;
+                            const files = raw?.length ? Array.from(raw) : [];
                             e.target.value = "";
-                            if (files?.length)
+                            if (files.length)
                               void addMessagePhotos("thanks", files);
                           }}
                         />

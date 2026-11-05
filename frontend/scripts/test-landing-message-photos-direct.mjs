@@ -92,12 +92,79 @@ test("admin : + Ajouter une photo + Choisir dans la galerie", () => {
   assert.match(customization, /landing\/message-photos\?attach=/);
 });
 
+/**
+ * Non-régression PR #46 : reset input avant snapshot → FileList live vidé,
+ * aucun appel API / aucune miniature.
+ */
+test("onChange messages : Array.from avant reset input (FileList live)", () => {
+  /** @param {"intro"|"thanks"} kind */
+  function extractMessageFileOnChange(kind) {
+    const marker = `addMessagePhotos("${kind}"`;
+    const idx = customization.indexOf(marker);
+    assert.ok(idx > 0, `handler ${kind} introuvable`);
+    const start = customization.lastIndexOf("onChange={(e) => {", idx);
+    assert.ok(start >= 0, `onChange ${kind} introuvable`);
+    const end = customization.indexOf("}}", idx);
+    assert.ok(end > start, `fin onChange ${kind}`);
+    return customization.slice(start, end + 2);
+  }
+
+  for (const kind of /** @type {const} */ (["intro", "thanks"])) {
+    const block = extractMessageFileOnChange(kind);
+    assert.match(block, /Array\.from\(raw\)/);
+    assert.match(block, /e\.target\.value\s*=\s*""/);
+    const arrayPos = block.indexOf("Array.from(raw)");
+    const resetPos = block.indexOf('e.target.value = ""');
+    assert.ok(
+      arrayPos >= 0 && resetPos > arrayPos,
+      `${kind}: Array.from doit précéder le reset value (sinon FileList vide)`,
+    );
+    assert.doesNotMatch(
+      block,
+      /const files = e\.target\.files;\s*\n\s*e\.target\.value = "";/,
+      `${kind}: pattern FileList live non snapshoté interdit`,
+    );
+  }
+
+  // Comportement FileList live (même piège que prod Windows).
+  const live = {
+    _files: [{ name: "a.jpg" }],
+    get files() {
+      return {
+        get length() {
+          return live._files.length;
+        },
+        [Symbol.iterator]() {
+          return live._files[Symbol.iterator]();
+        },
+      };
+    },
+    set value(_v) {
+      live._files = [];
+    },
+  };
+  const brokenRef = live.files;
+  live.value = "";
+  assert.equal(brokenRef.length, 0, "FileList live se vide au reset");
+
+  const raw = [{ name: "b.jpg" }];
+  const snapshot = Array.from(raw);
+  live._files = [];
+  assert.equal(snapshot.length, 1, "Array.from fige les fichiers");
+});
+
 test("indépendance galerie + Fil intact + rendu V3 conservé", () => {
   assert.match(evenement, /landing-evenement-intro/);
   assert.match(evenement, /landing-evenement-thanks/);
   assert.doesNotMatch(evenement, /LandingHybridFeed|onToggleLike/);
   assert.match(feedUi, /Fil de l&apos;événement|Fil de l'événement/);
   assert.match(backend, /showInGallery: false/);
+  assert.match(backend, /filter\(\(p\) => p\.showInGallery !== false\)/);
+  assert.match(customization, /showInGallery: false/);
+  assert.match(customization, /toggleMessagePhoto\("intro"/);
+  assert.match(customization, /toggleMessagePhoto\("thanks"/);
+  assert.match(customization, /removeMessagePhoto\("intro"/);
+  assert.match(customization, /removeMessagePhoto\("thanks"/);
   assert.doesNotMatch(
     customization.slice(
       customization.indexOf("Message de l&apos;organisateur"),
