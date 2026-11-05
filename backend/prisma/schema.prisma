@@ -155,6 +155,15 @@ model Event {
   landingEventDate String?
   landingVenue     String?
   landingHours     String?
+  /** Message organisateur (présentation) — corps multi-paragraphes. */
+  landingIntroTitle String?
+  landingIntroBody  String?
+  /** IDs ordonnés de photos showcase illustrant le message (JSON string[]). */
+  landingIntroPhotoIds Json?
+  /** Message de clôture / remerciements — affiché uniquement après l’événement. */
+  landingThanksTitle String?
+  landingThanksBody  String?
+  landingThanksPhotoIds Json?
   /** Après l’événement : quels types restent visibles dans le fil (défaut = comportement actuel). */
   landingKeepPhotosAfter   Boolean @default(true)
   landingKeepResultsAfter  Boolean @default(true)
