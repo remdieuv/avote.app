@@ -28,6 +28,7 @@
     "test:landing-hybride-v1": "node scripts/test-landing-hybride-v1.mjs",
     "test:landing-fil-admin-centralise": "node scripts/test-landing-fil-admin-centralise.mjs",
     "test:landing-evenement-enrichi": "node scripts/test-landing-evenement-enrichi.mjs",
+    "test:landing-evenement-v2-visuel": "node scripts/test-landing-evenement-v2-visuel.mjs",
     "test:regie-chrono": "node scripts/test-regie-chrono-enabled.mjs",
     "test:regie-quiz-edit": "node scripts/test-regie-quiz-edit.mjs",
     "test:regie-poll-edit-guards": "node scripts/test-regie-poll-edit-guards.mjs",

@@ -92,7 +92,8 @@ test("Likes / delete / orga préservés dans le fil", () => {
 test("Showcase landing aussi branché à la lightbox", () => {
   assert.match(page, /LandingPhotoLightbox/);
   assert.match(page, /showcaseLightboxIndex/);
-  assert.match(page, /ev-landing-showcase-photo-btn/);
+  assert.match(page, /LandingEvenementPresentation/);
+  assert.match(page, /onOpenPhoto/);
 });
 
 test("Admin Landing : bouton Régie à côté Salle live / Landing", () => {

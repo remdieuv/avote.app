@@ -10,6 +10,7 @@ import {
   prepareLandingPhotoForUpload,
 } from "@/lib/compressLandingPhoto";
 import { EventLandingDemoPage } from "@/components/event/EventLandingDemoPage";
+import { LandingEvenementPresentation } from "@/components/event/LandingEvenementPresentation";
 import {
   CameraIcon,
   LandingHybridFeed,
@@ -30,67 +31,6 @@ function mapApiError(body, status) {
   const code = String(body?.error || "").trim();
   const message = typeof body?.message === "string" ? body.message.trim() : "";
   return message || code || `Erreur ${status}`;
-}
-
-/** Photo galerie landing (carrousel ou grille) avec suppression optionnelle. */
-function LandingGalleryPhoto({
-  url,
-  photoId,
-  caption = null,
-  variant,
-  canManage,
-  isDeleting,
-  isExiting,
-  onDelete = () => {},
-  onOpen = null,
-}) {
-  const wrapClass =
-    variant === "slide" ? "ev-gallery-slide" : "ev-gallery-card";
-  const exitingClass = isExiting
-    ? variant === "slide"
-      ? " ev-gallery-slide--exiting"
-      : " ev-gallery-card--exiting"
-    : "";
-  const captionText =
-    typeof caption === "string" && caption.trim() ? caption.trim() : "";
-  return (
-    <div className={`${wrapClass}${exitingClass}`}>
-      <div className="ev-gallery-frame">
-        <figure>
-          {onOpen ? (
-            <button
-              type="button"
-              className="ev-landing-showcase-photo-btn"
-              aria-label="Agrandir la photo"
-              onClick={() => onOpen(photoId)}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt={captionText || ""} loading="lazy" />
-            </button>
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={url} alt={captionText || ""} loading="lazy" />
-          )}
-          {captionText ? (
-            <figcaption className="ev-landing-showcase-caption">
-              {captionText}
-            </figcaption>
-          ) : null}
-        </figure>
-        {canManage ? (
-          <button
-            type="button"
-            className="ev-gallery-delete-btn"
-            disabled={isDeleting}
-            aria-label="Supprimer cette photo"
-            onClick={() => onDelete(photoId)}
-          >
-            {isDeleting ? "…" : "✕"}
-          </button>
-        ) : null}
-      </div>
-    </div>
-  );
 }
 
 /**
@@ -117,9 +57,6 @@ export default function EventLandingPage() {
   const [deletingPhotoId, setDeletingPhotoId] = useState(null);
   const [exitingPhotoId, setExitingPhotoId] = useState(null);
   const fileInputRef = useRef(null);
-  const showcaseScrollRef = useRef(null);
-  const showcaseCarouselRafRef = useRef(0);
-  const [showcaseCarouselIndex, setShowcaseCarouselIndex] = useState(0);
   const [showcaseLightboxIndex, setShowcaseLightboxIndex] = useState(
     /** @type {number | null} */ (null),
   );
@@ -484,75 +421,6 @@ export default function EventLandingPage() {
     [slug, visitorKey],
   );
 
-  const showcasePhotoIdsKey = useMemo(() => {
-    if (!payload || typeof payload !== "object") return "";
-    const ph = Array.isArray(payload.showcasePhotos)
-      ? payload.showcasePhotos
-      : [];
-    return ph.map((p) => String(p?.id ?? "")).join(",");
-  }, [payload]);
-
-  const showcasePhotoCount = useMemo(() => {
-    if (!payload || typeof payload !== "object") return 0;
-    const ph = Array.isArray(payload.showcasePhotos)
-      ? payload.showcasePhotos
-      : [];
-    return ph.length;
-  }, [payload]);
-
-  const updateShowcaseCarouselIndexFromScroll = useCallback(() => {
-    const root = showcaseScrollRef.current;
-    if (!root) return;
-    const slides = root.querySelectorAll(".ev-gallery-slide");
-    if (!slides.length) return;
-    const rootRect = root.getBoundingClientRect();
-    const cs = getComputedStyle(root);
-    const pad =
-      parseFloat(cs.scrollPaddingLeft) || parseFloat(cs.paddingLeft) || 16;
-    const anchor = rootRect.left + pad;
-    let bestI = 0;
-    let bestD = Infinity;
-    slides.forEach((slide, i) => {
-      const r = slide.getBoundingClientRect();
-      const d = Math.abs(r.left - anchor);
-      if (d < bestD) {
-        bestD = d;
-        bestI = i;
-      }
-    });
-    setShowcaseCarouselIndex((prev) => (prev !== bestI ? bestI : prev));
-  }, []);
-
-  useEffect(() => {
-    setShowcaseCarouselIndex(0);
-    const root = showcaseScrollRef.current;
-    if (root) root.scrollLeft = 0;
-  }, [showcasePhotoIdsKey]);
-
-  useEffect(() => {
-    const root = showcaseScrollRef.current;
-    if (!root || showcasePhotoCount < 2) return undefined;
-    const tick = () => {
-      if (showcaseCarouselRafRef.current) return;
-      showcaseCarouselRafRef.current = requestAnimationFrame(() => {
-        showcaseCarouselRafRef.current = 0;
-        updateShowcaseCarouselIndexFromScroll();
-      });
-    };
-    const onScrollEnd = () => updateShowcaseCarouselIndexFromScroll();
-    root.addEventListener("scroll", tick, { passive: true });
-    root.addEventListener("scrollend", onScrollEnd);
-    tick();
-    return () => {
-      root.removeEventListener("scroll", tick);
-      root.removeEventListener("scrollend", onScrollEnd);
-    };
-  }, [
-    showcasePhotoCount,
-    showcasePhotoIdsKey,
-    updateShowcaseCarouselIndexFromScroll,
-  ]);
-
   const accent = useMemo(() => {
     const c = payload?.primaryColor;
     return typeof c === "string" && /^#[0-9A-Fa-f]{6}$/.test(c.trim())
@@ -728,11 +596,6 @@ export default function EventLandingPage() {
     (step) =>
       String(step?.timeLabel || "").trim() && String(step?.title || "").trim(),
   );
-  const showMetaBlock = Boolean(
-    landingEventDate || landingVenue || landingHours,
-  );
-  const showProgramBlock = programItemsList.length > 0;
-  const showGalleryBlock = showcasePhotosList.length > 0;
   const showEvenementSection = shouldShowLandingEvenementSection({
     landingEventDate,
     landingVenue,
@@ -749,10 +612,6 @@ export default function EventLandingPage() {
   const feedItems = Array.isArray(payload.feed) ? payload.feed : [];
   const showFeedBlock = feedItems.length > 0 || canUploadLanding;
 
-  const showcaseEyebrow = afterLive
-    ? "Souvenirs"
-    : "Présentation";
-  const showcaseTitle = "L'événement";
   const showcaseLead = afterLive
     ? "Retrouvez l'ambiance et les temps forts de l'événement."
     : "Découvrez l'ambiance et les temps forts de l'événement.";
@@ -1420,242 +1279,21 @@ export default function EventLandingPage() {
         }}
       >
         {showEvenementSection ? (
-          <section
-            className="ev-landing-gallery-section"
-            data-testid="landing-evenement-section"
-            style={{
-              marginBottom: "clamp(1.75rem, 5vw, 2.5rem)",
-              "--ev-accent": accent,
+          <LandingEvenementPresentation
+            accent={accent}
+            lead={showcaseLead}
+            landingEventDate={landingEventDate}
+            landingVenue={landingVenue}
+            landingHours={landingHours}
+            programItems={programItemsList}
+            showcasePhotos={showcasePhotosList}
+            onOpenPhoto={(id) => {
+              const idx = showcaseLightboxPhotos.findIndex(
+                (x) => x.id === String(id),
+              );
+              if (idx >= 0) setShowcaseLightboxIndex(idx);
             }}
-          >
-            <div style={{ marginBottom: "1.15rem" }}>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "0.68rem",
-                  fontWeight: 800,
-                  letterSpacing: "0.2em",
-                  textTransform: "uppercase",
-                  color: "#64748b",
-                }}
-              >
-                {showcaseEyebrow}
-              </p>
-              <h2
-                style={{
-                  margin: "0.35rem 0 0",
-                  fontSize: "clamp(1.45rem, 4vw, 1.85rem)",
-                  fontWeight: 800,
-                  letterSpacing: "-0.03em",
-                  color: "#0f172a",
-                  lineHeight: 1.15,
-                }}
-              >
-                ✨ {showcaseTitle}
-              </h2>
-              <p
-                style={{
-                  margin: "0.4rem 0 0",
-                  fontSize: "0.95rem",
-                  color: "#64748b",
-                  maxWidth: "32rem",
-                  lineHeight: 1.45,
-                }}
-              >
-                {showcaseLead}
-              </p>
-            </div>
-
-            {showMetaBlock ? (
-              <ul
-                data-testid="landing-evenement-meta"
-                style={{
-                  listStyle: "none",
-                  margin: "0 0 1.15rem",
-                  padding: 0,
-                  display: "grid",
-                  gap: "0.45rem",
-                  maxWidth: "36rem",
-                }}
-              >
-                {landingEventDate ? (
-                  <li style={{ fontSize: "0.98rem", color: "#334155", lineHeight: 1.45 }}>
-                    <span style={{ fontWeight: 700, color: "#0f172a" }}>Date · </span>
-                    {landingEventDate}
-                  </li>
-                ) : null}
-                {landingVenue ? (
-                  <li style={{ fontSize: "0.98rem", color: "#334155", lineHeight: 1.45 }}>
-                    <span style={{ fontWeight: 700, color: "#0f172a" }}>Lieu · </span>
-                    {landingVenue}
-                  </li>
-                ) : null}
-                {landingHours ? (
-                  <li style={{ fontSize: "0.98rem", color: "#334155", lineHeight: 1.45 }}>
-                    <span style={{ fontWeight: 700, color: "#0f172a" }}>Horaires · </span>
-                    {landingHours}
-                  </li>
-                ) : null}
-              </ul>
-            ) : null}
-
-            {showProgramBlock ? (
-              <div
-                data-testid="landing-evenement-program"
-                style={{ marginBottom: showGalleryBlock ? "1.25rem" : 0 }}
-              >
-                <p
-                  style={{
-                    margin: "0 0 0.55rem",
-                    fontSize: "0.68rem",
-                    fontWeight: 800,
-                    letterSpacing: "0.16em",
-                    textTransform: "uppercase",
-                    color: "#94a3b8",
-                  }}
-                >
-                  Programme
-                </p>
-                <ol
-                  style={{
-                    listStyle: "none",
-                    margin: 0,
-                    padding: 0,
-                    display: "grid",
-                    gap: "0.45rem",
-                    maxWidth: "40rem",
-                  }}
-                >
-                  {programItemsList.map((step) => (
-                    <li
-                      key={String(step.id || `${step.timeLabel}-${step.title}`)}
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "minmax(4.5rem, auto) 1fr",
-                        gap: "0.75rem",
-                        alignItems: "baseline",
-                        padding: "0.55rem 0",
-                        borderBottom: "1px solid rgba(15,23,42,0.06)",
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontWeight: 750,
-                          fontSize: "0.92rem",
-                          color: accent,
-                          fontVariantNumeric: "tabular-nums",
-                        }}
-                      >
-                        {String(step.timeLabel).trim()}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "0.98rem",
-                          color: "#0f172a",
-                          lineHeight: 1.4,
-                        }}
-                      >
-                        {String(step.title).trim()}
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            ) : null}
-
-            {showGalleryBlock ? (
-              <>
-                <div className="ev-landing-carousel-mobile-wrap">
-                  <div
-                    ref={showcaseScrollRef}
-                    className="ev-landing-gallery-scroll"
-                  >
-                    {showcasePhotosList.map((p) => {
-                      const u =
-                        typeof p?.url === "string"
-                          ? resolveApiAssetUrlNullable(p.url.trim())
-                          : null;
-                      if (!u) return null;
-                      const pid = String(p.id ?? "");
-                      const cap =
-                        typeof p?.caption === "string" && p.caption.trim()
-                          ? p.caption.trim()
-                          : null;
-                      return (
-                        <LandingGalleryPhoto
-                          key={`s-${p.id}`}
-                          url={u}
-                          photoId={pid}
-                          caption={cap}
-                          variant="slide"
-                          canManage={false}
-                          isDeleting={false}
-                          isExiting={false}
-                          onOpen={(id) => {
-                            const idx = showcaseLightboxPhotos.findIndex(
-                              (x) => x.id === String(id),
-                            );
-                            if (idx >= 0) setShowcaseLightboxIndex(idx);
-                          }}
-                        />
-                      );
-                    })}
-                  </div>
-                  {showcasePhotosList.length > 1 ? (
-                    <div className="ev-landing-carousel-progress">
-                      <div className="ev-landing-carousel-dots" aria-hidden="true">
-                        {showcasePhotosList.map((p, i) => (
-                          <span
-                            key={p.id}
-                            className={
-                              i === showcaseCarouselIndex
-                                ? "ev-landing-carousel-dot ev-landing-carousel-dot--active"
-                                : "ev-landing-carousel-dot"
-                            }
-                          />
-                        ))}
-                      </div>
-                      <span className="ev-landing-carousel-fraction">
-                        {showcaseCarouselIndex + 1} / {showcasePhotosList.length}
-                      </span>
-                    </div>
-                  ) : null}
-                </div>
-                <div className="ev-landing-gallery-grid">
-                  {showcasePhotosList.map((p) => {
-                    const u =
-                      typeof p?.url === "string"
-                        ? resolveApiAssetUrlNullable(p.url.trim())
-                        : null;
-                    if (!u) return null;
-                    const pid = String(p.id ?? "");
-                    const cap =
-                      typeof p?.caption === "string" && p.caption.trim()
-                        ? p.caption.trim()
-                        : null;
-                    return (
-                      <LandingGalleryPhoto
-                        key={`sg-${p.id}`}
-                        url={u}
-                        photoId={pid}
-                        caption={cap}
-                        variant="card"
-                        canManage={false}
-                        isDeleting={false}
-                        isExiting={false}
-                        onOpen={(id) => {
-                          const idx = showcaseLightboxPhotos.findIndex(
-                            (x) => x.id === String(id),
-                          );
-                          if (idx >= 0) setShowcaseLightboxIndex(idx);
-                        }}
-                      />
-                    );
-                  })}
-                </div>
-              </>
-            ) : null}
-          </section>
+          />
         ) : null}
 
         <LandingPhotoLightbox

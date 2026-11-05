@@ -29,20 +29,18 @@ function test(name, fn) {
   }
 }
 
-test("showcase pendant : carrousel mobile (pas grille seule)", () => {
-  assert.match(page, /showShowcaseBlock \? \(/);
-  assert.match(page, /ev-landing-gallery-scroll/);
-  assert.match(page, /showcaseScrollRef/);
+test("showcase ✨ : présentation V2 (carte galerie responsive)", () => {
+  assert.match(page, /LandingEvenementPresentation/);
+  assert.match(page, /showEvenementSection/);
   // Plus de branche « livePriority ? grille seule »
   assert.doesNotMatch(page, /Photos & infos/);
   assert.doesNotMatch(page, /showShowcaseBlock && livePriority/);
   assert.doesNotMatch(page, /showShowcaseBlock && !livePriority/);
 });
 
-test("labels après : pas « Avant le live » ; souvenirs / galerie", () => {
+test("labels après : pas « Avant le live » ; lead souvenirs / fil", () => {
   assert.doesNotMatch(page, /Avant le live/);
-  assert.match(page, /Souvenirs/);
-  assert.match(page, /Galerie événement/);
+  assert.match(page, /Retrouvez l'ambiance et les temps forts/);
   assert.match(page, /Live en cours|Événement terminé/);
   // Lot hybride : Moments remplacé par le fil chronologique
   assert.match(page, /LandingHybridFeed/);
@@ -94,8 +92,8 @@ test("infoShowOnFinished exposé API + respecté côté public", () => {
   assert.match(page, /afterLive && !infoShowOnFinished/);
 });
 
-test("vocabulaire public Galerie événement + fil (hybride)", () => {
-  assert.match(page, /Galerie événement/);
+test("vocabulaire public galerie ✨ + fil (hybride)", () => {
+  assert.match(page, /LandingEvenementPresentation/);
   assert.match(page, /Partager une photo|LandingHybridFeed/);
   assert.doesNotMatch(page, /Galerie live/);
 });

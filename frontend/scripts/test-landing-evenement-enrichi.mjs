@@ -218,11 +218,7 @@ test("admin Landing : méta + programme + légendes showcase/Moments", () => {
 
 test("public /e : section ✨ + méta + programme + captions", () => {
   assert.match(page, /shouldShowLandingEvenementSection/);
-  assert.match(page, /landing-evenement-section/);
-  assert.match(page, /landing-evenement-meta/);
-  assert.match(page, /landing-evenement-program/);
-  assert.match(page, /✨ \{showcaseTitle\}/);
-  assert.match(page, /ev-landing-showcase-caption/);
+  assert.match(page, /LandingEvenementPresentation/);
   assert.match(page, /hasLandingComplementaryInfo/);
   assert.match(page, /programItems/);
   // Pas de date/lieu structurés injectés dans le bloc Infos
