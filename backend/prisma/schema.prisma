@@ -198,7 +198,10 @@ model EventLandingProgramItem {
   @@index([eventId, sortOrder, createdAt])
 }
 
-/** Photos « galerie événement » (teaser / ambiance), uniquement depuis customization. */
+/**
+ * Photos landing orga (galerie événement et/ou illustration messages).
+ * showInGallery=false → upload direct message, hors galerie publique.
+ */
 model EventLandingShowcasePhoto {
   id                 String   @id @default(cuid())
   eventId            String
@@ -206,11 +209,14 @@ model EventLandingShowcasePhoto {
   cloudinaryPublicId String?
   /** Légende facultative (orga). */
   caption            String?
+  /** false = photo message-only (pas dans la Galerie de l'événement). */
+  showInGallery      Boolean  @default(true)
   createdAt          DateTime @default(now())
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@index([eventId, createdAt])
+  @@index([eventId, showInGallery])
 }
 
 /** Photos galerie landing (upload organisateur, pas de vidéo V1). */

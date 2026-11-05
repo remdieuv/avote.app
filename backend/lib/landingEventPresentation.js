@@ -148,6 +148,33 @@ function parseStoredLandingPhotoIds(raw) {
 }
 
 /**
+ * Retire un id des listes intro/thanks (sans toucher au fichier).
+ * @param {string[]} ids
+ * @param {string} photoId
+ * @returns {string[]}
+ */
+function removePhotoIdFromList(ids, photoId) {
+  const pid = String(photoId || "").trim();
+  if (!pid || !Array.isArray(ids)) return Array.isArray(ids) ? [...ids] : [];
+  return ids.filter((id) => String(id) !== pid);
+}
+
+/**
+ * @param {{ landingIntroPhotoIds?: unknown; landingThanksPhotoIds?: unknown }} eventLike
+ * @returns {Set<string>}
+ */
+function collectReferencedMessagePhotoIds(eventLike = {}) {
+  const out = new Set();
+  for (const id of parseStoredLandingPhotoIds(eventLike.landingIntroPhotoIds)) {
+    out.add(id);
+  }
+  for (const id of parseStoredLandingPhotoIds(eventLike.landingThanksPhotoIds)) {
+    out.add(id);
+  }
+  return out;
+}
+
+/**
  * @param {{
  *   landingEventDate?: string | null;
  *   landingVenue?: string | null;
@@ -228,6 +255,8 @@ module.exports = {
   normalizeLandingCaption,
   normalizeLandingMessagePhotoIds,
   parseStoredLandingPhotoIds,
+  removePhotoIdFromList,
+  collectReferencedMessagePhotoIds,
   shouldShowLandingEvenementSection,
   hasLandingComplementaryInfo,
   splitLandingMessageParagraphs,

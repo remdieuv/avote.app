@@ -50,6 +50,9 @@ const {
   normalizeLandingCaption,
   normalizeLandingMessagePhotoIds,
   parseStoredLandingPhotoIds,
+  removePhotoIdFromList,
+  collectReferencedMessagePhotoIds,
+  MESSAGE_PHOTOS_MAX,
 } = require("./lib/landingEventPresentation");
 const {
   STATUS_ACTIVE,
@@ -226,8 +229,9 @@ function eventCustomizationJson(event) {
 
 /**
  * Résout des IDs showcase → photos publiques (ordre conservé).
+ * Inclut les photos message-only (showInGallery=false).
  * @param {string[]} ids
- * @param {Array<{ id: string; url: string; caption?: string | null; createdAt?: Date | string }>} showcasePhotos
+ * @param {Array<{ id: string; url: string; caption?: string | null; createdAt?: Date | string; showInGallery?: boolean }>} showcasePhotos
  */
 function resolveLandingMessagePhotos(ids, showcasePhotos) {
   const byId = new Map(
@@ -247,6 +251,93 @@ function resolveLandingMessagePhotos(ids, showcasePhotos) {
     });
   }
   return out;
+}
+
+/**
+ * JSON public/admin d'une photo showcase (galerie ou message-only).
+ * @param {{ id: string; url: string; caption?: string | null; createdAt: Date | string; showInGallery?: boolean }} p
+ */
+function mapShowcasePhotoJson(p) {
+  return {
+    id: p.id,
+    url: absolutizeStoredAssetUrl(p.url),
+    caption:
+      typeof p.caption === "string" && p.caption.trim()
+        ? p.caption.trim()
+        : null,
+    showInGallery: p.showInGallery !== false,
+    createdAt:
+      p.createdAt instanceof Date
+        ? p.createdAt.toISOString()
+        : String(p.createdAt || ""),
+  };
+}
+
+/**
+ * Supprime les photos message-only non référencées par intro/thanks
+ * (ne touche jamais aux photos de galerie ni aux fichiers encore partagés).
+ * @param {string} eventId
+ */
+async function pruneUnreferencedMessageOnlyPhotos(eventId) {
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: {
+      landingIntroPhotoIds: true,
+      landingThanksPhotoIds: true,
+    },
+  });
+  if (!event) return;
+  const referenced = collectReferencedMessagePhotoIds(event);
+  const orphans = await prisma.eventLandingShowcasePhoto.findMany({
+    where: {
+      eventId,
+      showInGallery: false,
+      ...(referenced.size > 0 ? { id: { notIn: [...referenced] } } : {}),
+    },
+  });
+  for (const row of orphans) {
+    await prisma.eventLandingShowcasePhoto.delete({ where: { id: row.id } });
+    void destroyCloudinaryByPublicId(row.cloudinaryPublicId);
+  }
+}
+
+/**
+ * Retire photoId des tableaux intro/thanks de l'événement (association seule).
+ * @param {string} eventId
+ * @param {string} photoId
+ */
+async function scrubPhotoIdFromEventMessages(eventId, photoId) {
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: {
+      landingIntroPhotoIds: true,
+      landingThanksPhotoIds: true,
+    },
+  });
+  if (!event) return;
+  const intro = removePhotoIdFromList(
+    parseStoredLandingPhotoIds(event.landingIntroPhotoIds),
+    photoId,
+  );
+  const thanks = removePhotoIdFromList(
+    parseStoredLandingPhotoIds(event.landingThanksPhotoIds),
+    photoId,
+  );
+  const prevIntro = parseStoredLandingPhotoIds(event.landingIntroPhotoIds);
+  const prevThanks = parseStoredLandingPhotoIds(event.landingThanksPhotoIds);
+  if (
+    intro.join(",") === prevIntro.join(",") &&
+    thanks.join(",") === prevThanks.join(",")
+  ) {
+    return;
+  }
+  await prisma.event.update({
+    where: { id: eventId },
+    data: {
+      landingIntroPhotoIds: intro.length ? intro : null,
+      landingThanksPhotoIds: thanks.length ? thanks : null,
+    },
+  });
 }
 
 const LANDING_MESSAGE_MAX_LEN = 500;
@@ -2446,15 +2537,10 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
           : null,
       createdAt: p.createdAt.toISOString(),
     }));
-    const showcasePhotos = (event.landingShowcasePhotos || []).map((p) => ({
-      id: p.id,
-      url: absolutizeStoredAssetUrl(p.url),
-      caption:
-        typeof p.caption === "string" && p.caption.trim()
-          ? p.caption.trim()
-          : null,
-      createdAt: p.createdAt.toISOString(),
-    }));
+    const allShowcaseRows = event.landingShowcasePhotos || [];
+    const showcasePhotos = allShowcaseRows
+      .filter((p) => p.showInGallery !== false)
+      .map((p) => mapShowcasePhotoJson(p));
     const programItems = sortLandingProgramItems(
       event.landingProgramItems || [],
     ).map((step) => ({
@@ -2613,13 +2699,13 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       landingIntroBody: info.landingIntroBody,
       landingIntroPhotos: resolveLandingMessagePhotos(
         info.landingIntroPhotoIds,
-        event.landingShowcasePhotos || [],
+        allShowcaseRows,
       ),
       landingThanksTitle: info.landingThanksTitle,
       landingThanksBody: info.landingThanksBody,
       landingThanksPhotos: resolveLandingMessagePhotos(
         info.landingThanksPhotoIds,
-        event.landingShowcasePhotos || [],
+        allShowcaseRows,
       ),
       infoSectionTitle: info.infoSectionTitle,
       infoSectionText: info.infoSectionText,
@@ -2759,15 +2845,9 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
             : null,
         createdAt: ph.createdAt.toISOString(),
       })),
-      landingShowcasePhotos: (event.landingShowcasePhotos || []).map((ph) => ({
-        id: ph.id,
-        url: absolutizeStoredAssetUrl(ph.url),
-        caption:
-          typeof ph.caption === "string" && ph.caption.trim()
-            ? ph.caption.trim()
-            : null,
-        createdAt: ph.createdAt.toISOString(),
-      })),
+      landingShowcasePhotos: (event.landingShowcasePhotos || []).map((ph) =>
+        mapShowcasePhotoJson(ph),
+      ),
       landingProgramItems: sortLandingProgramItems(
         event.landingProgramItems || [],
       ).map((step) => ({
@@ -3176,6 +3256,9 @@ app.patch("/events/:eventId/customization", requireAuth, async (req, res) => {
       where: { id: eventId },
       data,
     });
+    if (needsPhotoAllowlist) {
+      await pruneUnreferencedMessageOnlyPhotos(eventId);
+    }
     try {
       io.to(roomPourEvent(event.id)).emit("event:customization_updated", {
         eventId: event.id,
@@ -3661,7 +3744,7 @@ app.delete(
   },
 );
 
-/** Galerie « événement » (teaser) — customization uniquement, max 30. */
+/** Galerie « événement » (teaser) — customization uniquement, max 30 (hors message-only). */
 app.post("/events/:eventId/landing/showcase-photos", requireAuth, async (req, res) => {
   try {
     const { eventId } = req.params;
@@ -3679,7 +3762,7 @@ app.post("/events/:eventId/landing/showcase-photos", requireAuth, async (req, re
       return res.status(400).json({ error: "Fichier manquant (champ file)." });
     }
     const count = await prisma.eventLandingShowcasePhoto.count({
-      where: { eventId },
+      where: { eventId, showInGallery: true },
     });
     if (count >= MAX_EVENT_LANDING_SHOWCASE_PHOTOS) {
       return res.status(400).json({
@@ -3696,13 +3779,103 @@ app.post("/events/:eventId/landing/showcase-photos", requireAuth, async (req, re
         eventId,
         url: uploadResult.secureUrl,
         cloudinaryPublicId: uploadResult.publicId,
+        showInGallery: true,
       },
     });
+    return res.status(201).json(mapShowcasePhotoJson(row));
+  } catch (e) {
+    if (e && typeof e === "object" && e.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({ error: "Fichier trop volumineux (max 5 Mo)." });
+    }
+    console.error(e);
+    return res.status(500).json({ error: e?.message || "Upload impossible." });
+  }
+});
+
+/**
+ * Upload direct dans un message (intro|thanks) — hors galerie événement.
+ * Associe immédiatement la photo au message (sans dupliquer en galerie).
+ */
+app.post("/events/:eventId/landing/message-photos", requireAuth, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const owned = await assertEventOwnedByOrPlatformAdmin(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    const attachRaw = String(req.query.attach || "").toLowerCase().trim();
+    if (attachRaw !== "intro" && attachRaw !== "thanks") {
+      return res.status(400).json({
+        error: "Query attach=intro ou attach=thanks requis.",
+      });
+    }
+    const photoKey =
+      attachRaw === "intro" ? "landingIntroPhotoIds" : "landingThanksPhotoIds";
+
+    await new Promise((resolve, reject) => {
+      uploadMiddleware(req, res, (err) => {
+        if (err) reject(err);
+        else resolve(undefined);
+      });
+    });
+    if (!req.file) {
+      return res.status(400).json({ error: "Fichier manquant (champ file)." });
+    }
+
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        landingIntroPhotoIds: true,
+        landingThanksPhotoIds: true,
+      },
+    });
+    if (!event) {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+    const currentIds = parseStoredLandingPhotoIds(event[photoKey]);
+    if (currentIds.length >= MESSAGE_PHOTOS_MAX) {
+      return res.status(400).json({
+        error: `Maximum ${MESSAGE_PHOTOS_MAX} photos par message.`,
+      });
+    }
+
+    const uploadResult = await uploadImageBufferToCloudinary({
+      buffer: req.file.buffer,
+      eventId,
+      kind: "landing_message_photo",
+    });
+    const row = await prisma.eventLandingShowcasePhoto.create({
+      data: {
+        eventId,
+        url: uploadResult.secureUrl,
+        cloudinaryPublicId: uploadResult.publicId,
+        showInGallery: false,
+      },
+    });
+    const nextIds = [...currentIds, row.id];
+    const updated = await prisma.event.update({
+      where: { id: eventId },
+      data: { [photoKey]: nextIds },
+      select: {
+        landingIntroPhotoIds: true,
+        landingThanksPhotoIds: true,
+      },
+    });
+    try {
+      io.to(roomPourEvent(eventId)).emit("event:customization_updated", {
+        eventId,
+      });
+    } catch (err) {
+      console.error("event:customization_updated", err);
+    }
     return res.status(201).json({
-      id: row.id,
-      url: absolutizeStoredAssetUrl(row.url),
-      caption: null,
-      createdAt: row.createdAt.toISOString(),
+      photo: mapShowcasePhotoJson(row),
+      landingIntroPhotoIds: parseStoredLandingPhotoIds(
+        updated.landingIntroPhotoIds,
+      ),
+      landingThanksPhotoIds: parseStoredLandingPhotoIds(
+        updated.landingThanksPhotoIds,
+      ),
     });
   } catch (e) {
     if (e && typeof e === "object" && e.code === "LIMIT_FILE_SIZE") {
@@ -3746,12 +3919,7 @@ app.patch(
         where: { id: pid },
         data: { caption },
       });
-      return res.json({
-        id: row.id,
-        url: absolutizeStoredAssetUrl(row.url),
-        caption: row.caption,
-        createdAt: row.createdAt.toISOString(),
-      });
+      return res.json(mapShowcasePhotoJson(row));
     } catch (e) {
       console.error(e);
       return res.status(500).json({ error: "Erreur serveur." });
@@ -3779,6 +3947,9 @@ app.delete(
       if (!existing) {
         return res.status(404).json({ error: "Photo introuvable." });
       }
+      // Retrait galerie / suppression explicite : détache des messages sans
+      // laisser d'IDs orphelins, puis supprime le fichier (action volontaire).
+      await scrubPhotoIdFromEventMessages(eventId, pid);
       await prisma.eventLandingShowcasePhoto.delete({ where: { id: pid } });
       void destroyCloudinaryByPublicId(existing.cloudinaryPublicId);
       return res.json({ ok: true });
