@@ -118,11 +118,15 @@ test("layout desktop sticky + mobile tabs CSS", () => {
     page,
     /customization-layout\[data-mobile-panel="preview"\] \.customization-form-col/,
   );
-  // Desktop : colonne stretch + carte sticky (containing block = hauteur formulaire)
+  // Desktop : split-scroll (shell 100dvh, pas de sticky)
+  assert.match(page, /customization-shell/);
   assert.match(page, /customization-preview-col/);
-  assert.match(page, /align-self:\s*stretch/);
-  assert.match(page, /customization-preview-card[\s\S]*?position:\s*sticky/);
-  assert.match(page, /max-height:\s*calc\(100vh/);
+  assert.match(page, /height:\s*100dvh/);
+  assert.match(page, /overflow-y:\s*auto/);
+  assert.doesNotMatch(
+    page,
+    /\.customization-preview-(?:card|col)\s*\{[^}]*position:\s*sticky/s,
+  );
   assert.match(page, /customization-preview-iframe/);
   assert.match(page, /Ouvrir la landing publiée/);
   assert.match(page, /position:\s*static/);

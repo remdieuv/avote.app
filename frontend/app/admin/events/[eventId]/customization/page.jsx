@@ -1486,6 +1486,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
 
   return (
     <main
+      className="customization-shell"
       style={{
         minHeight: "100vh",
         background: "#f1f5f9",
@@ -1520,6 +1521,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
       ) : null}
 
       <div
+        className="customization-shell-inner"
         style={{
           maxWidth: adminContentMaxWidth("workspace"),
           margin: "0 auto",
@@ -1528,7 +1530,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
           width: "100%",
         }}
       >
-        <div style={{ marginBottom: "1.35rem" }}>
+        <div className="customization-page-header" style={{ marginBottom: "1.35rem" }}>
           <Link
             href="/admin/events"
             style={{
@@ -4028,9 +4030,8 @@ export function EventCustomizationEditor({ mode = "live" }) {
             </div>
 
             {/*
-              Colonne stretch (= hauteur du formulaire) + carte sticky à l’intérieur.
-              Sans ce wrapper, sticky sur l’item grille (align-items:start) a un
-              containing block trop bas → l’aperçu décroche et laisse la colonne vide.
+              Desktop : colonne d’aperçu fixe dans la zone de travail (pas de sticky).
+              Le formulaire et l’iframe défilent chacun dans leur panneau.
             */}
             <div className="customization-preview-col">
               <div style={card} className="customization-preview-card">
@@ -4322,7 +4323,6 @@ export function EventCustomizationEditor({ mode = "live" }) {
             0 24px 48px rgba(15, 23, 42, 0.15),
             inset 0 1px 0 rgba(255, 255, 255, 0.06);
           position: relative;
-          /* Taille confortable (équivalente au layout pré-#48). */
           min-height: min(520px, 62vh);
         }
         .customization-preview-notch {
@@ -4362,21 +4362,62 @@ export function EventCustomizationEditor({ mode = "live" }) {
           flex: 0 0 auto;
           margin-top: 0.75rem;
         }
+        /*
+          Desktop ≥901px : deux panneaux de scroll indépendants.
+          Pas de position:sticky — le document ne défile plus ; chaque colonne
+          gère son overflow (formulaire à gauche, iframe à droite).
+        */
         @media (min-width: 901px) {
-          /*
-            Containing block sticky = colonne stretch (hauteur du formulaire).
-            Sticky sur l’item grille direct + align-items:start → boîte trop basse,
-            l’aperçu décroche et laisse la colonne droite vide.
-          */
-          .customization-preview-col {
-            align-self: stretch;
-          }
-          .customization-preview-card {
-            position: sticky;
-            top: 1rem;
-            max-height: calc(100vh - 1rem - 5.25rem);
+          .customization-shell {
+            height: 100dvh;
+            max-height: 100dvh;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
+            padding-bottom: 0 !important;
+          }
+          .customization-shell-inner {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            /* Réserve la barre « Enregistrer » fixe en bas. */
+            padding-bottom: 5.5rem !important;
+          }
+          .customization-page-header {
+            flex: 0 0 auto;
+          }
+          .customization-layout {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: hidden;
+            align-items: stretch !important;
+          }
+          .customization-form-col {
+            min-height: 0;
+            height: 100%;
+            overflow-x: hidden;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            padding-bottom: 0.5rem;
+            -webkit-overflow-scrolling: touch;
+          }
+          .customization-preview-col {
+            min-height: 0;
+            height: 100%;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+          }
+          .customization-preview-card {
+            /* Explicitement non-sticky : panneau fixe dans la zone de travail. */
+            position: static;
+            flex: 1 1 auto;
+            min-height: 0;
+            max-height: none;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
             box-sizing: border-box;
           }
           .customization-preview-header,
@@ -4386,12 +4427,12 @@ export function EventCustomizationEditor({ mode = "live" }) {
           .customization-preview-frame,
           .customization-preview-empty {
             flex: 1 1 auto;
-            /* Garde une hauteur lisible même dans le panneau sticky borné. */
-            min-height: min(520px, calc(100vh - 14rem));
+            min-height: min(420px, 48dvh);
+            height: auto;
           }
           .customization-preview-iframe {
             height: 100%;
-            min-height: min(520px, calc(100vh - 14rem));
+            min-height: min(420px, 48dvh);
           }
         }
         @media (max-width: 900px) {
@@ -4407,13 +4448,21 @@ export function EventCustomizationEditor({ mode = "live" }) {
           .customization-layout[data-mobile-panel="preview"] .customization-form-col {
             display: none;
           }
-          /* Pas d’aperçu flottant / sticky sur smartphone. */
+          /* Mobile : scroll document classique, pas de split viewport. */
+          .customization-shell {
+            height: auto;
+            max-height: none;
+            overflow: visible;
+          }
+          .customization-form-col,
           .customization-preview-col {
-            align-self: auto;
+            height: auto;
+            overflow: visible;
           }
           .customization-preview-card {
             position: static;
             max-height: none;
+            overflow: visible;
           }
           .customization-preview-iframe {
             height: min(420px, 58vh);
