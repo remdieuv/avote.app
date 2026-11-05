@@ -1,10 +1,12 @@
 "use client";
 
 import { resolveApiAssetUrlNullable } from "@/lib/assetUrl";
+import { splitLandingMessageParagraphs } from "@/lib/landingEventPresentation";
 
 /**
- * Présentation visuelle V2 « ✨ L'événement » — méta, programme, galerie.
- * Données / API inchangées ; Fil hors périmètre.
+ * Présentation visuelle V3 « ✨ L'événement » —
+ * méta, message organisateur, programme, galerie, remerciements.
+ * Fil hors périmètre.
  */
 
 function IconCalendar({ color = "#2563eb" }) {
@@ -125,14 +127,145 @@ function MetaCard({ label, value, icon, accent }) {
   );
 }
 
+function normalizeMessagePhotos(photos) {
+  if (!Array.isArray(photos)) return [];
+  const out = [];
+  for (const p of photos) {
+    const url =
+      typeof p?.url === "string"
+        ? resolveApiAssetUrlNullable(p.url.trim())
+        : null;
+    if (!url) continue;
+    out.push({
+      id: String(p.id ?? url),
+      url,
+      caption:
+        typeof p?.caption === "string" && p.caption.trim()
+          ? p.caption.trim()
+          : null,
+    });
+  }
+  return out;
+}
+
+function MessageStoryCard({
+  variant,
+  eyebrow,
+  subtitle,
+  heading,
+  body,
+  photos = [],
+  showFinishedBadge = false,
+  accent,
+  onOpenPhoto,
+  testId,
+}) {
+  const paragraphs = splitLandingMessageParagraphs(body);
+  const media = normalizeMessagePhotos(photos);
+  if (!paragraphs.length && !heading) return null;
+  const isThanks = variant === "thanks";
+  const tone = isThanks ? "#16a34a" : accent;
+  const initial = isThanks ? "♥" : "A";
+
+  return (
+    <article
+      className={
+        isThanks
+          ? "ev-evenement-story ev-evenement-story--thanks"
+          : "ev-evenement-story"
+      }
+      data-testid={testId}
+      style={{ "--ev-story-tone": tone }}
+    >
+      <header className="ev-evenement-story-header">
+        <div className="ev-evenement-story-brand">
+          <span
+            className="ev-evenement-story-avatar"
+            style={{ background: tone }}
+            aria-hidden="true"
+          >
+            {initial}
+          </span>
+          <span>
+            <span className="ev-evenement-story-eyebrow">{eyebrow}</span>
+            {subtitle ? (
+              <span className="ev-evenement-story-subtitle">{subtitle}</span>
+            ) : null}
+          </span>
+        </div>
+        {showFinishedBadge ? (
+          <span
+            className="ev-evenement-story-badge"
+            style={{
+              color: tone,
+              background: `color-mix(in srgb, ${tone} 12%, #fff)`,
+            }}
+          >
+            ✓ Événement terminé
+          </span>
+        ) : null}
+      </header>
+      <div
+        className={
+          media.length > 0
+            ? "ev-evenement-story-grid"
+            : "ev-evenement-story-grid ev-evenement-story-grid--text-only"
+        }
+      >
+        <div className="ev-evenement-story-copy">
+          {heading ? (
+            <h3 className="ev-evenement-story-heading">{heading}</h3>
+          ) : null}
+          {paragraphs.map((p, i) => (
+            <p key={`p-${i}`} className="ev-evenement-story-p">
+              {p}
+            </p>
+          ))}
+        </div>
+        {media.length > 0 ? (
+          <div
+            className={`ev-evenement-story-media ev-evenement-story-media--${Math.min(media.length, 3)}`}
+          >
+            {media.map((p) => (
+              <figure key={p.id} className="ev-evenement-story-figure">
+                <button
+                  type="button"
+                  className="ev-evenement-story-photo-btn"
+                  aria-label="Agrandir la photo"
+                  onClick={() => onOpenPhoto?.(p.id)}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={p.url} alt={p.caption || ""} loading="lazy" />
+                </button>
+                {p.caption ? (
+                  <figcaption className="ev-evenement-gallery-caption">
+                    {p.caption}
+                  </figcaption>
+                ) : null}
+              </figure>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
 /**
  * @param {{
  *   accent: string;
  *   title?: string;
  *   lead: string;
+ *   afterLive?: boolean;
  *   landingEventDate?: string;
  *   landingVenue?: string;
  *   landingHours?: string;
+ *   introTitle?: string;
+ *   introBody?: string;
+ *   introPhotos?: Array<{ id?: string; url?: string; caption?: string | null }>;
+ *   thanksTitle?: string;
+ *   thanksBody?: string;
+ *   thanksPhotos?: Array<{ id?: string; url?: string; caption?: string | null }>;
  *   programItems?: Array<{ id?: string; timeLabel?: string; title?: string }>;
  *   showcasePhotos?: Array<{ id?: string; url?: string; caption?: string | null }>;
  *   onOpenPhoto?: (photoId: string) => void;
@@ -142,9 +275,16 @@ export function LandingEvenementPresentation({
   accent,
   title = "L'événement",
   lead,
+  afterLive = false,
   landingEventDate = "",
   landingVenue = "",
   landingHours = "",
+  introTitle = "",
+  introBody = "",
+  introPhotos = [],
+  thanksTitle = "",
+  thanksBody = "",
+  thanksPhotos = [],
   programItems = [],
   showcasePhotos = [],
   onOpenPhoto,
@@ -153,28 +293,13 @@ export function LandingEvenementPresentation({
     landingEventDate || landingVenue || landingHours,
   );
   const showProgram = Array.isArray(programItems) && programItems.length > 0;
-  const photoEntries = Array.isArray(showcasePhotos)
-    ? showcasePhotos
-        .map((p) => {
-          const url =
-            typeof p?.url === "string"
-              ? resolveApiAssetUrlNullable(p.url.trim())
-              : null;
-          if (!url) return null;
-          const caption =
-            typeof p?.caption === "string" && p.caption.trim()
-              ? p.caption.trim()
-              : null;
-          return {
-            id: String(p.id ?? url),
-            url,
-            caption,
-          };
-        })
-        .filter(Boolean)
-    : [];
+  const photoEntries = normalizeMessagePhotos(showcasePhotos);
   const showGallery = photoEntries.length > 0;
-  if (!showMeta && !showProgram && !showGallery) return null;
+  const showIntro = Boolean(String(introBody || "").trim());
+  const showThanks = afterLive && Boolean(String(thanksBody || "").trim());
+  if (!showMeta && !showProgram && !showGallery && !showIntro && !showThanks) {
+    return null;
+  }
 
   const metaCount =
     Number(Boolean(landingEventDate)) +
@@ -218,6 +343,21 @@ export function LandingEvenementPresentation({
             icon={<IconClock color={accent} />}
           />
         </ul>
+      ) : null}
+
+      {showIntro ? (
+        <MessageStoryCard
+          variant="intro"
+          eyebrow="Message de l'organisateur"
+          subtitle="Présentation de l'événement"
+          heading={introTitle}
+          body={introBody}
+          photos={introPhotos}
+          showFinishedBadge={afterLive}
+          accent={accent}
+          onOpenPhoto={onOpenPhoto}
+          testId="landing-evenement-intro"
+        />
       ) : null}
 
       {showProgram || showGallery ? (
@@ -321,9 +461,149 @@ export function LandingEvenementPresentation({
         </div>
       ) : null}
 
+      {showThanks ? (
+        <MessageStoryCard
+          variant="thanks"
+          eyebrow="Merci à tous !"
+          subtitle="Message de clôture et remerciements"
+          heading={thanksTitle}
+          body={thanksBody}
+          photos={thanksPhotos}
+          showFinishedBadge
+          accent={accent}
+          onOpenPhoto={onOpenPhoto}
+          testId="landing-evenement-thanks"
+        />
+      ) : null}
+
       <style>{`
         .ev-evenement-v2 {
           margin-bottom: clamp(1.75rem, 5vw, 2.5rem);
+        }
+        .ev-evenement-story {
+          margin: 0 0 1.1rem;
+          background: #fff;
+          border-radius: 18px;
+          border: 1px solid rgba(15, 23, 42, 0.05);
+          box-shadow: 0 12px 32px rgba(15, 23, 42, 0.05);
+          padding: 1.1rem 1.15rem 1.2rem;
+          box-sizing: border-box;
+        }
+        .ev-evenement-story-header {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.65rem 1rem;
+          margin-bottom: 0.95rem;
+        }
+        .ev-evenement-story-brand {
+          display: flex;
+          align-items: center;
+          gap: 0.7rem;
+          min-width: 0;
+        }
+        .ev-evenement-story-avatar {
+          width: 2.35rem;
+          height: 2.35rem;
+          border-radius: 999px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: #fff;
+          font-weight: 800;
+          font-size: 0.95rem;
+          flex: 0 0 auto;
+        }
+        .ev-evenement-story-eyebrow {
+          display: block;
+          font-size: 0.98rem;
+          font-weight: 800;
+          color: #0f172a;
+          letter-spacing: -0.02em;
+        }
+        .ev-evenement-story-subtitle {
+          display: block;
+          margin-top: 0.12rem;
+          font-size: 0.78rem;
+          color: #94a3b8;
+          font-weight: 550;
+        }
+        .ev-evenement-story-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.25rem;
+          padding: 0.3rem 0.65rem;
+          border-radius: 999px;
+          font-size: 0.75rem;
+          font-weight: 700;
+          white-space: nowrap;
+        }
+        .ev-evenement-story-grid {
+          display: grid;
+          gap: 1rem;
+        }
+        @media (min-width: 860px) {
+          .ev-evenement-story-grid:not(.ev-evenement-story-grid--text-only) {
+            grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.95fr);
+            align-items: start;
+          }
+        }
+        .ev-evenement-story-heading {
+          margin: 0 0 0.55rem;
+          font-size: clamp(1.05rem, 2.4vw, 1.2rem);
+          font-weight: 800;
+          color: #0f172a;
+          letter-spacing: -0.02em;
+          line-height: 1.3;
+        }
+        .ev-evenement-story-p {
+          margin: 0 0 0.7rem;
+          font-size: 0.95rem;
+          line-height: 1.6;
+          color: #475569;
+          white-space: pre-wrap;
+        }
+        .ev-evenement-story-p:last-child {
+          margin-bottom: 0;
+        }
+        .ev-evenement-story-media {
+          display: grid;
+          gap: 0.65rem;
+          min-width: 0;
+        }
+        .ev-evenement-story-media--2,
+        .ev-evenement-story-media--3 {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .ev-evenement-story-media--1 {
+          grid-template-columns: 1fr;
+        }
+        .ev-evenement-story-figure {
+          margin: 0;
+          min-width: 0;
+        }
+        .ev-evenement-story-photo-btn {
+          display: block;
+          width: 100%;
+          padding: 0;
+          margin: 0;
+          border: none;
+          background: transparent;
+          cursor: zoom-in;
+          border-radius: 14px;
+          overflow: hidden;
+          aspect-ratio: 4 / 3;
+          box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+        }
+        .ev-evenement-story-media--1 .ev-evenement-story-photo-btn {
+          aspect-ratio: 16 / 10;
+        }
+        .ev-evenement-story-photo-btn img {
+          display: block;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
         }
         .ev-evenement-v2-header {
           margin-bottom: 1.15rem;

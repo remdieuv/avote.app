@@ -26,8 +26,12 @@ import {
   LANDING_META_DATE_MAX,
   LANDING_META_HOURS_MAX,
   LANDING_META_VENUE_MAX,
+  LANDING_MESSAGE_BODY_MAX,
+  LANDING_MESSAGE_PHOTOS_MAX,
+  LANDING_MESSAGE_TITLE_MAX,
   LANDING_PROGRAM_TIME_MAX,
   LANDING_PROGRAM_TITLE_MAX,
+  parseLandingMessagePhotoIds,
   sortLandingProgramItems,
 } from "@/lib/landingEventPresentation";
 
@@ -277,6 +281,16 @@ export function EventCustomizationEditor({ mode = "live" }) {
   const [landingEventDate, setLandingEventDate] = useState("");
   const [landingVenue, setLandingVenue] = useState("");
   const [landingHours, setLandingHours] = useState("");
+  const [landingIntroTitle, setLandingIntroTitle] = useState("");
+  const [landingIntroBody, setLandingIntroBody] = useState("");
+  const [landingIntroPhotoIds, setLandingIntroPhotoIds] = useState(
+    /** @type {string[]} */ ([]),
+  );
+  const [landingThanksTitle, setLandingThanksTitle] = useState("");
+  const [landingThanksBody, setLandingThanksBody] = useState("");
+  const [landingThanksPhotoIds, setLandingThanksPhotoIds] = useState(
+    /** @type {string[]} */ ([]),
+  );
   const [landingKeepPhotosAfter, setLandingKeepPhotosAfter] = useState(true);
   const [landingKeepResultsAfter, setLandingKeepResultsAfter] = useState(true);
   const [landingKeepMessagesAfter, setLandingKeepMessagesAfter] =
@@ -419,6 +433,14 @@ export function EventCustomizationEditor({ mode = "live" }) {
         landingEventDate !== baseline.landingEventDate ||
         landingVenue !== baseline.landingVenue ||
         landingHours !== baseline.landingHours ||
+        landingIntroTitle !== baseline.landingIntroTitle ||
+        landingIntroBody !== baseline.landingIntroBody ||
+        landingIntroPhotoIds.join(",") !==
+          (baseline.landingIntroPhotoIds || []).join(",") ||
+        landingThanksTitle !== baseline.landingThanksTitle ||
+        landingThanksBody !== baseline.landingThanksBody ||
+        landingThanksPhotoIds.join(",") !==
+          (baseline.landingThanksPhotoIds || []).join(",") ||
         landingKeepPhotosAfter !== baseline.landingKeepPhotosAfter ||
         landingKeepResultsAfter !== baseline.landingKeepResultsAfter ||
         landingKeepMessagesAfter !== baseline.landingKeepMessagesAfter
@@ -464,6 +486,12 @@ export function EventCustomizationEditor({ mode = "live" }) {
     landingEventDate,
     landingVenue,
     landingHours,
+    landingIntroTitle,
+    landingIntroBody,
+    landingIntroPhotoIds,
+    landingThanksTitle,
+    landingThanksBody,
+    landingThanksPhotoIds,
     landingKeepPhotosAfter,
     landingKeepResultsAfter,
     landingKeepMessagesAfter,
@@ -551,6 +579,18 @@ export function EventCustomizationEditor({ mode = "live" }) {
         typeof data.landingVenue === "string" ? data.landingVenue : "";
       const lhours =
         typeof data.landingHours === "string" ? data.landingHours : "";
+      const lintTitle =
+        typeof data.landingIntroTitle === "string" ? data.landingIntroTitle : "";
+      const lintBody =
+        typeof data.landingIntroBody === "string" ? data.landingIntroBody : "";
+      const lintPhotos = parseLandingMessagePhotoIds(data.landingIntroPhotoIds);
+      const lthTitle =
+        typeof data.landingThanksTitle === "string"
+          ? data.landingThanksTitle
+          : "";
+      const lthBody =
+        typeof data.landingThanksBody === "string" ? data.landingThanksBody : "";
+      const lthPhotos = parseLandingMessagePhotoIds(data.landingThanksPhotoIds);
       const keepPhotos =
         typeof data.landingKeepPhotosAfter === "boolean"
           ? data.landingKeepPhotosAfter
@@ -605,6 +645,12 @@ export function EventCustomizationEditor({ mode = "live" }) {
       setLandingEventDate(ldate);
       setLandingVenue(lvenue);
       setLandingHours(lhours);
+      setLandingIntroTitle(lintTitle);
+      setLandingIntroBody(lintBody);
+      setLandingIntroPhotoIds(lintPhotos);
+      setLandingThanksTitle(lthTitle);
+      setLandingThanksBody(lthBody);
+      setLandingThanksPhotoIds(lthPhotos);
       setLandingKeepPhotosAfter(keepPhotos);
       setLandingKeepResultsAfter(keepResults);
       setLandingKeepMessagesAfter(keepMessages);
@@ -714,6 +760,12 @@ export function EventCustomizationEditor({ mode = "live" }) {
         landingEventDate: ldate,
         landingVenue: lvenue,
         landingHours: lhours,
+        landingIntroTitle: lintTitle,
+        landingIntroBody: lintBody,
+        landingIntroPhotoIds: lintPhotos,
+        landingThanksTitle: lthTitle,
+        landingThanksBody: lthBody,
+        landingThanksPhotoIds: lthPhotos,
         landingKeepPhotosAfter: keepPhotos,
         landingKeepResultsAfter: keepResults,
         landingKeepMessagesAfter: keepMessages,
@@ -838,6 +890,30 @@ export function EventCustomizationEditor({ mode = "live" }) {
           landingHours.trim() === ""
             ? null
             : landingHours.trim().slice(0, LANDING_META_HOURS_MAX),
+        landingIntroTitle:
+          landingIntroTitle.trim() === ""
+            ? null
+            : landingIntroTitle.trim().slice(0, LANDING_MESSAGE_TITLE_MAX),
+        landingIntroBody:
+          landingIntroBody.trim() === ""
+            ? null
+            : landingIntroBody.trim().slice(0, LANDING_MESSAGE_BODY_MAX),
+        landingIntroPhotoIds:
+          landingIntroPhotoIds.length > 0
+            ? landingIntroPhotoIds.slice(0, LANDING_MESSAGE_PHOTOS_MAX)
+            : null,
+        landingThanksTitle:
+          landingThanksTitle.trim() === ""
+            ? null
+            : landingThanksTitle.trim().slice(0, LANDING_MESSAGE_TITLE_MAX),
+        landingThanksBody:
+          landingThanksBody.trim() === ""
+            ? null
+            : landingThanksBody.trim().slice(0, LANDING_MESSAGE_BODY_MAX),
+        landingThanksPhotoIds:
+          landingThanksPhotoIds.length > 0
+            ? landingThanksPhotoIds.slice(0, LANDING_MESSAGE_PHOTOS_MAX)
+            : null,
         landingKeepPhotosAfter: Boolean(landingKeepPhotosAfter),
         landingKeepResultsAfter: Boolean(landingKeepResultsAfter),
         landingKeepMessagesAfter: Boolean(landingKeepMessagesAfter),
@@ -894,6 +970,12 @@ export function EventCustomizationEditor({ mode = "live" }) {
         landingEventDate: landingEventDate.trim(),
         landingVenue: landingVenue.trim(),
         landingHours: landingHours.trim(),
+        landingIntroTitle: landingIntroTitle.trim(),
+        landingIntroBody: landingIntroBody.trim(),
+        landingIntroPhotoIds: [...landingIntroPhotoIds],
+        landingThanksTitle: landingThanksTitle.trim(),
+        landingThanksBody: landingThanksBody.trim(),
+        landingThanksPhotoIds: [...landingThanksPhotoIds],
         landingKeepPhotosAfter: Boolean(landingKeepPhotosAfter),
         landingKeepResultsAfter: Boolean(landingKeepResultsAfter),
         landingKeepMessagesAfter: Boolean(landingKeepMessagesAfter),
@@ -904,6 +986,16 @@ export function EventCustomizationEditor({ mode = "live" }) {
     } finally {
       setSaving(false);
     }
+  }
+
+  function toggleMessagePhoto(kind, photoId) {
+    const setter =
+      kind === "intro" ? setLandingIntroPhotoIds : setLandingThanksPhotoIds;
+    setter((prev) => {
+      if (prev.includes(photoId)) return prev.filter((id) => id !== photoId);
+      if (prev.length >= LANDING_MESSAGE_PHOTOS_MAX) return prev;
+      return [...prev, photoId];
+    });
   }
 
   function clearLogo() {
@@ -977,6 +1069,8 @@ export function EventCustomizationEditor({ mode = "live" }) {
         delete next[photoId];
         return next;
       });
+      setLandingIntroPhotoIds((prev) => prev.filter((id) => id !== photoId));
+      setLandingThanksPhotoIds((prev) => prev.filter((id) => id !== photoId));
       setToast("Photo retirée de la galerie événement");
       window.setTimeout(() => setToast(null), 2200);
       bumpLandingPreview();
@@ -1808,7 +1902,279 @@ export function EventCustomizationEditor({ mode = "live" }) {
                     />
                   </section>
 
-                  {/* 3. Programme */}
+                  {/* Message organisateur */}
+                  <section style={card}>
+                    <h2
+                      style={{
+                        margin: "0 0 0.45rem",
+                        fontSize: "0.72rem",
+                        fontWeight: 800,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "#64748b",
+                      }}
+                    >
+                      Message de l&apos;organisateur
+                    </h2>
+                    <p style={{ ...fieldHintStyle, margin: "0 0 0.65rem" }}>
+                      Présentation libre (plusieurs paragraphes). Visible avant,
+                      pendant et après. Illustrations = photos de la galerie
+                      événement (pas de nouvel upload).
+                    </p>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: "#475569",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Titre (facultatif)
+                    </label>
+                    <input
+                      type="text"
+                      value={landingIntroTitle}
+                      maxLength={LANDING_MESSAGE_TITLE_MAX}
+                      onChange={(e) => setLandingIntroTitle(e.target.value)}
+                      placeholder="Ex. Un grand rendez-vous à ne pas manquer"
+                      style={{
+                        width: "100%",
+                        boxSizing: "border-box",
+                        padding: "0.5rem 0.65rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.88rem",
+                        marginBottom: "0.75rem",
+                      }}
+                    />
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: "#475569",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Texte
+                    </label>
+                    <textarea
+                      value={landingIntroBody}
+                      maxLength={LANDING_MESSAGE_BODY_MAX}
+                      rows={5}
+                      onChange={(e) => setLandingIntroBody(e.target.value)}
+                      placeholder={
+                        "Séparez les paragraphes par une ligne vide.\n\nEx. Venez partager un moment unique…"
+                      }
+                      style={{
+                        width: "100%",
+                        boxSizing: "border-box",
+                        padding: "0.55rem 0.65rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.88rem",
+                        resize: "vertical",
+                        fontFamily: "inherit",
+                        marginBottom: "0.65rem",
+                      }}
+                    />
+                    <p style={{ ...fieldHintStyle, margin: "0 0 0.45rem" }}>
+                      Photos d&apos;illustration ({landingIntroPhotoIds.length}/
+                      {LANDING_MESSAGE_PHOTOS_MAX}) — cocher dans la galerie
+                      ci-dessous.
+                    </p>
+                    {showcasePhotos.length === 0 ? (
+                      <p style={{ ...fieldHintStyle, margin: 0 }}>
+                        Ajoutez d&apos;abord des photos à la galerie événement.
+                      </p>
+                    ) : (
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns:
+                            "repeat(auto-fill, minmax(72px, 1fr))",
+                          gap: "0.45rem",
+                        }}
+                      >
+                        {showcasePhotos.map((ph) => {
+                          const selected = landingIntroPhotoIds.includes(ph.id);
+                          return (
+                            <button
+                              key={`intro-${ph.id}`}
+                              type="button"
+                              onClick={() => toggleMessagePhoto("intro", ph.id)}
+                              aria-pressed={selected}
+                              title={
+                                selected
+                                  ? "Retirer du message"
+                                  : "Illustrer le message"
+                              }
+                              style={{
+                                position: "relative",
+                                padding: 0,
+                                borderRadius: "10px",
+                                overflow: "hidden",
+                                border: selected
+                                  ? "2px solid #2563eb"
+                                  : "1px solid #e2e8f0",
+                                aspectRatio: "1",
+                                cursor: "pointer",
+                                background: "#f8fafc",
+                              }}
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={ph.url}
+                                alt=""
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  objectFit: "cover",
+                                  display: "block",
+                                }}
+                              />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </section>
+
+                  {/* Remerciements */}
+                  <section style={card}>
+                    <h2
+                      style={{
+                        margin: "0 0 0.45rem",
+                        fontSize: "0.72rem",
+                        fontWeight: 800,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "#64748b",
+                      }}
+                    >
+                      Message de remerciement
+                    </h2>
+                    <p style={{ ...fieldHintStyle, margin: "0 0 0.65rem" }}>
+                      Facultatif. Rédigeable à tout moment ; affiché
+                      automatiquement uniquement lorsque l&apos;événement est
+                      terminé. Bloc masqué si vide.
+                    </p>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: "#475569",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Titre (facultatif)
+                    </label>
+                    <input
+                      type="text"
+                      value={landingThanksTitle}
+                      maxLength={LANDING_MESSAGE_TITLE_MAX}
+                      onChange={(e) => setLandingThanksTitle(e.target.value)}
+                      placeholder="Ex. Un immense merci à tous les participants !"
+                      style={{
+                        width: "100%",
+                        boxSizing: "border-box",
+                        padding: "0.5rem 0.65rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.88rem",
+                        marginBottom: "0.75rem",
+                      }}
+                    />
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: "#475569",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Texte
+                    </label>
+                    <textarea
+                      value={landingThanksBody}
+                      maxLength={LANDING_MESSAGE_BODY_MAX}
+                      rows={4}
+                      onChange={(e) => setLandingThanksBody(e.target.value)}
+                      placeholder="Merci à tous pour cette belle soirée…"
+                      style={{
+                        width: "100%",
+                        boxSizing: "border-box",
+                        padding: "0.55rem 0.65rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.88rem",
+                        resize: "vertical",
+                        fontFamily: "inherit",
+                        marginBottom: "0.65rem",
+                      }}
+                    />
+                    <p style={{ ...fieldHintStyle, margin: "0 0 0.45rem" }}>
+                      Photos d&apos;illustration ({landingThanksPhotoIds.length}/
+                      {LANDING_MESSAGE_PHOTOS_MAX}).
+                    </p>
+                    {showcasePhotos.length === 0 ? (
+                      <p style={{ ...fieldHintStyle, margin: 0 }}>
+                        Ajoutez d&apos;abord des photos à la galerie événement.
+                      </p>
+                    ) : (
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns:
+                            "repeat(auto-fill, minmax(72px, 1fr))",
+                          gap: "0.45rem",
+                        }}
+                      >
+                        {showcasePhotos.map((ph) => {
+                          const selected = landingThanksPhotoIds.includes(ph.id);
+                          return (
+                            <button
+                              key={`thanks-${ph.id}`}
+                              type="button"
+                              onClick={() =>
+                                toggleMessagePhoto("thanks", ph.id)
+                              }
+                              aria-pressed={selected}
+                              style={{
+                                position: "relative",
+                                padding: 0,
+                                borderRadius: "10px",
+                                overflow: "hidden",
+                                border: selected
+                                  ? "2px solid #16a34a"
+                                  : "1px solid #e2e8f0",
+                                aspectRatio: "1",
+                                cursor: "pointer",
+                                background: "#f8fafc",
+                              }}
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={ph.url}
+                                alt=""
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  objectFit: "cover",
+                                  display: "block",
+                                }}
+                              />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </section>
+
+                  {/* Programme */}
                   <section style={card}>
                     <div
                       style={{

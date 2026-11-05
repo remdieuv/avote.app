@@ -42,10 +42,14 @@ const {
   META_VENUE_MAX,
   META_HOURS_MAX,
   PROGRAM_MAX_ITEMS,
+  MESSAGE_TITLE_MAX,
+  MESSAGE_BODY_MAX,
   programSortOrderFromTimeLabel,
   sortLandingProgramItems,
   normalizeOptionalBoundedText,
   normalizeLandingCaption,
+  normalizeLandingMessagePhotoIds,
+  parseStoredLandingPhotoIds,
 } = require("./lib/landingEventPresentation");
 const {
   STATUS_ACTIVE,
@@ -170,6 +174,12 @@ function eventCustomizationJson(event) {
       landingEventDate: null,
       landingVenue: null,
       landingHours: null,
+      landingIntroTitle: null,
+      landingIntroBody: null,
+      landingIntroPhotoIds: [],
+      landingThanksTitle: null,
+      landingThanksBody: null,
+      landingThanksPhotoIds: [],
       landingKeepPhotosAfter: true,
       landingKeepResultsAfter: true,
       landingKeepMessagesAfter: true,
@@ -200,10 +210,43 @@ function eventCustomizationJson(event) {
     landingEventDate: event.landingEventDate ?? null,
     landingVenue: event.landingVenue ?? null,
     landingHours: event.landingHours ?? null,
+    landingIntroTitle: event.landingIntroTitle ?? null,
+    landingIntroBody: event.landingIntroBody ?? null,
+    landingIntroPhotoIds: parseStoredLandingPhotoIds(event.landingIntroPhotoIds),
+    landingThanksTitle: event.landingThanksTitle ?? null,
+    landingThanksBody: event.landingThanksBody ?? null,
+    landingThanksPhotoIds: parseStoredLandingPhotoIds(
+      event.landingThanksPhotoIds,
+    ),
     landingKeepPhotosAfter: event.landingKeepPhotosAfter !== false,
     landingKeepResultsAfter: event.landingKeepResultsAfter !== false,
     landingKeepMessagesAfter: event.landingKeepMessagesAfter !== false,
   };
+}
+
+/**
+ * Résout des IDs showcase → photos publiques (ordre conservé).
+ * @param {string[]} ids
+ * @param {Array<{ id: string; url: string; caption?: string | null; createdAt?: Date | string }>} showcasePhotos
+ */
+function resolveLandingMessagePhotos(ids, showcasePhotos) {
+  const byId = new Map(
+    (showcasePhotos || []).map((p) => [String(p.id), p]),
+  );
+  const out = [];
+  for (const id of ids || []) {
+    const p = byId.get(String(id));
+    if (!p) continue;
+    out.push({
+      id: String(p.id),
+      url: absolutizeStoredAssetUrl(p.url),
+      caption:
+        typeof p.caption === "string" && p.caption.trim()
+          ? p.caption.trim()
+          : null,
+    });
+  }
+  return out;
 }
 
 const LANDING_MESSAGE_MAX_LEN = 500;
@@ -1812,6 +1855,13 @@ app.post("/events/:eventId/duplicate", requireAuth, async (req, res) => {
           landingEventDate: source.landingEventDate ?? null,
           landingVenue: source.landingVenue ?? null,
           landingHours: source.landingHours ?? null,
+          landingIntroTitle: source.landingIntroTitle ?? null,
+          landingIntroBody: source.landingIntroBody ?? null,
+          /** Photos showcase non recopiées → pas d’IDs orphelins. */
+          landingIntroPhotoIds: undefined,
+          landingThanksTitle: source.landingThanksTitle ?? null,
+          landingThanksBody: source.landingThanksBody ?? null,
+          landingThanksPhotoIds: undefined,
           landingKeepPhotosAfter: source.landingKeepPhotosAfter !== false,
           landingKeepResultsAfter: source.landingKeepResultsAfter !== false,
           landingKeepMessagesAfter: source.landingKeepMessagesAfter !== false,
@@ -2559,6 +2609,18 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       landingEventDate: info.landingEventDate,
       landingVenue: info.landingVenue,
       landingHours: info.landingHours,
+      landingIntroTitle: info.landingIntroTitle,
+      landingIntroBody: info.landingIntroBody,
+      landingIntroPhotos: resolveLandingMessagePhotos(
+        info.landingIntroPhotoIds,
+        event.landingShowcasePhotos || [],
+      ),
+      landingThanksTitle: info.landingThanksTitle,
+      landingThanksBody: info.landingThanksBody,
+      landingThanksPhotos: resolveLandingMessagePhotos(
+        info.landingThanksPhotoIds,
+        event.landingShowcasePhotos || [],
+      ),
       infoSectionTitle: info.infoSectionTitle,
       infoSectionText: info.infoSectionText,
       infoPrimaryCtaLabel: info.infoPrimaryCtaLabel,
@@ -3070,6 +3132,10 @@ app.patch("/events/:eventId/customization", requireAuth, async (req, res) => {
       ["landingEventDate", META_DATE_MAX],
       ["landingVenue", META_VENUE_MAX],
       ["landingHours", META_HOURS_MAX],
+      ["landingIntroTitle", MESSAGE_TITLE_MAX],
+      ["landingIntroBody", MESSAGE_BODY_MAX],
+      ["landingThanksTitle", MESSAGE_TITLE_MAX],
+      ["landingThanksBody", MESSAGE_BODY_MAX],
     ]) {
       if (!Object.prototype.hasOwnProperty.call(body, metaKey)) continue;
       const normalized = normalizeOptionalBoundedText(body[metaKey], maxLen);
@@ -3077,6 +3143,29 @@ app.patch("/events/:eventId/customization", requireAuth, async (req, res) => {
         return res.status(400).json({ error: `${metaKey} invalide.` });
       }
       data[metaKey] = normalized;
+    }
+
+    const needsPhotoAllowlist =
+      Object.prototype.hasOwnProperty.call(body, "landingIntroPhotoIds") ||
+      Object.prototype.hasOwnProperty.call(body, "landingThanksPhotoIds");
+    let showcaseAllowIds = null;
+    if (needsPhotoAllowlist) {
+      const showcaseRows = await prisma.eventLandingShowcasePhoto.findMany({
+        where: { eventId },
+        select: { id: true },
+      });
+      showcaseAllowIds = new Set(showcaseRows.map((r) => String(r.id)));
+    }
+    for (const photoKey of ["landingIntroPhotoIds", "landingThanksPhotoIds"]) {
+      if (!Object.prototype.hasOwnProperty.call(body, photoKey)) continue;
+      const normalized = normalizeLandingMessagePhotoIds(
+        body[photoKey],
+        showcaseAllowIds,
+      );
+      if (normalized === undefined) {
+        return res.status(400).json({ error: `${photoKey} invalide.` });
+      }
+      data[photoKey] = normalized;
     }
 
     if (Object.keys(data).length === 0) {

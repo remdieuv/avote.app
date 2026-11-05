@@ -1,5 +1,5 @@
 /**
- * Présentation Landing « ✨ L'événement » — helpers purs (tri programme, légendes).
+ * Présentation Landing « ✨ L'événement » — helpers purs (tri programme, légendes, messages V3).
  */
 
 const CAPTION_MAX = 200;
@@ -9,6 +9,9 @@ const META_DATE_MAX = 120;
 const META_VENUE_MAX = 200;
 const META_HOURS_MAX = 120;
 const PROGRAM_MAX_ITEMS = 40;
+const MESSAGE_TITLE_MAX = 200;
+const MESSAGE_BODY_MAX = 4000;
+const MESSAGE_PHOTOS_MAX = 8;
 /** sortOrder pour horaires non parsables (fin de liste, ordre stable via createdAt). */
 const UNPARSED_SORT_BASE = 10_000;
 
@@ -95,12 +98,65 @@ function normalizeLandingCaption(raw) {
 }
 
 /**
+ * IDs de photos showcase pour illustrer un message.
+ * @param {unknown} raw
+ * @param {Set<string> | string[] | null | undefined} [allowedIds]
+ * @returns {string[] | null | undefined} null = clear ; undefined = invalid
+ */
+function normalizeLandingMessagePhotoIds(raw, allowedIds) {
+  if (raw === null) return null;
+  if (raw === undefined) return undefined;
+  let list = raw;
+  if (typeof raw === "string") {
+    const t = raw.trim();
+    if (t === "") return null;
+    try {
+      list = JSON.parse(t);
+    } catch {
+      return undefined;
+    }
+  }
+  if (!Array.isArray(list)) return undefined;
+  const allowed =
+    allowedIds instanceof Set
+      ? allowedIds
+      : Array.isArray(allowedIds)
+        ? new Set(allowedIds.map(String))
+        : null;
+  /** @type {string[]} */
+  const out = [];
+  const seen = new Set();
+  for (const item of list) {
+    if (typeof item !== "string" && typeof item !== "number") continue;
+    const id = String(item).trim();
+    if (!id || seen.has(id)) continue;
+    if (allowed && !allowed.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+    if (out.length >= MESSAGE_PHOTOS_MAX) break;
+  }
+  return out.length ? out : null;
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {string[]}
+ */
+function parseStoredLandingPhotoIds(raw) {
+  const normalized = normalizeLandingMessagePhotoIds(raw, null);
+  return Array.isArray(normalized) ? normalized : [];
+}
+
+/**
  * @param {{
  *   landingEventDate?: string | null;
  *   landingVenue?: string | null;
  *   landingHours?: string | null;
  *   programItems?: unknown[];
  *   showcasePhotos?: unknown[];
+ *   landingIntroBody?: string | null;
+ *   landingThanksBody?: string | null;
+ *   afterLive?: boolean;
  * }} input
  */
 function shouldShowLandingEvenementSection(input = {}) {
@@ -112,7 +168,11 @@ function shouldShowLandingEvenementSection(input = {}) {
     Array.isArray(input.programItems) && input.programItems.length > 0;
   const hasGallery =
     Array.isArray(input.showcasePhotos) && input.showcasePhotos.length > 0;
-  return hasMeta || hasProgram || hasGallery;
+  const hasIntro = Boolean(String(input.landingIntroBody || "").trim());
+  const hasThanks =
+    Boolean(input.afterLive) &&
+    Boolean(String(input.landingThanksBody || "").trim());
+  return hasMeta || hasProgram || hasGallery || hasIntro || hasThanks;
 }
 
 /**
@@ -136,6 +196,19 @@ function hasLandingComplementaryInfo(input = {}) {
   return Boolean(title || text || (pL && pU) || (sL && sU));
 }
 
+/**
+ * @param {string | null | undefined} body
+ * @returns {string[]}
+ */
+function splitLandingMessageParagraphs(body) {
+  const raw = String(body || "").replace(/\r\n/g, "\n").trim();
+  if (!raw) return [];
+  return raw
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+}
+
 module.exports = {
   CAPTION_MAX,
   PROGRAM_TITLE_MAX,
@@ -144,12 +217,18 @@ module.exports = {
   META_VENUE_MAX,
   META_HOURS_MAX,
   PROGRAM_MAX_ITEMS,
+  MESSAGE_TITLE_MAX,
+  MESSAGE_BODY_MAX,
+  MESSAGE_PHOTOS_MAX,
   UNPARSED_SORT_BASE,
   parseProgramTimeToMinutes,
   programSortOrderFromTimeLabel,
   sortLandingProgramItems,
   normalizeOptionalBoundedText,
   normalizeLandingCaption,
+  normalizeLandingMessagePhotoIds,
+  parseStoredLandingPhotoIds,
   shouldShowLandingEvenementSection,
   hasLandingComplementaryInfo,
+  splitLandingMessageParagraphs,
 };

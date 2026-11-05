@@ -172,6 +172,28 @@ export default function EventLandingPage() {
               data.landingHours !== undefined
                 ? data.landingHours
                 : prev.landingHours,
+            landingIntroTitle:
+              data.landingIntroTitle !== undefined
+                ? data.landingIntroTitle
+                : prev.landingIntroTitle,
+            landingIntroBody:
+              data.landingIntroBody !== undefined
+                ? data.landingIntroBody
+                : prev.landingIntroBody,
+            landingIntroPhotos: Array.isArray(data.landingIntroPhotos)
+              ? data.landingIntroPhotos
+              : prev.landingIntroPhotos,
+            landingThanksTitle:
+              data.landingThanksTitle !== undefined
+                ? data.landingThanksTitle
+                : prev.landingThanksTitle,
+            landingThanksBody:
+              data.landingThanksBody !== undefined
+                ? data.landingThanksBody
+                : prev.landingThanksBody,
+            landingThanksPhotos: Array.isArray(data.landingThanksPhotos)
+              ? data.landingThanksPhotos
+              : prev.landingThanksPhotos,
             liveState:
               typeof data.liveState === "string"
                 ? data.liveState
@@ -434,22 +456,34 @@ export default function EventLandingPage() {
    * au passage Chargement → contenu (régression PR #41).
    */
   const showcaseLightboxPhotos = useMemo(() => {
-    const list =
-      payload && typeof payload === "object" && Array.isArray(payload.showcasePhotos)
-        ? payload.showcasePhotos
-        : [];
+    if (!payload || typeof payload !== "object") return [];
+    const lists = [
+      Array.isArray(payload.showcasePhotos) ? payload.showcasePhotos : [],
+      Array.isArray(payload.landingIntroPhotos)
+        ? payload.landingIntroPhotos
+        : [],
+      Array.isArray(payload.landingThanksPhotos)
+        ? payload.landingThanksPhotos
+        : [],
+    ];
     const raw = [];
-    for (const p of list) {
-      const u =
-        typeof p?.url === "string"
-          ? resolveApiAssetUrlNullable(p.url.trim())
-          : null;
-      if (!u) continue;
-      const caption =
-        typeof p?.caption === "string" && p.caption.trim()
-          ? p.caption.trim()
-          : null;
-      raw.push({ id: String(p.id ?? u), url: u, caption });
+    const seen = new Set();
+    for (const list of lists) {
+      for (const p of list) {
+        const u =
+          typeof p?.url === "string"
+            ? resolveApiAssetUrlNullable(p.url.trim())
+            : null;
+        if (!u) continue;
+        const id = String(p.id ?? u);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        const caption =
+          typeof p?.caption === "string" && p.caption.trim()
+            ? p.caption.trim()
+            : null;
+        raw.push({ id, url: u, caption });
+      }
     }
     return normalizeLightboxPhotos(raw);
   }, [payload]);
@@ -596,12 +630,37 @@ export default function EventLandingPage() {
     (step) =>
       String(step?.timeLabel || "").trim() && String(step?.title || "").trim(),
   );
+  const landingIntroTitle =
+    typeof payload.landingIntroTitle === "string"
+      ? payload.landingIntroTitle.trim()
+      : "";
+  const landingIntroBody =
+    typeof payload.landingIntroBody === "string"
+      ? payload.landingIntroBody.trim()
+      : "";
+  const landingThanksTitle =
+    typeof payload.landingThanksTitle === "string"
+      ? payload.landingThanksTitle.trim()
+      : "";
+  const landingThanksBody =
+    typeof payload.landingThanksBody === "string"
+      ? payload.landingThanksBody.trim()
+      : "";
+  const landingIntroPhotos = Array.isArray(payload.landingIntroPhotos)
+    ? payload.landingIntroPhotos
+    : [];
+  const landingThanksPhotos = Array.isArray(payload.landingThanksPhotos)
+    ? payload.landingThanksPhotos
+    : [];
   const showEvenementSection = shouldShowLandingEvenementSection({
     landingEventDate,
     landingVenue,
     landingHours,
     programItems: programItemsList,
     showcasePhotos: showcasePhotosList,
+    landingIntroBody,
+    landingThanksBody,
+    afterLive,
   });
 
   const canUploadLanding =
@@ -1282,9 +1341,16 @@ export default function EventLandingPage() {
           <LandingEvenementPresentation
             accent={accent}
             lead={showcaseLead}
+            afterLive={afterLive}
             landingEventDate={landingEventDate}
             landingVenue={landingVenue}
             landingHours={landingHours}
+            introTitle={landingIntroTitle}
+            introBody={landingIntroBody}
+            introPhotos={landingIntroPhotos}
+            thanksTitle={landingThanksTitle}
+            thanksBody={landingThanksBody}
+            thanksPhotos={landingThanksPhotos}
             programItems={programItemsList}
             showcasePhotos={showcasePhotosList}
             onOpenPhoto={(id) => {

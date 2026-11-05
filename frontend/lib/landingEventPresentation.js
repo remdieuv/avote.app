@@ -8,6 +8,9 @@ export const LANDING_PROGRAM_TIME_MAX = 40;
 export const LANDING_META_DATE_MAX = 120;
 export const LANDING_META_VENUE_MAX = 200;
 export const LANDING_META_HOURS_MAX = 120;
+export const LANDING_MESSAGE_TITLE_MAX = 200;
+export const LANDING_MESSAGE_BODY_MAX = 4000;
+export const LANDING_MESSAGE_PHOTOS_MAX = 8;
 
 const UNPARSED_SORT_BASE = 10_000;
 
@@ -78,6 +81,9 @@ export function sortLandingProgramItems(items) {
  *   landingHours?: string | null;
  *   programItems?: unknown[];
  *   showcasePhotos?: unknown[];
+ *   landingIntroBody?: string | null;
+ *   landingThanksBody?: string | null;
+ *   afterLive?: boolean;
  * }} input
  */
 export function shouldShowLandingEvenementSection(input = {}) {
@@ -89,7 +95,11 @@ export function shouldShowLandingEvenementSection(input = {}) {
     Array.isArray(input.programItems) && input.programItems.length > 0;
   const hasGallery =
     Array.isArray(input.showcasePhotos) && input.showcasePhotos.length > 0;
-  return hasMeta || hasProgram || hasGallery;
+  const hasIntro = Boolean(String(input.landingIntroBody || "").trim());
+  const hasThanks =
+    Boolean(input.afterLive) &&
+    Boolean(String(input.landingThanksBody || "").trim());
+  return hasMeta || hasProgram || hasGallery || hasIntro || hasThanks;
 }
 
 /**
@@ -110,4 +120,46 @@ export function hasLandingComplementaryInfo(input = {}) {
   const sL = String(input.infoSecondaryCtaLabel || "").trim();
   const sU = String(input.infoSecondaryCtaUrl || "").trim();
   return Boolean(title || text || (pL && pU) || (sL && sU));
+}
+
+/**
+ * @param {string | null | undefined} body
+ * @returns {string[]}
+ */
+export function splitLandingMessageParagraphs(body) {
+  const raw = String(body || "").replace(/\r\n/g, "\n").trim();
+  if (!raw) return [];
+  return raw
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {string[]}
+ */
+export function parseLandingMessagePhotoIds(raw) {
+  if (raw == null) return [];
+  let list = raw;
+  if (typeof raw === "string") {
+    const t = raw.trim();
+    if (!t) return [];
+    try {
+      list = JSON.parse(t);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const item of list) {
+    const id = String(item || "").trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+    if (out.length >= LANDING_MESSAGE_PHOTOS_MAX) break;
+  }
+  return out;
 }
