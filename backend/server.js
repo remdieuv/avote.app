@@ -2243,7 +2243,8 @@ app.delete("/me/profiles/:profileId", requireAuth, async (req, res) => {
 app.post(
   "/me/profiles/:profileId/image",
   requireAuth,
-  uploadMiddleware.single("file"),
+  /** Déjà un middleware multer `.single("file")` — ne pas rappeler `.single`. */
+  uploadMiddleware,
   async (req, res) => {
     try {
       const profileId = String(req.params.profileId || "").trim();
