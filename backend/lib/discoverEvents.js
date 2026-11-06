@@ -22,12 +22,13 @@ const DISCOVER_LIMIT_DEFAULT = 20;
 const DISCOVER_LIMIT_MAX = 50;
 
 /**
- * Éligible à l’annuaire : PUBLIC + thème principal + startsAt.
- * Profil orga (Lot D) non requis ici.
+ * Éligible à l’annuaire : PUBLIC + thème + startsAt + profil orga public.
  * @param {{
  *   visibility?: unknown;
  *   primaryThemeId?: unknown;
  *   startsAt?: unknown;
+ *   organizerProfileId?: unknown;
+ *   organizerProfile?: { isPublic?: unknown } | null;
  * }} event
  */
 function isDiscoverEligible(event) {
@@ -37,6 +38,18 @@ function isDiscoverEligible(event) {
   if (!themeId) return false;
   if (event?.startsAt == null) return false;
   if (event.startsAt instanceof Date && Number.isNaN(event.startsAt.getTime())) {
+    return false;
+  }
+  const profileId =
+    typeof event?.organizerProfileId === "string"
+      ? event.organizerProfileId.trim()
+      : "";
+  if (!profileId) return false;
+  if (
+    event?.organizerProfile &&
+    typeof event.organizerProfile === "object" &&
+    event.organizerProfile.isPublic === false
+  ) {
     return false;
   }
   return true;
@@ -203,6 +216,8 @@ function buildDiscoverEventsQuery(query) {
     visibility: EVENT_VISIBILITY.PUBLIC,
     primaryThemeId: { not: null },
     startsAt: { not: null },
+    organizerProfileId: { not: null },
+    organizerProfile: { isPublic: true },
   };
 
   if (cityNorm) {
@@ -224,7 +239,12 @@ function buildDiscoverEventsQuery(query) {
       { city: { contains: q, mode: "insensitive" } },
       { primaryTheme: { label: { contains: q, mode: "insensitive" } } },
       { secondaryTheme: { label: { contains: q, mode: "insensitive" } } },
-      // Organisateur : Lot D (profils) — pas d’e-mail public.
+      {
+        organizerProfile: {
+          isPublic: true,
+          displayName: { contains: q, mode: "insensitive" },
+        },
+      },
     ];
     if (prismaWhere.OR) {
       prismaWhere.AND = [{ OR: prismaWhere.OR }, { OR: textOr }];
@@ -366,8 +386,9 @@ function validateEventThemes(args) {
 /**
  * Payload public d’une carte Discover.
  * @param {Record<string, any>} event
+ * @param {(url: string|null|undefined) => string|null} [absolutize]
  */
-function mapDiscoverEventCard(event) {
+function mapDiscoverEventCard(event, absolutize) {
   const cat =
     event.discoverCategory ||
     resolveDiscoverCategory(event) ||
@@ -386,6 +407,18 @@ function mapDiscoverEventCard(event) {
         label: event.secondaryTheme.label,
       }
     : null;
+  const abs = typeof absolutize === "function" ? absolutize : (u) => u ?? null;
+  const org =
+    event.organizerProfile && event.organizerProfile.isPublic
+      ? {
+          id: event.organizerProfile.id,
+          slug: event.organizerProfile.slug,
+          displayName: event.organizerProfile.displayName,
+          type: String(event.organizerProfile.type || "").toLowerCase(),
+          imageUrl: abs(event.organizerProfile.imageUrl),
+          profilePath: `/organizers/${event.organizerProfile.slug}`,
+        }
+      : null;
   return {
     id: event.id,
     title: event.title,
@@ -406,6 +439,7 @@ function mapDiscoverEventCard(event) {
     landingCoverUrl: event.landingCoverUrl ?? null,
     primaryTheme: primary,
     secondaryTheme: secondary,
+    organizer: org,
     joinPath: `/join/${event.slug}`,
     landingPath: event.landingEnabled ? `/e/${event.slug}` : null,
   };

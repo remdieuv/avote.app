@@ -40,12 +40,14 @@ function isEventPublic(visibility) {
 }
 
 /**
- * Éligibilité Discover (Lot B) : PUBLIC + thème principal + startsAt.
- * Profil organisateur (Lot D) non encore requis.
+ * Éligibilité Discover (Lot D) : PUBLIC + thème + startsAt + profil orga.
+ * Si `organizerProfile` est joint : il doit être public.
  * @param {{
  *   visibility?: unknown;
  *   primaryThemeId?: unknown;
  *   startsAt?: unknown;
+ *   organizerProfileId?: unknown;
+ *   organizerProfile?: { isPublic?: unknown } | null;
  * }} event
  */
 function isDiscoverEligible(event) {
@@ -57,6 +59,18 @@ function isDiscoverEligible(event) {
   if (!themeId) return false;
   if (event?.startsAt == null) return false;
   if (event.startsAt instanceof Date && Number.isNaN(event.startsAt.getTime())) {
+    return false;
+  }
+  const profileId =
+    typeof event?.organizerProfileId === "string"
+      ? event.organizerProfileId.trim()
+      : "";
+  if (!profileId) return false;
+  if (
+    event?.organizerProfile &&
+    typeof event.organizerProfile === "object" &&
+    event.organizerProfile.isPublic === false
+  ) {
     return false;
   }
   return true;

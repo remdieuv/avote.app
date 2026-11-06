@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { AdminContentShell } from "@/components/admin/AdminContentShell";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { useAdminUser } from "@/components/admin/AdminUserContext";
+import { OrganizerProfilesPanel } from "@/components/admin/OrganizerProfilesPanel";
 import { CheckoutEventButton } from "@/components/billing/CheckoutEventButton";
 import {
   computeActivationBalance,
@@ -172,6 +173,7 @@ export default function AdminAccountPage() {
           </Link>
         }
       />
+      <OrganizerProfilesPanel />
       <section className="account-overview-grid">
         <article style={CARD}>
           <h2 style={CARD_TITLE}>Informations du compte</h2>

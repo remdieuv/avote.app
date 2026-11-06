@@ -35,12 +35,27 @@ function sanitizeSegment(input) {
 }
 
 /**
- * @param {{buffer: Buffer, eventId: string, kind: "logo" | "background" | "landing_cover" | "landing_photo" | "landing_showcase_photo" | "landing_message_photo"}} args
+ * @param {{
+ *   buffer: Buffer;
+ *   eventId?: string;
+ *   profileId?: string;
+ *   kind:
+ *     | "logo"
+ *     | "background"
+ *     | "landing_cover"
+ *     | "landing_photo"
+ *     | "landing_showcase_photo"
+ *     | "landing_message_photo"
+ *     | "profile_image";
+ * }} args
  * @returns {Promise<{secureUrl: string, publicId: string}>}
  */
 function uploadImageBufferToCloudinary(args) {
   assertCloudinaryConfigured();
-  const eventSafe = sanitizeSegment(args.eventId) || "event";
+  const isProfile = args.kind === "profile_image";
+  const scopeSafe = isProfile
+    ? sanitizeSegment(args.profileId) || "profile"
+    : sanitizeSegment(args.eventId) || "event";
   const kindSafe =
     args.kind === "background"
       ? "bg"
@@ -52,16 +67,19 @@ function uploadImageBufferToCloudinary(args) {
             ? "ls"
             : args.kind === "landing_message_photo"
               ? "lm"
-              : "logo";
+              : args.kind === "profile_image"
+                ? "pf"
+                : "logo";
   const publicId = `${kindSafe}-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
   const landingTransform =
     args.kind === "landing_cover" ||
     args.kind === "landing_photo" ||
     args.kind === "landing_showcase_photo" ||
-    args.kind === "landing_message_photo"
+    args.kind === "landing_message_photo" ||
+    args.kind === "profile_image"
       ? [
           {
-            width: args.kind === "landing_cover" ? 1920 : 1600,
+            width: args.kind === "landing_cover" ? 1920 : args.kind === "profile_image" ? 800 : 1600,
             crop: "limit",
             quality: "auto",
             fetch_format: "auto",
@@ -72,7 +90,9 @@ function uploadImageBufferToCloudinary(args) {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
-        folder: `avote/events/${eventSafe}`,
+        folder: isProfile
+          ? `avote/profiles/${scopeSafe}`
+          : `avote/events/${scopeSafe}`,
         public_id: publicId,
         resource_type: "image",
         ...(landingTransform ? { transformation: landingTransform } : {}),
