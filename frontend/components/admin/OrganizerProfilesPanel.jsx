@@ -15,21 +15,34 @@ const inputStyle = {
 };
 
 /**
- * Lot D — gestion des profils organisateurs (compte).
+ * Lot D — gestion compacte des profils organisateurs (Mon compte).
+ * Formulaire masqué par défaut ; déplié via « Ajouter un profil » ou « Modifier ».
+ * Aucun changement d’API / règles de visibilité.
  */
 export function OrganizerProfilesPanel() {
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
   const [formType, setFormType] = useState(/** @type {"personal"|"organization"} */ ("personal"));
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [isPublic, setIsPublic] = useState(false);
   const [editId, setEditId] = useState(/** @type {string|null} */ (null));
+  const [pendingImageFile, setPendingImageFile] = useState(
+    /** @type {File|null} */ (null),
+  );
 
   const hasPersonal = profiles.some((p) => p.type === "personal");
+  const isEditing = Boolean(editId);
+  const nameLabel =
+    formType === "organization" ? "Nom de l'organisation" : "Nom ou pseudonyme";
+  const namePlaceholder =
+    formType === "organization" ? "Ex. Studio Nord" : "Ex. Alex M.";
+  const imageLabel =
+    formType === "organization" ? "Logo (facultatif)" : "Photo (facultatif)";
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -56,26 +69,56 @@ export function OrganizerProfilesPanel() {
   }, [load]);
 
   useEffect(() => {
-    if (formType === "organization" && !editId) setIsPublic(true);
-    if (formType === "personal" && !editId) setIsPublic(false);
-  }, [formType, editId]);
+    if (!formOpen || isEditing) return;
+    if (formType === "organization") setIsPublic(true);
+    if (formType === "personal") setIsPublic(false);
+  }, [formType, formOpen, isEditing]);
 
-  function resetForm() {
+  function closeForm() {
+    setFormOpen(false);
     setEditId(null);
     setFormType(hasPersonal ? "organization" : "personal");
     setDisplayName("");
     setBio("");
     setWebsiteUrl("");
     setIsPublic(hasPersonal);
+    setPendingImageFile(null);
+  }
+
+  function openCreateForm() {
+    setError("");
+    setEditId(null);
+    setFormType(hasPersonal ? "organization" : "personal");
+    setDisplayName("");
+    setBio("");
+    setWebsiteUrl("");
+    setIsPublic(hasPersonal);
+    setPendingImageFile(null);
+    setFormOpen(true);
   }
 
   function startEdit(p) {
+    setError("");
     setEditId(p.id);
     setFormType(p.type === "organization" ? "organization" : "personal");
     setDisplayName(p.displayName || "");
     setBio(p.bio || "");
     setWebsiteUrl(p.websiteUrl || "");
     setIsPublic(Boolean(p.isPublic));
+    setPendingImageFile(null);
+    setFormOpen(true);
+  }
+
+  async function uploadImage(profileId, file) {
+    if (!file || !profileId) return;
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await adminFetch(
+      `${apiBaseBrowser()}/me/profiles/${encodeURIComponent(profileId)}/image`,
+      { method: "POST", body: fd },
+    );
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body?.error || `Erreur ${res.status}`);
   }
 
   async function submitForm(e) {
@@ -90,6 +133,7 @@ export function OrganizerProfilesPanel() {
         isPublic,
       };
       let res;
+      let savedId = editId;
       if (editId) {
         res = await adminFetch(
           `${apiBaseBrowser()}/me/profiles/${encodeURIComponent(editId)}`,
@@ -110,7 +154,13 @@ export function OrganizerProfilesPanel() {
       if (!res.ok) {
         throw new Error(body?.error || `Erreur ${res.status}`);
       }
-      resetForm();
+      if (!savedId && body?.profile?.id) {
+        savedId = body.profile.id;
+      }
+      if (pendingImageFile && savedId) {
+        await uploadImage(savedId, pendingImageFile);
+      }
+      closeForm();
       await load();
     } catch (err) {
       setError(err?.message || "Enregistrement impossible.");
@@ -120,7 +170,11 @@ export function OrganizerProfilesPanel() {
   }
 
   async function removeProfile(id) {
-    if (!window.confirm("Supprimer ce profil ? Les événements liés resteront, sans organisateur.")) {
+    if (
+      !window.confirm(
+        "Supprimer ce profil ? Les événements liés resteront, sans organisateur.",
+      )
+    ) {
       return;
     }
     setBusy(true);
@@ -132,31 +186,10 @@ export function OrganizerProfilesPanel() {
       );
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body?.error || `Erreur ${res.status}`);
-      if (editId === id) resetForm();
+      if (editId === id) closeForm();
       await load();
     } catch (err) {
       setError(err?.message || "Suppression impossible.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function uploadImage(profileId, file) {
-    if (!file) return;
-    setBusy(true);
-    setError("");
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await adminFetch(
-        `${apiBaseBrowser()}/me/profiles/${encodeURIComponent(profileId)}/image`,
-        { method: "POST", body: fd },
-      );
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body?.error || `Erreur ${res.status}`);
-      await load();
-    } catch (err) {
-      setError(err?.message || "Upload impossible.");
     } finally {
       setBusy(false);
     }
@@ -172,209 +205,413 @@ export function OrganizerProfilesPanel() {
         marginTop: "1rem",
       }}
     >
-      <h2
+      <div
         style={{
-          margin: "0 0 0.35rem",
-          fontSize: "1.05rem",
-          color: "#0f172a",
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: "0.65rem",
+          marginBottom: "0.75rem",
         }}
       >
-        Profils organisateurs
-      </h2>
-      <p style={{ margin: "0 0 0.85rem", color: "#64748b", fontSize: "0.84rem" }}>
-        Identité Particulier et Organisations. Non obligatoire pour le live.
-        Requis pour apparaître dans Découvrir. Le nom n’est jamais repris automatiquement depuis l’e-mail.
-      </p>
+        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+          <h2
+            style={{
+              margin: 0,
+              fontSize: "1.05rem",
+              color: "#0f172a",
+            }}
+          >
+            Mes profils organisateurs
+          </h2>
+          <p
+            style={{
+              margin: "0.3rem 0 0",
+              color: "#64748b",
+              fontSize: "0.84rem",
+              lineHeight: 1.45,
+            }}
+          >
+            Particulier et organisations. Facultatif pour le live, requis pour
+            Découvrir. Le nom n’est jamais repris depuis l’e-mail.
+          </p>
+        </div>
+        {!formOpen ? (
+          <button
+            type="button"
+            disabled={busy || loading}
+            onClick={openCreateForm}
+            style={btnPrimary}
+          >
+            Ajouter un profil
+          </button>
+        ) : null}
+      </div>
 
       {loading ? (
         <p style={{ color: "#64748b", fontSize: "0.86rem" }}>Chargement…</p>
       ) : null}
       {error ? (
-        <p style={{ color: "#b91c1c", fontWeight: 700, fontSize: "0.86rem" }}>{error}</p>
+        <p style={{ color: "#b91c1c", fontWeight: 700, fontSize: "0.86rem" }}>
+          {error}
+        </p>
       ) : null}
 
-      <ul style={{ listStyle: "none", margin: "0 0 1rem", padding: 0 }}>
-        {profiles.map((p) => (
-          <li
-            key={p.id}
-            style={{
-              border: "1px solid #e2e8f0",
-              borderRadius: "12px",
-              padding: "0.75rem",
-              marginBottom: "0.55rem",
-              background: "#f8fafc",
-            }}
-          >
-            <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
-              {p.imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={p.imageUrl}
-                  alt=""
-                  width={48}
-                  height={48}
-                  style={{ borderRadius: "10px", objectFit: "cover" }}
-                />
-              ) : (
-                <div
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: "10px",
-                    background: "#e2e8f0",
-                  }}
-                />
-              )}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ margin: 0, fontWeight: 800, color: "#0f172a" }}>
-                  {p.displayName}{" "}
-                  <span style={{ fontWeight: 600, color: "#64748b", fontSize: "0.78rem" }}>
-                    ({p.type === "organization" ? "Organisation" : "Particulier"}
-                    {p.isPublic ? " · public" : " · privé"})
-                  </span>
-                </p>
-                {p.bio ? (
-                  <p style={{ margin: "0.25rem 0 0", color: "#475569", fontSize: "0.82rem" }}>
-                    {p.bio}
-                  </p>
-                ) : null}
-                <div style={{ marginTop: "0.45rem", display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
-                  <button type="button" disabled={busy} onClick={() => startEdit(p)} style={btnGhost}>
-                    Modifier
-                  </button>
-                  <label style={{ ...btnGhost, cursor: busy ? "not-allowed" : "pointer" }}>
-                    Photo / logo
-                    <input
-                      type="file"
-                      accept="image/*"
-                      hidden
-                      disabled={busy}
-                      onChange={(ev) => {
-                        const f = ev.target.files?.[0];
-                        void uploadImage(p.id, f);
-                        ev.target.value = "";
-                      }}
-                    />
-                  </label>
-                  {p.isPublic ? (
-                    <Link href={`/organizers/${encodeURIComponent(p.slug)}`} style={btnGhost}>
-                      Voir la page
-                    </Link>
-                  ) : null}
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void removeProfile(p.id)}
-                    style={{ ...btnGhost, color: "#b91c1c", borderColor: "#fecaca" }}
-                  >
-                    Supprimer
-                  </button>
-                </div>
-              </div>
-            </div>
-          </li>
-        ))}
-      </ul>
-
-      <form onSubmit={(e) => void submitForm(e)}>
-        <h3 style={{ margin: "0 0 0.55rem", fontSize: "0.95rem" }}>
-          {editId ? "Modifier le profil" : "Créer un profil"}
-        </h3>
-        {!editId ? (
-          <div style={{ display: "flex", gap: "0.75rem", marginBottom: "0.55rem" }}>
-            <label style={{ fontSize: "0.84rem", fontWeight: 700 }}>
-              <input
-                type="radio"
-                name="ptype"
-                checked={formType === "personal"}
-                disabled={hasPersonal}
-                onChange={() => setFormType("personal")}
-              />{" "}
-              Particulier {hasPersonal ? "(déjà créé)" : ""}
-            </label>
-            <label style={{ fontSize: "0.84rem", fontWeight: 700 }}>
-              <input
-                type="radio"
-                name="ptype"
-                checked={formType === "organization"}
-                onChange={() => setFormType("organization")}
-              />{" "}
-              Organisation
-            </label>
-          </div>
-        ) : null}
-        <label style={labelStyle}>
-          Nom ou pseudonyme *
-          <input
-            style={inputStyle}
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            required
-            maxLength={80}
-            placeholder="Ex. Studio Nord / Alex M."
-          />
-        </label>
-        <label style={labelStyle}>
-          Présentation
-          <textarea
-            style={{ ...inputStyle, minHeight: 72, resize: "vertical" }}
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
-            maxLength={2000}
-          />
-        </label>
-        <label style={labelStyle}>
-          Site internet
-          <input
-            style={inputStyle}
-            value={websiteUrl}
-            onChange={(e) => setWebsiteUrl(e.target.value)}
-            placeholder="https://"
-          />
-        </label>
-        <label
+      {!loading && profiles.length === 0 && !formOpen ? (
+        <p
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.4rem",
-            fontSize: "0.84rem",
-            fontWeight: 700,
-            marginBottom: "0.75rem",
+            margin: "0 0 0.35rem",
+            color: "#64748b",
+            fontSize: "0.86rem",
           }}
         >
-          <input
-            type="checkbox"
-            checked={isPublic}
-            onChange={(e) => setIsPublic(e.target.checked)}
-          />
-          Profil public (visible sur une page organisateur)
-        </label>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          <button
-            type="submit"
-            disabled={busy || !displayName.trim()}
-            style={{
-              padding: "0.5rem 0.85rem",
-              borderRadius: "9px",
-              border: "none",
-              background: "#1d4ed8",
-              color: "#fff",
-              fontWeight: 800,
-              cursor: busy ? "not-allowed" : "pointer",
-            }}
-          >
-            {editId ? "Enregistrer" : "Créer"}
-          </button>
-          {editId ? (
-            <button type="button" disabled={busy} onClick={resetForm} style={btnGhost}>
+          Aucun profil pour le moment.
+        </p>
+      ) : null}
+
+      <ul
+        style={{
+          listStyle: "none",
+          margin: profiles.length ? "0 0 0.85rem" : 0,
+          padding: 0,
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+          gap: "0.65rem",
+        }}
+      >
+        {profiles.map((p) => {
+          const isOrg = p.type === "organization";
+          return (
+            <li
+              key={p.id}
+              style={{
+                border: "1px solid #e2e8f0",
+                borderRadius: "12px",
+                padding: "0.7rem 0.75rem",
+                background: "#f8fafc",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.55rem",
+                minWidth: 0,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  gap: "0.65rem",
+                  alignItems: "center",
+                  minWidth: 0,
+                }}
+              >
+                {p.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={p.imageUrl}
+                    alt=""
+                    width={44}
+                    height={44}
+                    style={{
+                      borderRadius: isOrg ? "10px" : "50%",
+                      objectFit: "cover",
+                      flexShrink: 0,
+                      background: "#e2e8f0",
+                    }}
+                  />
+                ) : (
+                  <div
+                    aria-hidden
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: isOrg ? "10px" : "50%",
+                      background: "#e2e8f0",
+                      flexShrink: 0,
+                    }}
+                  />
+                )}
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontWeight: 800,
+                      color: "#0f172a",
+                      fontSize: "0.92rem",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                    title={p.displayName}
+                  >
+                    {p.displayName}
+                  </p>
+                  <p
+                    style={{
+                      margin: "0.18rem 0 0",
+                      fontSize: "0.75rem",
+                      color: "#64748b",
+                      fontWeight: 650,
+                    }}
+                  >
+                    {isOrg ? "Organisation" : "Particulier"}
+                    {" · "}
+                    {p.isPublic ? "Public" : "Privé"}
+                  </p>
+                </div>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "0.35rem",
+                }}
+              >
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => startEdit(p)}
+                  style={btnGhost}
+                >
+                  Modifier
+                </button>
+                {p.isPublic ? (
+                  <Link
+                    href={`/organizers/${encodeURIComponent(p.slug)}`}
+                    style={btnGhost}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Voir le profil
+                  </Link>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void removeProfile(p.id)}
+                  style={{
+                    ...btnGhost,
+                    color: "#b91c1c",
+                    borderColor: "#fecaca",
+                  }}
+                >
+                  Supprimer
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+
+      {formOpen ? (
+        <form
+          onSubmit={(e) => void submitForm(e)}
+          style={{
+            border: "1px solid #e2e8f0",
+            borderRadius: "12px",
+            padding: "0.85rem 0.9rem",
+            background: "#fff",
+          }}
+        >
+          <h3 style={{ margin: "0 0 0.65rem", fontSize: "0.95rem" }}>
+            {isEditing ? "Modifier le profil" : "Nouveau profil"}
+          </h3>
+
+          {!isEditing ? (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "0.85rem",
+                marginBottom: "0.7rem",
+              }}
+            >
+              <label style={radioLabel}>
+                <input
+                  type="radio"
+                  name="ptype"
+                  checked={formType === "personal"}
+                  disabled={hasPersonal}
+                  onChange={() => setFormType("personal")}
+                />
+                Particulier
+                {hasPersonal ? " (déjà créé)" : ""}
+              </label>
+              <label style={radioLabel}>
+                <input
+                  type="radio"
+                  name="ptype"
+                  checked={formType === "organization"}
+                  onChange={() => setFormType("organization")}
+                />
+                Organisation
+              </label>
+            </div>
+          ) : (
+            <p
+              style={{
+                margin: "0 0 0.65rem",
+                fontSize: "0.82rem",
+                color: "#64748b",
+                fontWeight: 650,
+              }}
+            >
+              Type :{" "}
+              {formType === "organization" ? "Organisation" : "Particulier"}
+            </p>
+          )}
+
+          <label style={labelStyle}>
+            {nameLabel} *
+            <input
+              style={inputStyle}
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              required
+              maxLength={80}
+              placeholder={namePlaceholder}
+              autoComplete="organization"
+            />
+          </label>
+
+          <label style={labelStyle}>
+            Présentation
+            <textarea
+              style={{ ...inputStyle, minHeight: 72, resize: "vertical" }}
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              maxLength={2000}
+              placeholder="Facultatif"
+            />
+          </label>
+
+          <label style={labelStyle}>
+            Site internet
+            <input
+              style={inputStyle}
+              value={websiteUrl}
+              onChange={(e) => setWebsiteUrl(e.target.value)}
+              placeholder="https:// (facultatif)"
+              inputMode="url"
+            />
+          </label>
+
+          <label style={labelStyle}>
+            {imageLabel}
+            <input
+              type="file"
+              accept="image/*"
+              disabled={busy}
+              onChange={(ev) => {
+                const f = ev.target.files?.[0] || null;
+                setPendingImageFile(f);
+              }}
+              style={{
+                display: "block",
+                marginTop: "0.35rem",
+                fontSize: "0.82rem",
+              }}
+            />
+            {pendingImageFile ? (
+              <span
+                style={{
+                  display: "block",
+                  marginTop: "0.25rem",
+                  fontSize: "0.78rem",
+                  color: "#64748b",
+                  fontWeight: 600,
+                }}
+              >
+                Fichier sélectionné : {pendingImageFile.name}
+              </span>
+            ) : isEditing ? (
+              <span
+                style={{
+                  display: "block",
+                  marginTop: "0.25rem",
+                  fontSize: "0.78rem",
+                  color: "#64748b",
+                  fontWeight: 600,
+                }}
+              >
+                Laisser vide pour conserver l’image actuelle.
+              </span>
+            ) : null}
+          </label>
+
+          <div style={{ marginBottom: "0.85rem" }}>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: "0.45rem",
+                fontSize: "0.84rem",
+                fontWeight: 700,
+                color: "#334155",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={isPublic}
+                onChange={(e) => setIsPublic(e.target.checked)}
+                style={{ marginTop: "0.15rem" }}
+              />
+              <span>Rendre mon profil public</span>
+            </label>
+            <p
+              style={{
+                margin: "0.35rem 0 0 1.45rem",
+                fontSize: "0.78rem",
+                color: "#64748b",
+                lineHeight: 1.45,
+              }}
+            >
+              Votre profil et vos événements publics pourront être découverts
+              par les visiteurs.
+            </p>
+          </div>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+            <button
+              type="submit"
+              disabled={busy || !displayName.trim()}
+              style={{
+                ...btnPrimary,
+                opacity: busy || !displayName.trim() ? 0.65 : 1,
+                cursor: busy || !displayName.trim() ? "not-allowed" : "pointer",
+              }}
+            >
+              {isEditing ? "Enregistrer" : "Créer"}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={closeForm}
+              style={btnGhost}
+            >
               Annuler
             </button>
-          ) : null}
-        </div>
-      </form>
+          </div>
+        </form>
+      ) : null}
     </article>
   );
 }
+
+const btnPrimary = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "0.48rem 0.85rem",
+  borderRadius: "9px",
+  border: "none",
+  background: "#1d4ed8",
+  color: "#fff",
+  fontWeight: 800,
+  fontSize: "0.84rem",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
 
 const btnGhost = {
   display: "inline-flex",
@@ -396,4 +633,13 @@ const labelStyle = {
   fontSize: "0.82rem",
   fontWeight: 700,
   color: "#334155",
+};
+
+const radioLabel = {
+  fontSize: "0.84rem",
+  fontWeight: 700,
+  color: "#334155",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "0.35rem",
 };
