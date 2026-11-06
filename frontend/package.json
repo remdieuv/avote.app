@@ -22,6 +22,7 @@
     "test:telecommande-qr": "node scripts/test-telecommande-qr.mjs",
     "test:admin-widths": "node scripts/test-admin-desktop-widths.mjs",
     "test:marketing-widths": "node scripts/test-marketing-desktop-widths.mjs",
+    "test:discover-ui": "node scripts/test-discover-ui.mjs",
     "test:landing-hero": "node scripts/test-landing-hero.mjs",
     "test:landing-admin-ux-lot1": "node scripts/test-landing-admin-ux-lot1.mjs",
     "test:landing-admin-preview-sticky": "node scripts/test-landing-admin-preview-sticky.mjs",
