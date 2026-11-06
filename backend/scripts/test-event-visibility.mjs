@@ -43,10 +43,18 @@ test("normalizeEventVisibility défaut PRIVATE", () => {
   assert.equal(normalizeEventVisibility("public"), "PUBLIC");
 });
 
-test("isEventPublic / isDiscoverEligible", () => {
+test("isEventPublic / isDiscoverEligible (Lot B : thème + startsAt)", () => {
   assert.equal(isEventPublic("PUBLIC"), true);
   assert.equal(isEventPublic("PRIVATE"), false);
-  assert.equal(isDiscoverEligible({ visibility: "PUBLIC" }), true);
+  assert.equal(isDiscoverEligible({ visibility: "PUBLIC" }), false);
+  assert.equal(
+    isDiscoverEligible({
+      visibility: "PUBLIC",
+      primaryThemeId: "theme_sport",
+      startsAt: new Date("2026-12-01T00:00:00.000Z"),
+    }),
+    true,
+  );
   assert.equal(isDiscoverEligible({ visibility: "PRIVATE" }), false);
 });
 

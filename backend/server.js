@@ -35,7 +35,21 @@ const {
   eventLandingRobots,
   validateVisibilityChange,
   visibilityApiFields,
+  isDiscoverEligible,
 } = require("./lib/eventVisibility");
+const {
+  normalizeDiscoverCity,
+  parseDiscoverStartsAt,
+  normalizeThemeRef,
+} = require("./lib/discoverCatalog");
+const {
+  buildDiscoverEventsQuery,
+  filterDiscoverRowsByCategory,
+  validateEventThemes,
+  mapDiscoverEventCard,
+  parseDiscoverLimit,
+  parseDiscoverOffset,
+} = require("./lib/discoverEvents");
 const {
   isLandingFeedLeadCrm,
   buildLandingFeedItems,
@@ -1835,6 +1849,10 @@ async function listEventsForAdmin(userId) {
       participantsLimit: true,
       landingEnabled: true,
       visibility: true,
+      city: true,
+      startsAt: true,
+      primaryThemeId: true,
+      secondaryThemeId: true,
       liveState: true,
       voteState: true,
       displayState: true,
@@ -1882,6 +1900,11 @@ async function listEventsForAdmin(userId) {
     displayState: String(e.displayState).toLowerCase(),
     landingEnabled: Boolean(e.landingEnabled),
     ...visibilityApiFields(e.visibility),
+    city: e.city ?? null,
+    startsAt: e.startsAt ? e.startsAt.toISOString() : null,
+    primaryThemeId: e.primaryThemeId ?? null,
+    secondaryThemeId: e.secondaryThemeId ?? null,
+    discoverEligible: isDiscoverEligible(e),
     pollCount: e.polls.length,
     voteCount: votesByEventId.get(e.id) || 0,
     participantCount: participantsByEventId.get(e.id)?.size || 0,
@@ -1895,6 +1918,111 @@ app.get("/events", requireAuth, async (req, res) => {
   try {
     const list = await listEventsForAdmin(req.userId);
     return res.json(list);
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/** Lot B — catalogue thèmes Discover (public). */
+app.get("/discover/themes", async (_req, res) => {
+  try {
+    const themes = await prisma.theme.findMany({
+      where: { active: true },
+      orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+      select: { id: true, slug: true, label: true, sortOrder: true },
+    });
+    return res.json({
+      themes: themes.map((t) => ({
+        id: t.id,
+        slug: t.slug,
+        label: t.label,
+        sortOrder: t.sortOrder,
+      })),
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/**
+ * Lot B — annuaire Discover (public).
+ * Query: category, q, city, theme, limit, offset
+ * Uniquement événements PUBLIC éligibles (thème + startsAt). Privés exclus.
+ */
+app.get("/discover/events", async (req, res) => {
+  try {
+    const built = buildDiscoverEventsQuery({
+      category: req.query.category,
+      q: req.query.q,
+      city: req.query.city,
+      theme: req.query.theme,
+    });
+    if (!built.ok) {
+      return res.status(built.status).json({
+        error: built.error,
+        code: built.code,
+      });
+    }
+    const limit = parseDiscoverLimit(req.query.limit);
+    const offset = parseDiscoverOffset(req.query.offset);
+
+    const rows = await prisma.event.findMany({
+      where: built.prismaWhere,
+      orderBy: [{ startsAt: "asc" }, { id: "asc" }],
+      skip: offset,
+      take: limit + 1,
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        city: true,
+        startsAt: true,
+        visibility: true,
+        liveState: true,
+        isLiveConsumed: true,
+        landingEnabled: true,
+        landingCoverUrl: true,
+        primaryTheme: {
+          select: { id: true, slug: true, label: true },
+        },
+        secondaryTheme: {
+          select: { id: true, slug: true, label: true },
+        },
+      },
+    });
+
+    const filtered = filterDiscoverRowsByCategory(rows, {
+      category: built.category,
+      excludeOverdueUnlessRequested: built.excludeOverdueUnlessRequested,
+      now: built.now,
+    });
+
+    const page = filtered.slice(0, limit).map((row) => {
+      const card = mapDiscoverEventCard({
+        ...row,
+        landingCoverUrl: absolutizeStoredAssetUrl(row.landingCoverUrl),
+      });
+      return card;
+    });
+    const hasMore = filtered.length > limit;
+
+    return res.json({
+      events: page,
+      pagination: {
+        limit,
+        offset,
+        hasMore,
+        nextOffset: hasMore ? offset + limit : null,
+      },
+      filters: {
+        category: built.category,
+        q: built.q || null,
+        city: built.city,
+        theme: built.themeRef,
+      },
+    });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Erreur serveur." });
@@ -2814,6 +2942,11 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
       slug: event.slug,
       status: event.status,
       ...visibilityApiFields(event.visibility),
+      city: event.city ?? null,
+      startsAt: event.startsAt ? event.startsAt.toISOString() : null,
+      primaryThemeId: event.primaryThemeId ?? null,
+      secondaryThemeId: event.secondaryThemeId ?? null,
+      discoverEligible: isDiscoverEligible(event),
       liveState: event.liveState.toLowerCase(),
       voteState: String(event.voteState).toLowerCase(),
       displayState: String(event.displayState).toLowerCase(),
@@ -2911,6 +3044,8 @@ app.patch("/events/:eventId/visibility", requireAuth, async (req, res) => {
         landingEnabled: true,
         slug: true,
         title: true,
+        primaryThemeId: true,
+        startsAt: true,
       },
     });
     if (!existing) {
@@ -2939,6 +3074,8 @@ app.patch("/events/:eventId/visibility", requireAuth, async (req, res) => {
               title: true,
               visibility: true,
               landingEnabled: true,
+              primaryThemeId: true,
+              startsAt: true,
             },
           })
         : existing;
@@ -2956,9 +3093,183 @@ app.patch("/events/:eventId/visibility", requireAuth, async (req, res) => {
         robots: seo.robots,
         indexable: seo.index,
       },
-      /** Lot A : Discover UI absente ; PUBLIC = intention SEO / future éligibilité. */
-      discoverReady: false,
+      /** Lot B : listable dans Discover ssi PUBLIC + thème + startsAt. */
+      discoverReady: isDiscoverEligible(updated),
       changed: Boolean(validated.becomingPublic || validated.becomingPrivate),
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/**
+ * Lot B — métadonnées Discover (ville, startsAt, thèmes).
+ * Optionnel pour les événements privés ; requis pour figurer dans Discover.
+ * Body: { city?, startsAt?, primaryThemeId?, secondaryThemeId? }
+ */
+app.patch("/events/:eventId/discover-meta", requireAuth, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    const existing = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true,
+        visibility: true,
+        city: true,
+        startsAt: true,
+        primaryThemeId: true,
+        secondaryThemeId: true,
+      },
+    });
+    if (!existing) {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+    const body = req.body ?? {};
+    const hasCity = Object.prototype.hasOwnProperty.call(body, "city");
+    const hasStartsAt = Object.prototype.hasOwnProperty.call(body, "startsAt");
+    const hasPrimary = Object.prototype.hasOwnProperty.call(
+      body,
+      "primaryThemeId",
+    );
+    const hasSecondary = Object.prototype.hasOwnProperty.call(
+      body,
+      "secondaryThemeId",
+    );
+    if (!hasCity && !hasStartsAt && !hasPrimary && !hasSecondary) {
+      return res.status(400).json({
+        error:
+          "Corps attendu : au moins un de { city, startsAt, primaryThemeId, secondaryThemeId }.",
+      });
+    }
+
+    /** @type {Record<string, unknown>} */
+    const data = {};
+    if (hasCity) {
+      const city = normalizeDiscoverCity(body.city);
+      if (city === undefined) {
+        return res.status(400).json({ error: "city invalide." });
+      }
+      data.city = city;
+    }
+    if (hasStartsAt) {
+      const startsAt = parseDiscoverStartsAt(body.startsAt);
+      if (startsAt === undefined) {
+        return res.status(400).json({
+          error: "startsAt invalide (ISO-8601 attendu).",
+        });
+      }
+      data.startsAt = startsAt;
+    }
+
+    const nextPrimary = hasPrimary
+      ? normalizeThemeRef(body.primaryThemeId)
+      : existing.primaryThemeId;
+    const nextSecondary = hasSecondary
+      ? normalizeThemeRef(body.secondaryThemeId)
+      : existing.secondaryThemeId;
+    if (hasPrimary && nextPrimary === undefined) {
+      return res.status(400).json({ error: "primaryThemeId invalide." });
+    }
+    if (hasSecondary && nextSecondary === undefined) {
+      return res.status(400).json({ error: "secondaryThemeId invalide." });
+    }
+
+    const resolveThemeId = async (ref) => {
+      if (ref == null) return null;
+      const hit = await prisma.theme.findFirst({
+        where: {
+          active: true,
+          OR: [{ id: ref }, { slug: ref }],
+        },
+        select: { id: true },
+      });
+      return hit?.id ?? null;
+    };
+
+    let primaryId = existing.primaryThemeId;
+    let secondaryId = existing.secondaryThemeId;
+    if (hasPrimary) {
+      if (nextPrimary == null) {
+        primaryId = null;
+      } else {
+        primaryId = await resolveThemeId(nextPrimary);
+        if (!primaryId) {
+          return res.status(400).json({
+            error: "Thème principal introuvable.",
+            code: "PRIMARY_THEME_NOT_FOUND",
+          });
+        }
+      }
+      data.primaryThemeId = primaryId;
+    }
+    if (hasSecondary) {
+      if (nextSecondary == null) {
+        secondaryId = null;
+      } else {
+        secondaryId = await resolveThemeId(nextSecondary);
+        if (!secondaryId) {
+          return res.status(400).json({
+            error: "Thème secondaire introuvable.",
+            code: "SECONDARY_THEME_NOT_FOUND",
+          });
+        }
+      }
+      data.secondaryThemeId = secondaryId;
+    }
+
+    const themesCheck = validateEventThemes({
+      primaryThemeId: hasPrimary ? primaryId : existing.primaryThemeId,
+      secondaryThemeId: hasSecondary ? secondaryId : existing.secondaryThemeId,
+      primaryExists: true,
+      secondaryExists: true,
+    });
+    if (!themesCheck.ok) {
+      return res.status(themesCheck.status).json({
+        error: themesCheck.error,
+        code: themesCheck.code,
+      });
+    }
+
+    const updated = await prisma.event.update({
+      where: { id: eventId },
+      data,
+      include: {
+        primaryTheme: {
+          select: { id: true, slug: true, label: true, sortOrder: true },
+        },
+        secondaryTheme: {
+          select: { id: true, slug: true, label: true, sortOrder: true },
+        },
+      },
+    });
+
+    return res.json({
+      id: updated.id,
+      slug: updated.slug,
+      title: updated.title,
+      ...visibilityApiFields(updated.visibility),
+      city: updated.city ?? null,
+      startsAt: updated.startsAt ? updated.startsAt.toISOString() : null,
+      primaryTheme: updated.primaryTheme
+        ? {
+            id: updated.primaryTheme.id,
+            slug: updated.primaryTheme.slug,
+            label: updated.primaryTheme.label,
+          }
+        : null,
+      secondaryTheme: updated.secondaryTheme
+        ? {
+            id: updated.secondaryTheme.id,
+            slug: updated.secondaryTheme.slug,
+            label: updated.secondaryTheme.label,
+          }
+        : null,
+      discoverEligible: isDiscoverEligible(updated),
     });
   } catch (e) {
     console.error(e);
