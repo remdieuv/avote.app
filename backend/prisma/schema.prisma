@@ -17,6 +17,12 @@ enum EventStatus {
   ARCHIVED
 }
 
+/** Découvrabilité : PRIVATE = hors Discover / noindex ; PUBLIC = éligible Discover + SEO. */
+enum EventVisibility {
+  PRIVATE
+  PUBLIC
+}
+
 enum PollStatus {
   DRAFT
   SCHEDULED
@@ -118,6 +124,8 @@ model Event {
   infoShowOnFinished Boolean @default(true)
   slug         String      @unique
   status       EventStatus @default(DRAFT)
+  /** Privé par défaut. N’altère pas /join ni le vote. Landing non gateée en Lot A. */
+  visibility   EventVisibility @default(PRIVATE)
   liveState    LiveState   @default(WAITING)
   /** Affichage écran salle : question / résultats / noir / attente */
   displayState DisplayState @default(WAITING)
@@ -180,6 +188,7 @@ model Event {
   landingProgramItems   EventLandingProgramItem[]
 
   @@index([userId])
+  @@index([visibility])
 }
 
 /** Étape de programme Landing (heure + titre), ordre chronologique. */

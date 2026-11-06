@@ -31,6 +31,12 @@ const {
   assertPollOwnedBy,
 } = require("./lib/eventAccess");
 const {
+  EVENT_VISIBILITY,
+  eventLandingRobots,
+  validateVisibilityChange,
+  visibilityApiFields,
+} = require("./lib/eventVisibility");
+const {
   isLandingFeedLeadCrm,
   buildLandingFeedItems,
 } = require("./lib/landingFeed");
@@ -1828,6 +1834,7 @@ async function listEventsForAdmin(userId) {
       createdAt: true,
       participantsLimit: true,
       landingEnabled: true,
+      visibility: true,
       liveState: true,
       voteState: true,
       displayState: true,
@@ -1874,6 +1881,7 @@ async function listEventsForAdmin(userId) {
     voteState: String(e.voteState).toLowerCase(),
     displayState: String(e.displayState).toLowerCase(),
     landingEnabled: Boolean(e.landingEnabled),
+    ...visibilityApiFields(e.visibility),
     pollCount: e.polls.length,
     voteCount: votesByEventId.get(e.id) || 0,
     participantCount: participantsByEventId.get(e.id)?.size || 0,
@@ -1958,6 +1966,8 @@ app.post("/events/:eventId/duplicate", requireAuth, async (req, res) => {
           landingKeepMessagesAfter: source.landingKeepMessagesAfter !== false,
           slug,
           status: "PUBLISHED",
+          /** Copie = nouvel événement → privé par défaut (pas de reprise PUBLIC). */
+          visibility: EVENT_VISIBILITY.PRIVATE,
           liveState: "WAITING",
           voteState: "CLOSED",
           displayState: "WAITING",
@@ -2525,7 +2535,12 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       return res.status(404).json({ error: "Événement introuvable." });
     }
     if (!event.landingEnabled) {
-      return res.json({ enabled: false, slug: event.slug });
+      return res.json({
+        enabled: false,
+        slug: event.slug,
+        ...visibilityApiFields(event.visibility),
+        seo: { robots: "noindex,nofollow", indexable: false },
+      });
     }
     const info = eventCustomizationJson(event);
     const photos = (event.landingPhotos || []).map((p) => ({
@@ -2677,6 +2692,11 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       afterLive,
     });
 
+    const visibilityFields = visibilityApiFields(event.visibility);
+    const seo = eventLandingRobots({
+      visibility: event.visibility,
+      landingEnabled: true,
+    });
     return res.json({
       enabled: true,
       slug: event.slug,
@@ -2723,6 +2743,12 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       voteState: String(event.voteState || "").toLowerCase(),
       displayState: String(event.displayState || "").toLowerCase(),
       isLocked: Boolean(event.isLocked),
+      ...visibilityFields,
+      /** Lot A : SEO seulement — pas de gate d’accès Landing. */
+      seo: {
+        robots: seo.robots,
+        indexable: seo.index,
+      },
     });
   } catch (e) {
     console.error(e);
@@ -2787,6 +2813,7 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
       ...eventCustomizationJson(event),
       slug: event.slug,
       status: event.status,
+      ...visibilityApiFields(event.visibility),
       liveState: event.liveState.toLowerCase(),
       voteState: String(event.voteState).toLowerCase(),
       displayState: String(event.displayState).toLowerCase(),
@@ -2857,6 +2884,81 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
         sortOrder: step.sortOrder,
         createdAt: step.createdAt.toISOString(),
       })),
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/**
+ * Lot A — bascule Public / Privé (ownership requis).
+ * Body: { visibility: "public"|"private", confirmPublic?: true }
+ * PUBLIC exige confirmPublic: true. N’impacte pas /join ni la Landing (Lot F).
+ */
+app.patch("/events/:eventId/visibility", requireAuth, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    const existing = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true,
+        visibility: true,
+        landingEnabled: true,
+        slug: true,
+        title: true,
+      },
+    });
+    if (!existing) {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+    const body = req.body ?? {};
+    const validated = validateVisibilityChange({
+      currentVisibility: existing.visibility,
+      nextVisibility: body.visibility,
+      confirmPublic: body.confirmPublic,
+    });
+    if (!validated.ok) {
+      return res.status(validated.status).json({
+        error: validated.error,
+        code: validated.code || undefined,
+      });
+    }
+    const updated =
+      validated.becomingPublic || validated.becomingPrivate
+        ? await prisma.event.update({
+            where: { id: eventId },
+            data: { visibility: validated.visibility },
+            select: {
+              id: true,
+              slug: true,
+              title: true,
+              visibility: true,
+              landingEnabled: true,
+            },
+          })
+        : existing;
+    const seo = eventLandingRobots({
+      visibility: updated.visibility,
+      landingEnabled: updated.landingEnabled,
+    });
+    return res.json({
+      id: updated.id,
+      slug: updated.slug,
+      title: updated.title,
+      ...visibilityApiFields(updated.visibility),
+      landingEnabled: Boolean(updated.landingEnabled),
+      seo: {
+        robots: seo.robots,
+        indexable: seo.index,
+      },
+      /** Lot A : Discover UI absente ; PUBLIC = intention SEO / future éligibilité. */
+      discoverReady: false,
+      changed: Boolean(validated.becomingPublic || validated.becomingPrivate),
     });
   } catch (e) {
     console.error(e);
@@ -5689,6 +5791,7 @@ app.post("/polls", requireAuth, async (req, res) => {
             slug,
             description: descriptionInit,
             status: "PUBLISHED",
+            visibility: EVENT_VISIBILITY.PRIVATE,
             /** Régie : premier sondage sélectionné, vote fermé jusqu’à « Lancer le vote » */
             liveState: "WAITING",
             voteState: "CLOSED",
@@ -5833,6 +5936,7 @@ app.post("/polls", requireAuth, async (req, res) => {
           slug,
           description: descriptionInit,
           status: "PUBLISHED",
+          visibility: EVENT_VISIBILITY.PRIVATE,
           /** Régie : sondage actif affichable, vote fermé jusqu’à POST /polls/:id/open */
           liveState: "WAITING",
           voteState: "CLOSED",

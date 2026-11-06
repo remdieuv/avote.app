@@ -9,6 +9,7 @@ import {
   TelecommandeIcon,
   TelecommandeQrModal,
 } from "@/components/admin/TelecommandeQrModal";
+import { EventVisibilityControls } from "@/components/admin/EventVisibilityControls";
 import { TELECOMMANDE_QR_COPY } from "@/lib/telecommandeQr";
 
 /**
@@ -27,6 +28,7 @@ import { TELECOMMANDE_QR_COPY } from "@/lib/telecommandeQr";
  *     participantsUsed?: number | null;
  *     participantsLimit?: number | null;
  *     landingEnabled?: boolean;
+ *     visibility?: string;
  *     _localOnly?: boolean;
  *   };
  *   featured?: boolean;
@@ -36,6 +38,11 @@ import { TELECOMMANDE_QR_COPY } from "@/lib/telecommandeQr";
  *   onDuplicate?: (eventId: string) => void;
  *   onDelete?: (eventId: string) => void;
  *   onRename?: (eventId: string, title: string) => Promise<void>;
+ *   onVisibilityChange?: (
+ *     eventId: string,
+ *     next: "public" | "private",
+ *     opts: { confirmPublic: boolean },
+ *   ) => Promise<void>;
  * }} props
  */
 const EVENT_TITLE_MAX_LEN = 200;
@@ -49,6 +56,7 @@ export function EventDashboardCard({
   onDuplicate,
   onDelete,
   onRename,
+  onVisibilityChange,
 }) {
   const ev = event;
   const ux = getEventUxState(ev);
@@ -447,6 +455,19 @@ export function EventDashboardCard({
           ev._localOnly ? "Date locale" : null,
         )}
       </p>
+
+      {!ev._localOnly ? (
+        <EventVisibilityControls
+          visibility={ev.visibility}
+          disabled={actionBusy}
+          busy={actionBusy}
+          onChangeVisibility={
+            onVisibilityChange
+              ? (next, opts) => onVisibilityChange(ev.id, next, opts)
+              : undefined
+          }
+        />
+      ) : null}
 
       {metaLine ? (
         <p
