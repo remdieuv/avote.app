@@ -30,8 +30,12 @@ export function LandingHeader() {
       logoLabel="AVOTE"
       logoWordmarkSrc="/avote-wordmark.png"
       contentMaxWidth={MARKETING_CONTENT_MAX}
-      navItems={[{ href: "/pricing", label: "Tarifs", match: "exact" }]}
-      mobileQuickItem={{ href: "/pricing", label: "Tarifs", match: "exact" }}
+      navItems={[
+        { href: "/discover", label: "Découvrir", match: "prefix" },
+        { href: "/pricing", label: "Tarifs", match: "exact" },
+      ]}
+      mobileQuickItem={{ href: "/discover", label: "Découvrir", match: "prefix" }}
+      mobileMoreItems={[{ href: "/pricing", label: "Tarifs", match: "exact" }]}
       rightSlot={
         <Link href={isAuthed ? "/admin/events" : "/admin"} className="landing-header-cta">
           {isAuthed ? "Mes événements" : "Créer un événement"}
