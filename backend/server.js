@@ -51,6 +51,18 @@ const {
   parseDiscoverOffset,
 } = require("./lib/discoverEvents");
 const {
+  PROFILE_TYPES,
+  parseProfileType,
+  normalizeDisplayName,
+  normalizeBio,
+  normalizeWebsiteUrl,
+  normalizeIsPublic,
+  allocateUniqueProfileSlug,
+  isProfilePubliclyVisible,
+  mapOwnerProfileJson,
+  mapPublicProfileJson,
+} = require("./lib/organizerProfiles");
+const {
   isLandingFeedLeadCrm,
   buildLandingFeedItems,
 } = require("./lib/landingFeed");
@@ -1853,6 +1865,7 @@ async function listEventsForAdmin(userId) {
       startsAt: true,
       primaryThemeId: true,
       secondaryThemeId: true,
+      organizerProfileId: true,
       liveState: true,
       voteState: true,
       displayState: true,
@@ -1904,6 +1917,7 @@ async function listEventsForAdmin(userId) {
     startsAt: e.startsAt ? e.startsAt.toISOString() : null,
     primaryThemeId: e.primaryThemeId ?? null,
     secondaryThemeId: e.secondaryThemeId ?? null,
+    organizerProfileId: e.organizerProfileId ?? null,
     discoverEligible: isDiscoverEligible(e),
     pollCount: e.polls.length,
     voteCount: votesByEventId.get(e.id) || 0,
@@ -1990,6 +2004,16 @@ app.get("/discover/events", async (req, res) => {
         secondaryTheme: {
           select: { id: true, slug: true, label: true },
         },
+        organizerProfile: {
+          select: {
+            id: true,
+            slug: true,
+            displayName: true,
+            type: true,
+            imageUrl: true,
+            isPublic: true,
+          },
+        },
       },
     });
 
@@ -2000,10 +2024,13 @@ app.get("/discover/events", async (req, res) => {
     });
 
     const page = filtered.slice(0, limit).map((row) => {
-      const card = mapDiscoverEventCard({
-        ...row,
-        landingCoverUrl: absolutizeStoredAssetUrl(row.landingCoverUrl),
-      });
+      const card = mapDiscoverEventCard(
+        {
+          ...row,
+          landingCoverUrl: absolutizeStoredAssetUrl(row.landingCoverUrl),
+        },
+        absolutizeStoredAssetUrl,
+      );
       return card;
     });
     const hasMore = filtered.length > limit;
@@ -2022,6 +2049,301 @@ app.get("/discover/events", async (req, res) => {
         city: built.city,
         theme: built.themeRef,
       },
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/** Lot D — profils du compte connecté. */
+app.get("/me/profiles", requireAuth, async (req, res) => {
+  try {
+    const profiles = await prisma.organizerProfile.findMany({
+      where: { ownerUserId: req.userId },
+      orderBy: [{ type: "asc" }, { createdAt: "asc" }],
+    });
+    return res.json({
+      profiles: profiles.map((p) =>
+        mapOwnerProfileJson(p, absolutizeStoredAssetUrl),
+      ),
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/**
+ * Lot D — créer un profil.
+ * Body: { type, displayName, bio?, websiteUrl?, isPublic? }
+ * Jamais de nom dérivé de l’e-mail.
+ */
+app.post("/me/profiles", requireAuth, async (req, res) => {
+  try {
+    const body = req.body ?? {};
+    const type = parseProfileType(body.type);
+    if (!type) {
+      return res.status(400).json({
+        error: 'type invalide ("personal" ou "organization").',
+        code: "INVALID_PROFILE_TYPE",
+      });
+    }
+    const displayName = normalizeDisplayName(body.displayName);
+    if (displayName === undefined || displayName === null) {
+      return res.status(400).json({
+        error:
+          "displayName requis (nom ou pseudonyme explicite — pas une adresse e-mail).",
+        code: "INVALID_DISPLAY_NAME",
+      });
+    }
+    const bio = Object.prototype.hasOwnProperty.call(body, "bio")
+      ? normalizeBio(body.bio)
+      : null;
+    if (bio === undefined) {
+      return res.status(400).json({ error: "bio invalide." });
+    }
+    const websiteUrl = Object.prototype.hasOwnProperty.call(body, "websiteUrl")
+      ? normalizeWebsiteUrl(body.websiteUrl)
+      : null;
+    if (websiteUrl === undefined) {
+      return res.status(400).json({
+        error: "websiteUrl invalide (https://… attendu).",
+      });
+    }
+    let isPublic = normalizeIsPublic(body.isPublic);
+    if (isPublic === undefined) {
+      isPublic = type === PROFILE_TYPES.ORGANIZATION;
+    }
+
+    if (type === PROFILE_TYPES.PERSONAL) {
+      const existingPersonal = await prisma.organizerProfile.findFirst({
+        where: { ownerUserId: req.userId, type: PROFILE_TYPES.PERSONAL },
+        select: { id: true },
+      });
+      if (existingPersonal) {
+        return res.status(409).json({
+          error: "Un profil particulier existe déjà pour ce compte.",
+          code: "PERSONAL_PROFILE_EXISTS",
+        });
+      }
+    }
+
+    const slug = await allocateUniqueProfileSlug(prisma, displayName);
+    const created = await prisma.organizerProfile.create({
+      data: {
+        ownerUserId: req.userId,
+        type,
+        slug,
+        displayName,
+        bio,
+        websiteUrl,
+        isPublic,
+      },
+    });
+    return res.status(201).json({
+      profile: mapOwnerProfileJson(created, absolutizeStoredAssetUrl),
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+app.patch("/me/profiles/:profileId", requireAuth, async (req, res) => {
+  try {
+    const profileId = String(req.params.profileId || "").trim();
+    const existing = await prisma.organizerProfile.findFirst({
+      where: { id: profileId, ownerUserId: req.userId },
+    });
+    if (!existing) {
+      return res.status(404).json({ error: "Profil introuvable." });
+    }
+    const body = req.body ?? {};
+    /** @type {Record<string, unknown>} */
+    const data = {};
+    if (Object.prototype.hasOwnProperty.call(body, "displayName")) {
+      const displayName = normalizeDisplayName(body.displayName);
+      if (displayName === undefined || displayName === null) {
+        return res.status(400).json({
+          error:
+            "displayName invalide (nom explicite requis — pas une adresse e-mail).",
+          code: "INVALID_DISPLAY_NAME",
+        });
+      }
+      data.displayName = displayName;
+      if (displayName !== existing.displayName) {
+        data.slug = await allocateUniqueProfileSlug(
+          prisma,
+          displayName,
+          existing.id,
+        );
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "bio")) {
+      const bio = normalizeBio(body.bio);
+      if (bio === undefined) {
+        return res.status(400).json({ error: "bio invalide." });
+      }
+      data.bio = bio;
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "websiteUrl")) {
+      const websiteUrl = normalizeWebsiteUrl(body.websiteUrl);
+      if (websiteUrl === undefined) {
+        return res.status(400).json({
+          error: "websiteUrl invalide (https://… attendu).",
+        });
+      }
+      data.websiteUrl = websiteUrl;
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "isPublic")) {
+      const isPublic = normalizeIsPublic(body.isPublic);
+      if (isPublic === undefined) {
+        return res.status(400).json({ error: "isPublic invalide." });
+      }
+      data.isPublic = isPublic;
+    }
+    if (Object.keys(data).length === 0) {
+      return res.status(400).json({
+        error:
+          "Corps attendu : au moins un de { displayName, bio, websiteUrl, isPublic }.",
+      });
+    }
+    const updated = await prisma.organizerProfile.update({
+      where: { id: existing.id },
+      data,
+    });
+    return res.json({
+      profile: mapOwnerProfileJson(updated, absolutizeStoredAssetUrl),
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+app.delete("/me/profiles/:profileId", requireAuth, async (req, res) => {
+  try {
+    const profileId = String(req.params.profileId || "").trim();
+    const existing = await prisma.organizerProfile.findFirst({
+      where: { id: profileId, ownerUserId: req.userId },
+      select: { id: true },
+    });
+    if (!existing) {
+      return res.status(404).json({ error: "Profil introuvable." });
+    }
+    await prisma.organizerProfile.delete({ where: { id: existing.id } });
+    return res.json({ ok: true, id: existing.id });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+app.post(
+  "/me/profiles/:profileId/image",
+  requireAuth,
+  uploadMiddleware.single("file"),
+  async (req, res) => {
+    try {
+      const profileId = String(req.params.profileId || "").trim();
+      const existing = await prisma.organizerProfile.findFirst({
+        where: { id: profileId, ownerUserId: req.userId },
+        select: { id: true },
+      });
+      if (!existing) {
+        return res.status(404).json({ error: "Profil introuvable." });
+      }
+      if (!req.file?.buffer) {
+        return res.status(400).json({ error: "Fichier image requis." });
+      }
+      const uploadResult = await uploadImageBufferToCloudinary({
+        buffer: req.file.buffer,
+        profileId: existing.id,
+        kind: "profile_image",
+      });
+      const updated = await prisma.organizerProfile.update({
+        where: { id: existing.id },
+        data: { imageUrl: uploadResult.secureUrl },
+      });
+      return res.json({
+        profile: mapOwnerProfileJson(updated, absolutizeStoredAssetUrl),
+      });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({
+        error:
+          typeof e?.message === "string" && e.message.includes("Cloudinary")
+            ? e.message
+            : "Erreur serveur.",
+      });
+    }
+  },
+);
+
+/**
+ * Lot D — page publique organisateur.
+ * Profils non publics → 404 (pas de fuite d’existence).
+ */
+app.get("/organizers/:slugOrId", async (req, res) => {
+  try {
+    const key = String(req.params.slugOrId || "").trim();
+    if (!key) {
+      return res.status(400).json({ error: "Identifiant invalide." });
+    }
+    const profile = await prisma.organizerProfile.findFirst({
+      where: { OR: [{ slug: key }, { id: key }] },
+    });
+    if (!profile || !isProfilePubliclyVisible(profile)) {
+      return res.status(404).json({ error: "Profil introuvable." });
+    }
+    const events = await prisma.event.findMany({
+      where: {
+        organizerProfileId: profile.id,
+        visibility: EVENT_VISIBILITY.PUBLIC,
+      },
+      orderBy: [{ startsAt: "desc" }, { createdAt: "desc" }],
+      take: 50,
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        city: true,
+        startsAt: true,
+        liveState: true,
+        isLiveConsumed: true,
+        landingEnabled: true,
+        landingCoverUrl: true,
+        primaryTheme: { select: { id: true, slug: true, label: true } },
+        visibility: true,
+        organizerProfileId: true,
+        primaryThemeId: true,
+      },
+    });
+    /** Uniquement visibility PUBLIC — jamais les privés. */
+    const publicEvents = events.map((e) => ({
+      id: e.id,
+      title: e.title,
+      slug: e.slug,
+      city: e.city ?? null,
+      startsAt: e.startsAt ? e.startsAt.toISOString() : null,
+      liveState: String(e.liveState || "").toLowerCase(),
+      landingEnabled: Boolean(e.landingEnabled),
+      landingCoverUrl: absolutizeStoredAssetUrl(e.landingCoverUrl),
+      primaryTheme: e.primaryTheme
+        ? {
+            id: e.primaryTheme.id,
+            slug: e.primaryTheme.slug,
+            label: e.primaryTheme.label,
+          }
+        : null,
+      joinPath: `/join/${e.slug}`,
+      landingPath: e.landingEnabled ? `/e/${e.slug}` : null,
+    }));
+
+    return res.json({
+      profile: mapPublicProfileJson(profile, absolutizeStoredAssetUrl),
+      events: publicEvents,
     });
   } catch (e) {
     console.error(e);
@@ -2946,6 +3268,7 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
       startsAt: event.startsAt ? event.startsAt.toISOString() : null,
       primaryThemeId: event.primaryThemeId ?? null,
       secondaryThemeId: event.secondaryThemeId ?? null,
+      organizerProfileId: event.organizerProfileId ?? null,
       discoverEligible: isDiscoverEligible(event),
       liveState: event.liveState.toLowerCase(),
       voteState: String(event.voteState).toLowerCase(),
@@ -3046,6 +3369,8 @@ app.patch("/events/:eventId/visibility", requireAuth, async (req, res) => {
         title: true,
         primaryThemeId: true,
         startsAt: true,
+        organizerProfileId: true,
+        organizerProfile: { select: { isPublic: true } },
       },
     });
     if (!existing) {
@@ -3076,6 +3401,8 @@ app.patch("/events/:eventId/visibility", requireAuth, async (req, res) => {
               landingEnabled: true,
               primaryThemeId: true,
               startsAt: true,
+              organizerProfileId: true,
+              organizerProfile: { select: { isPublic: true } },
             },
           })
         : existing;
@@ -3093,7 +3420,7 @@ app.patch("/events/:eventId/visibility", requireAuth, async (req, res) => {
         robots: seo.robots,
         indexable: seo.index,
       },
-      /** Lot B : listable dans Discover ssi PUBLIC + thème + startsAt. */
+      /** Lot D : PUBLIC + thème + startsAt + profil orga public. */
       discoverReady: isDiscoverEligible(updated),
       changed: Boolean(validated.becomingPublic || validated.becomingPrivate),
     });
@@ -3104,9 +3431,9 @@ app.patch("/events/:eventId/visibility", requireAuth, async (req, res) => {
 });
 
 /**
- * Lot B — métadonnées Discover (ville, startsAt, thèmes).
+ * Lot B/D — métadonnées Discover (ville, startsAt, thèmes, profil orga).
  * Optionnel pour les événements privés ; requis pour figurer dans Discover.
- * Body: { city?, startsAt?, primaryThemeId?, secondaryThemeId? }
+ * Body: { city?, startsAt?, primaryThemeId?, secondaryThemeId?, organizerProfileId? }
  */
 app.patch("/events/:eventId/discover-meta", requireAuth, async (req, res) => {
   try {
@@ -3124,6 +3451,7 @@ app.patch("/events/:eventId/discover-meta", requireAuth, async (req, res) => {
         startsAt: true,
         primaryThemeId: true,
         secondaryThemeId: true,
+        organizerProfileId: true,
       },
     });
     if (!existing) {
@@ -3140,10 +3468,20 @@ app.patch("/events/:eventId/discover-meta", requireAuth, async (req, res) => {
       body,
       "secondaryThemeId",
     );
-    if (!hasCity && !hasStartsAt && !hasPrimary && !hasSecondary) {
+    const hasOrganizer = Object.prototype.hasOwnProperty.call(
+      body,
+      "organizerProfileId",
+    );
+    if (
+      !hasCity &&
+      !hasStartsAt &&
+      !hasPrimary &&
+      !hasSecondary &&
+      !hasOrganizer
+    ) {
       return res.status(400).json({
         error:
-          "Corps attendu : au moins un de { city, startsAt, primaryThemeId, secondaryThemeId }.",
+          "Corps attendu : au moins un de { city, startsAt, primaryThemeId, secondaryThemeId, organizerProfileId }.",
       });
     }
 
@@ -3222,6 +3560,31 @@ app.patch("/events/:eventId/discover-meta", requireAuth, async (req, res) => {
       data.secondaryThemeId = secondaryId;
     }
 
+    if (hasOrganizer) {
+      const rawOrg = body.organizerProfileId;
+      if (rawOrg === null || rawOrg === "") {
+        data.organizerProfileId = null;
+      } else if (typeof rawOrg !== "string") {
+        return res.status(400).json({
+          error: "organizerProfileId invalide.",
+          code: "INVALID_ORGANIZER_PROFILE",
+        });
+      } else {
+        const orgId = rawOrg.trim();
+        const ownedProfile = await prisma.organizerProfile.findFirst({
+          where: { id: orgId, ownerUserId: req.userId },
+          select: { id: true, isPublic: true },
+        });
+        if (!ownedProfile) {
+          return res.status(403).json({
+            error: "Profil organisateur introuvable ou non autorisé.",
+            code: "ORGANIZER_PROFILE_FORBIDDEN",
+          });
+        }
+        data.organizerProfileId = ownedProfile.id;
+      }
+    }
+
     const themesCheck = validateEventThemes({
       primaryThemeId: hasPrimary ? primaryId : existing.primaryThemeId,
       secondaryThemeId: hasSecondary ? secondaryId : existing.secondaryThemeId,
@@ -3245,6 +3608,16 @@ app.patch("/events/:eventId/discover-meta", requireAuth, async (req, res) => {
         secondaryTheme: {
           select: { id: true, slug: true, label: true, sortOrder: true },
         },
+        organizerProfile: {
+          select: {
+            id: true,
+            slug: true,
+            displayName: true,
+            type: true,
+            isPublic: true,
+            imageUrl: true,
+          },
+        },
       },
     });
 
@@ -3267,6 +3640,16 @@ app.patch("/events/:eventId/discover-meta", requireAuth, async (req, res) => {
             id: updated.secondaryTheme.id,
             slug: updated.secondaryTheme.slug,
             label: updated.secondaryTheme.label,
+          }
+        : null,
+      organizerProfile: updated.organizerProfile
+        ? {
+            id: updated.organizerProfile.id,
+            slug: updated.organizerProfile.slug,
+            displayName: updated.organizerProfile.displayName,
+            type: String(updated.organizerProfile.type || "").toLowerCase(),
+            isPublic: Boolean(updated.organizerProfile.isPublic),
+            imageUrl: absolutizeStoredAssetUrl(updated.organizerProfile.imageUrl),
           }
         : null,
       discoverEligible: isDiscoverEligible(updated),

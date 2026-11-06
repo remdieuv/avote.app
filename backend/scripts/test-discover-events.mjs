@@ -49,7 +49,7 @@ test("catalogue : exactement 9 thèmes", () => {
   assert.ok(labels.includes("Autres"));
 });
 
-test("isDiscoverEligible exige public + thème + startsAt", () => {
+test("isDiscoverEligible exige public + thème + startsAt + profil orga", () => {
   assert.equal(isDiscoverEligible({ visibility: "PUBLIC" }), false);
   assert.equal(
     isDiscoverEligible({
@@ -63,6 +63,7 @@ test("isDiscoverEligible exige public + thème + startsAt", () => {
       visibility: "PRIVATE",
       primaryThemeId: "theme_sport",
       startsAt: NOW,
+      organizerProfileId: "org1",
     }),
     false,
   );
@@ -72,13 +73,33 @@ test("isDiscoverEligible exige public + thème + startsAt", () => {
       primaryThemeId: "theme_sport",
       startsAt: NOW,
     }),
+    false,
+  );
+  assert.equal(
+    isDiscoverEligible({
+      visibility: "PUBLIC",
+      primaryThemeId: "theme_sport",
+      startsAt: NOW,
+      organizerProfileId: "org1",
+    }),
     true,
+  );
+  assert.equal(
+    isDiscoverEligible({
+      visibility: "PUBLIC",
+      primaryThemeId: "theme_sport",
+      startsAt: NOW,
+      organizerProfileId: "org1",
+      organizerProfile: { isPublic: false },
+    }),
+    false,
   );
   assert.equal(
     isDiscoverEligibleVis({
       visibility: "public",
       primaryThemeId: "theme_sport",
       startsAt: NOW,
+      organizerProfileId: "org1",
     }),
     true,
   );
@@ -184,6 +205,8 @@ test("buildDiscoverEventsQuery refuse les privés via visibility PUBLIC", () => 
   assert.equal(q.ok, true);
   assert.equal(q.prismaWhere.visibility, "PUBLIC");
   assert.deepEqual(q.prismaWhere.primaryThemeId, { not: null });
+  assert.deepEqual(q.prismaWhere.organizerProfileId, { not: null });
+  assert.deepEqual(q.prismaWhere.organizerProfile, { isPublic: true });
 });
 
 test("buildDiscoverEventsQuery category live force isLiveConsumed", () => {

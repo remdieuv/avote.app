@@ -92,6 +92,10 @@ function normalizeEventRow(e) {
         : e.isPublic === true
           ? "public"
           : "private",
+    organizerProfileId:
+      typeof e.organizerProfileId === "string" && e.organizerProfileId.trim()
+        ? e.organizerProfileId
+        : null,
     _localOnly: Boolean(e._localOnly),
   };
 }
@@ -535,6 +539,15 @@ export default function AdminEventsPage() {
                   onDelete={deleteEvent}
                   onRename={renameEvent}
                   onVisibilityChange={changeEventVisibility}
+                  onOrganizerProfileChange={(eventId, profileId) => {
+                    setRows((prev) =>
+                      prev.map((r) =>
+                        String(r.id) === String(eventId)
+                          ? { ...r, organizerProfileId: profileId }
+                          : r,
+                      ),
+                    );
+                  }}
                 />
               </div>
             ))}

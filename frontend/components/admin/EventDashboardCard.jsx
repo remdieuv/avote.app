@@ -9,6 +9,7 @@ import {
   TelecommandeIcon,
   TelecommandeQrModal,
 } from "@/components/admin/TelecommandeQrModal";
+import { EventOrganizerSelect } from "@/components/admin/EventOrganizerSelect";
 import { EventVisibilityControls } from "@/components/admin/EventVisibilityControls";
 import { TELECOMMANDE_QR_COPY } from "@/lib/telecommandeQr";
 
@@ -29,6 +30,7 @@ import { TELECOMMANDE_QR_COPY } from "@/lib/telecommandeQr";
  *     participantsLimit?: number | null;
  *     landingEnabled?: boolean;
  *     visibility?: string;
+ *     organizerProfileId?: string | null;
  *     _localOnly?: boolean;
  *   };
  *   featured?: boolean;
@@ -43,6 +45,7 @@ import { TELECOMMANDE_QR_COPY } from "@/lib/telecommandeQr";
  *     next: "public" | "private",
  *     opts: { confirmPublic: boolean },
  *   ) => Promise<void>;
+ *   onOrganizerProfileChange?: (eventId: string, profileId: string | null) => void;
  * }} props
  */
 const EVENT_TITLE_MAX_LEN = 200;
@@ -57,6 +60,7 @@ export function EventDashboardCard({
   onDelete,
   onRename,
   onVisibilityChange,
+  onOrganizerProfileChange,
 }) {
   const ev = event;
   const ux = getEventUxState(ev);
@@ -457,16 +461,26 @@ export function EventDashboardCard({
       </p>
 
       {!ev._localOnly ? (
-        <EventVisibilityControls
-          visibility={ev.visibility}
-          disabled={actionBusy}
-          busy={actionBusy}
-          onChangeVisibility={
-            onVisibilityChange
-              ? (next, opts) => onVisibilityChange(ev.id, next, opts)
-              : undefined
-          }
-        />
+        <>
+          <EventOrganizerSelect
+            eventId={ev.id}
+            organizerProfileId={ev.organizerProfileId || null}
+            disabled={actionBusy}
+            onUpdated={(profileId) =>
+              onOrganizerProfileChange?.(ev.id, profileId)
+            }
+          />
+          <EventVisibilityControls
+            visibility={ev.visibility}
+            disabled={actionBusy}
+            busy={actionBusy}
+            onChangeVisibility={
+              onVisibilityChange
+                ? (next, opts) => onVisibilityChange(ev.id, next, opts)
+                : undefined
+            }
+          />
+        </>
       ) : null}
 
       {metaLine ? (

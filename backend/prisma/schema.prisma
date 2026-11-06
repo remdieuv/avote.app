@@ -75,6 +75,12 @@ enum ActivationPlanType {
   EVENT
 }
 
+/** Lot D — profil organisateur (Particulier / Organisation). */
+enum OrganizerProfileType {
+  PERSONAL
+  ORGANIZATION
+}
+
 model User {
   id           String       @id @default(cuid())
   email        String       @unique
@@ -92,6 +98,7 @@ model User {
   payments          Payment[]
   eventActivations  EventActivation[]
   landingMessages   EventLandingMessage[]
+  organizerProfiles OrganizerProfile[]
 }
 
 model Event {
@@ -136,6 +143,9 @@ model Event {
   /** Thème secondaire facultatif — distinct du principal. */
   secondaryThemeId String?
   secondaryTheme   Theme?  @relation("EventSecondaryTheme", fields: [secondaryThemeId], references: [id], onDelete: SetNull)
+  /** Profil organisateur (Lot D) — requis pour Discover, optionnel pour le live privé. */
+  organizerProfileId String?
+  organizerProfile   OrganizerProfile? @relation(fields: [organizerProfileId], references: [id], onDelete: SetNull)
   liveState    LiveState   @default(WAITING)
   /** Affichage écran salle : question / résultats / noir / attente */
   displayState DisplayState @default(WAITING)
@@ -203,6 +213,35 @@ model Event {
   @@index([visibility, city])
   @@index([primaryThemeId])
   @@index([secondaryThemeId])
+  @@index([organizerProfileId])
+}
+
+/**
+ * Lot D — identité publique organisateur.
+ * PERSONAL : au plus un par compte (contrainte applicative).
+ * ORGANIZATION : plusieurs par compte.
+ * Ne jamais dériver displayName de l’e-mail automatiquement.
+ */
+model OrganizerProfile {
+  id          String               @id @default(cuid())
+  ownerUserId String
+  owner       User                 @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  type        OrganizerProfileType
+  slug        String               @unique
+  displayName String
+  bio         String?
+  /** Photo (particulier) ou logo (organisation). */
+  imageUrl    String?
+  websiteUrl  String?
+  /** false = hors annuaire / API publique (typique profil perso). */
+  isPublic    Boolean              @default(false)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  events Event[]
+
+  @@index([ownerUserId, type])
+  @@index([isPublic, type])
 }
 
 /** Catalogue thèmes métier Discover (Lot B) — distinct de themeMode salle. */
