@@ -67,6 +67,47 @@ export default function EventLandingPage() {
     setVisitorKey(getOrCreateVoterSessionId());
   }, []);
 
+  /** Lot A — robots meta selon visibility (pas de gate d’accès). */
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    const seoRobots =
+      payload &&
+      typeof payload === "object" &&
+      payload.seo &&
+      typeof payload.seo === "object" &&
+      typeof payload.seo.robots === "string"
+        ? payload.seo.robots
+        : null;
+    const visibility =
+      payload && typeof payload.visibility === "string"
+        ? payload.visibility.toLowerCase()
+        : "private";
+    const content =
+      seoRobots ||
+      (visibility === "public" ? "index,follow" : "noindex,nofollow");
+
+    let meta = document.querySelector('meta[name="robots"]');
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.setAttribute("name", "robots");
+      document.head.appendChild(meta);
+    }
+    meta.setAttribute("content", content);
+
+    const pageTitle =
+      payload &&
+      typeof payload.title === "string" &&
+      payload.title.trim()
+        ? `${payload.title.trim()} · AVOTE`
+        : null;
+    const prevTitle = document.title;
+    if (pageTitle) document.title = pageTitle;
+
+    return () => {
+      if (pageTitle) document.title = prevTitle;
+    };
+  }, [payload]);
+
   useEffect(() => {
     if (!slug) return undefined;
     if (isDemoSlug) {

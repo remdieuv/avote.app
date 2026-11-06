@@ -86,6 +86,12 @@ function normalizeEventRow(e) {
         : "",
     landingEnabled:
       typeof e.landingEnabled === "boolean" ? e.landingEnabled : undefined,
+    visibility:
+      typeof e.visibility === "string" && e.visibility.trim()
+        ? String(e.visibility).toLowerCase()
+        : e.isPublic === true
+          ? "public"
+          : "private",
     _localOnly: Boolean(e._localOnly),
   };
 }
@@ -266,6 +272,55 @@ export default function AdminEventsPage() {
       }
     },
     [rows, load],
+  );
+
+  const changeEventVisibility = useCallback(
+    async (eventId, next, opts) => {
+      if (!eventId) {
+        throw new Error("Événement introuvable.");
+      }
+      setActionEventId(eventId);
+      setFetchError(null);
+      try {
+        const res = await adminFetch(
+          `${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/visibility`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              visibility: next,
+              confirmPublic: Boolean(opts?.confirmPublic),
+            }),
+          },
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(mapApiError(body, res.status));
+        }
+        const nextVis =
+          typeof body?.visibility === "string" && body.visibility.trim()
+            ? String(body.visibility).toLowerCase()
+            : next;
+        setRows((prev) =>
+          prev.map((r) =>
+            String(r.id) === String(eventId)
+              ? { ...r, visibility: nextVis }
+              : r,
+          ),
+        );
+        setToastMsg(
+          nextVis === "public"
+            ? "Événement rendu public"
+            : "Événement repassé en privé",
+        );
+        window.setTimeout(() => setToastMsg(null), 2600);
+      } catch (e) {
+        throw new Error(e?.message || "Impossible de modifier la visibilité.");
+      } finally {
+        setActionEventId(null);
+      }
+    },
+    [],
   );
 
   const filteredSorted = useMemo(() => {
@@ -479,6 +534,7 @@ export default function AdminEventsPage() {
                   onDuplicate={duplicateEvent}
                   onDelete={deleteEvent}
                   onRename={renameEvent}
+                  onVisibilityChange={changeEventVisibility}
                 />
               </div>
             ))}
