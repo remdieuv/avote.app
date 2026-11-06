@@ -126,6 +126,16 @@ model Event {
   status       EventStatus @default(DRAFT)
   /** Privé par défaut. N’altère pas /join ni le vote. Landing non gateée en Lot A. */
   visibility   EventVisibility @default(PRIVATE)
+  /** Ville structurée (Discover) — ne pas dériver automatiquement de landingVenue. */
+  city         String?
+  /** Date/heure de début structurée (Discover). Obligatoire pour être listé. */
+  startsAt     DateTime?
+  /** Thème métier principal (catalogue Theme) — obligatoire pour Discover. */
+  primaryThemeId   String?
+  primaryTheme     Theme?  @relation("EventPrimaryTheme", fields: [primaryThemeId], references: [id], onDelete: SetNull)
+  /** Thème secondaire facultatif — distinct du principal. */
+  secondaryThemeId String?
+  secondaryTheme   Theme?  @relation("EventSecondaryTheme", fields: [secondaryThemeId], references: [id], onDelete: SetNull)
   liveState    LiveState   @default(WAITING)
   /** Affichage écran salle : question / résultats / noir / attente */
   displayState DisplayState @default(WAITING)
@@ -189,6 +199,26 @@ model Event {
 
   @@index([userId])
   @@index([visibility])
+  @@index([visibility, startsAt])
+  @@index([visibility, city])
+  @@index([primaryThemeId])
+  @@index([secondaryThemeId])
+}
+
+/** Catalogue thèmes métier Discover (Lot B) — distinct de themeMode salle. */
+model Theme {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  label     String
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  eventsPrimary   Event[] @relation("EventPrimaryTheme")
+  eventsSecondary Event[] @relation("EventSecondaryTheme")
+
+  @@index([active, sortOrder])
 }
 
 /** Étape de programme Landing (heure + titre), ordre chronologique. */

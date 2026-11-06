@@ -40,12 +40,26 @@ function isEventPublic(visibility) {
 }
 
 /**
- * Éligibilité future Discover (Lot B/C) — Lot A = visibility PUBLIC uniquement.
- * Thème / date / profil seront ajoutés plus tard.
- * @param {{ visibility?: unknown }} event
+ * Éligibilité Discover (Lot B) : PUBLIC + thème principal + startsAt.
+ * Profil organisateur (Lot D) non encore requis.
+ * @param {{
+ *   visibility?: unknown;
+ *   primaryThemeId?: unknown;
+ *   startsAt?: unknown;
+ * }} event
  */
 function isDiscoverEligible(event) {
-  return isEventPublic(event?.visibility);
+  if (!isEventPublic(event?.visibility)) return false;
+  const themeId =
+    typeof event?.primaryThemeId === "string"
+      ? event.primaryThemeId.trim()
+      : "";
+  if (!themeId) return false;
+  if (event?.startsAt == null) return false;
+  if (event.startsAt instanceof Date && Number.isNaN(event.startsAt.getTime())) {
+    return false;
+  }
+  return true;
 }
 
 /**
