@@ -166,7 +166,7 @@ export function DiscoverPageClient() {
               lineHeight: 1.15,
             }}
           >
-            Découvrir
+            Découvrez les événements
           </h1>
           <p style={{ margin: 0, color: "#475569", fontSize: "1rem", lineHeight: 1.55 }}>
             Trouvez des événements publics organisés avec AVOTE — à venir, en

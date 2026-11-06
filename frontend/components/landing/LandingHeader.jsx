@@ -31,10 +31,14 @@ export function LandingHeader() {
       logoWordmarkSrc="/avote-wordmark.png"
       contentMaxWidth={MARKETING_CONTENT_MAX}
       navItems={[
-        { href: "/discover", label: "Découvrir", match: "prefix" },
+        { href: "/discover", label: "Les événements", match: "prefix" },
         { href: "/pricing", label: "Tarifs", match: "exact" },
       ]}
-      mobileQuickItem={{ href: "/discover", label: "Découvrir", match: "prefix" }}
+      mobileQuickItem={{
+        href: "/discover",
+        label: "Les événements",
+        match: "prefix",
+      }}
       mobileMoreItems={[{ href: "/pricing", label: "Tarifs", match: "exact" }]}
       rightSlot={
         <Link href={isAuthed ? "/admin/events" : "/admin"} className="landing-header-cta">

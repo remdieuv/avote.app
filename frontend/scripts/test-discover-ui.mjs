@@ -123,16 +123,22 @@ test("secondary Rejoindre si landing est le CTA upcoming", () => {
   assert.deepEqual(sec, { href: "/join/e-abc", label: "Rejoindre" });
 });
 
-test("page discover + nav Découvrir présents", () => {
+test("page discover + nav Les événements présents", () => {
   const page = readFileSync(join(root, "app/discover/page.jsx"), "utf8");
   assert.match(page, /robots:\s*\{[\s\S]*index:\s*true/);
   assert.match(page, /DiscoverPageClient/);
+  const client = readFileSync(
+    join(root, "components/discover/DiscoverPageClient.jsx"),
+    "utf8",
+  );
+  assert.match(client, /Découvrez les événements/);
   const header = readFileSync(
     join(root, "components/landing/LandingHeader.jsx"),
     "utf8",
   );
   assert.match(header, /\/discover/);
-  assert.match(header, /Découvrir/);
+  assert.match(header, /Les événements/);
+  assert.match(header, /Mes événements/);
   assert.match(header, /mobileMoreItems/);
 });
 
