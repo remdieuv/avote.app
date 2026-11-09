@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminEventsToolbar } from "@/components/admin/AdminEventsToolbar";
 import { EventDashboardCard } from "@/components/admin/EventDashboardCard";
+import { DiscoverEventCard } from "@/components/discover/DiscoverEventCard";
 import { adminContentShellStyle } from "@/lib/adminLayout";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 import {
@@ -19,6 +20,14 @@ import {
 import { getEventUxState } from "@/lib/eventUxState";
 
 const LEADS_LAST_SEEN_LS_PREFIX = "avote_leads_seen_at_";
+
+/** @typedef {"organized"|"favorites"|"invitations"} MesEventsSection */
+
+const MES_EVENTS_SECTIONS = [
+  { id: /** @type {MesEventsSection} */ ("organized"), label: "Organisés" },
+  { id: /** @type {MesEventsSection} */ ("favorites"), label: "Favoris" },
+  { id: /** @type {MesEventsSection} */ ("invitations"), label: "Invitations" },
+];
 
 function mapApiError(body, status) {
   const code = String(body?.error || "").trim();
@@ -101,7 +110,11 @@ function normalizeEventRow(e) {
 }
 
 export default function AdminEventsPage() {
+  const [section, setSection] = useState(/** @type {MesEventsSection} */ ("organized"));
   const [rows, setRows] = useState([]);
+  const [favorites, setFavorites] = useState(/** @type {Array<Record<string, any>>} */ ([]));
+  const [favoritesLoading, setFavoritesLoading] = useState(false);
+  const [favoriteBusyId, setFavoriteBusyId] = useState(/** @type {string|null} */ (null));
   const [newLeadCounts, setNewLeadCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
@@ -135,9 +148,45 @@ export default function AdminEventsPage() {
     }
   }, []);
 
+  const loadFavorites = useCallback(async () => {
+    setFavoritesLoading(true);
+    setFetchError(null);
+    try {
+      const res = await adminFetch(`${apiBaseBrowser()}/me/favorites`, {
+        cache: "no-store",
+      });
+      if (res.status === 401) {
+        setFavorites([]);
+        setFetchError("Session expirée ou non connecté. Rechargez la page ou reconnectez-vous.");
+        return;
+      }
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body?.error || `Erreur ${res.status}`);
+      }
+      const list = Array.isArray(body.favorites) ? body.favorites : [];
+      setFavorites(
+        list
+          .map((row) => row?.event)
+          .filter((ev) => ev && typeof ev.id === "string"),
+      );
+    } catch (e) {
+      setFavorites([]);
+      setFetchError(e?.message || "Impossible de charger les favoris.");
+    } finally {
+      setFavoritesLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (section === "favorites") {
+      void loadFavorites();
+    }
+  }, [section, loadFavorites]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -345,6 +394,35 @@ export default function AdminEventsPage() {
     return { featuredId: fid, orderedEvents: ordered };
   }, [filteredSorted]);
 
+  const removeFavorite = useCallback(
+    async (event) => {
+      const eventId = typeof event?.id === "string" ? event.id : "";
+      if (!eventId) return;
+      setFavoriteBusyId(eventId);
+      setFetchError(null);
+      const previous = favorites;
+      setFavorites((prev) => prev.filter((ev) => ev.id !== eventId));
+      try {
+        const res = await adminFetch(
+          `${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/favorite`,
+          { method: "DELETE" },
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(body?.error || `Erreur ${res.status}`);
+        }
+        setToastMsg("Retiré des favoris");
+        window.setTimeout(() => setToastMsg(null), 2600);
+      } catch (e) {
+        setFavorites(previous);
+        setFetchError(e?.message || "Impossible de retirer le favori.");
+      } finally {
+        setFavoriteBusyId(null);
+      }
+    },
+    [favorites],
+  );
+
   return (
     <main
       style={{
@@ -384,7 +462,7 @@ export default function AdminEventsPage() {
       <div style={adminContentShellStyle("workspace")}>
         <AdminPageHeader
           title="Mes événements"
-          subtitle="Pilotez le live : régie, salle participants et projection sur un même tableau."
+          subtitle="Organisés, favoris et prochainement vos invitations — un seul espace."
           actions={
             <Link
               href="/admin"
@@ -410,6 +488,42 @@ export default function AdminEventsPage() {
           }
         />
 
+        <div
+          role="tablist"
+          aria-label="Sections Mes événements"
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "0.4rem",
+            marginBottom: "1.15rem",
+          }}
+        >
+          {MES_EVENTS_SECTIONS.map((tab) => {
+            const active = section === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setSection(tab.id)}
+                style={{
+                  padding: "0.48rem 0.9rem",
+                  borderRadius: 999,
+                  border: active ? "1px solid #1d4ed8" : "1px solid #cbd5e1",
+                  background: active ? "#1d4ed8" : "#fff",
+                  color: active ? "#fff" : "#334155",
+                  fontWeight: 800,
+                  fontSize: "0.86rem",
+                  cursor: "pointer",
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
         {fetchError ? (
           <p
             style={{
@@ -428,11 +542,91 @@ export default function AdminEventsPage() {
           </p>
         ) : null}
 
-        {loading ? (
+        {section === "invitations" ? (
+          <div
+            style={{
+              padding: "clamp(2rem, 5vw, 3rem) 1.5rem",
+              borderRadius: "16px",
+              border: "1px dashed #cbd5e1",
+              background: "#f8fafc",
+              textAlign: "center",
+            }}
+          >
+            <p style={{ margin: "0 0 0.45rem", fontSize: "1.05rem", fontWeight: 800, color: "#0f172a" }}>
+              Invitations bientôt disponibles
+            </p>
+            <p style={{ margin: 0, color: "#64748b", fontSize: "0.92rem", lineHeight: 1.55, maxWidth: 420, marginInline: "auto" }}>
+              Les invitations privées arriveront dans un prochain lot. Cet espace est prêt pour les accueillir.
+            </p>
+          </div>
+        ) : null}
+
+        {section === "favorites" ? (
+          <>
+            {favoritesLoading ? (
+              <p style={{ color: "#64748b", fontWeight: 500, margin: "0 0 1rem" }}>
+                Chargement des favoris…
+              </p>
+            ) : null}
+            {!favoritesLoading && favorites.length === 0 ? (
+              <div
+                style={{
+                  padding: "clamp(2rem, 5vw, 3rem) 1.5rem",
+                  borderRadius: "16px",
+                  border: "1px dashed #cbd5e1",
+                  background: "#f8fafc",
+                  textAlign: "center",
+                }}
+              >
+                <p style={{ margin: "0 0 0.45rem", fontSize: "1.05rem", fontWeight: 800, color: "#0f172a" }}>
+                  Aucun favori pour le moment
+                </p>
+                <p style={{ margin: "0 0 1.25rem", color: "#64748b", fontSize: "0.92rem", lineHeight: 1.55 }}>
+                  Sur l’annuaire « Les événements », utilisez le cœur pour enregistrer un événement public.
+                </p>
+                <Link
+                  href="/discover"
+                  style={{
+                    display: "inline-flex",
+                    padding: "0.6rem 1rem",
+                    borderRadius: 10,
+                    background: "#1d4ed8",
+                    color: "#fff",
+                    fontWeight: 800,
+                    textDecoration: "none",
+                  }}
+                >
+                  Parcourir les événements
+                </Link>
+              </div>
+            ) : null}
+            {!favoritesLoading && favorites.length > 0 ? (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+                  gap: "1rem",
+                }}
+              >
+                {favorites.map((ev) => (
+                  <DiscoverEventCard
+                    key={ev.id}
+                    event={{ ...ev, isFavorite: true, favorited: true }}
+                    isFavorite
+                    favoriteBusy={favoriteBusyId === ev.id}
+                    onToggleFavorite={removeFavorite}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </>
+        ) : null}
+
+        {section === "organized" && loading ? (
           <p style={{ color: "#64748b", fontWeight: 500, margin: "0 0 1rem" }}>Chargement…</p>
         ) : null}
 
-        {!loading && rows.length === 0 ? (
+        {section === "organized" && !loading && rows.length === 0 ? (
           <div
             style={{
               padding: "clamp(2rem, 5vw, 3rem) 1.5rem",
@@ -471,7 +665,7 @@ export default function AdminEventsPage() {
           </div>
         ) : null}
 
-        {!loading && rows.length > 0 ? (
+        {section === "organized" && !loading && rows.length > 0 ? (
           <>
             <AdminEventsToolbar
               searchValue={searchQuery}
@@ -499,7 +693,10 @@ export default function AdminEventsPage() {
           </>
         ) : null}
 
-        {!loading && rows.length > 0 && filteredSorted.length === 0 ? (
+        {section === "organized" &&
+        !loading &&
+        rows.length > 0 &&
+        filteredSorted.length === 0 ? (
           <div
             style={{
               padding: "clamp(1.75rem, 4vw, 2.5rem) 1.25rem",
@@ -517,7 +714,7 @@ export default function AdminEventsPage() {
           </div>
         ) : null}
 
-        {!loading && orderedEvents.length > 0 ? (
+        {section === "organized" && !loading && orderedEvents.length > 0 ? (
           <div className="admin-events-grid">
             {orderedEvents.map((ev) => (
               <div

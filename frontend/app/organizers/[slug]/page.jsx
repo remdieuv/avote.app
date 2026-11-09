@@ -1,18 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { LandingHeader } from "@/components/landing/LandingHeader";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 import { marketingContentShellStyle } from "@/lib/marketingLayout";
 
 /**
- * Lot D — page publique organisateur.
- * Prépare le bouton Suivre (Lot E) sans l’activer.
+ * Lot D/E — page publique organisateur + Suivre.
  */
 export default function OrganizerPublicPage() {
   const params = useParams();
+  const router = useRouter();
   const slugParam = params?.slug;
   const slug =
     typeof slugParam === "string" ? slugParam : slugParam?.[0] ?? null;
@@ -20,6 +20,25 @@ export default function OrganizerPublicPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(/** @type {string|null} */ (null));
   const [payload, setPayload] = useState(/** @type {null | Record<string, any>} */ (null));
+  const [isAuthed, setIsAuthed] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await adminFetch(`${apiBaseBrowser()}/auth/me`, {
+          cache: "no-store",
+        });
+        if (!cancelled) setIsAuthed(res.ok);
+      } catch {
+        if (!cancelled) setIsAuthed(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!slug) return undefined;
@@ -56,8 +75,75 @@ export default function OrganizerPublicPage() {
     };
   }, [slug]);
 
+  const toggleFollow = useCallback(async () => {
+    if (!slug) return;
+    const loginNext = `/organizers/${encodeURIComponent(slug)}`;
+    if (!isAuthed) {
+      router.push(`/login?next=${encodeURIComponent(loginNext)}`);
+      return;
+    }
+    const currently = Boolean(payload?.profile?.isFollowing);
+    setFollowBusy(true);
+    setPayload((prev) =>
+      prev?.profile
+        ? {
+            ...prev,
+            profile: { ...prev.profile, isFollowing: !currently },
+          }
+        : prev,
+    );
+    try {
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/organizers/${encodeURIComponent(slug)}/follow`,
+        { method: currently ? "DELETE" : "POST" },
+      );
+      if (res.status === 401) {
+        setIsAuthed(false);
+        setPayload((prev) =>
+          prev?.profile
+            ? {
+                ...prev,
+                profile: { ...prev.profile, isFollowing: currently },
+              }
+            : prev,
+        );
+        router.push(`/login?next=${encodeURIComponent(loginNext)}`);
+        return;
+      }
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body?.error || `Erreur ${res.status}`);
+      }
+      setPayload((prev) =>
+        prev?.profile
+          ? {
+              ...prev,
+              profile: {
+                ...prev.profile,
+                isFollowing: Boolean(body?.isFollowing),
+              },
+            }
+          : prev,
+      );
+    } catch (e) {
+      setPayload((prev) =>
+        prev?.profile
+          ? {
+              ...prev,
+              profile: { ...prev.profile, isFollowing: currently },
+            }
+          : prev,
+      );
+      setError(e?.message || "Impossible de mettre à jour le suivi.");
+    } finally {
+      setFollowBusy(false);
+    }
+  }, [isAuthed, payload?.profile?.isFollowing, router, slug]);
+
   const profile = payload?.profile;
   const events = Array.isArray(payload?.events) ? payload.events : [];
+  const isFollowing = Boolean(profile?.isFollowing);
+  const followReady = profile?.followAvailable !== false;
 
   return (
     <div
@@ -142,23 +228,31 @@ export default function OrganizerPublicPage() {
                     </a>
                   </p>
                 ) : null}
-                <button
-                  type="button"
-                  disabled
-                  title="Bientôt disponible"
-                  style={{
-                    padding: "0.45rem 0.85rem",
-                    borderRadius: 10,
-                    border: "1px solid #cbd5e1",
-                    background: "#f1f5f9",
-                    color: "#94a3b8",
-                    fontWeight: 800,
-                    cursor: "not-allowed",
-                  }}
-                  data-avote-follow-ready="false"
-                >
-                  Suivre (bientôt)
-                </button>
+                {followReady ? (
+                  <button
+                    type="button"
+                    onClick={() => void toggleFollow()}
+                    disabled={followBusy}
+                    aria-pressed={isFollowing}
+                    style={{
+                      padding: "0.5rem 0.95rem",
+                      borderRadius: 10,
+                      border: isFollowing ? "1px solid #cbd5e1" : "1px solid #1d4ed8",
+                      background: isFollowing ? "#fff" : "#1d4ed8",
+                      color: isFollowing ? "#0f172a" : "#fff",
+                      fontWeight: 800,
+                      cursor: followBusy ? "wait" : "pointer",
+                      minHeight: 42,
+                    }}
+                    data-avote-follow-ready="true"
+                  >
+                    {followBusy
+                      ? "…"
+                      : isFollowing
+                        ? "Ne plus suivre"
+                        : "Suivre"}
+                  </button>
+                ) : null}
               </div>
             </header>
 
