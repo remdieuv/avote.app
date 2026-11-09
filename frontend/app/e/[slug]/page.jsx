@@ -137,11 +137,21 @@ export default function EventLandingPage() {
           }
           return;
         }
-        if (!res.ok) {
-          if (!cancelled) setError(`Erreur ${res.status}`);
+        const data = await res.json().catch(() => ({}));
+        if (
+          res.status === 401 &&
+          (data?.code === "INVITE_REQUIRED" || data?.inviteEnabled)
+        ) {
+          redirected = true;
+          router.replace(
+            data?.invitePath || `/invite/${encodeURIComponent(slug)}`,
+          );
           return;
         }
-        const data = await res.json();
+        if (!res.ok) {
+          if (!cancelled) setError(data?.error || `Erreur ${res.status}`);
+          return;
+        }
         if (!cancelled && data?.enabled === false) {
           redirected = true;
           router.replace(`/join/${encodeURIComponent(slug)}`);

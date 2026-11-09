@@ -101,6 +101,7 @@ model User {
   organizerProfiles OrganizerProfile[]
   eventFavorites    EventFavorite[]
   organizerFollows  OrganizerFollow[]
+  eventGuestAccesses EventGuestAccess[]
 }
 
 model Event {
@@ -198,6 +199,20 @@ model Event {
   landingKeepPhotosAfter   Boolean @default(true)
   landingKeepResultsAfter  Boolean @default(true)
   landingKeepMessagesAfter Boolean @default(true)
+  /**
+   * Lot F — accès souvenirs sur invitation (soft-gate).
+   * false = comportement historique (Landing /e accessible par slug même si PRIVATE).
+   * true = souvenirs protégés : auth + grant (code) requis, hors organisateur.
+   */
+  inviteEnabled Boolean @default(false)
+  /** Hash bcrypt du code d’accès (jamais de code en clair en base / API list). */
+  inviteCodeHash String?
+  inviteCodeUpdatedAt DateTime?
+  /**
+   * Lot F — médias Landing servis via Cloudinary authenticated + URL signées.
+   * Activé seulement après migration réussie des publicIds existants.
+   */
+  mediaProtectionEnabled Boolean @default(false)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
@@ -208,6 +223,7 @@ model Event {
   landingShowcasePhotos EventLandingShowcasePhoto[]
   landingMessages       EventLandingMessage[]
   landingProgramItems   EventLandingProgramItem[]
+  guestAccesses         EventGuestAccess[]
 
   @@index([userId])
   @@index([visibility])
@@ -216,8 +232,26 @@ model Event {
   @@index([primaryThemeId])
   @@index([secondaryThemeId])
   @@index([organizerProfileId])
+  @@index([inviteEnabled])
 
   favorites EventFavorite[]
+}
+
+/**
+ * Lot F — invitation acceptée (compte → événement privé protégé).
+ * Le renouvellement du code ne révoque pas ces grants.
+ */
+model EventGuestAccess {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  grantedAt DateTime @default(now())
+
+  @@unique([userId, eventId])
+  @@index([userId, grantedAt])
+  @@index([eventId])
 }
 
 /**

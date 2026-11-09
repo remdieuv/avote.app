@@ -17,6 +17,23 @@ const {
   destroyCloudinaryByPublicId,
 } = require("./lib/cloudinary");
 const {
+  generateInviteCode,
+  hashInviteCode,
+  verifyInviteCode,
+  normalizeInviteCodeInput,
+  isInviteProtectionEnabled,
+  isMediaProtectionEnabled,
+  canAccessProtectedSouvenirs,
+  mapInviteAccessMeta,
+  mapOwnerInviteJson,
+} = require("./lib/eventInvites");
+const {
+  resolveDeliverableMediaUrl,
+  migrateEventLandingMediaToProtected,
+  toProtectedUrlMarker,
+  isProtectedUrlMarker,
+} = require("./lib/protectedMedia");
+const {
   hashPassword,
   verifyPassword,
   signToken,
@@ -271,7 +288,7 @@ function eventCustomizationJson(event) {
  * @param {string[]} ids
  * @param {Array<{ id: string; url: string; caption?: string | null; createdAt?: Date | string; showInGallery?: boolean }>} showcasePhotos
  */
-function resolveLandingMessagePhotos(ids, showcasePhotos) {
+function resolveLandingMessagePhotos(ids, showcasePhotos, eventForMedia) {
   const byId = new Map(
     (showcasePhotos || []).map((p) => [String(p.id), p]),
   );
@@ -281,7 +298,16 @@ function resolveLandingMessagePhotos(ids, showcasePhotos) {
     if (!p) continue;
     out.push({
       id: String(p.id),
-      url: absolutizeStoredAssetUrl(p.url),
+      url: eventForMedia
+        ? resolveDeliverableMediaUrl(
+            p.url,
+            p.cloudinaryPublicId,
+            eventForMedia,
+            absolutizeStoredAssetUrl,
+          )
+        : isProtectedUrlMarker(p.url)
+          ? null
+          : absolutizeStoredAssetUrl(p.url),
       caption:
         typeof p.caption === "string" && p.caption.trim()
           ? p.caption.trim()
@@ -295,10 +321,20 @@ function resolveLandingMessagePhotos(ids, showcasePhotos) {
  * JSON public/admin d'une photo showcase (galerie ou message-only).
  * @param {{ id: string; url: string; caption?: string | null; createdAt: Date | string; showInGallery?: boolean }} p
  */
-function mapShowcasePhotoJson(p) {
+function mapShowcasePhotoJson(p, eventForMedia) {
+  const url = eventForMedia
+    ? resolveDeliverableMediaUrl(
+        p.url,
+        p.cloudinaryPublicId,
+        eventForMedia,
+        absolutizeStoredAssetUrl,
+      )
+    : isProtectedUrlMarker(p.url)
+      ? null
+      : absolutizeStoredAssetUrl(p.url);
   return {
     id: p.id,
-    url: absolutizeStoredAssetUrl(p.url),
+    url,
     caption:
       typeof p.caption === "string" && p.caption.trim()
         ? p.caption.trim()
@@ -309,6 +345,86 @@ function mapShowcasePhotoJson(p) {
         ? p.createdAt.toISOString()
         : String(p.createdAt || ""),
   };
+}
+
+/**
+ * Lot F — accès souvenirs Landing (owner / admin / grant).
+ * @param {Record<string, any>} event
+ * @param {import("express").Request} req
+ */
+async function resolveLandingSouvenirAccess(event, req) {
+  const token = readTokenFromRequest(req);
+  const authPayload = verifyToken(token);
+  const userId =
+    authPayload && typeof authPayload.sub === "string"
+      ? authPayload.sub.trim()
+      : "";
+  let isAdmin = false;
+  let hasGuestGrant = false;
+  if (userId) {
+    if (event.userId && event.userId === userId) {
+      return {
+        userId,
+        isOwner: true,
+        isAdmin: false,
+        hasGuestGrant: false,
+        allowed: true,
+      };
+    }
+    const sessionUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    isAdmin = String(sessionUser?.role || "").toUpperCase() === "ADMIN";
+    if (!isAdmin && isInviteProtectionEnabled(event)) {
+      const grant = await prisma.eventGuestAccess.findUnique({
+        where: {
+          userId_eventId: { userId, eventId: event.id },
+        },
+        select: { id: true },
+      });
+      hasGuestGrant = Boolean(grant);
+    }
+  }
+  const allowed = canAccessProtectedSouvenirs({
+    event,
+    userId: userId || null,
+    isAdmin,
+    hasGuestGrant,
+  });
+  return {
+    userId: userId || null,
+    isOwner: Boolean(userId && event.userId && event.userId === userId),
+    isAdmin,
+    hasGuestGrant,
+    allowed,
+  };
+}
+
+/**
+ * @param {{ secureUrl: string; publicId: string; deliveryType?: string }} uploadResult
+ * @param {{ mediaProtectionEnabled?: boolean }} event
+ */
+function persistProtectedUploadFields(uploadResult, event) {
+  if (isMediaProtectionEnabled(event) || uploadResult.deliveryType === "authenticated") {
+    return {
+      url: toProtectedUrlMarker(uploadResult.publicId),
+      cloudinaryPublicId: uploadResult.publicId,
+    };
+  }
+  return {
+    url: uploadResult.secureUrl,
+    cloudinaryPublicId: uploadResult.publicId,
+  };
+}
+
+/** Best-effort destroy upload ou authenticated. */
+function destroyLandingCloudinaryAsset(publicId) {
+  const id = typeof publicId === "string" ? publicId.trim() : "";
+  if (!id) return;
+  void destroyCloudinaryByPublicId(id, { type: "authenticated" }).then((ok) => {
+    if (!ok) void destroyCloudinaryByPublicId(id, { type: "upload" });
+  });
 }
 
 /**
@@ -417,6 +533,15 @@ const authAttemptLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Trop de tentatives. Réessayez plus tard." },
+});
+
+/** Lot F — limitation des essais de code d’invitation. */
+const inviteRedeemLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Trop de tentatives de code. Réessayez plus tard." },
 });
 
 /** CORS navigateur → API (www + localhost + Previews Vercel AVOTE uniquement). */
@@ -2606,6 +2731,368 @@ app.get("/me/following", requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * Lot F — événements auxquels le compte a été invité (souvenirs).
+ */
+app.get("/me/invitations", requireAuth, async (req, res) => {
+  try {
+    const rows = await prisma.eventGuestAccess.findMany({
+      where: { userId: req.userId },
+      orderBy: { grantedAt: "desc" },
+      take: 100,
+      include: {
+        event: {
+          select: {
+            id: true,
+            title: true,
+            slug: true,
+            landingEnabled: true,
+            landingCoverUrl: true,
+            landingTitle: true,
+            inviteEnabled: true,
+            mediaProtectionEnabled: true,
+            visibility: true,
+            liveState: true,
+            startsAt: true,
+            city: true,
+          },
+        },
+      },
+    });
+    const invitations = [];
+    for (const row of rows) {
+      const ev = row.event;
+      if (!ev || !isInviteProtectionEnabled(ev)) continue;
+      const title =
+        (ev.landingTitle && String(ev.landingTitle).trim()) ||
+        ev.title ||
+        "Événement";
+      invitations.push({
+        eventId: ev.id,
+        grantedAt: row.grantedAt.toISOString(),
+        event: {
+          id: ev.id,
+          title,
+          slug: ev.slug,
+          city: ev.city ?? null,
+          startsAt: ev.startsAt ? ev.startsAt.toISOString() : null,
+          landingEnabled: Boolean(ev.landingEnabled),
+          landingPath: ev.landingEnabled ? `/e/${ev.slug}` : null,
+          invitePath: `/invite/${ev.slug}`,
+          joinPath: `/join/${ev.slug}`,
+          coverUrl: resolveDeliverableMediaUrl(
+            ev.landingCoverUrl,
+            isProtectedUrlMarker(ev.landingCoverUrl)
+              ? String(ev.landingCoverUrl).replace(/^protected:\/\//, "")
+              : null,
+            ev,
+            absolutizeStoredAssetUrl,
+          ),
+          liveState: String(ev.liveState || "").toLowerCase(),
+          ...visibilityApiFields(ev.visibility),
+        },
+      });
+    }
+    return res.json({
+      invitations,
+      eventIds: invitations.map((i) => i.eventId),
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/** Lot F — meta publique page d’accès invitation (sans souvenirs). */
+app.get("/invite/:slug", optionalAuth, async (req, res) => {
+  try {
+    const slug = String(req.params.slug || "").trim();
+    if (!slug) return res.status(400).json({ error: "Slug invalide." });
+    const event = await prisma.event.findUnique({
+      where: { slug },
+      select: {
+        id: true,
+        slug: true,
+        title: true,
+        landingTitle: true,
+        landingEnabled: true,
+        inviteEnabled: true,
+        userId: true,
+        visibility: true,
+      },
+    });
+    if (!event) {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+    let hasAccess = false;
+    let isOwner = false;
+    if (req.userId) {
+      isOwner = Boolean(event.userId && event.userId === req.userId);
+      if (!isOwner && isInviteProtectionEnabled(event)) {
+        const grant = await prisma.eventGuestAccess.findUnique({
+          where: {
+            userId_eventId: { userId: req.userId, eventId: event.id },
+          },
+          select: { id: true },
+        });
+        hasAccess = Boolean(grant);
+      } else if (isOwner) {
+        hasAccess = true;
+      }
+    }
+    return res.json({
+      event: mapInviteAccessMeta(event, { hasAccess, isOwner }),
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/** Lot F — saisir le code (une fois) → grant durable. */
+app.post(
+  "/invite/:slug/redeem",
+  requireAuth,
+  inviteRedeemLimiter,
+  async (req, res) => {
+    try {
+      const slug = String(req.params.slug || "").trim();
+      const event = await prisma.event.findUnique({
+        where: { slug },
+        select: {
+          id: true,
+          slug: true,
+          title: true,
+          landingTitle: true,
+          landingEnabled: true,
+          inviteEnabled: true,
+          inviteCodeHash: true,
+          userId: true,
+          visibility: true,
+        },
+      });
+      if (!event || !isInviteProtectionEnabled(event)) {
+        return res.status(404).json({
+          error: "Invitation indisponible.",
+          code: "INVITE_UNAVAILABLE",
+        });
+      }
+      if (event.userId && event.userId === req.userId) {
+        return res.json({
+          ok: true,
+          alreadyHadAccess: true,
+          event: mapInviteAccessMeta(event, {
+            hasAccess: true,
+            isOwner: true,
+          }),
+        });
+      }
+      const existing = await prisma.eventGuestAccess.findUnique({
+        where: {
+          userId_eventId: { userId: req.userId, eventId: event.id },
+        },
+        select: { id: true },
+      });
+      if (existing) {
+        return res.json({
+          ok: true,
+          alreadyHadAccess: true,
+          event: mapInviteAccessMeta(event, {
+            hasAccess: true,
+            isOwner: false,
+          }),
+        });
+      }
+      const codeOk = await verifyInviteCode(req.body?.code, event.inviteCodeHash);
+      if (!codeOk) {
+        return res.status(403).json({
+          error: "Code d’accès incorrect.",
+          code: "INVITE_CODE_INVALID",
+        });
+      }
+      await prisma.eventGuestAccess.create({
+        data: { userId: req.userId, eventId: event.id },
+      });
+      return res.json({
+        ok: true,
+        alreadyHadAccess: false,
+        event: mapInviteAccessMeta(event, {
+          hasAccess: true,
+          isOwner: false,
+        }),
+      });
+    } catch (e) {
+      if (e && e.code === "P2002") {
+        return res.json({ ok: true, alreadyHadAccess: true });
+      }
+      console.error(e);
+      return res.status(500).json({ error: "Erreur serveur." });
+    }
+  },
+);
+
+/** Lot F — état invitations (orga). */
+app.get("/events/:eventId/invite", requireAuth, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true,
+        slug: true,
+        inviteEnabled: true,
+        inviteCodeHash: true,
+        inviteCodeUpdatedAt: true,
+        mediaProtectionEnabled: true,
+      },
+    });
+    if (!event) {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+    const guestCount = await prisma.eventGuestAccess.count({
+      where: { eventId },
+    });
+    return res.json(mapOwnerInviteJson(event, { guestCount }));
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/**
+ * Lot F — activer protection + générer code.
+ * Body: { confirm: true, code?: string }
+ * Migre les médias avant d’activer mediaProtectionEnabled.
+ */
+app.post("/events/:eventId/invite/enable", requireAuth, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    if (req.body?.confirm !== true) {
+      return res.status(400).json({
+        error:
+          "Confirmation requise (confirm: true) — lisez l’avertissement avant d’activer.",
+        code: "CONFIRM_REQUIRED",
+      });
+    }
+    const event = await prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+
+    const migration = await migrateEventLandingMediaToProtected({
+      prisma,
+      eventId,
+    });
+    if (!migration.ok) {
+      return res.status(409).json({
+        error: migration.error,
+        code: "MEDIA_MIGRATION_FAILED",
+        failed: migration.failed || [],
+      });
+    }
+
+    let plain =
+      typeof req.body?.code === "string" && req.body.code.trim()
+        ? normalizeInviteCodeInput(req.body.code)
+        : generateInviteCode();
+    if (!plain) {
+      return res.status(400).json({ error: "Code d’invitation invalide." });
+    }
+    const inviteCodeHash = await hashInviteCode(plain);
+    const updated = await prisma.event.update({
+      where: { id: eventId },
+      data: {
+        inviteEnabled: true,
+        mediaProtectionEnabled: true,
+        inviteCodeHash,
+        inviteCodeUpdatedAt: new Date(),
+      },
+      select: {
+        id: true,
+        slug: true,
+        inviteEnabled: true,
+        inviteCodeHash: true,
+        inviteCodeUpdatedAt: true,
+        mediaProtectionEnabled: true,
+      },
+    });
+    const guestCount = await prisma.eventGuestAccess.count({
+      where: { eventId },
+    });
+    return res.json({
+      ...mapOwnerInviteJson(updated, {
+        plaintextCode: plain,
+        guestCount,
+      }),
+      migratedMedia: migration.migrated,
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/** Lot F — renouveler le code (ne révoque pas les grants). */
+app.post("/events/:eventId/invite/rotate", requireAuth, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, slug: true, inviteEnabled: true },
+    });
+    if (!event || !event.inviteEnabled) {
+      return res.status(400).json({
+        error: "Activez d’abord les invitations pour cet événement.",
+        code: "INVITE_NOT_ENABLED",
+      });
+    }
+    let plain =
+      typeof req.body?.code === "string" && req.body.code.trim()
+        ? normalizeInviteCodeInput(req.body.code)
+        : generateInviteCode();
+    if (!plain) {
+      return res.status(400).json({ error: "Code d’invitation invalide." });
+    }
+    const inviteCodeHash = await hashInviteCode(plain);
+    const updated = await prisma.event.update({
+      where: { id: eventId },
+      data: {
+        inviteCodeHash,
+        inviteCodeUpdatedAt: new Date(),
+      },
+      select: {
+        id: true,
+        slug: true,
+        inviteEnabled: true,
+        inviteCodeHash: true,
+        inviteCodeUpdatedAt: true,
+        mediaProtectionEnabled: true,
+      },
+    });
+    const guestCount = await prisma.eventGuestAccess.count({
+      where: { eventId },
+    });
+    return res.json(
+      mapOwnerInviteJson(updated, { plaintextCode: plain, guestCount }),
+    );
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
 app.post("/events/:eventId/duplicate", requireAuth, async (req, res) => {
   const { eventId } = req.params;
   try {
@@ -3243,14 +3730,52 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       return res.json({
         enabled: false,
         slug: event.slug,
+        inviteEnabled: isInviteProtectionEnabled(event),
         ...visibilityApiFields(event.visibility),
         seo: { robots: "noindex,nofollow", indexable: false },
       });
     }
+
+    const access = await resolveLandingSouvenirAccess(event, req);
+    if (!access.allowed) {
+      const titleEffective =
+        (event.landingTitle && event.landingTitle.trim()) ||
+        event.title ||
+        "Événement";
+      return res.status(401).json({
+        error: "Souvenirs protégés — connexion et invitation requises.",
+        code: "INVITE_REQUIRED",
+        enabled: true,
+        slug: event.slug,
+        title: titleEffective,
+        inviteEnabled: true,
+        invitePath: `/invite/${event.slug}`,
+        joinPath: `/join/${event.slug}`,
+        ...visibilityApiFields(event.visibility),
+        seo: { robots: "noindex,nofollow", indexable: false },
+      });
+    }
+
+    const mediaEvent = {
+      mediaProtectionEnabled: isMediaProtectionEnabled(event),
+    };
     const info = eventCustomizationJson(event);
+    const coverUrl = resolveDeliverableMediaUrl(
+      event.landingCoverUrl,
+      isProtectedUrlMarker(event.landingCoverUrl)
+        ? String(event.landingCoverUrl).replace(/^protected:\/\//, "")
+        : null,
+      mediaEvent,
+      absolutizeStoredAssetUrl,
+    );
     const photos = (event.landingPhotos || []).map((p) => ({
       id: p.id,
-      url: absolutizeStoredAssetUrl(p.url),
+      url: resolveDeliverableMediaUrl(
+        p.url,
+        p.cloudinaryPublicId,
+        mediaEvent,
+        absolutizeStoredAssetUrl,
+      ),
       caption:
         typeof p.caption === "string" && p.caption.trim()
           ? p.caption.trim()
@@ -3260,7 +3785,7 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
     const allShowcaseRows = event.landingShowcasePhotos || [];
     const showcasePhotos = allShowcaseRows
       .filter((p) => p.showInGallery !== false)
-      .map((p) => mapShowcasePhotoJson(p));
+      .map((p) => mapShowcasePhotoJson(p, mediaEvent));
     const programItems = sortLandingProgramItems(
       event.landingProgramItems || [],
     ).map((step) => ({
@@ -3283,28 +3808,11 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
     let canUploadLandingPhoto = false;
     let canManageLandingFeed = false;
     let landingPhotoUploadEventId = null;
-    const token = readTokenFromRequest(req);
-    const authPayload = verifyToken(token);
-    const sessionUserId =
-      authPayload && typeof authPayload.sub === "string"
-        ? authPayload.sub.trim()
-        : "";
-    if (sessionUserId) {
-      if (event.userId && event.userId === sessionUserId) {
-        canUploadLandingPhoto = true;
-        canManageLandingFeed = true;
-        landingPhotoUploadEventId = event.id;
-      } else {
-        const sessionUser = await prisma.user.findUnique({
-          where: { id: sessionUserId },
-          select: { role: true },
-        });
-        if (String(sessionUser?.role || "").toUpperCase() === "ADMIN") {
-          canUploadLandingPhoto = true;
-          canManageLandingFeed = true;
-          landingPhotoUploadEventId = event.id;
-        }
-      }
+    const sessionUserId = access.userId || "";
+    if (access.isOwner || access.isAdmin) {
+      canUploadLandingPhoto = true;
+      canManageLandingFeed = true;
+      landingPhotoUploadEventId = event.id;
     }
 
     const photoIds = (event.landingPhotos || []).map((p) => p.id);
@@ -3382,7 +3890,12 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       event,
       photos: (event.landingPhotos || []).map((p) => ({
         id: p.id,
-        url: absolutizeStoredAssetUrl(p.url),
+        url: resolveDeliverableMediaUrl(
+          p.url,
+          p.cloudinaryPublicId,
+          mediaEvent,
+          absolutizeStoredAssetUrl,
+        ),
         caption:
           typeof p.caption === "string" && p.caption.trim()
             ? p.caption.trim()
@@ -3407,7 +3920,7 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       slug: event.slug,
       title: titleEffective,
       description: descEffective,
-      coverUrl: info.landingCoverUrl,
+      coverUrl,
       primaryColor: info.primaryColor,
       logoUrl: info.logoUrl,
       photos,
@@ -3425,12 +3938,14 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       landingIntroPhotos: resolveLandingMessagePhotos(
         info.landingIntroPhotoIds,
         allShowcaseRows,
+        mediaEvent,
       ),
       landingThanksTitle: info.landingThanksTitle,
       landingThanksBody: info.landingThanksBody,
       landingThanksPhotos: resolveLandingMessagePhotos(
         info.landingThanksPhotoIds,
         allShowcaseRows,
+        mediaEvent,
       ),
       infoSectionTitle: info.infoSectionTitle,
       infoSectionText: info.infoSectionText,
@@ -3443,16 +3958,20 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       landingKeepResultsAfter: info.landingKeepResultsAfter !== false,
       landingKeepMessagesAfter: info.landingKeepMessagesAfter !== false,
       joinPath: `/join/${event.slug}`,
+      inviteEnabled: isInviteProtectionEnabled(event),
+      mediaProtectionEnabled: isMediaProtectionEnabled(event),
+      hasInviteAccess: true,
       /** Phase Page événement (LOT-1/7) — pas de nouvel enum ; axes live existants. */
       liveState: String(event.liveState || "").toLowerCase(),
       voteState: String(event.voteState || "").toLowerCase(),
       displayState: String(event.displayState || "").toLowerCase(),
       isLocked: Boolean(event.isLocked),
       ...visibilityFields,
-      /** Lot A : SEO seulement — pas de gate d’accès Landing. */
       seo: {
-        robots: seo.robots,
-        indexable: seo.index,
+        robots: isInviteProtectionEnabled(event)
+          ? "noindex,nofollow"
+          : seo.robots,
+        indexable: isInviteProtectionEnabled(event) ? false : seo.index,
       },
     });
   } catch (e) {
@@ -4359,11 +4878,34 @@ app.post("/events/:eventId/customization/upload", requireAuth, async (req, res) 
         : kindRaw === "landing_cover"
           ? "landing_cover"
           : "logo";
+    const evMedia = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { mediaProtectionEnabled: true },
+    });
     const uploadResult = await uploadImageBufferToCloudinary({
       buffer: req.file.buffer,
       eventId,
       kind: cloudKind,
+      authenticated:
+        cloudKind === "landing_cover" &&
+        isMediaProtectionEnabled(evMedia || {}),
     });
+    if (cloudKind === "landing_cover" && isMediaProtectionEnabled(evMedia || {})) {
+      const stored = persistProtectedUploadFields(uploadResult, evMedia || {});
+      await prisma.event.update({
+        where: { id: eventId },
+        data: { landingCoverUrl: stored.url },
+      });
+      return res.json({
+        url: resolveDeliverableMediaUrl(
+          stored.url,
+          stored.cloudinaryPublicId,
+          evMedia || {},
+          absolutizeStoredAssetUrl,
+        ),
+        publicId: stored.cloudinaryPublicId,
+      });
+    }
     return res.json({ url: uploadResult.secureUrl, publicId: uploadResult.publicId });
   } catch (e) {
     if (e && typeof e === "object" && e.code === "LIMIT_FILE_SIZE") {
@@ -4399,21 +4941,32 @@ app.post("/events/:eventId/landing/photos", requireAuth, async (req, res) => {
         error: `Galerie limitée à ${MAX_EVENT_LANDING_PHOTOS} photos.`,
       });
     }
+    const evMedia = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { mediaProtectionEnabled: true },
+    });
     const uploadResult = await uploadImageBufferToCloudinary({
       buffer: req.file.buffer,
       eventId,
       kind: "landing_photo",
+      authenticated: isMediaProtectionEnabled(evMedia || {}),
     });
+    const stored = persistProtectedUploadFields(uploadResult, evMedia || {});
     const row = await prisma.eventLandingPhoto.create({
       data: {
         eventId,
-        url: uploadResult.secureUrl,
-        cloudinaryPublicId: uploadResult.publicId,
+        url: stored.url,
+        cloudinaryPublicId: stored.cloudinaryPublicId,
       },
     });
     return res.status(201).json({
       id: row.id,
-      url: absolutizeStoredAssetUrl(row.url),
+      url: resolveDeliverableMediaUrl(
+        row.url,
+        row.cloudinaryPublicId,
+        evMedia || {},
+        absolutizeStoredAssetUrl,
+      ),
       caption: null,
       createdAt: row.createdAt.toISOString(),
     });
@@ -4493,7 +5046,7 @@ app.delete(
         return res.status(404).json({ error: "Photo introuvable." });
       }
       await prisma.eventLandingPhoto.delete({ where: { id: pid } });
-      void destroyCloudinaryByPublicId(existing.cloudinaryPublicId);
+      destroyLandingCloudinaryAsset(existing.cloudinaryPublicId);
       return res.json({ ok: true });
     } catch (e) {
       console.error(e);
@@ -4719,10 +5272,22 @@ app.post(
       }
       const event = await prisma.event.findUnique({
         where: { slug },
-        select: { id: true, landingEnabled: true },
+        select: {
+          id: true,
+          landingEnabled: true,
+          inviteEnabled: true,
+          userId: true,
+        },
       });
       if (!event || !event.landingEnabled) {
         return res.status(404).json({ error: "Landing introuvable." });
+      }
+      const access = await resolveLandingSouvenirAccess(event, req);
+      if (!access.allowed) {
+        return res.status(401).json({
+          error: "Souvenirs protégés — invitation requise.",
+          code: "INVITE_REQUIRED",
+        });
       }
       const photo = await prisma.eventLandingPhoto.findFirst({
         where: { id: photoId, eventId: event.id },
@@ -4769,10 +5334,22 @@ app.delete(
       }
       const event = await prisma.event.findUnique({
         where: { slug },
-        select: { id: true, landingEnabled: true },
+        select: {
+          id: true,
+          landingEnabled: true,
+          inviteEnabled: true,
+          userId: true,
+        },
       });
       if (!event || !event.landingEnabled) {
         return res.status(404).json({ error: "Landing introuvable." });
+      }
+      const access = await resolveLandingSouvenirAccess(event, req);
+      if (!access.allowed) {
+        return res.status(401).json({
+          error: "Souvenirs protégés — invitation requise.",
+          code: "INVITE_REQUIRED",
+        });
       }
       const photo = await prisma.eventLandingPhoto.findFirst({
         where: { id: photoId, eventId: event.id },
@@ -4820,20 +5397,26 @@ app.post("/events/:eventId/landing/showcase-photos", requireAuth, async (req, re
         error: `Galerie événement limitée à ${MAX_EVENT_LANDING_SHOWCASE_PHOTOS} photos.`,
       });
     }
+    const evMedia = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { mediaProtectionEnabled: true },
+    });
     const uploadResult = await uploadImageBufferToCloudinary({
       buffer: req.file.buffer,
       eventId,
       kind: "landing_showcase_photo",
+      authenticated: isMediaProtectionEnabled(evMedia || {}),
     });
+    const stored = persistProtectedUploadFields(uploadResult, evMedia || {});
     const row = await prisma.eventLandingShowcasePhoto.create({
       data: {
         eventId,
-        url: uploadResult.secureUrl,
-        cloudinaryPublicId: uploadResult.publicId,
+        url: stored.url,
+        cloudinaryPublicId: stored.cloudinaryPublicId,
         showInGallery: true,
       },
     });
-    return res.status(201).json(mapShowcasePhotoJson(row));
+    return res.status(201).json(mapShowcasePhotoJson(row, evMedia || {}));
   } catch (e) {
     if (e && typeof e === "object" && e.code === "LIMIT_FILE_SIZE") {
       return res.status(400).json({ error: "Fichier trop volumineux (max 5 Mo)." });
@@ -4878,6 +5461,7 @@ app.post("/events/:eventId/landing/message-photos", requireAuth, async (req, res
       select: {
         landingIntroPhotoIds: true,
         landingThanksPhotoIds: true,
+        mediaProtectionEnabled: true,
       },
     });
     if (!event) {
@@ -4894,12 +5478,14 @@ app.post("/events/:eventId/landing/message-photos", requireAuth, async (req, res
       buffer: req.file.buffer,
       eventId,
       kind: "landing_message_photo",
+      authenticated: isMediaProtectionEnabled(event),
     });
+    const stored = persistProtectedUploadFields(uploadResult, event);
     const row = await prisma.eventLandingShowcasePhoto.create({
       data: {
         eventId,
-        url: uploadResult.secureUrl,
-        cloudinaryPublicId: uploadResult.publicId,
+        url: stored.url,
+        cloudinaryPublicId: stored.cloudinaryPublicId,
         showInGallery: false,
       },
     });
@@ -4920,7 +5506,7 @@ app.post("/events/:eventId/landing/message-photos", requireAuth, async (req, res
       console.error("event:customization_updated", err);
     }
     return res.status(201).json({
-      photo: mapShowcasePhotoJson(row),
+      photo: mapShowcasePhotoJson(row, event),
       landingIntroPhotoIds: parseStoredLandingPhotoIds(
         updated.landingIntroPhotoIds,
       ),
