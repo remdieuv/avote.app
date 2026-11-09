@@ -99,6 +99,8 @@ model User {
   eventActivations  EventActivation[]
   landingMessages   EventLandingMessage[]
   organizerProfiles OrganizerProfile[]
+  eventFavorites    EventFavorite[]
+  organizerFollows  OrganizerFollow[]
 }
 
 model Event {
@@ -214,6 +216,8 @@ model Event {
   @@index([primaryThemeId])
   @@index([secondaryThemeId])
   @@index([organizerProfileId])
+
+  favorites EventFavorite[]
 }
 
 /**
@@ -238,10 +242,47 @@ model OrganizerProfile {
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
 
-  events Event[]
+  events  Event[]
+  follows OrganizerFollow[]
 
   @@index([ownerUserId, type])
   @@index([isPublic, type])
+}
+
+/**
+ * Lot E — favori événement (compte → événement public).
+ * L’unicité userId+eventId empêche les doublons.
+ * Un événement redevenu privé reste en base mais est filtré des listes affichées.
+ */
+model EventFavorite {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, eventId])
+  @@index([userId, createdAt])
+  @@index([eventId])
+}
+
+/**
+ * Lot E — suivi d’un profil organisateur public.
+ * Libellé produit : « Organisateurs suivis » (pas « Abonnements »).
+ * Profil non public → filtré des listes affichées ; aucun droit supplémentaire.
+ */
+model OrganizerFollow {
+  id                 String           @id @default(cuid())
+  userId             String
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizerProfileId String
+  organizerProfile   OrganizerProfile @relation(fields: [organizerProfileId], references: [id], onDelete: Cascade)
+  createdAt          DateTime         @default(now())
+
+  @@unique([userId, organizerProfileId])
+  @@index([userId, createdAt])
+  @@index([organizerProfileId])
 }
 
 /** Catalogue thèmes métier Discover (Lot B) — distinct de themeMode salle. */

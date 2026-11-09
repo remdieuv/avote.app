@@ -174,9 +174,9 @@ function mapPublicProfileJson(profile, absolutize) {
     bio: owner.bio,
     imageUrl: owner.imageUrl,
     websiteUrl: owner.websiteUrl,
-    /** Lot E : bouton Suivre — flag préparatoire uniquement. */
+    /** Lot E : bouton Suivre disponible. */
     canFollow: true,
-    followAvailable: false,
+    followAvailable: true,
   };
 }
 

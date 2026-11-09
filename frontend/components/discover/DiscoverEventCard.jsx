@@ -10,9 +10,19 @@ import {
 } from "@/lib/discoverUi";
 
 /**
- * @param {{ event: Record<string, any> }} props
+ * @param {{
+ *   event: Record<string, any>;
+ *   isFavorite?: boolean;
+ *   favoriteBusy?: boolean;
+ *   onToggleFavorite?: (event: Record<string, any>) => void;
+ * }} props
  */
-export function DiscoverEventCard({ event }) {
+export function DiscoverEventCard({
+  event,
+  isFavorite = false,
+  favoriteBusy = false,
+  onToggleFavorite,
+}) {
   const cat = normalizeDiscoverCategory(event?.discoverCategory);
   const statusLabel = discoverCategoryLabel(cat);
   const when = formatDiscoverStartsAt(event?.startsAt);
@@ -33,6 +43,7 @@ export function DiscoverEventCard({ event }) {
       : organizer?.slug
         ? `/organizers/${organizer.slug}`
         : null;
+  const favorited = Boolean(isFavorite || event?.isFavorite || event?.favorited);
 
   const badgeBg =
     cat === "live" ? "#dc2626" : cat === "upcoming" ? "#1d4ed8" : "#475569";
@@ -85,6 +96,38 @@ export function DiscoverEventCard({ event }) {
           >
             {statusLabel}
           </span>
+        ) : null}
+        {typeof onToggleFavorite === "function" ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!favoriteBusy) onToggleFavorite(event);
+            }}
+            disabled={favoriteBusy}
+            aria-pressed={favorited}
+            aria-label={favorited ? "Retirer des favoris" : "Ajouter aux favoris"}
+            title={favorited ? "Retirer des favoris" : "Ajouter aux favoris"}
+            style={{
+              position: "absolute",
+              top: "0.55rem",
+              right: "0.55rem",
+              width: 40,
+              height: 40,
+              borderRadius: 999,
+              border: favorited ? "1px solid #fecaca" : "1px solid rgba(255,255,255,0.85)",
+              background: favorited ? "#fff1f2" : "rgba(15, 23, 42, 0.42)",
+              color: favorited ? "#e11d48" : "#fff",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: favoriteBusy ? "wait" : "pointer",
+              boxShadow: "0 4px 14px rgba(15, 23, 42, 0.18)",
+            }}
+          >
+            <HeartIcon filled={favorited} />
+          </button>
         ) : null}
       </div>
 
@@ -166,6 +209,27 @@ export function DiscoverEventCard({ event }) {
         </div>
       </div>
     </article>
+  );
+}
+
+/** @param {{ filled?: boolean }} props */
+function HeartIcon({ filled = false }) {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      aria-hidden
+      focusable="false"
+    >
+      <path
+        d="M12 21s-6.7-4.35-9.33-7.7C.7 10.9 1.1 7.4 3.7 5.7c2.1-1.4 4.7-.9 6.1 1.1L12 9.2l2.2-2.4c1.4-2 4-2.5 6.1-1.1 2.6 1.7 3 5.2 1.03 7.6C18.7 16.65 12 21 12 21z"
+        fill={filled ? "currentColor" : "none"}
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { LandingHeader } from "@/components/landing/LandingHeader";
 import { DiscoverEventCard } from "@/components/discover/DiscoverEventCard";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
@@ -8,6 +9,7 @@ import { DISCOVER_CATEGORY_TABS } from "@/lib/discoverUi";
 import { marketingContentShellStyle } from "@/lib/marketingLayout";
 
 const PAGE_SIZE = 12;
+const LOGIN_NEXT = "/discover";
 
 const inputStyle = {
   width: "100%",
@@ -25,6 +27,7 @@ const inputStyle = {
  * Lot C — annuaire public Découvrir (client).
  */
 export function DiscoverPageClient() {
+  const router = useRouter();
   const [category, setCategory] = useState(/** @type {"upcoming"|"live"|"finished"} */ ("upcoming"));
   const [q, setQ] = useState("");
   const [qDebounced, setQDebounced] = useState("");
@@ -38,6 +41,25 @@ export function DiscoverPageClient() {
   const [error, setError] = useState(/** @type {string|null} */ (null));
   const [hasMore, setHasMore] = useState(false);
   const [nextOffset, setNextOffset] = useState(/** @type {number|null} */ (null));
+  const [isAuthed, setIsAuthed] = useState(false);
+  const [favoriteBusyId, setFavoriteBusyId] = useState(/** @type {string|null} */ (null));
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await adminFetch(`${apiBaseBrowser()}/auth/me`, {
+          cache: "no-store",
+        });
+        if (!cancelled) setIsAuthed(res.ok);
+      } catch {
+        if (!cancelled) setIsAuthed(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => setQDebounced(q.trim()), 280);
@@ -119,6 +141,60 @@ export function DiscoverPageClient() {
   useEffect(() => {
     void fetchPage({ offset: 0, append: false });
   }, [fetchPage]);
+
+  const toggleFavorite = useCallback(
+    async (event) => {
+      const eventId = typeof event?.id === "string" ? event.id : "";
+      if (!eventId) return;
+      if (!isAuthed) {
+        router.push(`/login?next=${encodeURIComponent(LOGIN_NEXT)}`);
+        return;
+      }
+      const currently = Boolean(event?.isFavorite || event?.favorited);
+      setFavoriteBusyId(eventId);
+      setEvents((prev) =>
+        prev.map((row) =>
+          row.id === eventId ? { ...row, isFavorite: !currently } : row,
+        ),
+      );
+      try {
+        const res = await adminFetch(
+          `${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/favorite`,
+          { method: currently ? "DELETE" : "POST" },
+        );
+        if (res.status === 401) {
+          setIsAuthed(false);
+          setEvents((prev) =>
+            prev.map((row) =>
+              row.id === eventId ? { ...row, isFavorite: currently } : row,
+            ),
+          );
+          router.push(`/login?next=${encodeURIComponent(LOGIN_NEXT)}`);
+          return;
+        }
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(body?.error || `Erreur ${res.status}`);
+        }
+        const nextFav = Boolean(body?.favorited);
+        setEvents((prev) =>
+          prev.map((row) =>
+            row.id === eventId ? { ...row, isFavorite: nextFav } : row,
+          ),
+        );
+      } catch (e) {
+        setEvents((prev) =>
+          prev.map((row) =>
+            row.id === eventId ? { ...row, isFavorite: currently } : row,
+          ),
+        );
+        setError(e?.message || "Impossible de mettre à jour le favori.");
+      } finally {
+        setFavoriteBusyId(null);
+      }
+    },
+    [isAuthed, router],
+  );
 
   const emptyHint = (() => {
     if (qDebounced || cityDebounced || theme) {
@@ -303,7 +379,13 @@ export function DiscoverPageClient() {
             }}
           >
             {events.map((ev) => (
-              <DiscoverEventCard key={ev.id} event={ev} />
+              <DiscoverEventCard
+                key={ev.id}
+                event={ev}
+                isFavorite={Boolean(ev.isFavorite)}
+                favoriteBusy={favoriteBusyId === ev.id}
+                onToggleFavorite={toggleFavorite}
+              />
             ))}
           </div>
         ) : null}

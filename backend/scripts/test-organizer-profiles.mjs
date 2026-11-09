@@ -98,7 +98,7 @@ test("profil non public → hors page / carte Discover", () => {
   assert.equal(card.ownerUserId, undefined);
 });
 
-test("mapPublicProfileJson : pas d’e-mail / ownerUserId + stub Suivre", () => {
+test("mapPublicProfileJson : pas d’e-mail / ownerUserId + Suivre Lot E", () => {
   const profile = {
     id: "p2",
     type: "ORGANIZATION",
@@ -117,7 +117,7 @@ test("mapPublicProfileJson : pas d’e-mail / ownerUserId + stub Suivre", () => 
   );
   assert.equal(pub.displayName, "Asso Verte");
   assert.equal(pub.websiteUrl, "https://asso.example");
-  assert.equal(pub.followAvailable, false);
+  assert.equal(pub.followAvailable, true);
   assert.equal(pub.canFollow, true);
   assert.equal(pub.ownerUserId, undefined);
   assert.equal(pub.email, undefined);

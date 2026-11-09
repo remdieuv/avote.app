@@ -173,6 +173,26 @@ export default function AdminAccountPage() {
           </Link>
         }
       />
+      <p style={{ margin: "0 0 1rem" }}>
+        <Link
+          href="/admin/following"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.35rem",
+            padding: "0.5rem 0.85rem",
+            borderRadius: 10,
+            border: "1px solid #bfdbfe",
+            background: "#eff6ff",
+            color: "#1d4ed8",
+            fontWeight: 800,
+            fontSize: "0.88rem",
+            textDecoration: "none",
+          }}
+        >
+          Organisateurs suivis
+        </Link>
+      </p>
       <OrganizerProfilesPanel />
       <section className="account-overview-grid">
         <article style={CARD}>

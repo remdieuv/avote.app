@@ -63,6 +63,12 @@ const {
   mapPublicProfileJson,
 } = require("./lib/organizerProfiles");
 const {
+  canFavoriteEvent,
+  canFollowProfile,
+  mapFavoriteEventCard,
+  mapFollowingOrganizerCard,
+} = require("./lib/favoritesFollows");
+const {
   isLandingFeedLeadCrm,
   buildLandingFeedItems,
 } = require("./lib/landingFeed");
@@ -1552,6 +1558,17 @@ function requireAuth(req, res, next) {
   next();
 }
 
+/** Auth optionnelle — renseigne req.userId si cookie JWT valide. */
+function optionalAuth(req, _res, next) {
+  const token = readTokenFromRequest(req);
+  const payload = verifyToken(token);
+  if (payload?.sub) {
+    req.userId = payload.sub;
+    req.userEmail = payload.email;
+  }
+  next();
+}
+
 async function requireAdmin(req, res, next) {
   try {
     const user = await prisma.user.findUnique({
@@ -1965,7 +1982,7 @@ app.get("/discover/themes", async (_req, res) => {
  * Query: category, q, city, theme, limit, offset
  * Uniquement événements PUBLIC éligibles (thème + startsAt). Privés exclus.
  */
-app.get("/discover/events", async (req, res) => {
+app.get("/discover/events", optionalAuth, async (req, res) => {
   try {
     const built = buildDiscoverEventsQuery({
       category: req.query.category,
@@ -2023,7 +2040,20 @@ app.get("/discover/events", async (req, res) => {
       now: built.now,
     });
 
-    const page = filtered.slice(0, limit).map((row) => {
+    const pageRows = filtered.slice(0, limit);
+    let favoriteIds = new Set();
+    if (req.userId && pageRows.length > 0) {
+      const favs = await prisma.eventFavorite.findMany({
+        where: {
+          userId: req.userId,
+          eventId: { in: pageRows.map((r) => r.id) },
+        },
+        select: { eventId: true },
+      });
+      favoriteIds = new Set(favs.map((f) => f.eventId));
+    }
+
+    const page = pageRows.map((row) => {
       const card = mapDiscoverEventCard(
         {
           ...row,
@@ -2031,7 +2061,10 @@ app.get("/discover/events", async (req, res) => {
         },
         absolutizeStoredAssetUrl,
       );
-      return card;
+      return {
+        ...card,
+        isFavorite: favoriteIds.has(row.id),
+      };
     });
     const hasMore = filtered.length > limit;
 
@@ -2283,10 +2316,11 @@ app.post(
 );
 
 /**
- * Lot D — page publique organisateur.
+ * Lot D/E — page publique organisateur.
  * Profils non publics → 404 (pas de fuite d’existence).
+ * Auth optionnelle → isFollowing.
  */
-app.get("/organizers/:slugOrId", async (req, res) => {
+app.get("/organizers/:slugOrId", optionalAuth, async (req, res) => {
   try {
     const key = String(req.params.slugOrId || "").trim();
     if (!key) {
@@ -2297,6 +2331,19 @@ app.get("/organizers/:slugOrId", async (req, res) => {
     });
     if (!profile || !isProfilePubliclyVisible(profile)) {
       return res.status(404).json({ error: "Profil introuvable." });
+    }
+    let isFollowing = false;
+    if (req.userId) {
+      const follow = await prisma.organizerFollow.findUnique({
+        where: {
+          userId_organizerProfileId: {
+            userId: req.userId,
+            organizerProfileId: profile.id,
+          },
+        },
+        select: { id: true },
+      });
+      isFollowing = Boolean(follow);
     }
     const events = await prisma.event.findMany({
       where: {
@@ -2343,8 +2390,215 @@ app.get("/organizers/:slugOrId", async (req, res) => {
     }));
 
     return res.json({
-      profile: mapPublicProfileJson(profile, absolutizeStoredAssetUrl),
+      profile: {
+        ...mapPublicProfileJson(profile, absolutizeStoredAssetUrl),
+        isFollowing,
+      },
       events: publicEvents,
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/** Lot E — suivre un organisateur public. */
+app.post("/organizers/:slugOrId/follow", requireAuth, async (req, res) => {
+  try {
+    const key = String(req.params.slugOrId || "").trim();
+    const profile = await prisma.organizerProfile.findFirst({
+      where: { OR: [{ slug: key }, { id: key }] },
+    });
+    if (!profile || !canFollowProfile(profile)) {
+      return res.status(404).json({
+        error: "Profil introuvable ou non public.",
+        code: "ORGANIZER_NOT_FOLLOWABLE",
+      });
+    }
+    await prisma.organizerFollow.upsert({
+      where: {
+        userId_organizerProfileId: {
+          userId: req.userId,
+          organizerProfileId: profile.id,
+        },
+      },
+      create: { userId: req.userId, organizerProfileId: profile.id },
+      update: {},
+    });
+    return res.json({ ok: true, isFollowing: true, organizerProfileId: profile.id });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/** Lot E — ne plus suivre. */
+app.delete("/organizers/:slugOrId/follow", requireAuth, async (req, res) => {
+  try {
+    const key = String(req.params.slugOrId || "").trim();
+    const profile = await prisma.organizerProfile.findFirst({
+      where: { OR: [{ slug: key }, { id: key }] },
+      select: { id: true },
+    });
+    if (!profile) {
+      return res.status(404).json({ error: "Profil introuvable." });
+    }
+    await prisma.organizerFollow.deleteMany({
+      where: { userId: req.userId, organizerProfileId: profile.id },
+    });
+    return res.json({ ok: true, isFollowing: false, organizerProfileId: profile.id });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/** Lot E — ajouter un favori (événement PUBLIC uniquement). */
+app.post("/events/:eventId/favorite", requireAuth, async (req, res) => {
+  try {
+    const eventId = String(req.params.eventId || "").trim();
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, visibility: true },
+    });
+    if (!event) {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+    if (!canFavoriteEvent(event)) {
+      return res.status(403).json({
+        error: "Seuls les événements publics peuvent être ajoutés aux favoris.",
+        code: "EVENT_NOT_FAVORITABLE",
+      });
+    }
+    await prisma.eventFavorite.upsert({
+      where: {
+        userId_eventId: { userId: req.userId, eventId: event.id },
+      },
+      create: { userId: req.userId, eventId: event.id },
+      update: {},
+    });
+    return res.json({ ok: true, favorited: true, eventId: event.id });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/** Lot E — retirer un favori. */
+app.delete("/events/:eventId/favorite", requireAuth, async (req, res) => {
+  try {
+    const eventId = String(req.params.eventId || "").trim();
+    await prisma.eventFavorite.deleteMany({
+      where: { userId: req.userId, eventId },
+    });
+    return res.json({ ok: true, favorited: false, eventId });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/**
+ * Lot E — favoris du compte (événements encore PUBLIC uniquement).
+ * Les favoris d’événements redevenus privés restent en base mais sont exclus.
+ */
+app.get("/me/favorites", requireAuth, async (req, res) => {
+  try {
+    const rows = await prisma.eventFavorite.findMany({
+      where: {
+        userId: req.userId,
+        event: { visibility: EVENT_VISIBILITY.PUBLIC },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      include: {
+        event: {
+          select: {
+            id: true,
+            title: true,
+            slug: true,
+            city: true,
+            startsAt: true,
+            visibility: true,
+            liveState: true,
+            isLiveConsumed: true,
+            landingEnabled: true,
+            landingCoverUrl: true,
+            primaryThemeId: true,
+            primaryTheme: { select: { id: true, slug: true, label: true } },
+            secondaryTheme: { select: { id: true, slug: true, label: true } },
+            organizerProfile: {
+              select: {
+                id: true,
+                slug: true,
+                displayName: true,
+                type: true,
+                imageUrl: true,
+                isPublic: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    const favorites = [];
+    for (const row of rows) {
+      const card = mapFavoriteEventCard(
+        {
+          ...row.event,
+          landingCoverUrl: absolutizeStoredAssetUrl(row.event.landingCoverUrl),
+        },
+        absolutizeStoredAssetUrl,
+      );
+      if (card) {
+        favorites.push({
+          eventId: row.eventId,
+          createdAt: row.createdAt.toISOString(),
+          event: card,
+        });
+      }
+    }
+    return res.json({
+      favorites,
+      eventIds: favorites.map((f) => f.eventId),
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/**
+ * Lot E — organisateurs suivis (profils encore publics uniquement).
+ */
+app.get("/me/following", requireAuth, async (req, res) => {
+  try {
+    const rows = await prisma.organizerFollow.findMany({
+      where: {
+        userId: req.userId,
+        organizerProfile: { isPublic: true },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      include: { organizerProfile: true },
+    });
+    const following = [];
+    for (const row of rows) {
+      const card = mapFollowingOrganizerCard(
+        row.organizerProfile,
+        absolutizeStoredAssetUrl,
+      );
+      if (card) {
+        following.push({
+          organizerProfileId: row.organizerProfileId,
+          createdAt: row.createdAt.toISOString(),
+          organizer: card,
+        });
+      }
+    }
+    return res.json({
+      following,
+      profileIds: following.map((f) => f.organizerProfileId),
     });
   } catch (e) {
     console.error(e);
