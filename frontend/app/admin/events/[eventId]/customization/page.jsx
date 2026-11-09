@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { LiveMicroLabel } from "@/components/admin/LiveMicroIcon";
+import { EventInvitesPanel } from "@/components/admin/EventInvitesPanel";
 import { LandingFeedAdminPanel } from "@/components/event/LandingFeedAdminPanel";
 import { resolveApiAssetUrl } from "@/lib/assetUrl";
 import {
@@ -1738,6 +1739,10 @@ export function EventCustomizationEditor({ mode = "live" }) {
                       <p style={{ ...fieldHintStyle, margin: 0 }}>Slug manquant.</p>
                     )}
                   </section>
+
+                  {eventId ? (
+                    <EventInvitesPanel eventId={eventId} eventSlug={slug} />
+                  ) : null}
 
                   {/* 2. Personnalisation */}
                   <section style={card}>

@@ -115,6 +115,8 @@ export default function AdminEventsPage() {
   const [favorites, setFavorites] = useState(/** @type {Array<Record<string, any>>} */ ([]));
   const [favoritesLoading, setFavoritesLoading] = useState(false);
   const [favoriteBusyId, setFavoriteBusyId] = useState(/** @type {string|null} */ (null));
+  const [invitations, setInvitations] = useState(/** @type {Array<Record<string, any>>} */ ([]));
+  const [invitationsLoading, setInvitationsLoading] = useState(false);
   const [newLeadCounts, setNewLeadCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
@@ -182,11 +184,39 @@ export default function AdminEventsPage() {
     void load();
   }, [load]);
 
+  const loadInvitations = useCallback(async () => {
+    setInvitationsLoading(true);
+    setFetchError(null);
+    try {
+      const res = await adminFetch(`${apiBaseBrowser()}/me/invitations`, {
+        cache: "no-store",
+      });
+      if (res.status === 401) {
+        setInvitations([]);
+        setFetchError("Session expirée ou non connecté. Rechargez la page ou reconnectez-vous.");
+        return;
+      }
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body?.error || `Erreur ${res.status}`);
+      }
+      setInvitations(Array.isArray(body.invitations) ? body.invitations : []);
+    } catch (e) {
+      setInvitations([]);
+      setFetchError(e?.message || "Impossible de charger les invitations.");
+    } finally {
+      setInvitationsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (section === "favorites") {
       void loadFavorites();
     }
-  }, [section, loadFavorites]);
+    if (section === "invitations") {
+      void loadInvitations();
+    }
+  }, [section, loadFavorites, loadInvitations]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -462,7 +492,7 @@ export default function AdminEventsPage() {
       <div style={adminContentShellStyle("workspace")}>
         <AdminPageHeader
           title="Mes événements"
-          subtitle="Organisés, favoris et prochainement vos invitations — un seul espace."
+          subtitle="Organisés, favoris et invitations — un seul espace."
           actions={
             <Link
               href="/admin"
@@ -543,22 +573,99 @@ export default function AdminEventsPage() {
         ) : null}
 
         {section === "invitations" ? (
-          <div
-            style={{
-              padding: "clamp(2rem, 5vw, 3rem) 1.5rem",
-              borderRadius: "16px",
-              border: "1px dashed #cbd5e1",
-              background: "#f8fafc",
-              textAlign: "center",
-            }}
-          >
-            <p style={{ margin: "0 0 0.45rem", fontSize: "1.05rem", fontWeight: 800, color: "#0f172a" }}>
-              Invitations bientôt disponibles
-            </p>
-            <p style={{ margin: 0, color: "#64748b", fontSize: "0.92rem", lineHeight: 1.55, maxWidth: 420, marginInline: "auto" }}>
-              Les invitations privées arriveront dans un prochain lot. Cet espace est prêt pour les accueillir.
-            </p>
-          </div>
+          <>
+            {invitationsLoading ? (
+              <p style={{ color: "#64748b", fontWeight: 500, margin: "0 0 1rem" }}>
+                Chargement des invitations…
+              </p>
+            ) : null}
+            {!invitationsLoading && invitations.length === 0 ? (
+              <div
+                style={{
+                  padding: "clamp(2rem, 5vw, 3rem) 1.5rem",
+                  borderRadius: "16px",
+                  border: "1px dashed #cbd5e1",
+                  background: "#f8fafc",
+                  textAlign: "center",
+                }}
+              >
+                <p style={{ margin: "0 0 0.45rem", fontSize: "1.05rem", fontWeight: 800, color: "#0f172a" }}>
+                  Aucune invitation pour le moment
+                </p>
+                <p style={{ margin: 0, color: "#64748b", fontSize: "0.92rem", lineHeight: 1.55, maxWidth: 440, marginInline: "auto" }}>
+                  Lorsqu’un organisateur vous partage un lien d’accès et un code, l’événement privé apparaîtra ici après validation.
+                </p>
+              </div>
+            ) : null}
+            {!invitationsLoading && invitations.length > 0 ? (
+              <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                {invitations.map((row) => {
+                  const ev = row.event || {};
+                  return (
+                    <li
+                      key={row.eventId}
+                      style={{
+                        borderTop: "1px solid #e2e8f0",
+                        padding: "0.95rem 0",
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "0.75rem",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <p style={{ margin: 0, fontWeight: 850 }}>{ev.title || "Événement"}</p>
+                        <p style={{ margin: "0.25rem 0 0", color: "#64748b", fontSize: "0.84rem" }}>
+                          Accès souvenirs accordé
+                          {row.grantedAt
+                            ? ` · ${new Date(row.grantedAt).toLocaleString("fr-FR")}`
+                            : ""}
+                        </p>
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+                        {ev.landingPath ? (
+                          <Link
+                            href={ev.landingPath}
+                            style={{
+                              display: "inline-flex",
+                              padding: "0.45rem 0.75rem",
+                              borderRadius: 9,
+                              background: "#1d4ed8",
+                              color: "#fff",
+                              fontWeight: 800,
+                              fontSize: "0.82rem",
+                              textDecoration: "none",
+                            }}
+                          >
+                            Voir les souvenirs
+                          </Link>
+                        ) : null}
+                        {ev.joinPath ? (
+                          <Link
+                            href={ev.joinPath}
+                            style={{
+                              display: "inline-flex",
+                              padding: "0.45rem 0.75rem",
+                              borderRadius: 9,
+                              border: "1px solid #bfdbfe",
+                              background: "#fff",
+                              color: "#1d4ed8",
+                              fontWeight: 800,
+                              fontSize: "0.82rem",
+                              textDecoration: "none",
+                            }}
+                          >
+                            Salle live
+                          </Link>
+                        ) : null}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+          </>
         ) : null}
 
         {section === "favorites" ? (
