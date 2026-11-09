@@ -19,13 +19,17 @@ import {
   isCreateEventDraftMeaningful,
   isLeadLikeQuestionType,
   isQuizQuestion,
+  listCreatePublicDiscoverGaps,
   loadCreateEventDraft,
   moveItem,
   normalizeContestWinnerCount,
+  normalizeCreateVisibilityIntent,
   saveCreateEventDraft,
   summarizeQuestionTypes,
   validateCreateEventForm,
+  validateCreateVisibilityIntent,
 } from "@/lib/createEventForm";
+import { PUBLISH_PUBLIC_WARNING_LINES } from "@/lib/eventVisibility";
 import { rememberMyEvent } from "@/lib/myEventsStorage";
 
 const inputStyle = {
@@ -63,6 +67,13 @@ export default function AdminPage() {
 
   const [eventTitle, setEventTitle] = useState("");
   const [eventDescription, setEventDescription] = useState("");
+  /** @type {["private" | "public", Function]} */
+  const [visibilityIntent, setVisibilityIntent] = useState(
+    /** @type {"private" | "public"} */ ("private"),
+  );
+  const [publicConfirmed, setPublicConfirmed] = useState(false);
+  /** @type {[Array<{ id?: string; isPublic?: boolean; displayName?: string }>, Function]} */
+  const [organizerProfiles, setOrganizerProfiles] = useState([]);
   const [questions, setQuestions] = useState(() => [{ ...QUESTION_INITIALE }]);
   const [openQuestionId, setOpenQuestionId] = useState(QUESTION_INITIALE.id);
   const [formError, setFormError] = useState(null);
@@ -90,6 +101,10 @@ export default function AdminPage() {
       skipNextDraftSaveRef.current = true;
       setEventTitle(draft.eventTitle);
       setEventDescription(draft.eventDescription);
+      setVisibilityIntent(
+        normalizeCreateVisibilityIntent(draft.visibilityIntent),
+      );
+      setPublicConfirmed(false);
       setQuestions(draft.questions);
       setOpenQuestionId(draft.questions[draft.questions.length - 1]?.id || "q-1");
       let maxN = 1;
@@ -104,6 +119,30 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await adminFetch(`${apiBaseBrowser()}/me/profiles`, {
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const body = await res.json().catch(() => ({}));
+        const list = Array.isArray(body?.profiles)
+          ? body.profiles
+          : Array.isArray(body)
+            ? body
+            : [];
+        if (!cancelled) setOrganizerProfiles(list);
+      } catch {
+        /* ignore — gaps UI reste informative */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!draftHydrated || typeof window === "undefined") return;
     if (skipNextDraftSaveRef.current) {
       skipNextDraftSaveRef.current = false;
@@ -113,11 +152,12 @@ export default function AdminPage() {
       saveCreateEventDraft(window.localStorage, {
         eventTitle,
         eventDescription,
+        visibilityIntent,
         questions,
       });
     }, 350);
     return () => window.clearTimeout(t);
-  }, [eventTitle, eventDescription, questions, draftHydrated]);
+  }, [eventTitle, eventDescription, visibilityIntent, questions, draftHydrated]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -145,6 +185,8 @@ export default function AdminPage() {
     skipNextDraftSaveRef.current = true;
     setEventTitle("");
     setEventDescription("");
+    setVisibilityIntent("private");
+    setPublicConfirmed(false);
     setQuestions([{ ...blank }]);
     setOpenQuestionId(blank.id);
     setFormError(null);
@@ -398,6 +440,20 @@ export default function AdminPage() {
       focusValidationError(result);
       return;
     }
+    const visResult = validateCreateVisibilityIntent({
+      visibilityIntent,
+      publicConfirmed,
+    });
+    if (!visResult.ok) {
+      setFormError(visResult.formError);
+      setFieldErrors((fe) => ({
+        ...fe,
+        ...visResult.fieldErrors,
+        questions: fe?.questions || {},
+      }));
+      setMobilePanel("form");
+      return;
+    }
     setFormError(null);
     setFieldErrors({ questions: {} });
 
@@ -476,6 +532,33 @@ export default function AdminPage() {
       const slug = created.eventSlug;
 
       if (eventId) {
+        /** Création toujours privée côté API ; publication = PATCH confirmé. */
+        if (visibilityIntent === "public" && publicConfirmed === true) {
+          const visRes = await adminFetch(
+            `${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/visibility`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                visibility: "public",
+                confirmPublic: true,
+              }),
+            },
+          );
+          if (!visRes.ok) {
+            const errBody = await visRes.json().catch(() => ({}));
+            const serverMessage =
+              typeof errBody?.message === "string"
+                ? errBody.message.trim()
+                : "";
+            const code = String(errBody?.error || "").trim();
+            throw new Error(
+              serverMessage ||
+                code ||
+                "Événement créé en privé, mais la publication a échoué. Vous pourrez le rendre public depuis Mes événements.",
+            );
+          }
+        }
         if (typeof window !== "undefined") {
           clearCreateEventDraft(window.localStorage);
         }
@@ -493,6 +576,16 @@ export default function AdminPage() {
       createLockRef.current = false;
     }
   }
+
+  const discoverGaps = useMemo(
+    () =>
+      listCreatePublicDiscoverGaps({
+        profiles: organizerProfiles,
+        hasTheme: false,
+        hasStartsAt: false,
+      }),
+    [organizerProfiles],
+  );
 
   const stats = useMemo(() => summarizeQuestionTypes(questions), [questions]);
   const eventTitlePreview = eventTitle.trim() || "Titre de l’événement";
@@ -636,8 +729,254 @@ export default function AdminPage() {
                   minHeight: "4rem",
                   resize: "vertical",
                   fontFamily: "inherit",
+                  marginBottom: "1rem",
                 }}
               />
+
+              <fieldset
+                className="admin-visibility-fieldset"
+                disabled={creating}
+                style={{
+                  margin: 0,
+                  padding: 0,
+                  border: "none",
+                  minWidth: 0,
+                }}
+              >
+                <legend className="admin-label" style={{ padding: 0 }}>
+                  Visibilité
+                </legend>
+                <p
+                  style={{
+                    margin: "0 0 0.65rem",
+                    fontSize: "0.8rem",
+                    color: "#64748b",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  Privé par défaut : hors « Les événements » et noindex. Le live
+                  par lien / QR reste ouvert. Public = intention SEO /
+                  annuaire, avec confirmation.
+                </p>
+                <div
+                  role="radiogroup"
+                  aria-label="Visibilité de l’événement"
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "0.55rem",
+                    marginBottom: "0.55rem",
+                  }}
+                >
+                  {[
+                    {
+                      value: "private",
+                      label: "Privé",
+                      help: "Par défaut — non listé",
+                    },
+                    {
+                      value: "public",
+                      label: "Public",
+                      help: "Référencé si éligible",
+                    },
+                  ].map((opt) => {
+                    const selected = visibilityIntent === opt.value;
+                    return (
+                      <label
+                        key={opt.value}
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "0.15rem",
+                          flex: "1 1 140px",
+                          maxWidth: "220px",
+                          padding: "0.65rem 0.75rem",
+                          borderRadius: "10px",
+                          border: selected
+                            ? "1.5px solid #2563eb"
+                            : "1px solid #cbd5e1",
+                          background: selected ? "#eff6ff" : "#fff",
+                          cursor: creating ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.4rem",
+                            fontWeight: 750,
+                            fontSize: "0.9rem",
+                            color: "#0f172a",
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            name="create-visibility"
+                            value={opt.value}
+                            checked={selected}
+                            disabled={creating}
+                            onChange={() => {
+                              setVisibilityIntent(
+                                /** @type {"private" | "public"} */ (
+                                  opt.value
+                                ),
+                              );
+                              if (opt.value !== "public") {
+                                setPublicConfirmed(false);
+                              }
+                              if (fieldErrors?.publicConfirmed) {
+                                setFieldErrors((fe) => {
+                                  const next = { ...fe };
+                                  delete next.publicConfirmed;
+                                  return next;
+                                });
+                              }
+                            }}
+                          />
+                          {opt.label}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: "0.72rem",
+                            color: "#64748b",
+                            paddingLeft: "1.35rem",
+                          }}
+                        >
+                          {opt.help}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                {visibilityIntent === "public" ? (
+                  <div
+                    style={{
+                      marginTop: "0.35rem",
+                      padding: "0.75rem 0.85rem",
+                      borderRadius: "10px",
+                      border: "1px solid #e2e8f0",
+                      background: "#f8fafc",
+                    }}
+                  >
+                    <p
+                      style={{
+                        margin: "0 0 0.45rem",
+                        fontSize: "0.82rem",
+                        fontWeight: 700,
+                        color: "#0f172a",
+                      }}
+                    >
+                      Avant de rendre public
+                    </p>
+                    <ul
+                      style={{
+                        margin: "0 0 0.65rem",
+                        paddingLeft: "1.1rem",
+                        color: "#475569",
+                        fontSize: "0.8rem",
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      {PUBLISH_PUBLIC_WARNING_LINES.map((line) => (
+                        <li key={line} style={{ marginBottom: "0.28rem" }}>
+                          {line}
+                        </li>
+                      ))}
+                    </ul>
+                    {discoverGaps.length > 0 ? (
+                      <div
+                        style={{
+                          marginBottom: "0.65rem",
+                          padding: "0.55rem 0.65rem",
+                          borderRadius: "8px",
+                          border: "1px solid rgba(245, 158, 11, 0.45)",
+                          background: "rgba(255, 251, 235, 0.9)",
+                        }}
+                      >
+                        <p
+                          style={{
+                            margin: "0 0 0.35rem",
+                            fontSize: "0.78rem",
+                            fontWeight: 750,
+                            color: "#92400e",
+                          }}
+                        >
+                          Pour apparaître dans « Les événements », il manque
+                          encore :
+                        </p>
+                        <ul
+                          style={{
+                            margin: 0,
+                            paddingLeft: "1.05rem",
+                            fontSize: "0.76rem",
+                            color: "#78350f",
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {discoverGaps.map((gap) => (
+                            <li key={gap} style={{ marginBottom: "0.2rem" }}>
+                              {gap}
+                            </li>
+                          ))}
+                        </ul>
+                        <p
+                          style={{
+                            margin: "0.4rem 0 0",
+                            fontSize: "0.72rem",
+                            color: "#92400e",
+                          }}
+                        >
+                          Vous pourrez compléter ces infos après création. La
+                          publication seule ne contourne pas ces conditions
+                          Discover.
+                        </p>
+                      </div>
+                    ) : null}
+                    <label
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: "0.5rem",
+                        fontSize: "0.84rem",
+                        color: "#0f172a",
+                        fontWeight: 650,
+                        cursor: creating ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={publicConfirmed}
+                        disabled={creating}
+                        onChange={(ev) => {
+                          setPublicConfirmed(ev.target.checked);
+                          if (fieldErrors?.publicConfirmed) {
+                            setFieldErrors((fe) => {
+                              const next = { ...fe };
+                              delete next.publicConfirmed;
+                              return next;
+                            });
+                          }
+                        }}
+                        style={{ marginTop: "0.15rem" }}
+                      />
+                      <span>
+                        Je confirme vouloir publier cet événement (même
+                        confirmation que « Rendre public » sur Mes événements).
+                      </span>
+                    </label>
+                    {fieldErrors?.publicConfirmed ? (
+                      <p
+                        className="admin-field-error"
+                        role="alert"
+                        style={{ marginTop: "0.45rem" }}
+                      >
+                        {String(fieldErrors.publicConfirmed)}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </fieldset>
             </section>
 
             <section className="admin-section-card">

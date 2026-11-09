@@ -36,6 +36,76 @@ export const LEAD_DEFAULT_OPTIONS = ["Oui", "Non"];
  * }} CreateQuestion
  */
 
+/** @typedef {"private" | "public"} CreateVisibilityIntent */
+
+/**
+ * @param {unknown} raw
+ * @returns {CreateVisibilityIntent}
+ */
+export function normalizeCreateVisibilityIntent(raw) {
+  const s = String(raw || "")
+    .trim()
+    .toLowerCase();
+  return s === "public" ? "public" : "private";
+}
+
+/**
+ * Écarts pour apparaître dans « Les événements » (Discover).
+ * La visibilité PUBLIC peut être posée sans eux ; Discover exige le reste.
+ *
+ * @param {{
+ *   profiles?: Array<{ isPublic?: boolean; displayName?: string } | null> | null;
+ *   hasTheme?: boolean;
+ *   hasStartsAt?: boolean;
+ * }} args
+ * @returns {string[]}
+ */
+export function listCreatePublicDiscoverGaps(args) {
+  /** @type {string[]} */
+  const gaps = [];
+  const profiles = Array.isArray(args?.profiles) ? args.profiles : [];
+  const hasPublicOrganizer = profiles.some((p) => p && p.isPublic === true);
+  if (!hasPublicOrganizer) {
+    gaps.push(
+      "Un profil organisateur public (Mon compte → Profils organisateurs), puis le rattacher à l’événement.",
+    );
+  }
+  if (args?.hasTheme !== true) {
+    gaps.push(
+      "Un thème principal (à renseigner après création sur la fiche événement).",
+    );
+  }
+  if (args?.hasStartsAt !== true) {
+    gaps.push(
+      "Une date de début (à renseigner après création sur la fiche événement).",
+    );
+  }
+  return gaps;
+}
+
+/**
+ * Validation intention Public à la création (confirmation obligatoire).
+ * @param {{
+ *   visibilityIntent?: unknown;
+ *   publicConfirmed?: unknown;
+ * }} args
+ * @returns {{ ok: true } | { ok: false; formError: string; fieldErrors: Record<string, string> }}
+ */
+export function validateCreateVisibilityIntent(args) {
+  const intent = normalizeCreateVisibilityIntent(args?.visibilityIntent);
+  if (intent !== "public") return { ok: true };
+  if (args?.publicConfirmed === true) return { ok: true };
+  return {
+    ok: false,
+    formError:
+      "Pour un événement public, confirmez la publication (case à cocher) — comme pour « Rendre public » sur Mes événements.",
+    fieldErrors: {
+      publicConfirmed:
+        "Confirmation requise avant de demander la publication.",
+    },
+  };
+}
+
 export const QUESTION_TYPE_META = [
   {
     type: "SINGLE_CHOICE",
@@ -399,7 +469,12 @@ export function validateCreateEventForm(input) {
 
 /**
  * @param {unknown} raw
- * @returns {{ eventTitle: string; eventDescription: string; questions: CreateQuestion[] } | null}
+ * @returns {{
+ *   eventTitle: string;
+ *   eventDescription: string;
+ *   questions: CreateQuestion[];
+ *   visibilityIntent: CreateVisibilityIntent;
+ * } | null}
  */
 export function parseCreateEventDraft(raw) {
   if (raw == null) return null;
@@ -416,6 +491,9 @@ export function parseCreateEventDraft(raw) {
     typeof data.eventTitle === "string" ? data.eventTitle : "";
   const eventDescription =
     typeof data.eventDescription === "string" ? data.eventDescription : "";
+  const visibilityIntent = normalizeCreateVisibilityIntent(
+    data.visibilityIntent,
+  );
   if (!Array.isArray(data.questions) || data.questions.length < 1) return null;
 
   const questions = [];
@@ -468,11 +546,16 @@ export function parseCreateEventDraft(raw) {
     questions.push(base);
   }
   if (questions.length < 1) return null;
-  return { eventTitle, eventDescription, questions };
+  return { eventTitle, eventDescription, questions, visibilityIntent };
 }
 
 /**
- * @param {{ eventTitle: string; eventDescription: string; questions: CreateQuestion[] }} draft
+ * @param {{
+ *   eventTitle: string;
+ *   eventDescription: string;
+ *   questions: CreateQuestion[];
+ *   visibilityIntent?: CreateVisibilityIntent;
+ * }} draft
  * @returns {string}
  */
 export function serializeCreateEventDraft(draft) {
@@ -481,13 +564,19 @@ export function serializeCreateEventDraft(draft) {
     savedAt: Date.now(),
     eventTitle: draft.eventTitle ?? "",
     eventDescription: draft.eventDescription ?? "",
+    visibilityIntent: normalizeCreateVisibilityIntent(draft.visibilityIntent),
     questions: Array.isArray(draft.questions) ? draft.questions : [],
   });
 }
 
 /**
  * @param {Storage | null | undefined} storage
- * @returns {{ eventTitle: string; eventDescription: string; questions: CreateQuestion[] } | null}
+ * @returns {{
+ *   eventTitle: string;
+ *   eventDescription: string;
+ *   questions: CreateQuestion[];
+ *   visibilityIntent: CreateVisibilityIntent;
+ * } | null}
  */
 export function loadCreateEventDraft(storage) {
   if (!storage || typeof storage.getItem !== "function") return null;
@@ -501,7 +590,12 @@ export function loadCreateEventDraft(storage) {
 
 /**
  * @param {Storage | null | undefined} storage
- * @param {{ eventTitle: string; eventDescription: string; questions: CreateQuestion[] }} draft
+ * @param {{
+ *   eventTitle: string;
+ *   eventDescription: string;
+ *   questions: CreateQuestion[];
+ *   visibilityIntent?: CreateVisibilityIntent;
+ * }} draft
  */
 export function saveCreateEventDraft(storage, draft) {
   if (!storage || typeof storage.setItem !== "function") return;
