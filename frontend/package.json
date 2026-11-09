@@ -26,6 +26,7 @@
     "test:favorites-follows-ui": "node scripts/test-favorites-follows-ui.mjs",
     "test:event-invites-ui": "node scripts/test-event-invites-ui.mjs",
     "test:landing-hero": "node scripts/test-landing-hero.mjs",
+    "test:event-landing-nav": "node scripts/test-event-landing-nav.mjs",
     "test:landing-admin-ux-lot1": "node scripts/test-landing-admin-ux-lot1.mjs",
     "test:landing-admin-preview-sticky": "node scripts/test-landing-admin-preview-sticky.mjs",
     "test:landing-public-ux-lot2": "node scripts/test-landing-public-ux-lot2.mjs",

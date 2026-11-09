@@ -10,6 +10,7 @@ import {
   prepareLandingPhotoForUpload,
 } from "@/lib/compressLandingPhoto";
 import { EventLandingDemoPage } from "@/components/event/EventLandingDemoPage";
+import { EventLandingNav } from "@/components/event/EventLandingNav";
 import { LandingEvenementPresentation } from "@/components/event/LandingEvenementPresentation";
 import {
   CameraIcon,
@@ -557,16 +558,17 @@ export default function EventLandingPage() {
         className="ev-landing-shell"
         style={{
           minHeight: "100vh",
-          display: "grid",
-          placeItems: "center",
           fontFamily: "system-ui, sans-serif",
           color: "#64748b",
           background: "#0f172a",
         }}
       >
-        <p className="ev-landing-fade-in" style={{ color: "#94a3b8" }}>
-          Chargement…
-        </p>
+        <EventLandingNav />
+        <div style={{ display: "grid", placeItems: "center", minHeight: "70vh" }}>
+          <p className="ev-landing-fade-in" style={{ color: "#94a3b8" }}>
+            Chargement…
+          </p>
+        </div>
       </main>
     );
   }
@@ -577,17 +579,19 @@ export default function EventLandingPage() {
         className="ev-landing-shell"
         style={{
           minHeight: "100vh",
-          padding: "2rem",
           fontFamily: "system-ui, sans-serif",
           background: "#f8fafc",
         }}
       >
-        <p style={{ color: "#b91c1c" }}>{error || "Indisponible."}</p>
-        <p style={{ marginTop: "1rem" }}>
-          <Link href="/" style={{ color: "#2563eb", fontWeight: 600 }}>
-            Accueil
-          </Link>
-        </p>
+        <EventLandingNav />
+        <div style={{ padding: "2rem" }}>
+          <p style={{ color: "#b91c1c" }}>{error || "Indisponible."}</p>
+          <p style={{ marginTop: "1rem" }}>
+            <Link href="/" style={{ color: "#2563eb", fontWeight: 600 }}>
+              Accueil
+            </Link>
+          </p>
+        </div>
       </main>
     );
   }
@@ -1336,6 +1340,8 @@ export default function EventLandingPage() {
           color: var(--ev-accent, #2563eb);
         }
       `}</style>
+
+      <EventLandingNav />
 
       <section
         className="ev-landing-hero"

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EventLandingNav } from "@/components/event/EventLandingNav";
 
 const DEMO_ACCENT = "#7c3aed";
 
@@ -61,6 +62,7 @@ export function EventLandingDemoPage() {
         ["--ev-accent"]: DEMO_ACCENT,
       }}
     >
+      <EventLandingNav />
       <style>{`
         .ev-demo-shell { -webkit-font-smoothing: antialiased; }
         @media (prefers-reduced-motion: no-preference) {
