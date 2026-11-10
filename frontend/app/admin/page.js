@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { EventLivePreview } from "@/components/admin/EventLivePreview";
+import { EventStructuredInfoFields } from "@/components/admin/EventStructuredInfoFields";
 import { FormBuilderPanel } from "@/components/admin/FormBuilderPanel";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 import {
@@ -29,6 +30,11 @@ import {
   validateCreateEventForm,
   validateCreateVisibilityIntent,
 } from "@/lib/createEventForm";
+import {
+  blankEventStructuredInfo,
+  buildDiscoverMetaPatchBody,
+  hasAnyStructuredInfo,
+} from "@/lib/eventDiscoverMeta";
 import { PUBLISH_PUBLIC_WARNING_LINES } from "@/lib/eventVisibility";
 import { rememberMyEvent } from "@/lib/myEventsStorage";
 
@@ -74,6 +80,11 @@ export default function AdminPage() {
   const [publicConfirmed, setPublicConfirmed] = useState(false);
   /** @type {[Array<{ id?: string; isPublic?: boolean; displayName?: string }>, Function]} */
   const [organizerProfiles, setOrganizerProfiles] = useState([]);
+  /** @type {[Array<{ id: string; slug?: string; label?: string }>, Function]} */
+  const [discoverThemes, setDiscoverThemes] = useState([]);
+  const [structuredInfo, setStructuredInfo] = useState(() =>
+    blankEventStructuredInfo(),
+  );
   const [questions, setQuestions] = useState(() => [{ ...QUESTION_INITIALE }]);
   const [openQuestionId, setOpenQuestionId] = useState(QUESTION_INITIALE.id);
   const [formError, setFormError] = useState(null);
@@ -105,6 +116,9 @@ export default function AdminPage() {
         normalizeCreateVisibilityIntent(draft.visibilityIntent),
       );
       setPublicConfirmed(false);
+      if (draft.structuredInfo) {
+        setStructuredInfo(draft.structuredInfo);
+      }
       setQuestions(draft.questions);
       setOpenQuestionId(draft.questions[draft.questions.length - 1]?.id || "q-1");
       let maxN = 1;
@@ -122,17 +136,38 @@ export default function AdminPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await adminFetch(`${apiBaseBrowser()}/me/profiles`, {
-          cache: "no-store",
-        });
-        if (!res.ok) return;
-        const body = await res.json().catch(() => ({}));
-        const list = Array.isArray(body?.profiles)
-          ? body.profiles
-          : Array.isArray(body)
-            ? body
-            : [];
-        if (!cancelled) setOrganizerProfiles(list);
+        const [profilesRes, themesRes] = await Promise.all([
+          adminFetch(`${apiBaseBrowser()}/me/profiles`, { cache: "no-store" }),
+          adminFetch(`${apiBaseBrowser()}/discover/themes`, {
+            cache: "no-store",
+          }),
+        ]);
+        if (profilesRes.ok) {
+          const body = await profilesRes.json().catch(() => ({}));
+          const list = Array.isArray(body?.profiles)
+            ? body.profiles
+            : Array.isArray(body)
+              ? body
+              : [];
+          if (!cancelled) setOrganizerProfiles(list);
+        }
+        if (themesRes.ok) {
+          const body = await themesRes.json().catch(() => ({}));
+          const list = Array.isArray(body?.themes)
+            ? body.themes
+            : Array.isArray(body)
+              ? body
+              : [];
+          if (!cancelled) {
+            setDiscoverThemes(
+              list.map((t) => ({
+                id: String(t.id),
+                slug: t.slug,
+                label: t.label,
+              })),
+            );
+          }
+        }
       } catch {
         /* ignore — gaps UI reste informative */
       }
@@ -153,11 +188,19 @@ export default function AdminPage() {
         eventTitle,
         eventDescription,
         visibilityIntent,
+        structuredInfo,
         questions,
       });
     }, 350);
     return () => window.clearTimeout(t);
-  }, [eventTitle, eventDescription, visibilityIntent, questions, draftHydrated]);
+  }, [
+    eventTitle,
+    eventDescription,
+    visibilityIntent,
+    structuredInfo,
+    questions,
+    draftHydrated,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -187,6 +230,7 @@ export default function AdminPage() {
     setEventDescription("");
     setVisibilityIntent("private");
     setPublicConfirmed(false);
+    setStructuredInfo(blankEventStructuredInfo());
     setQuestions([{ ...blank }]);
     setOpenQuestionId(blank.id);
     setFormError(null);
@@ -532,6 +576,32 @@ export default function AdminPage() {
       const slug = created.eventSlug;
 
       if (eventId) {
+        /** Métas structurées via discover-meta (optionnelles si privé). */
+        if (hasAnyStructuredInfo(structuredInfo)) {
+          const built = buildDiscoverMetaPatchBody(structuredInfo);
+          if (!built.ok) {
+            throw new Error(
+              `Événement créé, mais infos structurées invalides : ${built.error}`,
+            );
+          }
+          const metaRes = await adminFetch(
+            `${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/discover-meta`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(built.body),
+            },
+          );
+          if (!metaRes.ok) {
+            const errBody = await metaRes.json().catch(() => ({}));
+            throw new Error(
+              errBody?.error ||
+                errBody?.message ||
+                "Événement créé, mais l’enregistrement des infos (date, ville, thèmes, profil) a échoué. Complétez-les dans Mes événements.",
+            );
+          }
+        }
+
         /** Création toujours privée côté API ; publication = PATCH confirmé. */
         if (visibilityIntent === "public" && publicConfirmed === true) {
           const visRes = await adminFetch(
@@ -581,10 +651,11 @@ export default function AdminPage() {
     () =>
       listCreatePublicDiscoverGaps({
         profiles: organizerProfiles,
-        hasTheme: false,
-        hasStartsAt: false,
+        startsAtLocal: structuredInfo.startsAtLocal,
+        primaryThemeId: structuredInfo.primaryThemeId,
+        organizerProfileId: structuredInfo.organizerProfileId,
       }),
-    [organizerProfiles],
+    [organizerProfiles, structuredInfo],
   );
 
   const stats = useMemo(() => summarizeQuestionTypes(questions), [questions]);
@@ -977,6 +1048,41 @@ export default function AdminPage() {
                   </div>
                 ) : null}
               </fieldset>
+
+              <div
+                style={{
+                  marginTop: "1.1rem",
+                  paddingTop: "0.95rem",
+                  borderTop: "1px solid #e2e8f0",
+                }}
+              >
+                <h3
+                  className="admin-section-title"
+                  style={{ fontSize: "0.95rem", marginBottom: "0.35rem" }}
+                >
+                  Informations structurées
+                </h3>
+                <p
+                  style={{
+                    margin: "0 0 0.65rem",
+                    fontSize: "0.78rem",
+                    color: "#64748b",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  Facultatives si l’événement reste privé. Pour un événement
+                  public dans « Les événements » : date de début, thème
+                  principal et profil organisateur public.
+                </p>
+                <EventStructuredInfoFields
+                  value={structuredInfo}
+                  onChange={setStructuredInfo}
+                  themes={discoverThemes}
+                  profiles={organizerProfiles}
+                  disabled={creating}
+                  idPrefix="create-ev-meta"
+                />
+              </div>
             </section>
 
             <section className="admin-section-card">

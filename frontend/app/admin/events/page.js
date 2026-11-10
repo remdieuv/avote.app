@@ -105,6 +105,25 @@ function normalizeEventRow(e) {
       typeof e.organizerProfileId === "string" && e.organizerProfileId.trim()
         ? e.organizerProfileId
         : null,
+    city: typeof e.city === "string" ? e.city : e.city ?? null,
+    startsAt:
+      typeof e.startsAt === "string" && e.startsAt.trim()
+        ? e.startsAt
+        : e.startsAt ?? null,
+    primaryThemeId:
+      typeof e.primaryThemeId === "string" && e.primaryThemeId.trim()
+        ? e.primaryThemeId
+        : e.primaryTheme?.id
+          ? String(e.primaryTheme.id)
+          : null,
+    secondaryThemeId:
+      typeof e.secondaryThemeId === "string" && e.secondaryThemeId.trim()
+        ? e.secondaryThemeId
+        : e.secondaryTheme?.id
+          ? String(e.secondaryTheme.id)
+          : null,
+    discoverEligible:
+      typeof e.discoverEligible === "boolean" ? e.discoverEligible : undefined,
     _localOnly: Boolean(e._localOnly),
   };
 }
@@ -843,11 +862,11 @@ export default function AdminEventsPage() {
                   onDelete={deleteEvent}
                   onRename={renameEvent}
                   onVisibilityChange={changeEventVisibility}
-                  onOrganizerProfileChange={(eventId, profileId) => {
+                  onStructuredInfoChange={(eventId, patch) => {
                     setRows((prev) =>
                       prev.map((r) =>
                         String(r.id) === String(eventId)
-                          ? { ...r, organizerProfileId: profileId }
+                          ? { ...r, ...patch }
                           : r,
                       ),
                     );

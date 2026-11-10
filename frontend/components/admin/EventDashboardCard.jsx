@@ -9,7 +9,7 @@ import {
   TelecommandeIcon,
   TelecommandeQrModal,
 } from "@/components/admin/TelecommandeQrModal";
-import { EventOrganizerSelect } from "@/components/admin/EventOrganizerSelect";
+import { EventStructuredInfoPanel } from "@/components/admin/EventStructuredInfoPanel";
 import { EventVisibilityControls } from "@/components/admin/EventVisibilityControls";
 import { TELECOMMANDE_QR_COPY } from "@/lib/telecommandeQr";
 
@@ -31,6 +31,10 @@ import { TELECOMMANDE_QR_COPY } from "@/lib/telecommandeQr";
  *     landingEnabled?: boolean;
  *     visibility?: string;
  *     organizerProfileId?: string | null;
+ *     city?: string | null;
+ *     startsAt?: string | null;
+ *     primaryThemeId?: string | null;
+ *     secondaryThemeId?: string | null;
  *     _localOnly?: boolean;
  *   };
  *   featured?: boolean;
@@ -45,7 +49,10 @@ import { TELECOMMANDE_QR_COPY } from "@/lib/telecommandeQr";
  *     next: "public" | "private",
  *     opts: { confirmPublic: boolean },
  *   ) => Promise<void>;
- *   onOrganizerProfileChange?: (eventId: string, profileId: string | null) => void;
+ *   onStructuredInfoChange?: (
+ *     eventId: string,
+ *     patch: Record<string, unknown>,
+ *   ) => void;
  * }} props
  */
 const EVENT_TITLE_MAX_LEN = 200;
@@ -60,7 +67,7 @@ export function EventDashboardCard({
   onDelete,
   onRename,
   onVisibilityChange,
-  onOrganizerProfileChange,
+  onStructuredInfoChange,
 }) {
   const ev = event;
   const ux = getEventUxState(ev);
@@ -462,12 +469,11 @@ export function EventDashboardCard({
 
       {!ev._localOnly ? (
         <>
-          <EventOrganizerSelect
-            eventId={ev.id}
-            organizerProfileId={ev.organizerProfileId || null}
+          <EventStructuredInfoPanel
+            event={ev}
             disabled={actionBusy}
-            onUpdated={(profileId) =>
-              onOrganizerProfileChange?.(ev.id, profileId)
+            onUpdated={(eventId, patch) =>
+              onStructuredInfoChange?.(eventId, patch)
             }
           />
           <EventVisibilityControls

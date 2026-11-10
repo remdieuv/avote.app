@@ -4,6 +4,11 @@
  */
 
 import {
+  blankEventStructuredInfo,
+  listDiscoverEligibilityGaps,
+  normalizeStructuredInfoForm,
+} from "./eventDiscoverMeta.js";
+import {
   defaultFormStateForPollKind,
   validateQuestionFormBuilder,
 } from "./forms/formBuilder.js";
@@ -52,35 +57,37 @@ export function normalizeCreateVisibilityIntent(raw) {
 /**
  * Écarts pour apparaître dans « Les événements » (Discover).
  * La visibilité PUBLIC peut être posée sans eux ; Discover exige le reste.
+ * Délègue à `listDiscoverEligibilityGaps` (mêmes règles création / édition).
  *
  * @param {{
- *   profiles?: Array<{ isPublic?: boolean; displayName?: string } | null> | null;
+ *   profiles?: Array<{ id?: string; isPublic?: boolean; displayName?: string } | null> | null;
  *   hasTheme?: boolean;
  *   hasStartsAt?: boolean;
+ *   startsAtLocal?: unknown;
+ *   primaryThemeId?: unknown;
+ *   organizerProfileId?: unknown;
  * }} args
  * @returns {string[]}
  */
 export function listCreatePublicDiscoverGaps(args) {
-  /** @type {string[]} */
-  const gaps = [];
-  const profiles = Array.isArray(args?.profiles) ? args.profiles : [];
-  const hasPublicOrganizer = profiles.some((p) => p && p.isPublic === true);
-  if (!hasPublicOrganizer) {
-    gaps.push(
-      "Un profil organisateur public (Mon compte → Profils organisateurs), puis le rattacher à l’événement.",
-    );
-  }
-  if (args?.hasTheme !== true) {
-    gaps.push(
-      "Un thème principal (à renseigner après création sur la fiche événement).",
-    );
-  }
-  if (args?.hasStartsAt !== true) {
-    gaps.push(
-      "Une date de début (à renseigner après création sur la fiche événement).",
-    );
-  }
-  return gaps;
+  const primaryThemeId =
+    args?.primaryThemeId != null
+      ? args.primaryThemeId
+      : args?.hasTheme === true
+        ? "set"
+        : "";
+  const startsAtLocal =
+    args?.startsAtLocal != null
+      ? args.startsAtLocal
+      : args?.hasStartsAt === true
+        ? "2099-01-01T12:00"
+        : "";
+  return listDiscoverEligibilityGaps({
+    profiles: args?.profiles,
+    primaryThemeId,
+    startsAtLocal,
+    organizerProfileId: args?.organizerProfileId,
+  });
 }
 
 /**
@@ -474,6 +481,7 @@ export function validateCreateEventForm(input) {
  *   eventDescription: string;
  *   questions: CreateQuestion[];
  *   visibilityIntent: CreateVisibilityIntent;
+ *   structuredInfo: import("./eventDiscoverMeta.js").EventStructuredInfoForm;
  * } | null}
  */
 export function parseCreateEventDraft(raw) {
@@ -493,6 +501,9 @@ export function parseCreateEventDraft(raw) {
     typeof data.eventDescription === "string" ? data.eventDescription : "";
   const visibilityIntent = normalizeCreateVisibilityIntent(
     data.visibilityIntent,
+  );
+  const structuredInfo = normalizeStructuredInfoForm(
+    data.structuredInfo || blankEventStructuredInfo(),
   );
   if (!Array.isArray(data.questions) || data.questions.length < 1) return null;
 
@@ -546,7 +557,13 @@ export function parseCreateEventDraft(raw) {
     questions.push(base);
   }
   if (questions.length < 1) return null;
-  return { eventTitle, eventDescription, questions, visibilityIntent };
+  return {
+    eventTitle,
+    eventDescription,
+    questions,
+    visibilityIntent,
+    structuredInfo,
+  };
 }
 
 /**
@@ -555,6 +572,7 @@ export function parseCreateEventDraft(raw) {
  *   eventDescription: string;
  *   questions: CreateQuestion[];
  *   visibilityIntent?: CreateVisibilityIntent;
+ *   structuredInfo?: import("./eventDiscoverMeta.js").EventStructuredInfoForm;
  * }} draft
  * @returns {string}
  */
@@ -565,6 +583,9 @@ export function serializeCreateEventDraft(draft) {
     eventTitle: draft.eventTitle ?? "",
     eventDescription: draft.eventDescription ?? "",
     visibilityIntent: normalizeCreateVisibilityIntent(draft.visibilityIntent),
+    structuredInfo: normalizeStructuredInfoForm(
+      draft.structuredInfo || blankEventStructuredInfo(),
+    ),
     questions: Array.isArray(draft.questions) ? draft.questions : [],
   });
 }
@@ -576,6 +597,7 @@ export function serializeCreateEventDraft(draft) {
  *   eventDescription: string;
  *   questions: CreateQuestion[];
  *   visibilityIntent: CreateVisibilityIntent;
+ *   structuredInfo: import("./eventDiscoverMeta.js").EventStructuredInfoForm;
  * } | null}
  */
 export function loadCreateEventDraft(storage) {
@@ -595,6 +617,7 @@ export function loadCreateEventDraft(storage) {
  *   eventDescription: string;
  *   questions: CreateQuestion[];
  *   visibilityIntent?: CreateVisibilityIntent;
+ *   structuredInfo?: import("./eventDiscoverMeta.js").EventStructuredInfoForm;
  * }} draft
  */
 export function saveCreateEventDraft(storage, draft) {
