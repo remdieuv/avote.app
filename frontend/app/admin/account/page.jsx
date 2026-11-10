@@ -13,6 +13,10 @@ import {
 } from "@/lib/activationBalance";
 import { ADMIN_CONTENT_MAX_FORM_NARROW } from "@/lib/adminLayout";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
+import {
+  ACCOUNT_ACTIVATIONS_INTRO,
+  getAccountActivationExplain,
+} from "@/lib/testModeActivationCopy";
 
 export default function AdminAccountPage() {
   const { user } = useAdminUser();
@@ -41,6 +45,9 @@ export default function AdminAccountPage() {
   } = balance;
   const hasNoActivation =
     activationsLoaded && totalAvailable !== null && totalAvailable === 0;
+  const activationExplain = getAccountActivationExplain({
+    hasActivation: hasNoActivation ? false : activationsLoaded ? true : null,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -227,19 +234,31 @@ export default function AdminAccountPage() {
             <p
               style={{
                 margin: 0,
-                color: hasNoActivation ? "#b45309" : "#0f172a",
+                color: hasNoActivation ? "#1e3a5f" : "#0f172a",
                 padding: "0.38rem 0.48rem",
                 borderRadius: "9px",
-                border: hasNoActivation ? "1px solid #fdba74" : "1px solid #e2e8f0",
-                background: hasNoActivation ? "#fff7ed" : "#f8fafc",
+                border: hasNoActivation ? "1px solid #bfdbfe" : "1px solid #e2e8f0",
+                background: hasNoActivation ? "#eff6ff" : "#f8fafc",
               }}
             >
               {!activationsLoaded
                 ? "Activations en cours de chargement..."
-                : hasNoActivation
-                  ? "Aucune activation disponible"
-                  : "Vos activations par formule"}
+                : activationExplain.title}
             </p>
+            {activationsLoaded && hasNoActivation ? (
+              <p
+                style={{
+                  margin: 0,
+                  color: "#475569",
+                  padding: "0 0.48rem",
+                  fontSize: "0.82rem",
+                  fontWeight: 600,
+                  lineHeight: 1.45,
+                }}
+              >
+                {activationExplain.body}
+              </p>
+            ) : null}
             {activationsLoaded && !hasNoActivation ? (
               <>
                 {funAvailable != null && funAvailable > 0 ? (
@@ -264,7 +283,7 @@ export default function AdminAccountPage() {
             ) : null}
           </div>
           <p style={{ margin: "0 0 0.85rem", color: "#64748b", fontSize: "0.86rem", fontWeight: 700 }}>
-            Choisissez une formule selon votre événement.
+            {activationsLoaded ? ACCOUNT_ACTIVATIONS_INTRO : "Choisissez une formule selon votre événement."}
           </p>
           <div className="account-plan-grid">
             <div className="account-plan-card">
