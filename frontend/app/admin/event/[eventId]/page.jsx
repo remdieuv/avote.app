@@ -112,6 +112,10 @@ import {
 } from "@/lib/regieLiveFlowSteps";
 import { RegieLiveFlowStepper } from "@/components/admin/RegieLiveFlowStepper";
 import {
+  getProjectionAdvancedScreensLabel,
+  resolveConnectedScreensPresence,
+} from "@/lib/regieScreenPresenceCopy";
+import {
   formatAutoRevealCountdownLabel,
   getAutoRevealCountdownSec,
   isAutoRevealCountdownPending,
@@ -4999,9 +5003,15 @@ export default function RegieEventPage() {
         : "📸 Publier une photo";
   /** Desktop : colonne gauche (questions + liens) repliée */
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
-  /** Nombre de clients /screen connectés (socket room dédiée) */
+  /** Présence /screen — false tant que non confirmé par socket (évite un faux « 0 »). */
   const [screenMainConnected, setScreenMainConnected] = useState(false);
   const [screenBConnected, setScreenBConnected] = useState(false);
+  const [screenMainPresenceKnown, setScreenMainPresenceKnown] = useState(false);
+  const [screenBPresenceKnown, setScreenBPresenceKnown] = useState(false);
+  /** Total clients /screen (événement `screen:count` déjà émis côté serveur). */
+  const [screenClientsCount, setScreenClientsCount] = useState(
+    /** @type {number | null} */ (null),
+  );
   const [socketConnected, setSocketConnected] = useState(false);
   const [socketReconnecting, setSocketReconnecting] = useState(false);
   const [screenBDisplayState, setScreenBDisplayState] = useState(
@@ -5583,10 +5593,12 @@ export default function RegieEventPage() {
             : false;
       if (sid === "main") {
         setScreenMainConnected(connected);
+        setScreenMainPresenceKnown(true);
         return;
       }
       if (sid === "b") {
         setScreenBConnected(connected);
+        setScreenBPresenceKnown(true);
         if (!connected) {
           setScreenBDisplayState("waiting");
         }
@@ -5595,6 +5607,15 @@ export default function RegieEventPage() {
 
     function onScreenPresence(payload) {
       applyScreenPresence(payload);
+    }
+
+    /** Total écrans déjà fourni par le serveur — pas d’invention côté UI. */
+    function onScreenCount(payload) {
+      if (!payload || String(payload.eventId) !== String(eventId)) return;
+      if (typeof payload.count !== "number" || !Number.isFinite(payload.count)) {
+        return;
+      }
+      setScreenClientsCount(Math.max(0, Math.floor(payload.count)));
     }
 
     function onScreenUpdate(payload) {
@@ -5729,6 +5750,12 @@ export default function RegieEventPage() {
     }
     function onSocketDisconnect() {
       setSocketConnected(false);
+      // Présence devenue non fiable tant que pas de nouveau snapshot serveur.
+      setScreenClientsCount(null);
+      setScreenMainPresenceKnown(false);
+      setScreenBPresenceKnown(false);
+      setScreenMainConnected(false);
+      setScreenBConnected(false);
     }
     function onSocketConnectError() {
       setSocketConnected(false);
@@ -5746,6 +5773,7 @@ export default function RegieEventPage() {
     socket.on("event_live_updated", onLive);
     socket.on("poll_updated", onPollUpdated);
     socket.on("screen:presence", onScreenPresence);
+    socket.on("screen:count", onScreenCount);
     socket.on("screen:update", onScreenUpdate);
 
     return () => {
@@ -5760,6 +5788,7 @@ export default function RegieEventPage() {
       socket.off("event_live_updated", onLive);
       socket.off("poll_updated", onPollUpdated);
       socket.off("screen:presence", onScreenPresence);
+      socket.off("screen:count", onScreenCount);
       socket.off("screen:update", onScreenUpdate);
       socket.disconnect();
     };
@@ -6701,6 +6730,17 @@ export default function RegieEventPage() {
     openTitle: openVoteButtonCopy.title,
   });
   const regieToolGlossary = getRegieToolGlossary();
+  const connectedScreensPresence = resolveConnectedScreensPresence({
+    serverCount: screenClientsCount,
+    mainConnected: screenMainConnected,
+    bConnected: screenBConnected,
+    mainKnown: screenMainPresenceKnown,
+    bKnown: screenBPresenceKnown,
+  });
+  const projectionAdvancedScreensLabel = getProjectionAdvancedScreensLabel({
+    known: connectedScreensPresence.known,
+    count: connectedScreensPresence.count,
+  });
   const activeParticipationCount = Math.max(0, Number(activePoll?.voteCount || 0));
   const activeParticipationUnit = isContestPoll(activePoll)
     ? activeParticipationCount === 1
@@ -11333,9 +11373,30 @@ export default function RegieEventPage() {
                   color: "#0f172a",
                   letterSpacing: "-0.01em",
                   listStyle: "none",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "baseline",
+                  justifyContent: "space-between",
+                  gap: "0.35rem 0.75rem",
                 }}
               >
-                {REGIE_ZONE_PROJECTION_AVANCEE}
+                <span>{REGIE_ZONE_PROJECTION_AVANCEE}</span>
+                <span
+                  data-testid="regie-projection-screens-count"
+                  style={{
+                    fontSize: "0.78rem",
+                    fontWeight: 700,
+                    color: connectedScreensPresence.known
+                      ? connectedScreensPresence.count &&
+                        connectedScreensPresence.count > 0
+                        ? "#14532d"
+                        : "#64748b"
+                      : "#92400e",
+                    letterSpacing: "0",
+                  }}
+                >
+                  {projectionAdvancedScreensLabel}
+                </span>
               </summary>
               <p
                 style={{
