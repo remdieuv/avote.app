@@ -40,6 +40,16 @@ import {
   getRegiePublicPreviewTitleFontSize,
 } from "@/lib/regiePublicPreview";
 import { getStartRealConfirmMessage } from "@/lib/startRealResetClient";
+import {
+  REGIE_NO_ACTIVATION_HINT,
+  REGIE_NO_ACTIVATION_STATUS,
+  REGIE_PRICING_CTA_LABEL,
+  REGIE_START_REAL_CTA_LABEL,
+  REGIE_START_REAL_MODAL_INTRO,
+  getRegieTestModeHelpLine,
+  isActivationShortageError,
+  messageForStartRealErrorCode,
+} from "@/lib/testModeActivationCopy";
 import { adminFetch, apiBaseBrowser, SOCKET_URL as SOCKET } from "@/lib/config";
 import {
   LANDING_PHOTO_TOO_HEAVY_MESSAGE,
@@ -148,14 +158,9 @@ function mapApiError(body, status) {
   if (code === "EVENT_ALREADY_ACTIVE") {
     return "Vous avez déjà un événement actif. Terminez-le avant d’en créer un nouveau.";
   }
-  if (code === "NO_EVENT_CREDIT") {
-    return "Vous n’avez plus d’activation disponible. Choisissez une formule pour lancer le live réel.";
-  }
-  if (code === "NO_ACTIVATION_AVAILABLE") {
-    return "Aucune activation disponible pour cette formule.";
-  }
-  if (code === "EVENT_ALREADY_CONSUMED") {
-    return "Le mode réel est déjà activé pour cet événement.";
+  {
+    const mapped = messageForStartRealErrorCode(code);
+    if (mapped) return mapped;
   }
   if (code === "EVENT_LOCKED") {
     return "Cet événement est terminé et verrouillé.";
@@ -8014,8 +8019,7 @@ export default function RegieEventPage() {
           role="alert"
         >
           <span style={{ fontSize: "0.86rem", fontWeight: 700 }}>{actionError}</span>
-          {String(actionError).includes("Aucune activation disponible pour cette formule") ||
-          String(actionError).includes("Vous n’avez plus d’activation disponible") ? (
+          {isActivationShortageError(actionError) ? (
             <Link
               href="/pricing"
               style={{
@@ -8715,7 +8719,7 @@ export default function RegieEventPage() {
                 lineHeight: 1.45,
               }}
             >
-              Une activation sera consommée pour passer en mode réel.
+              {REGIE_START_REAL_MODAL_INTRO}
             </p>
             <div style={{ display: "grid", gap: "0.65rem" }}>
               {startRealPlanOptions.includes("FUN") ? (
@@ -9154,8 +9158,7 @@ export default function RegieEventPage() {
           onOpenQuestions={() => setTelecommandeQuestionsOpen(true)}
           onOpenFullRegie={openMobileFullRegie}
           actionError={
-            actionError &&
-            !String(actionError).includes("Aucune activation disponible")
+            actionError && !isActivationShortageError(actionError)
               ? actionError
               : null
           }
@@ -9538,12 +9541,33 @@ export default function RegieEventPage() {
                         <>
                           <span
                             style={{
-                              fontSize: "0.72rem",
-                              fontWeight: 600,
-                              color: "rgba(224, 231, 255, 0.72)",
+                              display: "inline-flex",
+                              flexDirection: "column",
+                              alignItems: "flex-end",
+                              gap: "0.1rem",
+                              maxWidth: "16rem",
+                              textAlign: "right",
                             }}
                           >
-                            Aucune activation disponible
+                            <span
+                              style={{
+                                fontSize: "0.72rem",
+                                fontWeight: 700,
+                                color: "rgba(204, 251, 241, 0.92)",
+                              }}
+                            >
+                              {REGIE_NO_ACTIVATION_STATUS}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: "0.64rem",
+                                fontWeight: 600,
+                                color: "rgba(224, 231, 255, 0.68)",
+                                lineHeight: 1.35,
+                              }}
+                            >
+                              {REGIE_NO_ACTIVATION_HINT}
+                            </span>
                           </span>
                           <Link
                             href="/pricing"
@@ -9553,18 +9577,16 @@ export default function RegieEventPage() {
                               justifyContent: "center",
                               padding: "0.48rem 0.88rem",
                               borderRadius: "999px",
-                              border: "1px solid rgba(251, 191, 36, 0.55)",
-                              background:
-                                "linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%)",
-                              color: "#422006",
+                              border: "1px solid rgba(148, 163, 184, 0.45)",
+                              background: "rgba(255, 255, 255, 0.1)",
+                              color: "#e2e8f0",
                               fontSize: "0.76rem",
                               fontWeight: 800,
                               textDecoration: "none",
                               whiteSpace: "nowrap",
-                              boxShadow: "0 10px 22px rgba(245, 158, 11, 0.28)",
                             }}
                           >
-                            Choisir une formule
+                            {REGIE_PRICING_CTA_LABEL}
                           </Link>
                         </>
                       ) : (
@@ -9591,7 +9613,7 @@ export default function RegieEventPage() {
                             boxShadow: "0 12px 26px rgba(34, 197, 94, 0.32)",
                           }}
                         >
-                          Passer en live réel
+                          {REGIE_START_REAL_CTA_LABEL}
                         </button>
                       )}
                       {activationsLoaded ? (
@@ -9685,6 +9707,21 @@ export default function RegieEventPage() {
                     </span>
                   ) : null}
                 </div>
+                {inTestMode && !eventLocked ? (
+                  <p
+                    data-testid="regie-test-mode-help"
+                    style={{
+                      margin: "0.35rem 0 0",
+                      fontSize: "0.72rem",
+                      fontWeight: 600,
+                      color: "rgba(226, 232, 240, 0.78)",
+                      lineHeight: 1.4,
+                      maxWidth: "46rem",
+                    }}
+                  >
+                    {getRegieTestModeHelpLine()}
+                  </p>
+                ) : null}
 
                 <div
                   style={{
