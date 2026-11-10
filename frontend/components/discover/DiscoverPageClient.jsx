@@ -1,11 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { LandingHeader } from "@/components/landing/LandingHeader";
 import { DiscoverEventCard } from "@/components/discover/DiscoverEventCard";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 import { DISCOVER_CATEGORY_TABS } from "@/lib/discoverUi";
+import {
+  buildDiscoverSearchParams,
+  discoverHrefFromParams,
+  parseDiscoverSearchParams,
+} from "@/lib/discoverUrlState";
 import { marketingContentShellStyle } from "@/lib/marketingLayout";
 
 const PAGE_SIZE = 12;
@@ -24,16 +29,20 @@ const inputStyle = {
 };
 
 /**
- * Lot C — annuaire public Découvrir (client).
+ * Lot C + Lot 5 — annuaire public Découvrir (client) + persistence URL filtres.
  */
-export function DiscoverPageClient() {
+function DiscoverPageClientInner() {
   const router = useRouter();
-  const [category, setCategory] = useState(/** @type {"upcoming"|"live"|"finished"} */ ("upcoming"));
-  const [q, setQ] = useState("");
-  const [qDebounced, setQDebounced] = useState("");
-  const [city, setCity] = useState("");
-  const [cityDebounced, setCityDebounced] = useState("");
-  const [theme, setTheme] = useState("");
+  const searchParams = useSearchParams();
+  const initial = parseDiscoverSearchParams(searchParams);
+  const [category, setCategory] = useState(
+    /** @type {"upcoming"|"live"|"finished"} */ (initial.category),
+  );
+  const [q, setQ] = useState(initial.q);
+  const [qDebounced, setQDebounced] = useState(initial.q);
+  const [city, setCity] = useState(initial.city);
+  const [cityDebounced, setCityDebounced] = useState(initial.city);
+  const [theme, setTheme] = useState(initial.theme);
   const [themes, setThemes] = useState(/** @type {Array<{id:string,slug:string,label:string}>} */ ([]));
   const [events, setEvents] = useState(/** @type {Array<Record<string, any>>} */ ([]));
   const [loading, setLoading] = useState(true);
@@ -43,7 +52,17 @@ export function DiscoverPageClient() {
   const [nextOffset, setNextOffset] = useState(/** @type {number|null} */ (null));
   const [isAuthed, setIsAuthed] = useState(false);
   const [favoriteBusyId, setFavoriteBusyId] = useState(/** @type {string|null} */ (null));
-
+  const skipUrlWriteRef = useRef(true);
+  const lastWrittenHrefRef = useRef(
+    discoverHrefFromParams(
+      buildDiscoverSearchParams({
+        category: initial.category,
+        q: initial.q,
+        city: initial.city,
+        theme: initial.theme,
+      }),
+    ),
+  );
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -70,6 +89,39 @@ export function DiscoverPageClient() {
     const t = setTimeout(() => setCityDebounced(city.trim()), 280);
     return () => clearTimeout(t);
   }, [city]);
+
+  // Lot 5 — écrire les filtres dans l’URL (aller-retour / partage).
+  useEffect(() => {
+    if (skipUrlWriteRef.current) {
+      skipUrlWriteRef.current = false;
+      return;
+    }
+    const href = discoverHrefFromParams(
+      buildDiscoverSearchParams({
+        category,
+        q: qDebounced,
+        city: cityDebounced,
+        theme,
+      }),
+    );
+    if (href === lastWrittenHrefRef.current) return;
+    lastWrittenHrefRef.current = href;
+    router.replace(href, { scroll: false });
+  }, [category, qDebounced, cityDebounced, theme, router]);
+
+  // Lot 5 — resync si l’URL change hors écriture locale (retour navigateur).
+  useEffect(() => {
+    const next = parseDiscoverSearchParams(searchParams);
+    const href = discoverHrefFromParams(buildDiscoverSearchParams(next));
+    if (href === lastWrittenHrefRef.current) return;
+    lastWrittenHrefRef.current = href;
+    setCategory(next.category);
+    setQ(next.q);
+    setQDebounced(next.q);
+    setCity(next.city);
+    setCityDebounced(next.city);
+    setTheme(next.theme);
+  }, [searchParams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -204,7 +256,7 @@ export function DiscoverPageClient() {
       return "Aucun événement en direct pour le moment. Revenez bientôt, ou explorez les événements à venir.";
     }
     if (category === "finished") {
-      return "Pas encore de souvenirs publics. Les événements terminés avec une Landing apparaîtront ici.";
+      return "Pas encore de souvenirs publics. Les événements terminés avec une page de l’événement apparaîtront ici.";
     }
     return "Aucun événement à venir pour l’instant. Les organisateurs AVOTE publieront bientôt leurs prochains rendez-vous.";
   })();
@@ -262,18 +314,26 @@ export function DiscoverPageClient() {
         >
           {DISCOVER_CATEGORY_TABS.map((tab) => {
             const active = category === tab.id;
+            const finishedTab = tab.id === "finished";
+            const activeBorder = finishedTab ? "#334155" : "#1d4ed8";
+            const activeBg = finishedTab ? "#334155" : "#1d4ed8";
             return (
               <button
                 key={tab.id}
                 type="button"
                 role="tab"
                 aria-selected={active}
+                aria-label={
+                  finishedTab
+                    ? "Terminés — souvenirs des événements publics clôturés"
+                    : tab.label
+                }
                 onClick={() => setCategory(/** @type {any} */ (tab.id))}
                 style={{
                   padding: "0.48rem 0.85rem",
                   borderRadius: 999,
-                  border: active ? "1px solid #1d4ed8" : "1px solid #cbd5e1",
-                  background: active ? "#1d4ed8" : "#fff",
+                  border: active ? `1px solid ${activeBorder}` : "1px solid #cbd5e1",
+                  background: active ? activeBg : "#fff",
                   color: active ? "#fff" : "#334155",
                   fontWeight: 800,
                   fontSize: "0.86rem",
@@ -413,6 +473,35 @@ export function DiscoverPageClient() {
         ) : null}
       </main>
     </div>
+  );
+}
+
+function DiscoverPageFallback() {
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        fontFamily: "system-ui, sans-serif",
+        color: "#0f172a",
+        background: "linear-gradient(180deg, #f8fafc 0%, #fff 42%)",
+      }}
+    >
+      <LandingHeader />
+      <main style={marketingContentShellStyle({ paddingTop: "1.75rem" })}>
+        <p style={{ color: "#64748b", fontWeight: 600 }}>Chargement de l’annuaire…</p>
+      </main>
+    </div>
+  );
+}
+
+/**
+ * Lot C + Lot 5 — wrapper Suspense (useSearchParams).
+ */
+export function DiscoverPageClient() {
+  return (
+    <Suspense fallback={<DiscoverPageFallback />}>
+      <DiscoverPageClientInner />
+    </Suspense>
   );
 }
 

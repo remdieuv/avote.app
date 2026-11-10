@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminEventsToolbar } from "@/components/admin/AdminEventsToolbar";
 import { EventDashboardCard } from "@/components/admin/EventDashboardCard";
@@ -14,10 +15,15 @@ import {
   filterEventsBySearch,
   filterEventsByStatus,
   sortEventsByMode,
-  SORT_ACTIVE_FIRST,
-  EVENT_STATUS_FILTER_ALL,
 } from "@/lib/adminEventsFilters";
 import { getEventUxState } from "@/lib/eventUxState";
+import { getMesEventsSectionHelp } from "@/lib/mesEventsSectionCopy";
+import {
+  buildMesEventsSearchParams,
+  MES_EVENTS_FINISHED_FILTER_HINT,
+  mesEventsHrefFromParams,
+  parseMesEventsSearchParams,
+} from "@/lib/mesEventsUrlState";
 
 const LEADS_LAST_SEEN_LS_PREFIX = "avote_leads_seen_at_";
 
@@ -128,8 +134,11 @@ function normalizeEventRow(e) {
   };
 }
 
-export default function AdminEventsPage() {
-  const [section, setSection] = useState(/** @type {MesEventsSection} */ ("organized"));
+function AdminEventsPageInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const initial = parseMesEventsSearchParams(searchParams);
+  const [section, setSection] = useState(/** @type {MesEventsSection} */ (initial.section));
   const [rows, setRows] = useState([]);
   const [favorites, setFavorites] = useState(/** @type {Array<Record<string, any>>} */ ([]));
   const [favoritesLoading, setFavoritesLoading] = useState(false);
@@ -139,11 +148,23 @@ export default function AdminEventsPage() {
   const [newLeadCounts, setNewLeadCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState(EVENT_STATUS_FILTER_ALL);
-  const [sortMode, setSortMode] = useState(SORT_ACTIVE_FIRST);
+  const [searchQuery, setSearchQuery] = useState(initial.q);
+  const [statusFilter, setStatusFilter] = useState(initial.status);
+  const [sortMode, setSortMode] = useState(initial.sort);
   const [actionEventId, setActionEventId] = useState(null);
   const [toastMsg, setToastMsg] = useState(null);
+  const skipUrlWriteRef = useRef(true);
+  const lastWrittenHrefRef = useRef(
+    mesEventsHrefFromParams(
+      buildMesEventsSearchParams({
+        section: initial.section,
+        status: initial.status,
+        q: initial.q,
+        sort: initial.sort,
+      }),
+    ),
+  );
+  const sectionHelp = getMesEventsSectionHelp(section);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -202,6 +223,36 @@ export default function AdminEventsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Lot 5 — persistence URL (section / statut / recherche / tri).
+  useEffect(() => {
+    if (skipUrlWriteRef.current) {
+      skipUrlWriteRef.current = false;
+      return;
+    }
+    const href = mesEventsHrefFromParams(
+      buildMesEventsSearchParams({
+        section,
+        status: statusFilter,
+        q: searchQuery,
+        sort: sortMode,
+      }),
+    );
+    if (href === lastWrittenHrefRef.current) return;
+    lastWrittenHrefRef.current = href;
+    router.replace(href, { scroll: false });
+  }, [section, statusFilter, searchQuery, sortMode, router]);
+
+  useEffect(() => {
+    const next = parseMesEventsSearchParams(searchParams);
+    const href = mesEventsHrefFromParams(buildMesEventsSearchParams(next));
+    if (href === lastWrittenHrefRef.current) return;
+    lastWrittenHrefRef.current = href;
+    setSection(next.section);
+    setStatusFilter(next.status);
+    setSearchQuery(next.q);
+    setSortMode(next.sort);
+  }, [searchParams]);
 
   const loadInvitations = useCallback(async () => {
     setInvitationsLoading(true);
@@ -511,7 +562,7 @@ export default function AdminEventsPage() {
       <div style={adminContentShellStyle("workspace")}>
         <AdminPageHeader
           title="Mes événements"
-          subtitle="Organisés, favoris et invitations — un seul espace."
+          subtitle="Organisés, favoris et invitations — trois listes distinctes, un seul espace."
           actions={
             <Link
               href="/admin"
@@ -544,7 +595,7 @@ export default function AdminEventsPage() {
             display: "flex",
             flexWrap: "wrap",
             gap: "0.4rem",
-            marginBottom: "1.15rem",
+            marginBottom: "0.75rem",
           }}
         >
           {MES_EVENTS_SECTIONS.map((tab) => {
@@ -555,6 +606,7 @@ export default function AdminEventsPage() {
                 type="button"
                 role="tab"
                 aria-selected={active}
+                data-avote-mes-section={tab.id}
                 onClick={() => setSection(tab.id)}
                 style={{
                   padding: "0.48rem 0.9rem",
@@ -571,6 +623,41 @@ export default function AdminEventsPage() {
               </button>
             );
           })}
+        </div>
+
+        <div
+          data-avote-mes-section-help={section}
+          style={{
+            marginBottom: "1.15rem",
+            padding: "0.7rem 0.85rem",
+            borderRadius: 12,
+            border: "1px solid #e2e8f0",
+            background: "#fff",
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontSize: "0.72rem",
+              fontWeight: 800,
+              letterSpacing: "0.05em",
+              textTransform: "uppercase",
+              color: "#64748b",
+            }}
+          >
+            {sectionHelp.kicker}
+          </p>
+          <p
+            style={{
+              margin: "0.28rem 0 0",
+              fontSize: "0.88rem",
+              color: "#475569",
+              lineHeight: 1.5,
+              fontWeight: 500,
+            }}
+          >
+            {sectionHelp.body}
+          </p>
         </div>
 
         {fetchError ? (
@@ -803,18 +890,23 @@ export default function AdminEventsPage() {
               statusOptions={EVENT_STATUS_FILTERS}
               sortOptions={EVENT_SORT_OPTIONS}
               showCreate={false}
+              finishedFilterHint={MES_EVENTS_FINISHED_FILTER_HINT}
             />
             <p
               style={{
                 margin: "0 0 1rem",
                 fontSize: "0.88rem",
                 fontWeight: 600,
-                color: "#64748b",
+                color: statusFilter === "finished" ? "#334155" : "#64748b",
               }}
             >
-              {filteredSorted.length === 1
-                ? "1 événement"
-                : `${filteredSorted.length} événements`}
+              {statusFilter === "finished"
+                ? filteredSorted.length === 1
+                  ? "1 événement terminé"
+                  : `${filteredSorted.length} événements terminés`
+                : filteredSorted.length === 1
+                  ? "1 événement"
+                  : `${filteredSorted.length} événements`}
             </p>
           </>
         ) : null}
@@ -898,5 +990,32 @@ export default function AdminEventsPage() {
       `}</style>
       </div>
     </main>
+  );
+}
+
+function AdminEventsPageFallback() {
+  return (
+    <main
+      style={{
+        minHeight: "100vh",
+        width: "100%",
+        boxSizing: "border-box",
+        fontFamily:
+          'system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif',
+        background: "linear-gradient(180deg, #f1f5f9 0%, #f8fafc 32%, #fff 100%)",
+      }}
+    >
+      <div style={adminContentShellStyle("workspace")}>
+        <p style={{ color: "#64748b", fontWeight: 600 }}>Chargement…</p>
+      </div>
+    </main>
+  );
+}
+
+export default function AdminEventsPage() {
+  return (
+    <Suspense fallback={<AdminEventsPageFallback />}>
+      <AdminEventsPageInner />
+    </Suspense>
   );
 }

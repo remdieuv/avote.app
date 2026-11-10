@@ -1,5 +1,5 @@
-import { getEventUxState } from "./eventUxState";
-import { sortEventsForDashboard } from "./adminEventsDashboard";
+import { getEventUxState } from "./eventUxState.js";
+import { sortEventsForDashboard } from "./adminEventsDashboard.js";
 
 export const EVENT_STATUS_FILTER_ALL = "all";
 
