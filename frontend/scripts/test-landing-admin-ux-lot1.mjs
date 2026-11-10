@@ -63,7 +63,7 @@ test("vocabulaire canonique Galerie événement + Fil", () => {
 
 test("aperçu off = empty state (pas iframe /join)", () => {
   assert.match(page, /landingPreviewActive/);
-  assert.match(page, /Landing désactivée/);
+  assert.match(page, /Landing désactivée|Page de l’événement désactivée|EVENT_PAGE_DISABLED_LABEL/);
   assert.match(page, /Enregistrez pour activer l’aperçu/);
   assert.match(page, /Ouvrir \/e \(redirige vers la salle\)/);
 });
@@ -128,7 +128,7 @@ test("layout desktop sticky + mobile tabs CSS", () => {
     /\.customization-preview-(?:card|col)\s*\{[^}]*position:\s*sticky/s,
   );
   assert.match(page, /customization-preview-iframe/);
-  assert.match(page, /Ouvrir la landing publiée/);
+  assert.match(page, /Ouvrir la landing publiée|Ouvrir la page publiée/);
   assert.match(page, /position:\s*static/);
 });
 

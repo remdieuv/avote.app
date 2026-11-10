@@ -23,6 +23,12 @@ import {
 } from "@/lib/compressLandingPhoto";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 import {
+  EVENT_PAGE_DISABLED_LABEL,
+  EVENT_PAGE_LABEL,
+  EVENT_PAGE_NAV_EMOJI,
+  EVENT_PAGE_ROLE_HINT,
+} from "@/lib/eventPageLabels";
+import {
   LANDING_CAPTION_MAX,
   LANDING_META_DATE_MAX,
   LANDING_META_HOURS_MAX,
@@ -226,7 +232,7 @@ function EditorModeSwitch({ eventId, current }) {
         className="editor-universe-link editor-universe-link--landing"
         style={linkStyle(current === "landing")}
       >
-        ✨ Landing événement
+        {EVENT_PAGE_NAV_EMOJI}
       </Link>
       <Link
         href={regieHref}
@@ -948,7 +954,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
       }
       setToast(
         isLandingPage
-          ? "Landing enregistrée"
+          ? "Page de l’événement enregistrée"
           : "Personnalisation enregistrée",
       );
       window.setTimeout(() => setToast(null), 3200);
@@ -1551,11 +1557,11 @@ export function EventCustomizationEditor({ mode = "live" }) {
               letterSpacing: "-0.02em",
             }}
           >
-            {isLandingPage ? "✨ Landing événement" : <LiveMicroLabel iconSize={18} gap="0.45rem" />}
+            {isLandingPage ? EVENT_PAGE_NAV_EMOJI : <LiveMicroLabel iconSize={18} gap="0.45rem" />}
           </h1>
           <p style={{ margin: 0, color: "#64748b", fontSize: "0.95rem" }}>
             {isLandingPage
-              ? "Page centrale facultative (/e) : teaser, galerie événement et moments live."
+              ? EVENT_PAGE_ROLE_HINT
               : "Configurez l’expérience interactive et visuelle de votre salle de vote."}
           </p>
           <EditorModeSwitch eventId={eventId} current={isLandingPage ? "landing" : "live"} />
@@ -1656,9 +1662,9 @@ export function EventCustomizationEditor({ mode = "live" }) {
                       Publication
                     </h2>
                     <p style={{ ...fieldHintStyle, margin: "0 0 0.85rem" }}>
-                      Landing événement = page centrale facultative. Désactivée, le
-                      lien <code style={{ fontSize: "0.72rem" }}>/e</code> redirige
-                      vers la salle live.
+                      {EVENT_PAGE_LABEL} = page publique facultative. Désactivée,
+                      le lien <code style={{ fontSize: "0.72rem" }}>/e</code>{" "}
+                      redirige vers la salle live.
                     </p>
                     <label
                       style={{
@@ -1676,7 +1682,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
                         checked={landingEnabled}
                         onChange={(e) => setLandingEnabled(e.target.checked)}
                       />
-                      Activer la landing événement
+                      Activer la {EVENT_PAGE_LABEL.toLowerCase()}
                     </label>
                     <p
                       style={{
@@ -1761,7 +1767,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
                     <p style={{ ...fieldHintStyle, margin: "0 0 0.85rem" }}>
                       Couverture, titre et accroche : à valider avec{" "}
                       <strong style={{ fontWeight: 700, color: "#475569" }}>
-                        Enregistrer la landing
+                        Enregistrer la page
                       </strong>
                       . Logo et couleur d’accent viennent de la{" "}
                       {eventId ? (
@@ -4048,7 +4054,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
                       fontWeight: 800,
                     }}
                   >
-                    {isLandingPage ? "Aperçu landing" : "Aperçu brouillon"}
+                    {isLandingPage ? "Aperçu page événement" : "Aperçu brouillon"}
                   </h2>
                   <p
                     style={{
@@ -4076,7 +4082,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
                     >
                       {landingEnabled
                         ? "Enregistrez pour activer l’aperçu"
-                        : "Landing désactivée"}
+                        : EVENT_PAGE_DISABLED_LABEL}
                     </p>
                     <p
                       style={{
@@ -4087,8 +4093,8 @@ export function EventCustomizationEditor({ mode = "live" }) {
                       }}
                     >
                       {landingEnabled
-                        ? "La case est cochée : cliquez « Enregistrer la landing » pour publier /e et charger l’aperçu."
-                        : "Cochez « Activer la landing événement », puis enregistrez. Tant qu’elle est off, /e redirige vers la salle."}
+                        ? "La case est cochée : cliquez « Enregistrer » pour publier /e et charger l’aperçu."
+                        : `Cochez « Activer la ${EVENT_PAGE_LABEL.toLowerCase()} », puis enregistrez. Tant qu’elle est off, /e redirige vers la salle.`}
                     </p>
                     {landingPath && !landingEnabled ? (
                       <button
@@ -4118,7 +4124,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
                         className="customization-preview-iframe"
                         key={`${mode}-${slug ?? "preview"}-${previewNonce}`}
                         title={
-                          isLandingPage ? "Aperçu landing" : "Aperçu salle"
+                          isLandingPage ? "Aperçu page événement" : "Aperçu salle"
                         }
                         src={isLandingPage ? landingPath : joinPath}
                         sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
@@ -4144,7 +4150,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
                         }
                       >
                         {isLandingPage
-                          ? "Ouvrir la landing publiée"
+                          ? "Ouvrir la page publiée"
                           : "Ouvrir la salle publiée"}
                       </button>
                       {isLivePage ? (
@@ -4214,7 +4220,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
               {saving
                 ? "Enregistrement…"
                 : isLandingPage
-                  ? "Enregistrer la landing"
+                  ? "Enregistrer la page"
                   : "Enregistrer la salle live"}
             </button>
           </div>
@@ -4576,7 +4582,7 @@ export default function EventCustomizationHubPage() {
                 color: "#7c3aed",
               }}
             >
-              ✨ Landing événement
+              {EVENT_PAGE_NAV_EMOJI}
             </p>
             <p
               style={{
@@ -4587,7 +4593,7 @@ export default function EventCustomizationHubPage() {
               }}
             >
               Créez la vitrine immersive de l’événement : couverture, titre,
-              description, galerie événement, moments live et aperçu landing.
+              description, galerie, moments live et aperçu de la page.
             </p>
             <Link
               href={landingHref}
@@ -4599,7 +4605,7 @@ export default function EventCustomizationHubPage() {
                 textDecoration: "none",
               }}
             >
-              Ouvrir la landing événement
+              Ouvrir la {EVENT_PAGE_LABEL.toLowerCase()}
             </Link>
           </section>
         </div>

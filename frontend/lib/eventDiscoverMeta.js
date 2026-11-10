@@ -1,6 +1,6 @@
 /**
  * Métadonnées structurées Discover (ville, startsAt, thèmes, profil orga).
- * Distinctes des textes libres Landing (venue / date affichée).
+ * Distinctes des textes libres de la page de l’événement (venue / date affichée).
  */
 
 /** @typedef {{

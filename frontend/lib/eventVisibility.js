@@ -20,14 +20,14 @@ export function isPublicVisibility(raw) {
 }
 
 export const PUBLISH_PUBLIC_WARNING_LINES = [
-  "L’événement pourra être référencé dans « Découvrir » dès que cet annuaire sera disponible.",
-  "Si une Landing est active, les moteurs de recherche pourront l’indexer.",
+  "L’événement pourra être listé dans « Les événements » (annuaire public) s’il est éligible.",
+  "Si la page de l’événement est active, les moteurs de recherche pourront l’indexer.",
   "Le live (/join), les QR codes et le vote restent accessibles par lien, comme aujourd’hui.",
-  "Vous pourrez repasser en privé plus tard : retrait de Découvrir et noindex (la désindexation réelle peut prendre du temps).",
+  "Vous pourrez repasser en privé plus tard : retrait de l’annuaire et noindex (la désindexation réelle peut prendre du temps).",
 ];
 
 export const UNPUBLISH_PRIVATE_WARNING_LINES = [
-  "L’événement sera retiré de « Découvrir » (dès disponibilité de l’annuaire) et repassera en noindex.",
-  "Les liens /join et Landing déjà partagés continuent de fonctionner (Lot A : pas de fermeture automatique).",
+  "L’événement sera retiré de « Les événements » et repassera en noindex.",
+  "Les liens /join et la page de l’événement déjà partagés continuent de fonctionner (pas de fermeture automatique).",
   "D’éventuels favoris futurs resteront enregistrés mais ne donneront pas accès à un contenu privé.",
 ];

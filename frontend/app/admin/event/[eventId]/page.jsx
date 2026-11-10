@@ -41,6 +41,13 @@ import {
 } from "@/lib/regiePublicPreview";
 import { getStartRealConfirmMessage } from "@/lib/startRealResetClient";
 import {
+  EVENT_PAGE_DISABLED_LABEL,
+  EVENT_PAGE_LABEL,
+  EVENT_PAGE_NAV_EMOJI,
+  EVENT_PAGE_NAV_SHORT_EMOJI,
+  EVENT_PAGE_VIEW_CTA,
+} from "@/lib/eventPageLabels";
+import {
   REGIE_NO_ACTIVATION_HINT,
   REGIE_NO_ACTIVATION_STATUS,
   REGIE_PRICING_CTA_LABEL,
@@ -3456,7 +3463,7 @@ function SectionPartageLandingEvenement({ slug, landingEnabled, eventId }) {
     const abs = clientPret ? lienDiffusionAbsolu(pathLanding) : "";
     return (
       <div style={{ paddingTop: "0.55rem" }}>
-        <p style={eyebrow}>Landing événement</p>
+        <p style={eyebrow}>{EVENT_PAGE_LABEL}</p>
         <div
           style={{
             padding: "0.62rem 0.68rem",
@@ -3482,7 +3489,7 @@ function SectionPartageLandingEvenement({ slug, landingEnabled, eventId }) {
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem", alignItems: "center" }}>
             <button type="button" onClick={() => ouvrir()} style={linkAct}>
-              👁 Voir la landing
+              👁 {EVENT_PAGE_VIEW_CTA}
             </button>
             <Link
               href={landingAdminHref}
@@ -3491,7 +3498,7 @@ function SectionPartageLandingEvenement({ slug, landingEnabled, eventId }) {
                 textDecoration: "none",
               }}
             >
-              ✨ Landing événement
+              {EVENT_PAGE_NAV_EMOJI}
             </Link>
             <button type="button" onClick={() => void copier()} style={linkAct}>
               Copier le lien
@@ -3526,10 +3533,10 @@ function SectionPartageLandingEvenement({ slug, landingEnabled, eventId }) {
             lineHeight: 1.25,
           }}
         >
-          Landing événement
+          {EVENT_PAGE_LABEL}
         </p>
         <p style={{ margin: "0 0 0.55rem 0", fontSize: "0.72rem", color: "#64748b", lineHeight: 1.4 }}>
-          Landing désactivée pour cet événement.
+          {EVENT_PAGE_DISABLED_LABEL} pour cet événement.
         </p>
         <Link
           href={landingAdminHref}
@@ -3548,7 +3555,7 @@ function SectionPartageLandingEvenement({ slug, landingEnabled, eventId }) {
             textDecoration: "none",
           }}
         >
-          ✨ Landing événement
+          {EVENT_PAGE_NAV_EMOJI}
         </Link>
       </div>
     </div>
@@ -4612,7 +4619,7 @@ function RegieSidebarInner({
                         textDecoration: "none",
                       }}
                     >
-                      ✨ Landing
+                      {EVENT_PAGE_NAV_SHORT_EMOJI}
                     </Link>
                   </div>
                   <style>{`
@@ -5182,7 +5189,7 @@ export default function RegieEventPage() {
         );
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(mapApiError(body, res.status));
-        setToastNotif("✅ Photo publiée sur la landing");
+        setToastNotif("✅ Photo publiée sur la page de l’événement");
         window.setTimeout(() => setToastNotif(null), 2600);
       } catch (e) {
         const msg = e?.message || "Upload photo impossible.";

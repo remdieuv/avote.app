@@ -125,7 +125,7 @@ export function EventInvitesPanel({ eventId, eventSlug }) {
     <section style={card}>
       <h2 style={sectionTitle}>Invitations et confidentialité</h2>
       <p style={hint}>
-        Protège réellement les souvenirs de la Landing (photos, fil, médias). Le
+        Protège réellement les souvenirs de la page de l’événement (photos, fil, médias). Le
         live <code style={{ fontSize: "0.72rem" }}>/join</code> et le vote restent
         ouverts sans code. Les événements publics ne sont pas concernés.
       </p>

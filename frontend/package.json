@@ -47,6 +47,7 @@
     "test:skip-event-poll": "node ../backend/scripts/test-skip-event-poll.mjs",
     "test:poll-options-form": "node scripts/test-poll-options-form.mjs",
     "test:create-event-form": "node scripts/test-create-event-form.mjs",
+    "test:ux-lot2-create-event": "node scripts/test-ux-lot2-create-event.mjs",
     "test:forms-l0": "node scripts/test-forms-l0.mjs",
     "test:forms-l2": "node scripts/test-forms-l2.mjs",
     "test:forms-l3": "node scripts/test-forms-l3.mjs",
