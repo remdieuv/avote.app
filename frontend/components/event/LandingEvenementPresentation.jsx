@@ -269,12 +269,14 @@ function MessageStoryCard({
  *   programItems?: Array<{ id?: string; timeLabel?: string; title?: string }>;
  *   showcasePhotos?: Array<{ id?: string; url?: string; caption?: string | null }>;
  *   onOpenPhoto?: (photoId: string) => void;
+ *   kicker?: string | null;
  * }} props
  */
 export function LandingEvenementPresentation({
   accent,
   title = "L'événement",
   lead,
+  kicker = "Présentation",
   afterLive = false,
   landingEventDate = "",
   landingVenue = "",
@@ -313,6 +315,21 @@ export function LandingEvenementPresentation({
       style={{ "--ev-accent": accent }}
     >
       <header className="ev-evenement-v2-header">
+        {kicker ? (
+          <p
+            className="ev-evenement-v2-kicker"
+            style={{
+              margin: "0 0 0.35rem",
+              fontSize: "0.68rem",
+              fontWeight: 800,
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              color: "#94a3b8",
+            }}
+          >
+            {kicker}
+          </p>
+        ) : null}
         <h2 className="ev-evenement-v2-title">
           <span aria-hidden="true">✨</span> {title}
         </h2>
