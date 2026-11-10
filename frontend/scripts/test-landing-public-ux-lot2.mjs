@@ -40,7 +40,7 @@ test("showcase ✨ : présentation V2 (carte galerie responsive)", () => {
 
 test("labels après : pas « Avant le live » ; lead souvenirs / fil", () => {
   assert.doesNotMatch(page, /Avant le live/);
-  assert.match(page, /Retrouvez l'ambiance et les temps forts/);
+  assert.match(page, /getLandingEvenementLead|Infos et programme|souvenirs/i);
   assert.match(page, /Live en cours|Événement terminé/);
   // Lot hybride : Moments remplacé par le fil chronologique
   assert.match(page, /LandingHybridFeed/);
@@ -94,7 +94,7 @@ test("infoShowOnFinished exposé API + respecté côté public", () => {
 
 test("vocabulaire public galerie ✨ + fil (hybride)", () => {
   assert.match(page, /LandingEvenementPresentation/);
-  assert.match(page, /Partager une photo|LandingHybridFeed/);
+  assert.match(page, /Partager une photo|getLandingFeedShareCopy|LandingHybridFeed/);
   assert.doesNotMatch(page, /Galerie live/);
 });
 

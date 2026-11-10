@@ -89,6 +89,8 @@ export function collectFeedLightboxPhotos(items) {
  *   deletingPhotoId?: string | null;
  *   headerAction?: import("react").ReactNode;
  *   emptyHint?: string | null;
+ *   subtitle?: string | null;
+ *   kicker?: string | null;
  * }} props
  */
 export function LandingHybridFeed({
@@ -101,6 +103,8 @@ export function LandingHybridFeed({
   deletingPhotoId = null,
   headerAction = null,
   emptyHint = null,
+  subtitle = null,
+  kicker = "Journal",
 }) {
   const hasItems = Array.isArray(items) && items.length > 0;
   const lightboxPhotos = useMemo(
@@ -147,7 +151,7 @@ export function LandingHybridFeed({
               color: "#64748b",
             }}
           >
-            Journal
+            {kicker || "Journal"}
           </p>
           <h2
             style={{
@@ -170,7 +174,8 @@ export function LandingHybridFeed({
               lineHeight: 1.45,
             }}
           >
-            Photos, messages et résultats — du plus récent au plus ancien.
+            {subtitle ||
+              "Photos, messages et résultats — du plus récent au plus ancien."}
           </p>
         </div>
         {headerAction}

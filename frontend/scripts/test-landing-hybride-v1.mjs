@@ -194,10 +194,10 @@ test("buildLandingFeedItems : chrono desc + keep after + hide", () => {
 
 test("UI publique : LandingHybridFeed + Partager une photo + CameraIcon", () => {
   assert.match(page, /LandingHybridFeed/);
-  assert.match(page, /Partager une photo/);
+  assert.match(page, /Partager une photo|getLandingFeedShareCopy|feedShare/);
   assert.match(page, /CameraIcon/);
   assert.match(page, /handleTogglePhotoLike/);
-  assert.match(page, /showFeedBlock/);
+  assert.match(page, /showFeedBlock|shouldShowLandingFeedBlock/);
   assert.doesNotMatch(page, /Ajouter un moment live/);
   assert.doesNotMatch(page, /momentsEyebrow/);
   assert.match(feedUi, /Fil de l&apos;événement|Fil de l'événement/);

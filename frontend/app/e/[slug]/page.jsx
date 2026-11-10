@@ -21,6 +21,13 @@ import {
   normalizeLightboxPhotos,
 } from "@/components/event/LandingPhotoLightbox";
 import {
+  getLandingEvenementLead,
+  getLandingFeedEmptyHint,
+  getLandingFeedShareCopy,
+  getLandingFeedSubtitle,
+  shouldShowLandingFeedBlock,
+} from "@/lib/landingFeedCopy";
+import {
   hasLandingComplementaryInfo,
   shouldShowLandingEvenementSection,
   sortLandingProgramItems,
@@ -724,11 +731,25 @@ export default function EventLandingPage() {
     String(payload.landingPhotoUploadEventId).trim() !== "";
   const canManageFeed = payload.canManageLandingFeed === true || canUploadLanding;
   const feedItems = Array.isArray(payload.feed) ? payload.feed : [];
-  const showFeedBlock = feedItems.length > 0 || canUploadLanding;
+  const showFeedBlock = shouldShowLandingFeedBlock({
+    phase: landingPhase,
+    hasItems: feedItems.length > 0,
+    canUpload: canUploadLanding,
+  });
+  const feedSubtitle = getLandingFeedSubtitle({ phase: landingPhase });
+  const feedEmptyHint = getLandingFeedEmptyHint({
+    phase: landingPhase,
+    canUpload: canUploadLanding,
+  });
+  const feedShare = getLandingFeedShareCopy({ phase: landingPhase });
+  const feedKicker =
+    landingPhase === "after"
+      ? "Souvenirs"
+      : landingPhase === "during"
+        ? "En direct"
+        : "Journal";
 
-  const showcaseLead = afterLive
-    ? "Retrouvez l'ambiance et les temps forts de l'événement."
-    : "Découvrez l'ambiance et les temps forts de l'événement.";
+  const showcaseLead = getLandingEvenementLead({ phase: landingPhase });
 
   const footerCta = {
     display: "inline-flex",
@@ -1485,11 +1506,9 @@ export default function EventLandingPage() {
               canManageFeed ? handleDeleteLandingPhoto : undefined
             }
             deletingPhotoId={deletingPhotoId || exitingPhotoId}
-            emptyHint={
-              canUploadLanding && feedItems.length === 0
-                ? "Le fil est vide — partagez une photo pour lancer le journal."
-                : null
-            }
+            kicker={feedKicker}
+            subtitle={feedSubtitle}
+            emptyHint={feedItems.length === 0 ? feedEmptyHint : null}
             headerAction={
               canUploadLanding ? (
                 <button
@@ -1497,6 +1516,8 @@ export default function EventLandingPage() {
                   className="ev-landing-upload-desktop"
                   disabled={uploadBusy}
                   onClick={triggerLandingPhotoPicker}
+                  title={feedShare.title}
+                  aria-label={feedShare.ariaLabel}
                   style={{ color: accent }}
                 >
                   <CameraIcon size={16} />
@@ -1504,7 +1525,7 @@ export default function EventLandingPage() {
                     ? "Optimisation…"
                     : uploadPhase === "uploading"
                       ? "Envoi…"
-                      : "Partager une photo"}
+                      : feedShare.label}
                 </button>
               ) : null
             }
@@ -1660,8 +1681,8 @@ export default function EventLandingPage() {
           }
           disabled={uploadBusy}
           onClick={triggerLandingPhotoPicker}
-          aria-label="Partager une photo"
-          title="Partager une photo"
+          aria-label={feedShare.ariaLabel}
+          title={feedShare.title}
           style={{
             background: `linear-gradient(160deg, ${accent}, color-mix(in srgb, ${accent} 72%, #0f172a))`,
           }}
