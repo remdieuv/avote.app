@@ -11,6 +11,12 @@ import {
 } from "@/components/admin/TelecommandeQrModal";
 import { EventStructuredInfoPanel } from "@/components/admin/EventStructuredInfoPanel";
 import { EventVisibilityControls } from "@/components/admin/EventVisibilityControls";
+import {
+  EVENT_PAGE_DISABLED_LABEL,
+  EVENT_PAGE_ENABLE_HINT,
+  EVENT_PAGE_NAV_SHORT_EMOJI,
+  EVENT_PAGE_VIEW_CTA,
+} from "@/lib/eventPageLabels";
 import { TELECOMMANDE_QR_COPY } from "@/lib/telecommandeQr";
 
 /**
@@ -651,11 +657,11 @@ export function EventDashboardCard({
                   rel="noopener noreferrer"
                   style={secondaryLinkStyle}
                 >
-                  Voir la landing
+                  {EVENT_PAGE_VIEW_CTA}
                 </Link>
               ) : (
                 <span
-                  title="Activez la landing dans Landing événement"
+                  title={EVENT_PAGE_ENABLE_HINT}
                   style={{
                     ...secondaryLinkStyle,
                     opacity: 0.5,
@@ -663,7 +669,7 @@ export function EventDashboardCard({
                     pointerEvents: "none",
                   }}
                 >
-                  Landing désactivée
+                  {EVENT_PAGE_DISABLED_LABEL}
                 </span>
               )}
             </>
@@ -676,7 +682,7 @@ export function EventDashboardCard({
                 Voir l’écran
               </span>
               <span style={{ ...secondaryLinkStyle, opacity: 0.45, cursor: "default", pointerEvents: "none" }}>
-                Landing désactivée
+                {EVENT_PAGE_DISABLED_LABEL}
               </span>
             </>
           )}
@@ -761,7 +767,7 @@ export function EventDashboardCard({
                   textAlign: "center",
                 }}
               >
-                ✨ Landing
+                {EVENT_PAGE_NAV_SHORT_EMOJI}
               </Link>
               <Link
                 href={`/admin/event/${ev.id}/leads`}

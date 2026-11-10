@@ -149,12 +149,13 @@ test("Mes événements : panneau Infos + terminés modifiables", () => {
   assert.match(eventsPage, /primaryThemeId|startsAt|city/);
 });
 
-test("pas de confusion Landing : copy structurée explicite", () => {
+test("pas de confusion page événement : copy structurée explicite", () => {
   const fields = read("components/admin/EventStructuredInfoFields.jsx");
-  assert.match(fields, /Landing/);
+  assert.match(fields, /page de l’événement|page de l'événement|EVENT_PAGE_STRUCTURED_HINT/);
   assert.match(fields, /Thème principal/);
   assert.match(fields, /Thème secondaire/);
   assert.match(fields, /Profil organisateur/);
+  assert.doesNotMatch(fields, /textes libres de la Landing/);
 });
 
 if (failed > 0) {

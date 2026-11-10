@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { CreateEventPrepChecklist } from "@/components/admin/CreateEventPrepChecklist";
 import { EventLivePreview } from "@/components/admin/EventLivePreview";
 import { EventStructuredInfoFields } from "@/components/admin/EventStructuredInfoFields";
 import { FormBuilderPanel } from "@/components/admin/FormBuilderPanel";
@@ -13,6 +14,7 @@ import {
   QUESTION_TYPE_META,
   applyQuestionType,
   buildContestQuestion,
+  buildCreateEventPrepChecklist,
   clearCreateEventDraft,
   createBlankQuestion,
   duplicateQuestion,
@@ -35,6 +37,7 @@ import {
   buildDiscoverMetaPatchBody,
   hasAnyStructuredInfo,
 } from "@/lib/eventDiscoverMeta";
+import { EVENT_PAGE_ROLE_HINT } from "@/lib/eventPageLabels";
 import { PUBLISH_PUBLIC_WARNING_LINES } from "@/lib/eventVisibility";
 import { rememberMyEvent } from "@/lib/myEventsStorage";
 
@@ -659,6 +662,16 @@ export default function AdminPage() {
   );
 
   const stats = useMemo(() => summarizeQuestionTypes(questions), [questions]);
+  const prepChecklist = useMemo(
+    () =>
+      buildCreateEventPrepChecklist({
+        eventTitle,
+        questions,
+        visibilityIntent,
+        publicConfirmed,
+      }),
+    [eventTitle, questions, visibilityIntent, publicConfirmed],
+  );
   const eventTitlePreview = eventTitle.trim() || "Titre de l’événement";
   const activeQuestionIndex = Math.max(
     0,
@@ -825,9 +838,12 @@ export default function AdminPage() {
                     lineHeight: 1.4,
                   }}
                 >
-                  Privé par défaut : hors « Les événements » et noindex. Le live
-                  par lien / QR reste ouvert. Public = intention SEO /
-                  annuaire, avec confirmation.
+                  <strong style={{ color: "#334155" }}>Privé</strong> (défaut) :
+                  hors annuaire, non indexé — idéal pour un premier test. Le live
+                  reste accessible par lien / QR sans compte.{" "}
+                  <strong style={{ color: "#334155" }}>Public</strong> : peut
+                  apparaître dans « Les événements » si date, thème et profil
+                  public sont renseignés (confirmation requise).
                 </p>
                 <div
                   role="radiogroup"
@@ -843,12 +859,12 @@ export default function AdminPage() {
                     {
                       value: "private",
                       label: "Privé",
-                      help: "Par défaut — non listé",
+                      help: "Test rapide · lien / QR seuls",
                     },
                     {
                       value: "public",
                       label: "Public",
-                      help: "Référencé si éligible",
+                      help: "Annuaire si éligible",
                     },
                   ].map((opt) => {
                     const selected = visibilityIntent === opt.value;
@@ -1085,13 +1101,21 @@ export default function AdminPage() {
               </div>
             </section>
 
-            <section className="admin-section-card">
+            <section
+              className="admin-section-card admin-section-card--questions"
+              data-testid="create-event-questions"
+            >
               <div className="admin-questions-head">
                 <div>
+                  <p className="admin-questions-essential">
+                    Essentiel pour le live
+                  </p>
                   <h2 className="admin-section-title">Questions</h2>
                   <p className="admin-section-sub">
-                    Une question ouverte à la fois. Ordre d’affichage = ordre du
-                    vote. Chaque question contient au moins 2 réponses.
+                    Préparez au moins une question (2 réponses min.). Une
+                    question ouverte à la fois ; l’ordre = ordre du vote. Le
+                    MODE TEST permet de tout répéter gratuitement après
+                    création.
                   </p>
                 </div>
                 <button
@@ -1632,8 +1656,8 @@ export default function AdminPage() {
             </button>
 
             <p className="admin-footnote">
-              Après création, vous êtes redirigé vers la régie. Retrouvez vos
-              événements dans{" "}
+              Après création : régie en MODE TEST (gratuit). Vous pourrez activer
+              la page de l’événement plus tard. Retrouvez vos événements dans{" "}
               <Link
                 href="/admin/events"
                 style={{ color: "#7c3aed", fontWeight: 700 }}
@@ -1642,10 +1666,22 @@ export default function AdminPage() {
               </Link>
               .
             </p>
+            <p
+              style={{
+                margin: "0.35rem 0 0",
+                fontSize: "0.78rem",
+                color: "#64748b",
+                lineHeight: 1.4,
+              }}
+            >
+              {EVENT_PAGE_ROLE_HINT}
+            </p>
           </form>
 
           <aside className="admin-side-panel">
             <div className="admin-side-sticky">
+              <CreateEventPrepChecklist items={prepChecklist} />
+
               <section className="admin-side-card">
                 <p className="admin-side-kicker">Résumé</p>
                 <h3>{eventTitlePreview}</h3>
@@ -1673,8 +1709,9 @@ export default function AdminPage() {
               <section className="admin-side-card">
                 <p className="admin-side-kicker">Ce qui sera créé</p>
                 <p className="admin-side-text">
-                  Un événement publié, des questions prêtes pour la régie, et un
-                  accès direct salle/écran après création.
+                  Un événement en MODE TEST, des questions prêtes pour la régie,
+                  et un accès salle / écran. La page de l’événement reste
+                  optionnelle.
                 </p>
               </section>
 
@@ -1784,11 +1821,32 @@ export default function AdminPage() {
           padding: 1rem;
           box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
         }
+        .admin-section-card--questions {
+          border-color: #93c5fd;
+          box-shadow: 0 2px 12px rgba(37, 99, 235, 0.08);
+        }
+        .admin-questions-essential {
+          margin: 0 0 0.28rem;
+          display: inline-flex;
+          align-items: center;
+          padding: 0.18rem 0.5rem;
+          border-radius: 999px;
+          border: 1px solid #bfdbfe;
+          background: #eff6ff;
+          color: #1d4ed8;
+          font-size: 0.68rem;
+          font-weight: 800;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+        }
         .admin-section-title {
           margin: 0 0 0.65rem;
           font-size: 1.02rem;
           font-weight: 800;
           letter-spacing: -0.02em;
+        }
+        .admin-section-card--questions .admin-section-title {
+          margin-bottom: 0.35rem;
         }
         .admin-section-sub {
           margin: 0.1rem 0 0;

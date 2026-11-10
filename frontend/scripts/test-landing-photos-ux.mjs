@@ -106,12 +106,12 @@ test("Admin Landing : bouton Régie à côté Salle live / Landing", () => {
     /\/admin\/event\/\$\{encodeURIComponent\(eventId\)\}/,
   );
   assert.match(customization, /LiveMicroLabel/);
-  assert.match(customization, /Landing événement/);
+  assert.match(customization, /Landing événement|Page de l’événement|EVENT_PAGE_NAV_EMOJI/);
 });
 
-test("Régie : nav Landing inchangée (pas de retrait du lien Landing)", () => {
+test("Régie : nav page événement (route /landing inchangée)", () => {
   assert.match(regie, /\/admin\/events\/\$\{encodeURIComponent\(eventId\)\}\/landing/);
-  assert.match(regie, /Landing événement/);
+  assert.match(regie, /Landing événement|Page de l’événement|EVENT_PAGE_NAV/);
 });
 
 test("Pas de changement API / schéma dans ce lot", () => {

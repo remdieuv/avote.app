@@ -98,8 +98,8 @@ test("structure DOM : shell + colonnes + actions", () => {
   assert.match(page, /className="customization-shell-inner"/);
   assert.match(page, /className="customization-form-col"/);
   assert.match(page, /className="customization-preview-col"/);
-  assert.match(page, /Ouvrir la landing publiée/);
-  assert.match(page, /Enregistrer la landing/);
+  assert.match(page, /Ouvrir la landing publiée|Ouvrir la page publiée/);
+  assert.match(page, /Enregistrer la landing|Enregistrer la page/);
   assert.match(page, /customization-sticky-bar/);
   assert.match(
     page,

@@ -702,3 +702,55 @@ export function summarizeQuestionTypes(questions) {
     quiz,
   };
 }
+
+/**
+ * Checklist discrète de préparation (non bloquante).
+ * @param {{
+ *   eventTitle?: unknown;
+ *   questions?: CreateQuestion[] | null;
+ *   visibilityIntent?: unknown;
+ *   publicConfirmed?: unknown;
+ * }} args
+ * @returns {Array<{ id: string; label: string; done: boolean; optional?: boolean }>}
+ */
+export function buildCreateEventPrepChecklist(args = {}) {
+  const titleDone = String(args?.eventTitle ?? "").trim().length > 0;
+  const qs = Array.isArray(args?.questions) ? args.questions : [];
+  const questionDone = qs.some((q) => {
+    const text = String(q?.question ?? "").trim();
+    const opts = (Array.isArray(q?.options) ? q.options : []).filter((o) =>
+      String(o ?? "").trim(),
+    );
+    return Boolean(text) && opts.length >= 2;
+  });
+  const intent = normalizeCreateVisibilityIntent(args?.visibilityIntent);
+  const visibilityDone =
+    intent === "private" || args?.publicConfirmed === true;
+
+  return [
+    {
+      id: "title",
+      label: "Titre de l’événement",
+      done: titleDone,
+    },
+    {
+      id: "questions",
+      label: "Au moins une question avec 2 réponses",
+      done: questionDone,
+    },
+    {
+      id: "visibility",
+      label:
+        intent === "public"
+          ? "Visibilité public confirmée"
+          : "Visibilité choisie (privé par défaut)",
+      done: visibilityDone,
+    },
+    {
+      id: "after",
+      label: "Après création : tester en MODE TEST, puis page de l’événement",
+      done: false,
+      optional: true,
+    },
+  ];
+}

@@ -1,6 +1,8 @@
 "use client";
 
+import { FrDatetimeLocalField } from "@/components/admin/FrDatetimeLocalField";
 import { blankEventStructuredInfo } from "@/lib/eventDiscoverMeta";
+import { EVENT_PAGE_STRUCTURED_HINT } from "@/lib/eventPageLabels";
 
 const labelStyle = {
   display: "block",
@@ -23,7 +25,7 @@ const inputStyle = {
 };
 
 /**
- * Champs structurés Discover (création ou édition) — pas les textes libres Landing.
+ * Champs structurés Discover (création ou édition) — pas les textes libres page événement.
  *
  * @param {{
  *   value?: import("@/lib/eventDiscoverMeta").EventStructuredInfoForm;
@@ -70,23 +72,16 @@ export function EventStructuredInfoFields({
           lineHeight: 1.4,
         }}
       >
-        Infos structurées pour « Les événements » (annuaire). Distinctes des
-        textes libres de la Landing.
+        {EVENT_PAGE_STRUCTURED_HINT}
       </p>
 
-      <div>
-        <label style={labelStyle} htmlFor={`${idPrefix}-startsAt`}>
-          Date et heure de début
-        </label>
-        <input
-          id={`${idPrefix}-startsAt`}
-          type="datetime-local"
-          value={v.startsAtLocal}
-          disabled={disabled}
-          onChange={(e) => patch({ startsAtLocal: e.target.value })}
-          style={inputStyle}
-        />
-      </div>
+      <FrDatetimeLocalField
+        id={`${idPrefix}-startsAt`}
+        label="Date et heure de début"
+        value={v.startsAtLocal}
+        disabled={disabled}
+        onChange={(startsAtLocal) => patch({ startsAtLocal })}
+      />
 
       <div>
         <label style={labelStyle} htmlFor={`${idPrefix}-city`}>
@@ -180,6 +175,18 @@ export function EventStructuredInfoFields({
             </option>
           ))}
         </select>
+        <p
+          style={{
+            margin: "0.32rem 0 0",
+            fontSize: "0.72rem",
+            color: "#64748b",
+            lineHeight: 1.4,
+          }}
+        >
+          Affiché sur la page de l’événement et dans « Les événements » si le
+          profil est public. Inutile pour un live privé partagé uniquement par
+          lien / QR.
+        </p>
       </div>
     </div>
   );
