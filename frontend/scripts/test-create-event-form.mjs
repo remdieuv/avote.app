@@ -282,14 +282,15 @@ test("intention Public exige confirmation (pas d’auto-publish)", () => {
 
 test("écarts Discover à la création (profil / thème / date)", () => {
   const without = listCreatePublicDiscoverGaps({ profiles: [] });
-  assert.ok(without.some((g) => /profil organisateur/i.test(g)));
+  assert.ok(without.some((g) => /profil/i.test(g)));
   assert.ok(without.some((g) => /thème/i.test(g)));
   assert.ok(without.some((g) => /date/i.test(g)));
 
   const withPublic = listCreatePublicDiscoverGaps({
-    profiles: [{ isPublic: true, displayName: "Orga" }],
-    hasTheme: true,
-    hasStartsAt: true,
+    profiles: [{ id: "p1", isPublic: true, displayName: "Orga" }],
+    startsAtLocal: "2026-12-01T12:00",
+    primaryThemeId: "th1",
+    organizerProfileId: "p1",
   });
   assert.equal(withPublic.length, 0);
 });
