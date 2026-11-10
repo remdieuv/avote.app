@@ -50,6 +50,7 @@
     "test:ux-lot2-create-event": "node scripts/test-ux-lot2-create-event.mjs",
     "test:ux-lot3-landing-feed": "node scripts/test-ux-lot3-landing-feed.mjs",
     "test:ux-lot4-regie-flow": "node scripts/test-ux-lot4-regie-flow.mjs",
+    "test:regie-projection-screens-count": "node scripts/test-regie-projection-screens-count.mjs",
     "test:forms-l0": "node scripts/test-forms-l0.mjs",
     "test:forms-l2": "node scripts/test-forms-l2.mjs",
     "test:forms-l3": "node scripts/test-forms-l3.mjs",
