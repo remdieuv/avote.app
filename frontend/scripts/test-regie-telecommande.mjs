@@ -207,17 +207,16 @@ test("page.jsx branche chrono télécommande ; live réel hors chrome T-E1", () 
   assert.match(pageSrc, /chronoAction=\{telecommandeChronoAction\}/);
   assert.match(pageSrc, /onChronoAction=\{runTelecommandeChrono\}/);
   assert.match(pageSrc, /PanneauQrParticipant/);
-  assert.match(pageSrc, /Passer en live réel/);
-  assert.match(
-    pageSrc,
-    /!String\(actionError\)\.includes\("Aucune activation disponible"\)/,
-  );
+  // Lot 1 : libellé via REGIE_START_REAL_CTA_LABEL (plus de littéral dans page.jsx)
+  assert.match(pageSrc, /REGIE_START_REAL_CTA_LABEL/);
+  assert.match(pageSrc, /isActivationShortageError\(actionError\)/);
   assert.doesNotMatch(pageSrc, /admin\/event\/\[eventId\]\/remote/);
   // Live réel + hint activation uniquement hors branche RegieTelecommande
   const teleBlock = pageSrc.match(
     /useTelecommandeChrome \? \(\s*<RegieTelecommande[\s\S]*?\) : null/,
   );
   assert.ok(teleBlock, "bloc RegieTelecommande introuvable");
+  assert.doesNotMatch(teleBlock[0], /REGIE_START_REAL_CTA_LABEL/);
   assert.doesNotMatch(teleBlock[0], /Passer en live réel/);
   assert.doesNotMatch(teleBlock[0], /onStartReal=/);
   assert.doesNotMatch(teleBlock[0], /startRealHint=/);
