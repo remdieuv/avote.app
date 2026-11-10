@@ -142,6 +142,29 @@ test("page discover + nav Les événements présents", () => {
   assert.match(header, /mobileMoreItems/);
 });
 
+test("Lot 5 — persistence URL Discover (helpers + client)", async () => {
+  const {
+    buildDiscoverSearchParams,
+    discoverHrefFromParams,
+    parseDiscoverSearchParams,
+  } = await import("../lib/discoverUrlState.js");
+  const parsed = parseDiscoverSearchParams(
+    new URLSearchParams("category=live&city=Paris"),
+  );
+  assert.equal(parsed.category, "live");
+  assert.equal(parsed.city, "Paris");
+  assert.equal(
+    discoverHrefFromParams(buildDiscoverSearchParams(parsed)),
+    "/discover?category=live&city=Paris",
+  );
+  const client = readFileSync(
+    join(root, "components/discover/DiscoverPageClient.jsx"),
+    "utf8",
+  );
+  assert.match(client, /discoverUrlState/);
+  assert.match(client, /router\.replace/);
+});
+
 if (failed > 0) {
   console.error(`\n${failed} test(s) en échec`);
   process.exit(1);

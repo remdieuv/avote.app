@@ -655,9 +655,19 @@ export function EventDashboardCard({
                   href={`/e/${encodeURIComponent(ev.slug)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={secondaryLinkStyle}
+                  style={
+                    ux.key === "finished"
+                      ? {
+                          ...secondaryLinkStyle,
+                          border: "1px solid #334155",
+                          background: "#0f172a",
+                          color: "#fff",
+                          fontWeight: 800,
+                        }
+                      : secondaryLinkStyle
+                  }
                 >
-                  {EVENT_PAGE_VIEW_CTA}
+                  {ux.key === "finished" ? "Voir les souvenirs" : EVENT_PAGE_VIEW_CTA}
                 </Link>
               ) : (
                 <span

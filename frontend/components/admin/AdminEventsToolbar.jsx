@@ -58,6 +58,7 @@ const createBtnStyle = {
  *   statusOptions: { value: string; label: string }[];
  *   sortOptions: { value: string; label: string }[];
  *   showCreate?: boolean;
+ *   finishedFilterHint?: string | null;
  * }} props
  */
 export function AdminEventsToolbar({
@@ -70,7 +71,19 @@ export function AdminEventsToolbar({
   statusOptions,
   sortOptions,
   showCreate = true,
+  finishedFilterHint = null,
 }) {
+  const finishedActive = statusValue === "finished";
+  const statusControlStyle = finishedActive
+    ? {
+        ...controlBase,
+        border: "1px solid #475569",
+        background: "#f1f5f9",
+        fontWeight: 800,
+        color: "#0f172a",
+      }
+    : controlBase;
+
   return (
     <div className="admin-events-toolbar">
       <div className="admin-events-toolbar-search-wrap">
@@ -94,13 +107,19 @@ export function AdminEventsToolbar({
       <div className="admin-events-toolbar-filters">
         <div>
           <label htmlFor="admin-events-status" style={fieldLabel}>
-            Statut
+            Statut{finishedActive ? " · Terminés" : ""}
           </label>
           <select
             id="admin-events-status"
             value={statusValue}
             onChange={(e) => onStatusChange(e.target.value)}
-            style={controlBase}
+            aria-label={
+              finishedActive
+                ? "Statut : Terminés (événements clôturés)"
+                : "Filtrer par statut"
+            }
+            data-avote-status-filter={statusValue}
+            style={statusControlStyle}
           >
             {statusOptions.map((o) => (
               <option key={o.value} value={o.value}>
@@ -139,6 +158,27 @@ export function AdminEventsToolbar({
         </div>
       ) : null}
 
+      {finishedActive && finishedFilterHint ? (
+        <p
+          className="admin-events-toolbar-finished-hint"
+          role="status"
+          style={{
+            gridColumn: "1 / -1",
+            margin: 0,
+            padding: "0.55rem 0.75rem",
+            borderRadius: 10,
+            border: "1px solid #cbd5e1",
+            background: "#f8fafc",
+            color: "#334155",
+            fontSize: "0.82rem",
+            fontWeight: 650,
+            lineHeight: 1.45,
+          }}
+        >
+          {finishedFilterHint}
+        </p>
+      ) : null}
+
       <style>{`
         .admin-events-toolbar {
           display: grid;
@@ -171,6 +211,9 @@ export function AdminEventsToolbar({
           .admin-events-toolbar-create {
             width: auto !important;
             align-self: end;
+          }
+          .admin-events-toolbar-finished-hint {
+            grid-column: 1 / -1;
           }
         }
         #admin-events-search:focus-visible,

@@ -61,7 +61,9 @@ test("Mes événements : Organisés / Favoris / Invitations", () => {
   assert.match(src, /Favoris/);
   assert.match(src, /Invitations/);
   assert.match(src, /\/me\/favorites/);
-  assert.match(src, /Invitations bientôt disponibles/);
+  assert.match(src, /\/me\/invitations/);
+  assert.match(src, /Voir les souvenirs/);
+  assert.doesNotMatch(src, /Invitations bientôt disponibles/);
   assert.doesNotMatch(src, /Abonnements/);
 });
 

@@ -1,4 +1,4 @@
-import { getEventUxSortTier, getEventUxState } from "./eventUxState";
+import { getEventUxSortTier, getEventUxState } from "./eventUxState.js";
 
 /**
  * Tri dashboard admin : En direct → Lecture → En attente → … (par date décroissante).
