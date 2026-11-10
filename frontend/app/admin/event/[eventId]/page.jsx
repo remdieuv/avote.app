@@ -103,6 +103,15 @@ import {
   sortPollsByPlaylistOrder,
 } from "@/lib/regieDesktopLayout";
 import {
+  REGIE_FINISH_EVENT_TITLE,
+  deriveRegieLiveFlowStep,
+  getRegieLiveFlowModeLine,
+  getRegieLiveFlowNextHint,
+  getRegiePrimaryLiveActionTitle,
+  getRegieToolGlossary,
+} from "@/lib/regieLiveFlowSteps";
+import { RegieLiveFlowStepper } from "@/components/admin/RegieLiveFlowStepper";
+import {
   formatAutoRevealCountdownLabel,
   getAutoRevealCountdownSec,
   isAutoRevealCountdownPending,
@@ -3610,7 +3619,7 @@ function SidebarPartageDroit({
             Partage & accès
           </h2>
           <p style={{ margin: 0, fontSize: "0.66rem", color: "#64748b", lineHeight: 1.35 }}>
-            QR, salle, Screen et Overlay OBS
+            QR participants · écran /screen · télécommande · Overlay OBS
           </p>
         </div>
       ) : null}
@@ -6671,6 +6680,27 @@ export default function RegieEventPage() {
     leadEnabled: activePoll?.leadEnabled,
     eventFinished,
   });
+  const liveFlowInput = {
+    voteState: voteStateUi,
+    displayState: projectionDisplayStateUi,
+    pollStatus: activePoll?.status,
+    pollType: activePoll?.type,
+    leadEnabled: activePoll?.leadEnabled,
+    contestQuotaReached,
+    eventFinished,
+    hasActivePoll: Boolean(activePollIdJs),
+    hasNextPoll: hasNextPollAfterActive,
+  };
+  const liveFlowStep = deriveRegieLiveFlowStep(liveFlowInput);
+  const liveFlowNextHint = getRegieLiveFlowNextHint({
+    ...liveFlowInput,
+    pendingAutoReveal: pendingAutoRevealRegie,
+  });
+  const liveFlowModeLine = getRegieLiveFlowModeLine({ inTestMode });
+  const liveFlowPrimaryTitle = getRegiePrimaryLiveActionTitle(primaryLiveAction, {
+    openTitle: openVoteButtonCopy.title,
+  });
+  const regieToolGlossary = getRegieToolGlossary();
   const activeParticipationCount = Math.max(0, Number(activePoll?.voteCount || 0));
   const activeParticipationUnit = isContestPoll(activePoll)
     ? activeParticipationCount === 1
@@ -7105,7 +7135,7 @@ export default function RegieEventPage() {
     if (primaryLiveAction === "finish") {
       if (typeof window === "undefined") return;
       const ok = window.confirm(
-        "Terminer l’événement maintenant ? Cette action clôture l’événement.",
+        "Terminer l’événement maintenant ? Cette action clôture l’événement (différent de Fermer le vote).",
       );
       if (!ok) return;
       const confirmWord = window.prompt(
@@ -9958,12 +9988,25 @@ export default function RegieEventPage() {
                         lineHeight: 1.35,
                       }}
                     >
-                      Commandes essentielles du live — une seule zone d’autorité
+                      Enchaînez les étapes du live — actions principales ici,
+                      options avancées plus bas
                     </p>
                   </div>
                   <p style={{ margin: 0, fontSize: "0.76rem", color: "#64748b" }}>
                     Pilotage = antenne · Clic playlist = consultation seule
                   </p>
+                </div>
+
+                <div style={{ marginTop: "0.85rem" }}>
+                  <RegieLiveFlowStepper
+                    steps={liveFlowStep.steps}
+                    currentIndex={liveFlowStep.currentIndex}
+                    completed={liveFlowStep.completed}
+                    nextHint={liveFlowNextHint}
+                    modeLine={liveFlowModeLine}
+                    showGlossary={!compactTopPanel}
+                    compact={compactTopPanel}
+                  />
                 </div>
 
                 {eventFinished ? (
@@ -10203,19 +10246,18 @@ export default function RegieEventPage() {
                         disabled={!primaryActionEnabled}
                         onClick={() => void runPrimaryLiveAction()}
                         title={
-                          primaryLiveAction === "open"
-                            ? openVoteButtonCopy.title
-                            : primaryLiveAction === "show-results"
-                              ? pendingAutoRevealRegie
-                                ? "Interrompt le décompte et affiche les résultats partout maintenant."
-                                : isQuizPoll(activePoll)
-                                  ? "Affiche les résultats finaux. Si le vote est fermé, révèle aussi la bonne réponse."
-                                  : "Affiche les résultats finaux à la salle et à l’écran."
-                              : primaryLiveAction === "next"
-                                ? "Prépare la question suivante sans ouvrir le vote."
-                                : primaryLiveAction === "draw"
-                                  ? "Ouvre le tirage au sort pour cette question concours."
-                                  : undefined
+                          liveFlowPrimaryTitle ||
+                          (primaryLiveAction === "show-results"
+                            ? pendingAutoRevealRegie
+                              ? "Interrompt le décompte et affiche les résultats partout maintenant."
+                              : isQuizPoll(activePoll)
+                                ? "Affiche les résultats finaux. Si le vote est fermé, révèle aussi la bonne réponse."
+                                : "Affiche les résultats finaux à la salle et à l’écran."
+                            : primaryLiveAction === "next"
+                              ? "Prépare la question suivante sans ouvrir le vote."
+                              : primaryLiveAction === "draw"
+                                ? "Ouvre le tirage au sort pour cette question concours."
+                                : undefined)
                         }
                         style={{
                           width: "100%",
@@ -10286,6 +10328,7 @@ export default function RegieEventPage() {
                           fontWeight: 700,
                           color: "#64748b",
                         }}
+                        title={regieToolGlossary.chrono.body}
                       >
                         Chrono
                       </span>
@@ -10512,10 +10555,11 @@ export default function RegieEventPage() {
                         <button
                           type="button"
                           disabled={busy || eventFinished || !allowedLiveActions.finish}
+                          title={REGIE_FINISH_EVENT_TITLE}
                           onClick={async () => {
                             if (typeof window === "undefined") return;
                             const ok = window.confirm(
-                              "Terminer l’événement maintenant ? Cette action clôture l’événement.",
+                              "Terminer l’événement maintenant ? Cette action clôture l’événement (différent de Fermer le vote).",
                             );
                             if (!ok) return;
                             const confirmWord = window.prompt(
