@@ -117,6 +117,14 @@ function LoginForm() {
             />
           </label>
 
+          {mode === "login" ? (
+            <p style={{ margin: "-0.25rem 0 0", fontSize: "0.82rem" }}>
+              <Link href="/forgot-password" style={{ color: "#2563eb", fontWeight: 700 }}>
+                Mot de passe oublié ?
+              </Link>
+            </p>
+          ) : null}
+
           {error ? (
             <p role="alert" style={{ margin: 0, color: "#b91c1c", fontSize: "0.88rem" }}>
               {error}

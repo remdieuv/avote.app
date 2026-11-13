@@ -25,7 +25,9 @@
     "test:organizer-profiles": "node scripts/test-organizer-profiles.mjs",
     "test:favorites-follows": "node scripts/test-favorites-follows.mjs",
     "test:event-invites": "node scripts/test-event-invites.mjs",
+    "test:password-reset-mail": "node scripts/test-password-reset-mail.mjs",
     "test:upload-middleware-startup": "node scripts/test-upload-middleware-startup.mjs",
+
     "test:forms-l1": "node scripts/test-forms-l1-form-capture.mjs",
     "test:forms-l4": "node scripts/test-forms-l4-soft-lock.mjs",
     "test:forms-l5": "node scripts/test-forms-l5-rgpd.mjs",
@@ -46,6 +48,7 @@
     "express-rate-limit": "^8.4.1",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.1.1",
+    "nodemailer": "^6.10.1",
     "prisma": "^6.19.0",
     "socket.io": "^4.8.3",
     "stripe": "^22.1.0"

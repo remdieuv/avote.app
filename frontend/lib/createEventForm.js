@@ -192,6 +192,30 @@ export function createBlankQuestion(id) {
 }
 
 /**
+ * Textes de démo / filler indésirables (jamais préremplis par l’app).
+ * Blocage à la validation création uniquement — ne touche pas aux questions déjà en base.
+ */
+export const DISALLOWED_DEMO_QUESTION_TEXTS = Object.freeze([
+  "placeholder question",
+  "placeholder",
+  "test question",
+  "lorem ipsum",
+]);
+
+/**
+ * @param {unknown} raw
+ * @returns {boolean}
+ */
+export function isDisallowedDemoQuestionText(raw) {
+  const v = String(raw || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+  if (!v) return false;
+  return DISALLOWED_DEMO_QUESTION_TEXTS.includes(v);
+}
+
+/**
  * Texte question par défaut pour un type (vide hors concours).
  * @param {CreateQuestionType} type
  * @param {string} [contestPrize]
@@ -413,6 +437,12 @@ export function validateCreateEventForm(input) {
       qErr.question = "Saisis le texte de la question.";
       formError =
         formError || `Question ${i + 1} : saisis le texte de la question.`;
+    } else if (isDisallowedDemoQuestionText(qi)) {
+      qErr.question =
+        "Remplace ce texte de démonstration par une vraie question pour vos participants.";
+      formError =
+        formError ||
+        `Question ${i + 1} : remplace le texte de démonstration par une vraie question.`;
     }
     if (isContestEntryQuestion(x?.type) && !(x?.contestPrize || "").trim()) {
       qErr.contestPrize =
