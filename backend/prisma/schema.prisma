@@ -102,6 +102,22 @@ model User {
   eventFavorites    EventFavorite[]
   organizerFollows  OrganizerFollow[]
   eventGuestAccesses EventGuestAccess[]
+  passwordResetTokens PasswordResetToken[]
+}
+
+/** Jetons de réinitialisation mot de passe (usage unique, hashés). */
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
 }
 
 model Event {

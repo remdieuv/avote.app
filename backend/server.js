@@ -43,6 +43,12 @@ const {
   clearAuthCookie,
 } = require("./lib/auth");
 const {
+  requestPasswordReset,
+  resetPasswordWithToken,
+  GENERIC_OK_MESSAGE,
+} = require("./lib/passwordReset");
+const { isDisallowedDemoQuestionText } = require("./lib/demoQuestionGuard");
+const {
   assertEventOwnedBy,
   assertEventOwnedByOrPlatformAdmin,
   assertPollOwnedBy,
@@ -1720,10 +1726,16 @@ app.get("/", (_req, res) => {
   res.type("text/plain").send("API Avote OK");
 });
 
+/**
+ * Google Auth — volontairement non branché (reporté).
+ * Pas d’OAuth, pas de bouton UI : e-mail / mot de passe uniquement.
+ * Voir docs produit / compte rendu Lot 6 follow-up.
+ */
 app.get("/auth/google", (_req, res) => {
   res.status(501).json({
     error:
-      "Connexion Google : à configurer côté serveur. Utilisez e-mail / mot de passe.",
+      "Connexion Google : non disponible pour le moment (activation reportée). Utilisez e-mail / mot de passe.",
+    code: "GOOGLE_AUTH_DEFERRED",
   });
 });
 
@@ -1900,6 +1912,49 @@ app.post("/auth/change-password", authAttemptLimiter, requireAuth, async (req, r
     return res
       .status(500)
       .json({ error: "Impossible de modifier le mot de passe." });
+  }
+});
+
+/** Mot de passe oublié — toujours 200 + message générique (anti-énumération). */
+app.post("/auth/forgot-password", authAttemptLimiter, async (req, res) => {
+  try {
+    const email =
+      typeof req.body?.email === "string" ? req.body.email : "";
+    const result = await requestPasswordReset(email);
+    return res.json({
+      ok: true,
+      message: result.message || GENERIC_OK_MESSAGE,
+    });
+  } catch (e) {
+    console.error("auth/forgot-password", e);
+    // Même message générique en cas d’erreur interne
+    return res.json({ ok: true, message: GENERIC_OK_MESSAGE });
+  }
+});
+
+/** Applique un jeton de reset (usage unique). */
+app.post("/auth/reset-password", authAttemptLimiter, async (req, res) => {
+  try {
+    const token =
+      typeof req.body?.token === "string" ? req.body.token : "";
+    const newPassword =
+      typeof req.body?.newPassword === "string" ? req.body.newPassword : "";
+    const result = await resetPasswordWithToken(token, newPassword);
+    if (!result.ok) {
+      return res
+        .status(result.status || 400)
+        .json({ error: result.error || "Lien invalide ou expiré." });
+    }
+    clearAuthCookie(res);
+    return res.json({
+      ok: true,
+      message: "Mot de passe mis à jour. Vous pouvez vous connecter.",
+    });
+  } catch (e) {
+    console.error("auth/reset-password", e);
+    return res
+      .status(500)
+      .json({ error: "Impossible de réinitialiser le mot de passe." });
   }
 });
 
@@ -6113,6 +6168,12 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
       .status(400)
       .json({ error: "question requise (1 à 2000 caractères)." });
   }
+  if (isDisallowedDemoQuestionText(questionBrute)) {
+    return res.status(400).json({
+      error:
+        "Remplacez le texte de démonstration par une vraie question pour vos participants.",
+    });
+  }
 
   const pollTypeParsed = parseTypeSondage(typeBrut) ?? "SINGLE_CHOICE";
   const pollType = pollTypeParsed === "LEAD" ? "SINGLE_CHOICE" : pollTypeParsed;
@@ -7297,6 +7358,11 @@ app.post("/polls", requireAuth, async (req, res) => {
         if (!p.question) {
           return res.status(400).json({
             error: `Question n°${i + 1} : le texte de la question est obligatoire.`,
+          });
+        }
+        if (isDisallowedDemoQuestionText(p.question)) {
+          return res.status(400).json({
+            error: `Question n°${i + 1} : remplacez le texte de démonstration par une vraie question.`,
           });
         }
         if (!p.type) {

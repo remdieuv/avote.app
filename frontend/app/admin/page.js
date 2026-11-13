@@ -1230,14 +1230,26 @@ export default function AdminPage() {
                               ...(qErr.question ? inputErrorStyle : inputStyle),
                               marginBottom: qErr.question
                                 ? "0.35rem"
-                                : "0.95rem",
+                                : "0.35rem",
                             }}
                           />
                           {qErr.question ? (
                             <p className="admin-field-error" role="alert">
                               {qErr.question}
                             </p>
-                          ) : null}
+                          ) : (
+                            <p
+                              style={{
+                                margin: "0 0 0.95rem",
+                                fontSize: "0.78rem",
+                                color: "#64748b",
+                                fontWeight: 500,
+                                lineHeight: 1.4,
+                              }}
+                            >
+                              Écrivez une vraie question pour vos participants — évitez les textes de démo du type « Placeholder ».
+                            </p>
+                          )}
 
                           <div className="admin-question-separator" />
 
