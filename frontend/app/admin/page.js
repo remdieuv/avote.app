@@ -39,6 +39,7 @@ import {
 } from "@/lib/eventDiscoverMeta";
 import { EVENT_PAGE_ROLE_HINT } from "@/lib/eventPageLabels";
 import { PUBLISH_PUBLIC_WARNING_LINES } from "@/lib/eventVisibility";
+import { formatDatetimeLocalFr } from "@/lib/frDateTime";
 import { rememberMyEvent } from "@/lib/myEventsStorage";
 
 const inputStyle = {
@@ -90,6 +91,8 @@ export default function AdminPage() {
   );
   const [questions, setQuestions] = useState(() => [{ ...QUESTION_INITIALE }]);
   const [openQuestionId, setOpenQuestionId] = useState(QUESTION_INITIALE.id);
+  /** Bloc « Informations événement » — déplié par défaut */
+  const [eventInfoOpen, setEventInfoOpen] = useState(true);
   const [formError, setFormError] = useState(null);
   /** @type {[Record<string, unknown>, Function]} */
   const [fieldErrors, setFieldErrors] = useState({ questions: {} });
@@ -687,6 +690,17 @@ export default function AdminPage() {
     return `${label} · ${filled} réponse(s)${qText ? ` · ${qText.slice(0, 42)}${qText.length > 42 ? "…" : ""}` : ""}`;
   }
 
+  function eventInfoSummaryLine() {
+    const title = eventTitle.trim() || "Sans titre";
+    const vis = visibilityIntent === "public" ? "Public" : "Privé";
+    const date = formatDatetimeLocalFr(structuredInfo?.startsAtLocal);
+    const city = String(structuredInfo?.city || "").trim();
+    const parts = [title, vis];
+    if (date) parts.push(date);
+    if (city) parts.push(city);
+    return parts.join(" · ");
+  }
+
   return (
     <main className="admin-create-page">
       <div className="admin-create-shell">
@@ -763,8 +777,39 @@ export default function AdminPage() {
             className="admin-create-form"
             onSubmit={handleCreatePoll}
           >
-            <section className="admin-section-card">
-              <h2 className="admin-section-title">Informations événement</h2>
+            <section
+              className={`admin-section-card admin-section-card--event-info ${eventInfoOpen ? "is-open" : "is-collapsed"}`}
+              data-testid="create-event-info"
+            >
+              <div className="admin-event-info-top">
+                <button
+                  type="button"
+                  className="admin-event-info-toggle"
+                  aria-expanded={eventInfoOpen}
+                  disabled={creating}
+                  onClick={() => setEventInfoOpen((v) => !v)}
+                  data-testid="create-event-info-toggle"
+                >
+                  <span className="admin-event-info-toggle-row">
+                    <span className="admin-section-title admin-event-info-title">
+                      Informations événement
+                    </span>
+                    <span className="admin-event-info-chevron" aria-hidden>
+                      {eventInfoOpen ? "▾" : "▸"}
+                    </span>
+                  </span>
+                  {!eventInfoOpen ? (
+                    <span className="admin-event-info-summary">
+                      {eventInfoSummaryLine()}
+                    </span>
+                  ) : null}
+                </button>
+              </div>
+              <div
+                className="admin-event-info-body"
+                hidden={!eventInfoOpen}
+                data-testid="create-event-info-body"
+              >
               <label className="admin-label" htmlFor="event-title">
                 Titre de l’événement
               </label>
@@ -1098,6 +1143,7 @@ export default function AdminPage() {
                   disabled={creating}
                   idPrefix="create-ev-meta"
                 />
+              </div>
               </div>
             </section>
 
@@ -1832,6 +1878,54 @@ export default function AdminPage() {
           background: #fff;
           padding: 1rem;
           box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+        }
+        .admin-section-card--event-info.is-collapsed {
+          padding: 0.75rem 1rem;
+        }
+        .admin-event-info-top {
+          display: flex;
+          align-items: flex-start;
+          gap: 0.45rem;
+          margin-bottom: 0;
+        }
+        .admin-section-card--event-info.is-open .admin-event-info-top {
+          margin-bottom: 0.75rem;
+        }
+        .admin-event-info-toggle {
+          flex: 1;
+          min-width: 0;
+          text-align: left;
+          border: none;
+          background: transparent;
+          padding: 0;
+          cursor: pointer;
+          display: grid;
+          gap: 0.2rem;
+        }
+        .admin-event-info-toggle:disabled {
+          cursor: not-allowed;
+          opacity: 0.7;
+        }
+        .admin-event-info-toggle-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.45rem;
+        }
+        .admin-event-info-title {
+          margin: 0;
+        }
+        .admin-event-info-summary {
+          font-size: 0.8rem;
+          color: #64748b;
+          font-weight: 500;
+          line-height: 1.35;
+        }
+        .admin-event-info-chevron {
+          flex-shrink: 0;
+          color: #64748b;
+          font-size: 0.95rem;
+          line-height: 1.4;
         }
         .admin-section-card--questions {
           border-color: #93c5fd;

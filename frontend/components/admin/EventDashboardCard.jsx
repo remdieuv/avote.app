@@ -17,6 +17,7 @@ import {
   EVENT_PAGE_NAV_SHORT_EMOJI,
   EVENT_PAGE_VIEW_CTA,
 } from "@/lib/eventPageLabels";
+import { isPublicVisibility } from "@/lib/eventVisibility";
 import { TELECOMMANDE_QR_COPY } from "@/lib/telecommandeQr";
 
 /**
@@ -89,12 +90,15 @@ export function EventDashboardCard({
   const [renameError, setRenameError] = useState("");
   const [renameSaving, setRenameSaving] = useState(false);
   const [telecommandeQrOpen, setTelecommandeQrOpen] = useState(false);
+  /** Cartes repliées par défaut — dépliage indépendant, état local conservé */
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const titleInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const skipBlurSaveRef = useRef(false);
 
   const isLiveUx = ux.key === "voting";
   const canRename = Boolean(onRename) && !ev._localOnly && Boolean(ev.id);
   const canShowTelecommandeQr = !ev._localOnly && Boolean(ev.id);
+  const visibilityLabel = isPublicVisibility(ev.visibility) ? "Public" : "Privé";
 
   useEffect(() => {
     const prev = prevUxKeyRef.current;
@@ -255,8 +259,22 @@ export function EventDashboardCard({
   }
   const metaLine = metaParts.join(" · ");
 
+  const dateSummary = formatDate(
+    ev.startsAt || ev.createdAt,
+    ev._localOnly ? "Date locale" : null,
+  );
+  const votesSummary =
+    vc !== null ? `${vc} vote${vc !== 1 ? "s" : ""}` : null;
+  const participantsSummary =
+    part !== null
+      ? `${part} participant${part !== 1 ? "s" : ""}`
+      : participantsLimit !== null
+        ? `${safeParticipantsUsed} / ${participantsLimit} participants`
+        : null;
+
   const cardClass = [
     "avote-event-card",
+    detailsOpen ? "avote-event-card--expanded" : "avote-event-card--collapsed",
     featured && (isLiveUx ? "avote-event-card--featured-live" : "avote-event-card--featured"),
     cardStatusFlash && "avote-event-card--flash",
     reducedMotion && "avote-event-card--reduced-motion",
@@ -272,7 +290,11 @@ export function EventDashboardCard({
     .join(" ");
 
   return (
-    <article className={cardClass}>
+    <article
+      className={cardClass}
+      data-testid="event-dashboard-card"
+      data-expanded={detailsOpen ? "true" : "false"}
+    >
       <div
         style={{
           display: "flex",
@@ -280,7 +302,7 @@ export function EventDashboardCard({
           alignItems: "flex-start",
           justifyContent: "space-between",
           gap: "0.65rem",
-          marginBottom: "0.65rem",
+          marginBottom: detailsOpen ? "0.65rem" : "0.45rem",
         }}
       >
         <div
@@ -300,6 +322,36 @@ export function EventDashboardCard({
               minWidth: 0,
             }}
           >
+            <button
+              type="button"
+              className="avote-event-card-toggle"
+              aria-expanded={detailsOpen}
+              aria-label={
+                detailsOpen
+                  ? "Replier les détails de l’événement"
+                  : "Déplier les détails de l’événement"
+              }
+              data-testid="event-card-toggle"
+              onClick={() => setDetailsOpen((v) => !v)}
+              style={{
+                flexShrink: 0,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "2rem",
+                height: "2rem",
+                padding: 0,
+                borderRadius: "8px",
+                border: "1px solid #e2e8f0",
+                background: "#f8fafc",
+                color: "#334155",
+                fontSize: "0.85rem",
+                fontWeight: 800,
+                cursor: "pointer",
+              }}
+            >
+              {detailsOpen ? "▾" : "▸"}
+            </button>
             {editingTitle ? (
               <input
                 ref={titleInputRef}
@@ -347,7 +399,7 @@ export function EventDashboardCard({
                 {ev.title}
               </h2>
             )}
-            {!editingTitle && canRename ? (
+            {!editingTitle && detailsOpen && canRename ? (
               <button
                 type="button"
                 onClick={startTitleEdit}
@@ -374,7 +426,7 @@ export function EventDashboardCard({
                 ✏️
               </button>
             ) : null}
-            {!editingTitle && canShowTelecommandeQr ? (
+            {!editingTitle && detailsOpen && canShowTelecommandeQr ? (
               <button
                 type="button"
                 onClick={() => setTelecommandeQrOpen(true)}
@@ -459,6 +511,45 @@ export function EventDashboardCard({
         </span>
       </div>
 
+      {!detailsOpen ? (
+        <div
+          className="avote-event-card-summary"
+          data-testid="event-card-collapsed-summary"
+          style={{
+            display: "grid",
+            gap: "0.2rem",
+            marginBottom: "0.75rem",
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontSize: "0.8rem",
+              color: "#64748b",
+              fontWeight: 600,
+              lineHeight: 1.35,
+            }}
+          >
+            {[visibilityLabel, dateSummary].filter(Boolean).join(" · ")}
+          </p>
+          {participantsSummary || votesSummary ? (
+            <p
+              style={{
+                margin: 0,
+                fontSize: "0.8rem",
+                color: "#475569",
+                fontWeight: 600,
+                lineHeight: 1.35,
+              }}
+            >
+              {[participantsSummary, votesSummary].filter(Boolean).join(" · ")}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Toujours monté : conserve renommage / réglages en cours au repli */}
+      <div hidden={!detailsOpen} data-testid="event-card-details">
       <p
         style={{
           margin: "0 0 0.35rem",
@@ -585,45 +676,13 @@ export function EventDashboardCard({
 
       <div
         style={{
-          marginTop: "auto",
           display: "flex",
           flexDirection: "column",
           gap: "0.55rem",
+          marginBottom: "0.55rem",
         }}
-        className="avote-event-card-actions"
+        className="avote-event-card-secondary-actions"
       >
-        <Link
-          href={`/admin/event/${ev.id}`}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            minHeight: "44px",
-            padding: "0.72rem 1rem",
-            fontSize: "0.88rem",
-            fontWeight: 800,
-            borderRadius: "10px",
-            textDecoration: "none",
-            border: "1px solid #1e40af",
-            background: "linear-gradient(180deg, #2563eb, #1d4ed8)",
-            color: "#fff",
-            boxShadow: "0 2px 10px rgba(37, 99, 235, 0.32)",
-            boxSizing: "border-box",
-            textAlign: "center",
-          }}
-        >
-          Ouvrir la régie
-        </Link>
-
-        {canShowTelecommandeQr ? (
-          <TelecommandeQrModal
-            open={telecommandeQrOpen}
-            onClose={() => setTelecommandeQrOpen(false)}
-            eventId={ev.id}
-            eventTitle={ev.title}
-          />
-        ) : null}
-
         <div
           style={{
             display: "grid",
@@ -887,6 +946,50 @@ export function EventDashboardCard({
           </>
         )}
       </div>
+      </div>
+
+      <div
+        style={{
+          marginTop: "auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.55rem",
+        }}
+        className="avote-event-card-actions"
+      >
+        <Link
+          href={`/admin/event/${ev.id}`}
+          data-testid="event-card-regie"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: "44px",
+            padding: "0.72rem 1rem",
+            fontSize: "0.88rem",
+            fontWeight: 800,
+            borderRadius: "10px",
+            textDecoration: "none",
+            border: "1px solid #1e40af",
+            background: "linear-gradient(180deg, #2563eb, #1d4ed8)",
+            color: "#fff",
+            boxShadow: "0 2px 10px rgba(37, 99, 235, 0.32)",
+            boxSizing: "border-box",
+            textAlign: "center",
+          }}
+        >
+          Ouvrir la régie
+        </Link>
+
+        {canShowTelecommandeQr ? (
+          <TelecommandeQrModal
+            open={telecommandeQrOpen}
+            onClose={() => setTelecommandeQrOpen(false)}
+            eventId={ev.id}
+            eventTitle={ev.title}
+          />
+        ) : null}
+      </div>
 
       <style>{`
         .avote-event-card {
@@ -907,6 +1010,9 @@ export function EventDashboardCard({
             box-shadow 0.2s ease-out,
             border-color 0.22s ease-out,
             background 0.22s ease-out;
+        }
+        .avote-event-card--collapsed {
+          padding: 1rem 1.15rem;
         }
         .avote-event-card--featured {
           border: 1px solid color-mix(in srgb, #2563eb 38%, #e2e8f0);
