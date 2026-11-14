@@ -51,6 +51,7 @@
     "test:ux-lot3-landing-feed": "node scripts/test-ux-lot3-landing-feed.mjs",
     "test:ux-lot4-regie-flow": "node scripts/test-ux-lot4-regie-flow.mjs",
     "test:ux-lot5-mes-discover": "node scripts/test-ux-lot5-mes-discover.mjs",
+    "test:ux-collapsible-admin-blocks": "node scripts/test-ux-collapsible-admin-blocks.mjs",
     "test:forgot-password-ui": "node scripts/test-forgot-password-ui.mjs",
     "test:regie-projection-screens-count": "node scripts/test-regie-projection-screens-count.mjs",
 
