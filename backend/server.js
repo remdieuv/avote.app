@@ -176,6 +176,21 @@ const {
   isContestPoll: isSkipContestPoll,
   isContestQuotaReached,
 } = require("./lib/skipEventPoll");
+const {
+  voteSessionRateLimitKey,
+  voteIpRateLimitKey,
+} = require("./lib/voteRateLimitKeys");
+const {
+  countDistinctParticipantsForEvent,
+  fetchPollVoteAggregates,
+  fetchEventOptionVoteCounts,
+  fetchEventVoteParticipantCounts,
+  attachVoteAggregatesToPoll,
+  resolveVoteCountsFromPoll,
+} = require("./lib/voteAggregates");
+const {
+  createPollUpdatedCoalescer,
+} = require("./lib/pollUpdatedCoalesce");
 
 /** Anti double-clic rejeu TEST (sérialise par pollId). */
 const runReplayTestExclusive = createPollExclusiveQueue();
@@ -526,11 +541,28 @@ const uploadMiddleware = multer({
 const app = express();
 app.set("trust proxy", 1);
 
-const voteLimiter = rateLimit({
+/**
+ * Anti-abus vote : clé principale = voterSessionId (Wi‑Fi partagé OK).
+ * Plafond IP large : freine un flood bot sans bloquer une salle sur une IP.
+ */
+const voteSessionLimiter = rateLimit({
   windowMs: 1000,
-  max: 5,
+  max: 8,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: voteSessionRateLimitKey,
+  validate: { keyGeneratorIpFallback: false },
+  message: { error: "Trop de tentatives de vote. Réessayez." },
+});
+
+const voteIpBurstLimiter = rateLimit({
+  windowMs: 1000,
+  max: 400,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: voteIpRateLimitKey,
+  validate: { keyGeneratorIpFallback: false },
+  message: { error: "Trop de votes depuis ce réseau. Réessayez." },
 });
 
 const authAttemptLimiter = rateLimit({
@@ -823,15 +855,10 @@ function pollToJson(poll) {
   const eventDisplayStateUpper = String(poll?.event?.displayState || "").toUpperCase();
   const maskResultsInTestMode = eventIsTestMode && eventDisplayStateUpper === "RESULTS";
 
-  const voteCounts = {};
-  /** Participants distincts ayant voté (1 voterSessionId = 1, même en MULTIPLE_CHOICE). */
-  const uniqueVoterSessions = new Set();
-  for (const v of poll.votes || []) {
-    voteCounts[v.optionId] = (voteCounts[v.optionId] || 0) + 1;
-    if (v.voterSessionId != null && String(v.voterSessionId).trim()) {
-      uniqueVoterSessions.add(String(v.voterSessionId));
-    }
-  }
+  /** Agrégats SQL attachés, ou fallback lignes `votes` (landing legacy). */
+  const resolved = resolveVoteCountsFromPoll(poll);
+  const voteCounts = resolved.voteCounts;
+  const uniqueVotersCount = resolved.votersCount;
 
   // En mode TEST + RESULTS : bucket /10 pour obscurcir, mais totaux < 10 restent bruts
   // (sinon 1 vote → 0 et régie/Salle/screen divergent).
@@ -907,7 +934,7 @@ function pollToJson(poll) {
      * Nombre de participants ayant voté (distinct voterSessionId).
      * Screen VOTING : à préférer à la somme des options (MULTIPLE_CHOICE).
      */
-    votersCount: uniqueVoterSessions.size,
+    votersCount: uniqueVotersCount,
     /**
      * Compteur CRM Lead / inscriptions Concours (LeadCapture).
      * Screen Lead : compteur global sans répartition ni PII.
@@ -950,15 +977,17 @@ function shouldScheduleAutoRevealForPoll(poll) {
 }
 
 async function loadPollFull(pollId) {
-  return prisma.poll.findUnique({
+  const poll = await prisma.poll.findUnique({
     where: { id: pollId },
     include: {
       event: true,
       options: { orderBy: { order: "asc" } },
-      votes: true,
       _count: { select: { contestWinners: true, leads: true } },
     },
   });
+  if (!poll) return null;
+  const aggregates = await fetchPollVoteAggregates(prisma, pollId);
+  return attachVoteAggregatesToPoll(poll, aggregates);
 }
 
 async function loadPublicPollPourSlug(slug) {
@@ -977,7 +1006,6 @@ async function loadPublicPollPourSlug(slug) {
     include: {
       event: true,
       options: { orderBy: { order: "asc" } },
-      votes: true,
       _count: { select: { contestWinners: true, leads: true } },
     },
   });
@@ -989,7 +1017,8 @@ async function loadPublicPollPourSlug(slug) {
     if (poll.status !== "ACTIVE") {
       return null;
     }
-    return poll;
+    const aggregates = await fetchPollVoteAggregates(prisma, poll.id);
+    return attachVoteAggregatesToPoll(poll, aggregates);
   }
 
   /**
@@ -1000,7 +1029,8 @@ async function loadPublicPollPourSlug(slug) {
   if (poll.status !== "ACTIVE" && poll.status !== "CLOSED") {
     return null;
   }
-  return poll;
+  const aggregates = await fetchPollVoteAggregates(prisma, poll.id);
+  return attachVoteAggregatesToPoll(poll, aggregates);
 }
 
 /**
@@ -1026,10 +1056,11 @@ async function loadPublicPollByIdForEventSlug(slug, pollId) {
     include: {
       event: true,
       options: { orderBy: { order: "asc" } },
-      votes: true,
     },
   });
-  return poll || null;
+  if (!poll) return null;
+  const aggregates = await fetchPollVoteAggregates(prisma, poll.id);
+  return attachVoteAggregatesToPoll(poll, aggregates);
 }
 
 async function submitVote(input) {
@@ -1152,12 +1183,10 @@ async function submitVote(input) {
     });
 
     if (!participantExistsOnEvent) {
-      const participantsUsedRows = await tx.vote.findMany({
-        where: { poll: { eventId } },
-        distinct: ["voterSessionId"],
-        select: { voterSessionId: true },
-      });
-      const participantsUsed = participantsUsedRows.length;
+      const participantsUsed = await countDistinctParticipantsForEvent(
+        tx,
+        eventId,
+      );
       const participantsLimit = Math.max(1, Number(event.participantsLimit || 500));
       if (participantsUsed >= participantsLimit) {
         await tx.event.update({
@@ -1220,6 +1249,10 @@ async function submitVote(input) {
 /** @param {import("socket.io").Server} io */
 async function emitPollUpdated(io, pollId) {
   try {
+    // Chemins critiques : annuler un coalesce en attente puis emit immédiat (relecture DB).
+    if (pollUpdatedCoalescer) {
+      pollUpdatedCoalescer.cancel(pollId);
+    }
     const poll = await loadPollFull(pollId);
     if (poll) {
       io.to(roomPourPoll(pollId)).emit("poll_updated", pollToJson(poll));
@@ -1228,6 +1261,23 @@ async function emitPollUpdated(io, pollId) {
     console.error("emitPollUpdated", e);
   }
 }
+
+/**
+ * Burst de votes : coalesce `poll_updated` (relecture DB au flush).
+ * Ne pas utiliser pour open/close/reveal/patch/tirage.
+ * @param {import("socket.io").Server} io
+ * @param {string} pollId
+ */
+function schedulePollUpdatedAfterVote(io, pollId) {
+  if (!pollUpdatedCoalescer) {
+    void emitPollUpdated(io, pollId);
+    return;
+  }
+  pollUpdatedCoalescer.schedule(String(pollId || ""));
+}
+
+/** @type {ReturnType<typeof createPollUpdatedCoalescer> | null} */
+let pollUpdatedCoalescer = null;
 
 /**
  * Anciens événements : liveState VOTING alors que le vote est fermé et l’affichage en attente.
@@ -1282,6 +1332,11 @@ async function loadEventLiveUpdatedBundle(eventId) {
 async function emitEventLiveUpdated(io, eventId) {
   const bundle = await loadEventLiveUpdatedBundle(eventId);
   if (!bundle) return;
+
+  // Transition critique : annuler un poll_updated coalescé en attente.
+  if (bundle.activePollId && pollUpdatedCoalescer) {
+    pollUpdatedCoalescer.cancel(bundle.activePollId);
+  }
 
   io.to(roomPourEvent(eventId)).emit("event_live_updated", bundle.payload);
 
@@ -2070,58 +2125,39 @@ async function listEventsForAdmin(userId) {
     },
   });
 
-  const pollIds = events.flatMap((e) => e.polls.map((p) => p.id));
-  /** @type {Map<string, number>} */
-  const votesByEventId = new Map();
-  /** @type {Map<string, Set<string>>} */
-  const participantsByEventId = new Map();
-  for (const e of events) {
-    votesByEventId.set(e.id, 0);
-    participantsByEventId.set(e.id, new Set());
-  }
+  const countsByEvent = await fetchEventVoteParticipantCounts(
+    prisma,
+    events.map((e) => e.id),
+  );
 
-  if (pollIds.length > 0) {
-    const voteRows = await prisma.vote.findMany({
-      where: { pollId: { in: pollIds } },
-      select: { pollId: true, voterSessionId: true },
-    });
-    /** @type {Map<string, string>} */
-    const pollToEvent = new Map();
-    for (const ev of events) {
-      for (const p of ev.polls) {
-        pollToEvent.set(p.id, ev.id);
-      }
-    }
-    for (const v of voteRows) {
-      const eid = pollToEvent.get(v.pollId);
-      if (!eid) continue;
-      votesByEventId.set(eid, (votesByEventId.get(eid) || 0) + 1);
-      participantsByEventId.get(eid)?.add(v.voterSessionId);
-    }
-  }
-
-  return events.map((e) => ({
-    id: e.id,
-    title: e.title,
-    slug: e.slug,
-    createdAt: e.createdAt.toISOString(),
-    liveState: String(e.liveState).toLowerCase(),
-    voteState: String(e.voteState).toLowerCase(),
-    displayState: String(e.displayState).toLowerCase(),
-    landingEnabled: Boolean(e.landingEnabled),
-    ...visibilityApiFields(e.visibility),
-    city: e.city ?? null,
-    startsAt: e.startsAt ? e.startsAt.toISOString() : null,
-    primaryThemeId: e.primaryThemeId ?? null,
-    secondaryThemeId: e.secondaryThemeId ?? null,
-    organizerProfileId: e.organizerProfileId ?? null,
-    discoverEligible: isDiscoverEligible(e),
-    pollCount: e.polls.length,
-    voteCount: votesByEventId.get(e.id) || 0,
-    participantCount: participantsByEventId.get(e.id)?.size || 0,
-    participantsUsed: participantsByEventId.get(e.id)?.size || 0,
-    participantsLimit: Number(e.participantsLimit || 500),
-  }));
+  return events.map((e) => {
+    const counts = countsByEvent.get(e.id) || {
+      voteCount: 0,
+      participantCount: 0,
+    };
+    return {
+      id: e.id,
+      title: e.title,
+      slug: e.slug,
+      createdAt: e.createdAt.toISOString(),
+      liveState: String(e.liveState).toLowerCase(),
+      voteState: String(e.voteState).toLowerCase(),
+      displayState: String(e.displayState).toLowerCase(),
+      landingEnabled: Boolean(e.landingEnabled),
+      ...visibilityApiFields(e.visibility),
+      city: e.city ?? null,
+      startsAt: e.startsAt ? e.startsAt.toISOString() : null,
+      primaryThemeId: e.primaryThemeId ?? null,
+      secondaryThemeId: e.secondaryThemeId ?? null,
+      organizerProfileId: e.organizerProfileId ?? null,
+      discoverEligible: isDiscoverEligible(e),
+      pollCount: e.polls.length,
+      voteCount: counts.voteCount,
+      participantCount: counts.participantCount,
+      participantsUsed: counts.participantCount,
+      participantsLimit: Number(e.participantsLimit || 500),
+    };
+  });
 }
 
 /** Liste des événements (admin / « Mes événements ») */
@@ -4070,22 +4106,15 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
       return res.status(404).json({ error: "Événement introuvable." });
     }
     await repairStaleVotingLiveState(event);
-    const participantsDistinct = await prisma.vote.findMany({
-      where: { poll: { eventId: event.id } },
-      distinct: ["voterSessionId"],
-      select: { voterSessionId: true },
-    });
+    const participantsUsed = await countDistinctParticipantsForEvent(
+      prisma,
+      event.id,
+    );
     /** Régie « Réponses en direct » : totaux bruts par option (pas de mask TEST). */
-    const optionVoteRows = await prisma.vote.findMany({
-      where: { poll: { eventId: event.id } },
-      select: { optionId: true },
-    });
-    const optionVoteCounts = {};
-    for (const row of optionVoteRows) {
-      const oid = row.optionId;
-      if (!oid) continue;
-      optionVoteCounts[oid] = (optionVoteCounts[oid] || 0) + 1;
-    }
+    const optionVoteCounts = await fetchEventOptionVoteCounts(
+      prisma,
+      event.id,
+    );
     return res.json({
       id: event.id,
       title: event.title,
@@ -4107,7 +4136,7 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
         : null,
       activePollId: event.activePollId,
       participantsLimit: Number(event.participantsLimit || 500),
-      participantsUsed: participantsDistinct.length,
+      participantsUsed,
       eventPlanType: event.eventPlanType ? String(event.eventPlanType) : null,
       isLiveConsumed: Boolean(event.isLiveConsumed),
       isLocked: Boolean(event.isLocked),
@@ -8048,7 +8077,11 @@ app.patch("/polls/:pollId", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/polls/:pollId/vote", voteLimiter, async (req, res) => {
+app.post(
+  "/polls/:pollId/vote",
+  voteIpBurstLimiter,
+  voteSessionLimiter,
+  async (req, res) => {
   const pollId = req.params.pollId;
   const body = req.body ?? {};
 
@@ -8103,10 +8136,8 @@ app.post("/polls/:pollId/vote", voteLimiter, async (req, res) => {
     if (result.ok) {
       const poll = await loadPollFull(pollId);
       res.json(pollToJson(poll));
-
-      void emitPollUpdated(io, pollId).catch((e) =>
-        console.error("emitPollUpdated (vote)", e),
-      );
+      // Fan-out room coalescé ; réponse HTTP déjà à jour pour le votant.
+      schedulePollUpdatedAfterVote(io, pollId);
       return;
     }
 
@@ -10313,6 +10344,20 @@ const io = new Server(server, {
     origin: resolveCorsOrigin,
     methods: ["GET", "POST"],
     credentials: true,
+  },
+});
+
+pollUpdatedCoalescer = createPollUpdatedCoalescer({
+  delayMs: 150,
+  emit: async (pollId) => {
+    try {
+      const poll = await loadPollFull(pollId);
+      if (poll) {
+        io.to(roomPourPoll(pollId)).emit("poll_updated", pollToJson(poll));
+      }
+    } catch (e) {
+      console.error("pollUpdatedCoalescer emit", e);
+    }
   },
 });
 
