@@ -40,20 +40,20 @@ test("0 activation : messages non anxiogènes + MODE TEST gratuit", () => {
   assert.match(REGIE_NO_ACTIVATION_STATUS, /gratuit|OK/i);
   assert.doesNotMatch(REGIE_NO_ACTIVATION_STATUS, /^Aucune activation disponible$/);
   assert.match(REGIE_NO_ACTIVATION_HINT, /live réel/i);
-  assert.match(ACCOUNT_NO_ACTIVATION_TITLE, /0 activation|gratuit/i);
+  assert.match(ACCOUNT_NO_ACTIVATION_TITLE, /0 pack|gratuit/i);
   assert.match(ACCOUNT_NO_ACTIVATION_BODY, /MODE TEST/i);
   assert.match(ACCOUNT_NO_ACTIVATION_BODY, /live réel/i);
   assert.match(getRegieTestModeHelpLine(), /Répétition|gratuit/i);
   assert.match(REGIE_START_REAL_MODAL_INTRO, /MODE TEST/i);
-  assert.match(REGIE_START_REAL_MODAL_INTRO, /activation/i);
+  assert.match(REGIE_START_REAL_MODAL_INTRO, /pack|activation/i);
 });
 
 test("Compte : explain 0 vs avec activations", () => {
   const empty = getAccountActivationExplain({ hasActivation: false });
   assert.equal(empty.title, ACCOUNT_NO_ACTIVATION_TITLE);
-  assert.match(empty.body, /sans activation|MODE TEST/i);
+  assert.match(empty.body, /sans paiement|sans activation|MODE TEST/i);
   const filled = getAccountActivationExplain({ hasActivation: true });
-  assert.match(filled.title, /activations/i);
+  assert.match(filled.title, /packs|activations/i);
   assert.match(filled.body, /live réel/i);
 });
 

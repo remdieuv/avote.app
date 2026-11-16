@@ -28,6 +28,11 @@ import {
 } from "@/lib/forms/formUsage";
 import { computeActivationBalance } from "@/lib/activationBalance";
 import {
+  PARTICIPANT_PACK_SIZES,
+  PARTICIPANT_PACKS,
+  parseParticipantPackSize,
+} from "@/lib/participantPacks";
+import {
   shouldClearRegieEventLoadingAfterFetch,
   shouldRenderRegieEventBody,
 } from "@/lib/regieEventLoad";
@@ -4962,9 +4967,13 @@ export default function RegieEventPage() {
   const [eventData, setEventData] = useState(null);
   const [eventCredits, setEventCredits] = useState(/** @type {number | null} */ (null));
   const [activationsAvailable, setActivationsAvailable] = useState(
-    /** @type {{ FUN: number; EVENT: number } | null} */ (null),
+    /** @type {Record<string, number> | null} */ (null),
   );
   const [startRealPlanModalOpen, setStartRealPlanModalOpen] = useState(false);
+  const [topupModalOpen, setTopupModalOpen] = useState(false);
+  const [topupBusyPack, setTopupBusyPack] = useState(
+    /** @type {number | null} */ (null),
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionError, setActionError] = useState(null);
@@ -5174,16 +5183,30 @@ export default function RegieEventPage() {
             : null;
       setEventCredits(raw == null ? null : Math.max(0, Number(raw)));
       const avail =
-        body?.activationsAvailable ?? body?.user?.activationsAvailable ?? null;
+        body?.activationsByPack ??
+        body?.activationsAvailable ??
+        body?.user?.activationsByPack ??
+        body?.user?.activationsAvailable ??
+        null;
       if (avail && typeof avail === "object") {
-        const funRaw = Number(avail.FUN);
-        const eventRaw = Number(avail.EVENT);
-        setActivationsAvailable({
-          FUN: Number.isFinite(funRaw) ? Math.max(0, funRaw) : 0,
-          EVENT: Number.isFinite(eventRaw) ? Math.max(0, eventRaw) : 0,
-        });
+        /** @type {Record<string, number>} */
+        const next = {};
+        for (const size of PARTICIPANT_PACK_SIZES) {
+          const raw = Number(avail[String(size)]);
+          next[String(size)] = Number.isFinite(raw) ? Math.max(0, Math.trunc(raw)) : 0;
+        }
+        // legacy FUN/EVENT
+        if (Object.values(next).every((n) => n === 0)) {
+          const funRaw = Number(avail.FUN);
+          const eventRaw = Number(avail.EVENT);
+          if (Number.isFinite(funRaw) && funRaw > 0) next["100"] = Math.trunc(funRaw);
+          if (Number.isFinite(eventRaw) && eventRaw > 0) next["500"] = Math.trunc(eventRaw);
+        }
+        setActivationsAvailable(next);
       } else {
-        setActivationsAvailable({ FUN: 0, EVENT: 0 });
+        setActivationsAvailable(
+          Object.fromEntries(PARTICIPANT_PACK_SIZES.map((s) => [String(s), 0])),
+        );
       }
     } catch {
       /* ignore */
@@ -5296,6 +5319,27 @@ export default function RegieEventPage() {
       loadPollAbortRef.current?.abort();
     };
   }, [fetchEvent, fetchMeCredits]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !eventId) return;
+    const params = new URLSearchParams(window.location.search);
+    const topup = String(params.get("topup") || "").toLowerCase();
+    if (!topup) return;
+    if (topup === "ok") {
+      setToastNotif("Recharge confirmée — capacité mise à jour");
+      window.setTimeout(() => setToastNotif(null), 3200);
+      void fetchEvent({ silent: true });
+    } else if (topup === "cancel") {
+      setToastNotif("Recharge annulée");
+      window.setTimeout(() => setToastNotif(null), 2800);
+    }
+    params.delete("topup");
+    params.delete("pack");
+    params.delete("session_id");
+    const qs = params.toString();
+    const next = `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash || ""}`;
+    window.history.replaceState({}, "", next);
+  }, [eventId, fetchEvent]);
 
   useEffect(() => {
     if (!eventId || typeof window === "undefined") return;
@@ -5947,26 +5991,24 @@ export default function RegieEventPage() {
     }
   }
 
-  /** @returns {("FUN" | "EVENT")[]} */
-  function getStartRealPlanOptions() {
+  /** @returns {number[]} */
+  function getStartRealPackOptions() {
     const balance = computeActivationBalance(eventCredits, activationsAvailable);
-    const fun = balance.fun ?? 0;
-    const event = balance.event ?? 0;
-    const legacy = balance.legacyCredits ?? 0;
-    /** @type {("FUN" | "EVENT")[]} */
+    /** @type {number[]} */
     const options = [];
-    if (fun > 0) options.push("FUN");
-    if (event > 0) options.push("EVENT");
-    if (legacy > 0) {
-      if (!options.includes("FUN")) options.push("FUN");
-      if (!options.includes("EVENT")) options.push("EVENT");
+    for (const size of PARTICIPANT_PACK_SIZES) {
+      const n = Number(balance.byPack?.[String(size)] || 0);
+      if (n > 0) options.push(size);
+    }
+    if (options.length === 0 && (balance.legacyCredits ?? 0) > 0) {
+      return [...PARTICIPANT_PACK_SIZES];
     }
     return options;
   }
 
   function handleStartRealClick() {
     if (!canStartReal || busy) return;
-    const options = getStartRealPlanOptions();
+    const options = getStartRealPackOptions();
     if (options.length === 0) return;
     if (options.length === 1) {
       void startRealLive(options[0]);
@@ -5975,11 +6017,13 @@ export default function RegieEventPage() {
     setStartRealPlanModalOpen(true);
   }
 
-  /** @param {"FUN" | "EVENT"} planType */
-  async function startRealLive(planType) {
+  /** @param {number} pack */
+  async function startRealLive(pack) {
     if (!eventId || !canStartReal) return;
+    const packSize = parseParticipantPackSize(pack);
+    if (!packSize) return;
     if (typeof window !== "undefined") {
-      const ok = window.confirm(getStartRealConfirmMessage(planType));
+      const ok = window.confirm(getStartRealConfirmMessage(packSize));
       if (!ok) return;
     }
     setStartRealPlanModalOpen(false);
@@ -5992,7 +6036,7 @@ export default function RegieEventPage() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ planType }),
+          body: JSON.stringify({ pack: packSize }),
         },
       );
       const body = await res.json().catch(() => ({}));
@@ -6002,23 +6046,55 @@ export default function RegieEventPage() {
       if (typeof body?.eventCredits === "number") {
         setEventCredits(Math.max(0, Number(body.eventCredits)));
       }
-      if (body?.activationsAvailable && typeof body.activationsAvailable === "object") {
-        const funRaw = Number(body.activationsAvailable.FUN);
-        const eventRaw = Number(body.activationsAvailable.EVENT);
-        setActivationsAvailable({
-          FUN: Number.isFinite(funRaw) ? Math.max(0, funRaw) : 0,
-          EVENT: Number.isFinite(eventRaw) ? Math.max(0, eventRaw) : 0,
-        });
+      const avail = body?.activationsByPack ?? body?.activationsAvailable;
+      if (avail && typeof avail === "object") {
+        /** @type {Record<string, number>} */
+        const next = {};
+        for (const size of PARTICIPANT_PACK_SIZES) {
+          const raw = Number(avail[String(size)]);
+          next[String(size)] = Number.isFinite(raw) ? Math.max(0, Math.trunc(raw)) : 0;
+        }
+        setActivationsAvailable(next);
       } else {
         await fetchMeCredits();
       }
       await fetchEvent({ silent: true });
-      setToastNotif(`Mode réel activé (${planType})`);
+      setToastNotif(`Mode réel activé (${packSize} participants)`);
       window.setTimeout(() => setToastNotif(null), 2800);
     } catch (e) {
       setActionError(e.message || "Activation du mode réel impossible.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  /** @param {number} pack */
+  async function startTopupCheckout(pack) {
+    if (!eventId || !eventData?.isLiveConsumed || eventLocked) return;
+    const packSize = parseParticipantPackSize(pack);
+    if (!packSize || topupBusyPack != null) return;
+    setTopupBusyPack(packSize);
+    setActionError(null);
+    try {
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/events/${eventId}/billing/create-topup-session`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pack: packSize }),
+        },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || typeof body?.url !== "string" || !body.url) {
+        throw new Error(
+          body?.message || body?.error || "Impossible de lancer la recharge.",
+        );
+      }
+      setTopupModalOpen(false);
+      window.location.href = body.url;
+    } catch (e) {
+      setActionError(e.message || "Recharge impossible.");
+      setTopupBusyPack(null);
     }
   }
 
@@ -6505,17 +6581,34 @@ export default function RegieEventPage() {
   const inTestMode = eventData?.isLiveConsumed === false;
   const canStartReal = inTestMode && !eventLocked;
   const activationBalance = computeActivationBalance(eventCredits, activationsAvailable);
-  const funAvailable = activationBalance.fun;
-  const eventAvailable = activationBalance.event;
   const activationsLoaded = activationBalance.typedLoaded;
   const totalAvailable = activationBalance.totalAvailable;
   const canStartRealWithActivation =
     activationsLoaded && totalAvailable !== null && totalAvailable > 0;
   const startRealDisabled = busy || !canStartRealWithActivation;
-  const startRealPlanOptions = getStartRealPlanOptions();
+  const startRealPackOptions = getStartRealPackOptions();
   const eventPlanType = eventData?.eventPlanType
     ? String(eventData.eventPlanType).toUpperCase()
     : null;
+  const eventPackSize =
+    parseParticipantPackSize(
+      eventData?.participantsLimit != null && !inTestMode
+        ? eventData.participantsLimit
+        : null,
+    ) ||
+    (eventPlanType === "P50"
+      ? 50
+      : eventPlanType === "P100" || eventPlanType === "FUN"
+        ? 100
+        : eventPlanType === "P250"
+          ? 250
+          : eventPlanType === "P500" || eventPlanType === "EVENT"
+            ? 500
+            : eventPlanType === "P1000"
+              ? 1000
+              : null);
+  const canTopupCapacity =
+    Boolean(eventData?.isLiveConsumed) && !eventFinished && !eventLocked;
   const canGoNextBase =
     !busy && !eventFinished && totalQuestions > 0 && !eventLocked;
 
@@ -8786,7 +8879,7 @@ export default function RegieEventPage() {
                 letterSpacing: "-0.02em",
               }}
             >
-              Choisissez une formule pour cet événement
+              Choisissez un pack pour cet événement
             </h3>
             <p
               style={{
@@ -8799,62 +8892,38 @@ export default function RegieEventPage() {
               {REGIE_START_REAL_MODAL_INTRO}
             </p>
             <div style={{ display: "grid", gap: "0.65rem" }}>
-              {startRealPlanOptions.includes("FUN") ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void startRealLive("FUN")}
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "flex-start",
-                    gap: "0.2rem",
-                    width: "100%",
-                    padding: "0.75rem 0.9rem",
-                    borderRadius: "12px",
-                    border: "1px solid #fcd34d",
-                    background: "linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%)",
-                    color: "#78350f",
-                    fontWeight: 800,
-                    fontSize: "0.9rem",
-                    cursor: busy ? "not-allowed" : "pointer",
-                    textAlign: "left",
-                  }}
-                >
-                  <span>FUN</span>
-                  <span style={{ fontSize: "0.78rem", fontWeight: 700, opacity: 0.9 }}>
-                    Jusqu’à 100 participants
-                  </span>
-                </button>
-              ) : null}
-              {startRealPlanOptions.includes("EVENT") ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void startRealLive("EVENT")}
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "flex-start",
-                    gap: "0.2rem",
-                    width: "100%",
-                    padding: "0.75rem 0.9rem",
-                    borderRadius: "12px",
-                    border: "1px solid #c4b5fd",
-                    background: "linear-gradient(180deg, #faf5ff 0%, #ede9fe 100%)",
-                    color: "#5b21b6",
-                    fontWeight: 800,
-                    fontSize: "0.9rem",
-                    cursor: busy ? "not-allowed" : "pointer",
-                    textAlign: "left",
-                  }}
-                >
-                  <span>EVENT</span>
-                  <span style={{ fontSize: "0.78rem", fontWeight: 700, opacity: 0.9 }}>
-                    Jusqu’à 500 participants
-                  </span>
-                </button>
-              ) : null}
+              {startRealPackOptions.map((size) => {
+                const meta = PARTICIPANT_PACKS[size];
+                return (
+                  <button
+                    key={size}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void startRealLive(size)}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "flex-start",
+                      gap: "0.2rem",
+                      width: "100%",
+                      padding: "0.75rem 0.9rem",
+                      borderRadius: "12px",
+                      border: "1px solid #c4b5fd",
+                      background: "linear-gradient(180deg, #faf5ff 0%, #ede9fe 100%)",
+                      color: "#5b21b6",
+                      fontWeight: 800,
+                      fontSize: "0.9rem",
+                      cursor: busy ? "not-allowed" : "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    <span>{meta.label}</span>
+                    <span style={{ fontSize: "0.78rem", fontWeight: 700, opacity: 0.9 }}>
+                      {meta.priceLabel} TTC
+                    </span>
+                  </button>
+                );
+              })}
             </div>
             <button
               type="button"
@@ -8869,6 +8938,118 @@ export default function RegieEventPage() {
                 fontSize: "0.82rem",
                 fontWeight: 700,
                 cursor: busy ? "not-allowed" : "pointer",
+              }}
+            >
+              Annuler
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {topupModalOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="topup-pack-title"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 10009,
+            background: "rgba(15, 23, 42, 0.48)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+            boxSizing: "border-box",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && topupBusyPack == null) {
+              setTopupModalOpen(false);
+            }
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "26rem",
+              borderRadius: "16px",
+              background: "#fff",
+              border: "1px solid #ddd6fe",
+              boxShadow: "0 24px 60px rgba(76, 29, 149, 0.22)",
+              padding: "1.15rem 1.2rem",
+            }}
+          >
+            <h3
+              id="topup-pack-title"
+              style={{
+                margin: 0,
+                fontSize: "1.05rem",
+                fontWeight: 850,
+                color: "#0f172a",
+                letterSpacing: "-0.02em",
+              }}
+            >
+              Ajouter des participants
+            </h3>
+            <p
+              style={{
+                margin: "0.5rem 0 0.35rem",
+                fontSize: "0.86rem",
+                color: "#64748b",
+                lineHeight: 1.45,
+              }}
+            >
+              Capacité actuelle : {effectiveParticipantsUsed}
+              {hasParticipantsLimit ? ` / ${participantsLimitValue}` : ""}. Les packs s’additionnent après confirmation du paiement.
+            </p>
+            <div style={{ display: "grid", gap: "0.65rem", marginTop: "0.85rem" }}>
+              {PARTICIPANT_PACK_SIZES.map((size) => {
+                const meta = PARTICIPANT_PACKS[size];
+                const busyPack = topupBusyPack === size;
+                return (
+                  <button
+                    key={size}
+                    type="button"
+                    disabled={topupBusyPack != null}
+                    onClick={() => void startTopupCheckout(size)}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "flex-start",
+                      gap: "0.2rem",
+                      width: "100%",
+                      padding: "0.75rem 0.9rem",
+                      borderRadius: "12px",
+                      border: "1px solid #c4b5fd",
+                      background: "linear-gradient(180deg, #faf5ff 0%, #ede9fe 100%)",
+                      color: "#5b21b6",
+                      fontWeight: 800,
+                      fontSize: "0.9rem",
+                      cursor: topupBusyPack != null ? "not-allowed" : "pointer",
+                      textAlign: "left",
+                      opacity: topupBusyPack != null && !busyPack ? 0.55 : 1,
+                    }}
+                  >
+                    <span>{meta.label}</span>
+                    <span style={{ fontSize: "0.78rem", fontWeight: 700, opacity: 0.9 }}>
+                      {busyPack ? "Redirection Stripe…" : `${meta.priceLabel} TTC`}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              disabled={topupBusyPack != null}
+              onClick={() => setTopupModalOpen(false)}
+              style={{
+                marginTop: "0.85rem",
+                padding: "0.45rem 0.65rem",
+                border: "none",
+                background: "transparent",
+                color: "#64748b",
+                fontSize: "0.82rem",
+                fontWeight: 700,
+                cursor: topupBusyPack != null ? "not-allowed" : "pointer",
               }}
             >
               Annuler
@@ -9705,12 +9886,18 @@ export default function RegieEventPage() {
                             color: "rgba(224, 231, 255, 0.65)",
                           }}
                         >
-                          <span>
-                            FUN disponible : {funAvailable ?? 0}
-                          </span>
-                          <span>
-                            EVENT disponible : {eventAvailable ?? 0}
-                          </span>
+                          {PARTICIPANT_PACK_SIZES.map((size) => {
+                            const n = Number(activationBalance.byPack?.[String(size)] || 0);
+                            if (n <= 0) return null;
+                            return (
+                              <span key={size}>
+                                {PARTICIPANT_PACKS[size].label} : {n}
+                              </span>
+                            );
+                          })}
+                          {totalAvailable != null ? (
+                            <span>Total packs : {totalAvailable}</span>
+                          ) : null}
                         </div>
                       ) : null}
                     </>
@@ -9731,19 +9918,21 @@ export default function RegieEventPage() {
                     { label: participantsCounterLabel, color: participantsCounterStyle.valueColor, bg: participantsCounterStyle.background, border: participantsCounterStyle.borderColor || "#cbd5e1" },
                     { label: socketStatusLabel, color: socketStatusColor, bg: socketStatusBg, border: "#cbd5e1" },
                     { label: modeBadge.label, color: modeBadge.color, bg: modeBadge.bg, border: modeBadge.border },
-                    ...(!inTestMode && eventPlanType
+                    ...(!inTestMode && hasParticipantsLimit
                       ? [
                           {
-                            label: `Formule ${eventPlanType}`,
-                            color: eventPlanType === "FUN" ? "#92400e" : "#5b21b6",
-                            bg: eventPlanType === "FUN" ? "#fef3c7" : "#ede9fe",
-                            border: eventPlanType === "FUN" ? "#fcd34d" : "#c4b5fd",
+                            label: eventPackSize
+                              ? `Pack ${eventPackSize} + recharges`
+                              : `Capacité ${participantsLimitValue}`,
+                            color: "#5b21b6",
+                            bg: "#ede9fe",
+                            border: "#c4b5fd",
                           },
                           {
-                            label: `Limite ${Number(eventData?.participantsLimit || 500)} participants`,
-                            color: "#334155",
+                            label: `Capacité ${effectiveParticipantsUsed} / ${participantsLimitValue}`,
+                            color: participantsCounterStyle.valueColor,
                             bg: "rgba(255,255,255,0.74)",
-                            border: "#cbd5e1",
+                            border: participantsCounterStyle.borderColor || "#cbd5e1",
                           },
                         ]
                       : []),
@@ -9784,6 +9973,52 @@ export default function RegieEventPage() {
                     </span>
                   ) : null}
                 </div>
+                {canTopupCapacity ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      gap: "0.55rem",
+                      marginTop: "0.35rem",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      data-testid="regie-add-participants"
+                      disabled={busy || topupBusyPack != null}
+                      onClick={() => setTopupModalOpen(true)}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: "0.42rem 0.85rem",
+                        borderRadius: "999px",
+                        border: "1px solid #c4b5fd",
+                        background: "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)",
+                        color: "#fff",
+                        fontSize: "0.76rem",
+                        fontWeight: 800,
+                        cursor: busy || topupBusyPack != null ? "not-allowed" : "pointer",
+                        opacity: busy || topupBusyPack != null ? 0.6 : 1,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Ajouter des participants
+                    </button>
+                    {participantsStatus.message ? (
+                      <span
+                        style={{
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          color: participantsCounterStyle.hintColor || "#64748b",
+                        }}
+                      >
+                        {participantsStatus.message}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
                 {inTestMode && !eventLocked ? (
                   <p
                     data-testid="regie-test-mode-help"
