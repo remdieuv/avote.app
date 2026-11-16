@@ -32,7 +32,10 @@
     "test:poll-updated-coalesce": "node scripts/test-poll-updated-coalesce.mjs",
     "test:vote-unique-migration": "node scripts/test-vote-unique-migration.mjs",
     "test:submit-vote-perf-guards": "node scripts/test-submit-vote-perf-guards.mjs",
-
+    "test:load-harness": "node scripts/test-load-harness.mjs",
+    "load:plan": "node scripts/load-harness.mjs plan",
+    "load:guard": "node scripts/load-harness.mjs guard",
+    "load:run": "node scripts/load-harness.mjs run",
     "test:forms-l1": "node scripts/test-forms-l1-form-capture.mjs",
     "test:forms-l4": "node scripts/test-forms-l4-soft-lock.mjs",
     "test:forms-l5": "node scripts/test-forms-l5-rgpd.mjs",
@@ -57,6 +60,9 @@
     "prisma": "^6.19.0",
     "socket.io": "^4.8.3",
     "stripe": "^22.1.0"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.4"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
