@@ -2,11 +2,15 @@ import Link from "next/link";
 import { LandingHeader } from "@/components/landing/LandingHeader";
 import { CheckoutEventButton } from "@/components/billing/CheckoutEventButton";
 import { marketingContentShellStyle } from "@/lib/marketingLayout";
+import {
+  PARTICIPANT_PACK_SIZES,
+  PARTICIPANT_PACKS,
+} from "@/lib/participantPacks";
 
 export const metadata = {
   title: "Tarifs Avote | Vote interactif en direct",
   description:
-    "Des tarifs simples pour vos événements en direct. Créez votre événement avec une capacité claire et un paiement unique.",
+    "Cinq packs de participants, toutes les fonctionnalités incluses. Paiement unique, recharges cumulatives.",
 };
 
 const shell = {
@@ -83,7 +87,7 @@ const plans = [
     unit: "/ événement",
     label: "Pour petits événements",
     cta: "Choisir Starter",
-    checkoutPlan: "FUN",
+    checkoutPack: 100,
     href: "/admin",
     features: [
       "1 événement",
@@ -102,7 +106,7 @@ const plans = [
     label: "Expérience live complète",
     sublabel: "Idéal pour événements publics et animations live",
     cta: "Choisir Pro Événement",
-    checkoutPlan: "EVENT",
+    checkoutPack: 500,
     href: "/admin",
     badge: "Le plus utilisé",
     featured: true,
@@ -275,9 +279,9 @@ function PlanCard({ plan }) {
         ))}
       </ul>
       <div className="pricing-card-cta">
-        {plan.checkoutPlan ? (
+        {plan.checkoutPack ? (
           <CheckoutEventButton
-            plan={plan.checkoutPlan}
+            pack={plan.checkoutPack}
             label={plan.cta}
             style={plan.featured ? btnPrimary : btnSecondary}
           />
@@ -346,10 +350,9 @@ export default function PricingPage() {
               {isLaunchMode
                 ? (
                   <>
-                    Créez un événement interactif en quelques minutes et faites participer votre audience en direct.
+                    Choisissez la capacité de votre événement. Toutes les fonctionnalités sont incluses.
                     <br />
-                    <strong>Avote FUN</strong> pour les soirées et moments privés,{" "}
-                    <strong>Avote EVENT</strong> pour conférences et formats professionnels.
+                    Paiement unique — recharges possibles pendant le live.
                   </>
                 )
                 : "Payez une seule fois pour un événement, ou choisissez un abonnement mensuel si vous utilisez Avote régulièrement."}
@@ -360,8 +363,8 @@ export default function PricingPage() {
             <div className="pricing-hero-cta">
               {isLaunchMode ? (
                 <div style={{ display: "grid", gap: "0.55rem", justifyItems: "center" }}>
-                  <Link href="#pricing-fun-event" style={btnPrimary}>
-                    Voir les formules FUN et EVENT
+                  <Link href="#pricing-packs" style={btnPrimary}>
+                    Voir les packs participants
                   </Link>
                   <p
                     style={{
@@ -371,7 +374,7 @@ export default function PricingPage() {
                       fontWeight: 800,
                     }}
                   >
-                    👉 Aucun engagement • Paiement sécurisé • Mise en ligne immédiate • Fonctionne sans application
+                    👉 Aucun engagement • Paiement sécurisé • Recharges cumulatives
                   </p>
                 </div>
               ) : (
@@ -390,77 +393,57 @@ export default function PricingPage() {
 
         {isLaunchMode ? (
           <section
-            id="pricing-fun-event"
+            id="pricing-packs"
             style={sectionY}
-            aria-labelledby="pricing-fun-event-title"
+            aria-labelledby="pricing-packs-title"
           >
-            <h2 id="pricing-fun-event-title" className="section-title">
-              Choisissez votre formule
+            <h2 id="pricing-packs-title" className="section-title">
+              Packs de participants
             </h2>
             <p className="pricing-section-subtitle">
-              Deux offres ponctuelles, un paiement unique par événement : FUN pour les moments privés, EVENT pour la salle et l’analyse après coup.
+              Cinq capacités, un même produit. Les recharges utilisent exactement ces packs et s’additionnent.
             </p>
             <div className="pricing-grid pricing-grid-fun-event">
-              <div className="pricing-card-wrap">
-                <div className="pricing-card-badge-row external">
-                  <span className="pricing-plan-badge">Soirées &amp; événements privés</span>
-                </div>
-                <article className="pricing-card pricing-card-offer">
-                  <div className="pricing-card-top">
-                    <div className="pricing-card-head">
-                      <p className="pricing-plan-name">Avote FUN</p>
-                    </div>
-                    <div className="pricing-price-box">
-                      <p className="pricing-price">
-                        <strong>19€</strong>
-                        <span>/ événement</span>
-                      </p>
-                    </div>
+              {PARTICIPANT_PACK_SIZES.map((size, index) => {
+                const meta = PARTICIPANT_PACKS[size];
+                const featured = size === 250 || size === 500;
+                return (
+                  <div className="pricing-card-wrap" key={size}>
+                    <article
+                      className={
+                        featured
+                          ? "pricing-card pricing-card-offer featured"
+                          : "pricing-card pricing-card-offer"
+                      }
+                    >
+                      <div className="pricing-card-top">
+                        <div className="pricing-card-head">
+                          <p className="pricing-plan-name">{meta.label}</p>
+                        </div>
+                        <div className="pricing-price-box">
+                          <p className="pricing-price">
+                            <strong>{meta.priceLabel}</strong>
+                            <span> TTC</span>
+                          </p>
+                        </div>
+                      </div>
+                      <ul className="pricing-features pricing-offer-features">
+                        <li>Jusqu’à {meta.label.replace(" participants", "").replace("1 000", "1000")} participants uniques</li>
+                        <li>Toutes les fonctionnalités incluses</li>
+                        <li>QR, votes live, projection, stats</li>
+                        <li>Recharge possible pendant l’événement</li>
+                      </ul>
+                      <div className="pricing-card-cta">
+                        <CheckoutEventButton
+                          pack={size}
+                          label={`Choisir ${meta.priceLabel}`}
+                          style={featured || index === 2 ? btnPrimary : btnSecondary}
+                        />
+                      </div>
+                    </article>
                   </div>
-                  <p className="pricing-offer-desc">
-                    Idéal pour EVG, EVJF, mariages, anniversaires et soirées.
-                  </p>
-                  <ul className="pricing-features pricing-offer-features">
-                    <li>Jusqu’à 100 participants uniques</li>
-                    <li>QR code + lien d’accès rapide</li>
-                    <li>Votes et résultats en direct</li>
-                    <li>Aucun abonnement</li>
-                  </ul>
-                  <div className="pricing-card-cta">
-                    <CheckoutEventButton plan="FUN" label="Activer FUN" style={btnSecondary} />
-                  </div>
-                </article>
-              </div>
-              <div className="pricing-card-wrap">
-                <div className="pricing-card-badge-row external">
-                  <span className="pricing-plan-badge">Entreprises &amp; événements pro</span>
-                </div>
-                <article className="pricing-card pricing-card-offer featured">
-                  <div className="pricing-card-top">
-                    <div className="pricing-card-head">
-                      <p className="pricing-plan-name">Avote EVENT</p>
-                    </div>
-                    <div className="pricing-price-box">
-                      <p className="pricing-price">
-                        <strong>49€</strong>
-                        <span>/ événement</span>
-                      </p>
-                    </div>
-                  </div>
-                  <p className="pricing-offer-desc">
-                    Idéal pour conférences, formations, entreprises et événements professionnels.
-                  </p>
-                  <ul className="pricing-features pricing-offer-features">
-                    <li>Jusqu’à 500 participants uniques</li>
-                    <li>Projection écran / OBS</li>
-                    <li>Personnalisation logo et couleurs</li>
-                    <li>Statistiques et export des résultats</li>
-                  </ul>
-                  <div className="pricing-card-cta">
-                    <CheckoutEventButton plan="EVENT" label="Activer EVENT" style={btnPrimary} />
-                  </div>
-                </article>
-              </div>
+                );
+              })}
             </div>
           </section>
         ) : (
@@ -603,7 +586,7 @@ export default function PricingPage() {
           <div className="pricing-bottom-reassurance">
             <span>Aucun engagement</span>
             <span>Paiement sécurisé avec Stripe</span>
-            <span>FUN ou EVENT selon vos besoins</span>
+            <span>Cinq packs selon votre capacité</span>
             <span>Fonctionne sans application</span>
           </div>
         </section>

@@ -14,6 +14,10 @@ import {
 import { ADMIN_CONTENT_MAX_FORM_NARROW } from "@/lib/adminLayout";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 import {
+  PARTICIPANT_PACK_SIZES,
+  PARTICIPANT_PACKS,
+} from "@/lib/participantPacks";
+import {
   ACCOUNT_ACTIVATIONS_INTRO,
   getAccountActivationExplain,
 } from "@/lib/testModeActivationCopy";
@@ -22,7 +26,7 @@ export default function AdminAccountPage() {
   const { user } = useAdminUser();
   const [eventCredits, setEventCredits] = useState(/** @type {number | null} */ (null));
   const [activationsAvailable, setActivationsAvailable] = useState(
-    /** @type {{ FUN: number | null; EVENT: number | null } | null} */ (null),
+    /** @type {Record<string, number> | null} */ (null),
   );
   const [createdAt, setCreatedAt] = useState(/** @type {string | null} */ (null));
   const [payments, setPayments] = useState(
@@ -37,8 +41,7 @@ export default function AdminAccountPage() {
   const totalCreditsBought = payments.reduce((sum, p) => sum + Math.max(0, Number(p.credits || 0)), 0);
   const balance = computeActivationBalance(eventCredits, activationsAvailable);
   const {
-    fun: funAvailable,
-    event: eventAvailable,
+    byPack,
     legacyCredits,
     totalAvailable,
     typedLoaded: activationsLoaded,
@@ -66,16 +69,35 @@ export default function AdminAccountPage() {
           setEventCredits(raw == null ? null : Math.max(0, Number(raw)));
           setCreatedAt(typeof body?.user?.createdAt === "string" ? body.user.createdAt : null);
           const avail =
-            body?.activationsAvailable ?? body?.user?.activationsAvailable ?? null;
+            body?.activationsByPack ??
+            body?.activationsAvailable ??
+            body?.user?.activationsByPack ??
+            body?.user?.activationsAvailable ??
+            null;
           if (avail && typeof avail === "object") {
-            const funRaw = Number(avail.FUN);
-            const eventRaw = Number(avail.EVENT);
-            setActivationsAvailable({
-              FUN: Number.isFinite(funRaw) ? Math.max(0, funRaw) : 0,
-              EVENT: Number.isFinite(eventRaw) ? Math.max(0, eventRaw) : 0,
-            });
+            /** @type {Record<string, number>} */
+            const next = {};
+            for (const size of PARTICIPANT_PACK_SIZES) {
+              const raw = Number(avail[String(size)]);
+              next[String(size)] = Number.isFinite(raw)
+                ? Math.max(0, Math.trunc(raw))
+                : 0;
+            }
+            if (Object.values(next).every((n) => n === 0)) {
+              const funRaw = Number(avail.FUN);
+              const eventRaw = Number(avail.EVENT);
+              if (Number.isFinite(funRaw) && funRaw > 0) {
+                next["100"] = Math.trunc(funRaw);
+              }
+              if (Number.isFinite(eventRaw) && eventRaw > 0) {
+                next["500"] = Math.trunc(eventRaw);
+              }
+            }
+            setActivationsAvailable(next);
           } else {
-            setActivationsAvailable({ FUN: 0, EVENT: 0 });
+            setActivationsAvailable(
+              Object.fromEntries(PARTICIPANT_PACK_SIZES.map((s) => [String(s), 0])),
+            );
           }
         }
       } catch {
@@ -221,7 +243,7 @@ export default function AdminAccountPage() {
         </article>
 
         <article style={CARD}>
-          <h2 style={CARD_TITLE}>Activations & formules</h2>
+          <h2 style={CARD_TITLE}>Packs participants</h2>
           <div
             style={{
               margin: "0 0 0.45rem",
@@ -261,18 +283,19 @@ export default function AdminAccountPage() {
             ) : null}
             {activationsLoaded && !hasNoActivation ? (
               <>
-                {funAvailable != null && funAvailable > 0 ? (
-                  <p style={{ margin: 0, color: "#334155", padding: "0 0.48rem" }}>
-                    <span style={ROW_LABEL}>FUN : </span>
-                    {formatDisponibles(funAvailable)}
-                  </p>
-                ) : null}
-                {eventAvailable != null && eventAvailable > 0 ? (
-                  <p style={{ margin: 0, color: "#334155", padding: "0 0.48rem" }}>
-                    <span style={ROW_LABEL}>EVENT : </span>
-                    {formatDisponibles(eventAvailable)}
-                  </p>
-                ) : null}
+                {PARTICIPANT_PACK_SIZES.map((size) => {
+                  const n = Number(byPack?.[String(size)] || 0);
+                  if (n <= 0) return null;
+                  return (
+                    <p
+                      key={size}
+                      style={{ margin: 0, color: "#334155", padding: "0 0.48rem" }}
+                    >
+                      <span style={ROW_LABEL}>{PARTICIPANT_PACKS[size].label} : </span>
+                      {formatDisponibles(n)}
+                    </p>
+                  );
+                })}
                 {legacyCredits > 0 ? (
                   <p style={{ margin: 0, color: "#334155", padding: "0 0.48rem" }}>
                     <span style={ROW_LABEL}>Crédits non typés : </span>
@@ -283,31 +306,35 @@ export default function AdminAccountPage() {
             ) : null}
           </div>
           <p style={{ margin: "0 0 0.85rem", color: "#64748b", fontSize: "0.86rem", fontWeight: 700 }}>
-            {activationsLoaded ? ACCOUNT_ACTIVATIONS_INTRO : "Choisissez une formule selon votre événement."}
+            {activationsLoaded ? ACCOUNT_ACTIVATIONS_INTRO : "Choisissez un pack selon votre événement."}
           </p>
           <div className="account-plan-grid">
-            <div className="account-plan-card">
-              <p className="account-plan-name">FUN — 19€</p>
-              <p className="account-plan-detail">Jusqu’à 100 participants</p>
-              <div className="buy-activation-cta">
-                <CheckoutEventButton
-                  plan="FUN"
-                  label="Acheter FUN"
-                  style={PLAN_BTN_SECONDARY}
-                />
-              </div>
-            </div>
-            <div className="account-plan-card account-plan-card-featured">
-              <p className="account-plan-name">EVENT — 49€</p>
-              <p className="account-plan-detail">Jusqu’à 500 participants</p>
-              <div className="buy-activation-cta">
-                <CheckoutEventButton
-                  plan="EVENT"
-                  label="Acheter EVENT"
-                  style={PLAN_BTN_PRIMARY}
-                />
-              </div>
-            </div>
+            {PARTICIPANT_PACK_SIZES.map((size, index) => {
+              const meta = PARTICIPANT_PACKS[size];
+              const featured = size === 250 || size === 500;
+              return (
+                <div
+                  key={size}
+                  className={
+                    featured
+                      ? "account-plan-card account-plan-card-featured"
+                      : "account-plan-card"
+                  }
+                >
+                  <p className="account-plan-name">
+                    {meta.label} — {meta.priceLabel}
+                  </p>
+                  <p className="account-plan-detail">Toutes fonctionnalités • paiement unique</p>
+                  <div className="buy-activation-cta">
+                    <CheckoutEventButton
+                      pack={size}
+                      label={`Acheter ${meta.priceLabel}`}
+                      style={featured || index === 2 ? PLAN_BTN_PRIMARY : PLAN_BTN_SECONDARY}
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
           <p style={{ margin: "0.55rem 0 0", color: "#64748b", fontSize: "0.8rem", fontWeight: 700 }}>
             Paiement sécurisé • Sans abonnement

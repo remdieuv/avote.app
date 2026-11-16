@@ -191,12 +191,26 @@ const {
 const {
   createPollUpdatedCoalescer,
 } = require("./lib/pollUpdatedCoalesce");
+const {
+  PARTICIPANT_PACK_SIZES,
+  parseParticipantPackSize,
+  packSizeFromPlanType,
+  planTypeForPackSize,
+  stripePriceIdForPack,
+  listParticipantPacksPublic,
+  PARTICIPANT_PACKS,
+} = require("./lib/participantPacks");
+const { planCapacityTopUp } = require("./lib/capacityTopUp");
 
 /** Anti double-clic rejeu TEST (sérialise par pollId). */
 const runReplayTestExclusive = createPollExclusiveQueue();
 
 /** Anti double-clic tirage / remplacement (sérialise par pollId). */
 const runContestDrawExclusive = createPollExclusiveQueue();
+
+/** Socket.IO serveur — renseigné après `new Server` (webhooks Stripe). */
+/** @type {import("socket.io").Server | null} */
+let liveIo = null;
 
 /** Origine publique de l’API (URLs absolues assets /join). */
 const PUBLIC_API_ORIGIN = (
@@ -1189,10 +1203,8 @@ async function submitVote(input) {
       );
       const participantsLimit = Math.max(1, Number(event.participantsLimit || 500));
       if (participantsUsed >= participantsLimit) {
-        await tx.event.update({
-          where: { id: eventId },
-          data: { isLocked: true },
-        });
+        // Saturation ≠ clôture : ne pas poser isLocked (réservé à Terminer).
+        // Les voterSessionId déjà comptés peuvent encore voter aux questions suivantes.
         return {
           ok: false,
           limitReached: true,
@@ -1591,76 +1603,172 @@ async function passerAuSondageSuivant(eventId) {
 }
 
 /**
- * Lit planType / participantsLimit depuis metadata Stripe Checkout.
- * Fallback sécurité : EVENT + 500.
+ * Metadata Checkout → pack participants.
  * @param {Record<string, string> | null | undefined} metadata
  */
-function parseActivationFromStripeMetadata(metadata) {
-  const planRaw = String(metadata?.planType || "").trim().toUpperCase();
-  const planType = planRaw === "FUN" ? "FUN" : "EVENT";
+function parsePackFromStripeMetadata(metadata) {
+  const fromPack = parseParticipantPackSize(metadata?.pack ?? metadata?.packSize);
+  if (fromPack) {
+    return {
+      pack: fromPack,
+      planType: planTypeForPackSize(fromPack),
+      participantsLimit: fromPack,
+    };
+  }
+  const fromPlan = packSizeFromPlanType(metadata?.planType);
+  if (fromPlan) {
+    return {
+      pack: fromPlan,
+      planType: planTypeForPackSize(fromPlan),
+      participantsLimit: fromPlan,
+    };
+  }
   const limitRaw = Number(metadata?.participantsLimit);
-  const participantsLimit =
-    Number.isFinite(limitRaw) && limitRaw > 0
-      ? Math.trunc(limitRaw)
-      : planType === "FUN"
-        ? 100
-        : 500;
-  return { planType, participantsLimit };
+  const fromLimit = parseParticipantPackSize(limitRaw);
+  if (fromLimit) {
+    return {
+      pack: fromLimit,
+      planType: planTypeForPackSize(fromLimit),
+      participantsLimit: fromLimit,
+    };
+  }
+  return null;
 }
 
 /**
- * Activations non consommées (consumedAt IS NULL), par formule.
+ * Activations non consommées par taille de pack.
  * @param {string} userId
+ * @returns {Promise<Record<string, number>>}
  */
-async function countAvailableActivationsByPlan(userId) {
-  const [funCount, eventCount] = await Promise.all([
-    prisma.eventActivation.count({
-      where: { userId, planType: "FUN", consumedAt: null },
-    }),
-    prisma.eventActivation.count({
-      where: { userId, planType: "EVENT", consumedAt: null },
-    }),
-  ]);
-  return {
-    FUN: Math.max(0, funCount),
-    EVENT: Math.max(0, eventCount),
-  };
+async function countAvailableActivationsByPack(userId) {
+  /** @type {Record<string, number>} */
+  const out = {};
+  for (const size of PARTICIPANT_PACK_SIZES) {
+    out[String(size)] = 0;
+  }
+  const rows = await prisma.eventActivation.groupBy({
+    by: ["planType"],
+    where: { userId, consumedAt: null },
+    _count: { _all: true },
+  });
+  for (const row of rows) {
+    const size = packSizeFromPlanType(row.planType);
+    if (!size) continue;
+    out[String(size)] = Math.max(0, Number(row._count?._all) || 0);
+  }
+  return out;
 }
 
-/** @param {number} eventCredits @param {{ FUN: number; EVENT: number }} activationsAvailable */
-function computeTotalAvailableActivations(eventCredits, activationsAvailable) {
+/** @param {number} eventCredits @param {Record<string, number> | null | undefined} activationsByPack */
+function computeTotalAvailableActivations(eventCredits, activationsByPack) {
   const credits = Math.max(0, Number(eventCredits || 0));
-  const typedTotal =
-    Math.max(0, Number(activationsAvailable?.FUN || 0)) +
-    Math.max(0, Number(activationsAvailable?.EVENT || 0));
+  let typedTotal = 0;
+  if (activationsByPack && typeof activationsByPack === "object") {
+    for (const size of PARTICIPANT_PACK_SIZES) {
+      typedTotal += Math.max(0, Number(activationsByPack[String(size)]) || 0);
+    }
+  }
   const legacyCredits = Math.max(0, credits - typedTotal);
   return typedTotal + legacyCredits;
 }
 
-/** @param {string} raw */
-function normalizeStartRealPlanType(raw) {
-  const plan = String(raw || "").trim().toUpperCase();
-  return plan === "FUN" ? "FUN" : plan === "EVENT" ? "EVENT" : null;
-}
-
-/** @param {"FUN" | "EVENT"} planType */
-function defaultParticipantsLimitForPlan(planType) {
-  return planType === "FUN" ? 100 : 500;
-}
-
-async function handleCheckoutCompleted(session) {
+/**
+ * @param {import("socket.io").Server | null | undefined} io
+ * @param {import("stripe").Stripe.Checkout.Session} session
+ */
+async function handleCheckoutCompleted(session, io) {
   const stripeSessionId = String(session?.id || "").trim();
   const userId = String(session?.metadata?.userId || "").trim();
+  const kind = String(session?.metadata?.kind || "activation")
+    .trim()
+    .toLowerCase();
   const creditsRaw = Number(session?.metadata?.credits);
-  const credits = Number.isFinite(creditsRaw) ? Math.max(1, Math.trunc(creditsRaw)) : 1;
+  const credits = Number.isFinite(creditsRaw)
+    ? Math.max(1, Math.trunc(creditsRaw))
+    : 1;
   const amount = Number.isFinite(Number(session?.amount_total))
     ? Math.max(0, Math.trunc(Number(session.amount_total)))
     : 0;
   if (!stripeSessionId || !userId) return;
 
-  const { planType, participantsLimit } = parseActivationFromStripeMetadata(
-    session?.metadata,
-  );
+  const packInfo = parsePackFromStripeMetadata(session?.metadata);
+  if (!packInfo) {
+    console.error("stripe checkout: pack inconnu", session?.metadata);
+    return;
+  }
+
+  if (kind === "participant_topup" || kind === "topup") {
+    const eventId = String(session?.metadata?.eventId || "").trim();
+    if (!eventId) {
+      console.error("stripe topup: eventId manquant", stripeSessionId);
+      return;
+    }
+    let bumpedEventId = null;
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.payment.findUnique({
+        where: { stripeSessionId },
+        select: { id: true },
+      });
+      if (existing) return;
+
+      await tx.$executeRaw`SELECT 1 FROM "Event" WHERE "id" = ${eventId} FOR UPDATE`;
+      const event = await tx.event.findUnique({
+        where: { id: eventId },
+        select: {
+          id: true,
+          userId: true,
+          participantsLimit: true,
+          isLocked: true,
+          liveState: true,
+          isLiveConsumed: true,
+        },
+      });
+      if (!event || String(event.userId) !== String(userId)) {
+        throw new Error("TOPUP_EVENT_FORBIDDEN");
+      }
+      if (!event.isLiveConsumed) {
+        throw new Error("TOPUP_EVENT_NOT_REAL");
+      }
+      const plan = planCapacityTopUp({
+        participantsLimit: event.participantsLimit,
+        isLocked: event.isLocked,
+        liveState: event.liveState,
+        delta: packInfo.participantsLimit,
+      });
+      if (!plan.ok) {
+        throw new Error(plan.code || "TOPUP_REFUSED");
+      }
+
+      await tx.payment.create({
+        data: {
+          userId,
+          stripeSessionId,
+          amount,
+          credits: 0,
+        },
+      });
+      await tx.event.update({
+        where: { id: eventId },
+        data: {
+          participantsLimit: plan.nextLimit,
+          ...(plan.shouldUnlock ? { isLocked: false } : {}),
+        },
+      });
+      bumpedEventId = eventId;
+    });
+    if (bumpedEventId && io) {
+      await emitEventLiveUpdated(io, bumpedEventId);
+    }
+    console.log(
+      "Top-up capacité:",
+      eventId,
+      "+",
+      packInfo.participantsLimit,
+      "user:",
+      userId,
+    );
+    return;
+  }
 
   await prisma.$transaction(async (tx) => {
     const existing = await tx.payment.findUnique({
@@ -1669,7 +1777,6 @@ async function handleCheckoutCompleted(session) {
     });
     if (existing) return;
 
-    // Compat prod : le compteur global reste la source pour start-real.
     await tx.user.update({
       where: { id: userId },
       data: { eventCredits: { increment: credits } },
@@ -1687,13 +1794,13 @@ async function handleCheckoutCompleted(session) {
         data: {
           userId,
           paymentId: payment.id,
-          planType,
-          participantsLimit,
+          planType: /** @type {any} */ (packInfo.planType),
+          participantsLimit: packInfo.participantsLimit,
         },
       });
     }
   });
-  console.log("User crédité:", userId, "plan:", planType);
+  console.log("User crédité:", userId, "pack:", packInfo.pack);
 }
 
 app.use(
@@ -1723,7 +1830,7 @@ app.post("/stripe/webhook", express.raw({ type: "application/json" }), async (re
   console.log("Stripe webhook reçu:", event.type);
   try {
     if (event.type === "checkout.session.completed") {
-      await handleCheckoutCompleted(event.data.object);
+      await handleCheckoutCompleted(event.data.object, liveIo);
     }
     return res.json({ received: true });
   } catch (err) {
@@ -1884,21 +1991,24 @@ app.get("/auth/me", async (req, res) => {
       return res.status(401).json({ error: "Compte introuvable." });
     }
     const eventCredits = Math.max(0, Number(user.eventCredits || 0));
-    const activationsAvailable = await countAvailableActivationsByPlan(payload.sub);
+    const activationsByPack = await countAvailableActivationsByPack(payload.sub);
     const totalAvailable = computeTotalAvailableActivations(
       eventCredits,
-      activationsAvailable,
+      activationsByPack,
     );
     return res.json({
       user: {
         ...user,
         eventCredits,
-        activationsAvailable,
+        activationsByPack,
+        activationsAvailable: activationsByPack,
         totalAvailable,
       },
       eventCredits,
-      activationsAvailable,
+      activationsByPack,
+      activationsAvailable: activationsByPack,
       totalAvailable,
+      packs: listParticipantPacksPublic(),
     });
   } catch (e) {
     console.error(e);
@@ -2013,51 +2123,144 @@ app.post("/auth/reset-password", authAttemptLimiter, async (req, res) => {
   }
 });
 
+app.get("/billing/packs", (_req, res) => {
+  return res.json({ packs: listParticipantPacksPublic() });
+});
+
 app.post("/billing/create-checkout-session", requireAuth, async (req, res) => {
   try {
-    const { plan } = req.body || {};
-    const normalizedPlan = String(plan || "").trim().toUpperCase();
-    const planType = normalizedPlan === "FUN" ? "FUN" : "EVENT";
-    const planConfig =
-      planType === "FUN"
-        ? {
-            priceId: String(process.env.STRIPE_PRICE_FUN || "").trim(),
-            participantsLimit: 100,
-            missingEnvError: "STRIPE_PRICE_FUN manquant.",
-          }
-        : {
-            priceId: String(process.env.STRIPE_PRICE_EVENT || "").trim(),
-            participantsLimit: 500,
-            missingEnvError: "STRIPE_PRICE_EVENT manquant.",
-          };
-    const { priceId, participantsLimit, missingEnvError } = planConfig;
+    const body = req.body || {};
+    const pack =
+      parseParticipantPackSize(body.pack ?? body.packSize) ||
+      packSizeFromPlanType(body.plan);
+    if (!pack) {
+      return res.status(400).json({
+        error: "INVALID_PACK",
+        message: "Pack requis : 50, 100, 250, 500 ou 1000.",
+        packs: listParticipantPacksPublic(),
+      });
+    }
+    const priceId = stripePriceIdForPack(pack);
     const clientUrl = String(process.env.CLIENT_URL || "").trim();
     if (!priceId) {
-      return res.status(500).json({ error: missingEnvError });
+      return res.status(503).json({
+        error: "STRIPE_PRICE_MISSING",
+        message: `Price Stripe manquant pour le pack ${pack} (${PARTICIPANT_PACKS[pack].envPriceKey}).`,
+        pack,
+      });
     }
     if (!clientUrl) {
       return res.status(500).json({ error: "CLIENT_URL manquant." });
     }
 
+    const planType = planTypeForPackSize(pack);
     const session = await getStripeClient().checkout.sessions.create({
       mode: "payment",
       line_items: [{ price: priceId, quantity: 1 }],
       metadata: {
+        kind: "activation",
         userId: String(req.userId || ""),
         credits: "1",
+        pack: String(pack),
         planType,
-        participantsLimit: String(participantsLimit),
+        participantsLimit: String(pack),
       },
-      success_url: `${clientUrl.replace(/\/$/, "")}/success?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${clientUrl.replace(/\/$/, "")}/success?session_id={CHECKOUT_SESSION_ID}&pack=${pack}`,
       cancel_url: `${clientUrl.replace(/\/$/, "")}/pricing`,
     });
 
-    return res.json({ url: session.url });
+    return res.json({ url: session.url, pack });
   } catch (e) {
     console.error("billing/create-checkout-session", e);
     return res.status(500).json({ error: "Impossible de créer la session de paiement." });
   }
 });
+
+/**
+ * Recharge capacité mid-événement (mode réel uniquement).
+ */
+app.post(
+  "/events/:eventId/billing/create-topup-session",
+  requireAuth,
+  async (req, res) => {
+    try {
+      const { eventId } = req.params;
+      const owned = await assertEventOwnedBy(eventId, req.userId);
+      if (!owned.ok) {
+        return res.status(owned.status).json({ error: "Événement introuvable." });
+      }
+      const pack = parseParticipantPackSize(req.body?.pack ?? req.body?.packSize);
+      if (!pack) {
+        return res.status(400).json({
+          error: "INVALID_PACK",
+          message: "Pack requis : 50, 100, 250, 500 ou 1000.",
+          packs: listParticipantPacksPublic(),
+        });
+      }
+      const event = await prisma.event.findUnique({
+        where: { id: eventId },
+        select: {
+          id: true,
+          isLiveConsumed: true,
+          isLocked: true,
+          liveState: true,
+          participantsLimit: true,
+        },
+      });
+      if (!event) {
+        return res.status(404).json({ error: "Événement introuvable." });
+      }
+      if (!event.isLiveConsumed) {
+        return res.status(403).json({
+          error: "TOPUP_TEST_MODE",
+          message:
+            "Les recharges concernent uniquement un événement en mode réel.",
+        });
+      }
+      if (String(event.liveState).toUpperCase() === "FINISHED") {
+        return res.status(403).json({
+          error: "EVENT_FINISHED",
+          message: "Événement terminé : recharge impossible.",
+        });
+      }
+      const priceId = stripePriceIdForPack(pack);
+      const clientUrl = String(process.env.CLIENT_URL || "").trim();
+      if (!priceId) {
+        return res.status(503).json({
+          error: "STRIPE_PRICE_MISSING",
+          message: `Price Stripe manquant pour le pack ${pack} (${PARTICIPANT_PACKS[pack].envPriceKey}).`,
+          pack,
+        });
+      }
+      if (!clientUrl) {
+        return res.status(500).json({ error: "CLIENT_URL manquant." });
+      }
+      const planType = planTypeForPackSize(pack);
+      const successBase = `${clientUrl.replace(/\/$/, "")}/admin/event/${encodeURIComponent(eventId)}`;
+      const session = await getStripeClient().checkout.sessions.create({
+        mode: "payment",
+        line_items: [{ price: priceId, quantity: 1 }],
+        metadata: {
+          kind: "participant_topup",
+          userId: String(req.userId || ""),
+          eventId: String(eventId),
+          pack: String(pack),
+          planType,
+          participantsLimit: String(pack),
+          credits: "0",
+        },
+        success_url: `${successBase}?topup=ok&pack=${pack}&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${successBase}?topup=cancel`,
+      });
+      return res.json({ url: session.url, pack, eventId });
+    } catch (e) {
+      console.error("events/:eventId/billing/create-topup-session", e);
+      return res
+        .status(500)
+        .json({ error: "Impossible de créer la session de recharge." });
+    }
+  },
+);
 
 app.get("/billing/payments", requireAuth, async (req, res) => {
   try {
@@ -6498,18 +6701,22 @@ app.post("/events/:eventId/finish", requireAuth, async (req, res) => {
 });
 
 /**
- * Régie : démarrer le mode réel (consomme une EventActivation FUN/EVENT, ou reliquat eventCredits).
+ * Régie : démarrer le mode réel (consomme une EventActivation pack, ou reliquat eventCredits).
  * TX atomique : wipe runtime TEST + reset Q1 PRÉPARÉ + consommation crédit.
  */
 app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
   const { eventId } = req.params;
-  const planType = normalizeStartRealPlanType(req.body?.planType);
-  if (!planType || !startRealResetAppliesToPlan(planType)) {
+  const pack =
+    parseParticipantPackSize(req.body?.pack ?? req.body?.packSize) ||
+    packSizeFromPlanType(req.body?.planType);
+  if (!pack || !startRealResetAppliesToPlan("PACK")) {
     return res.status(400).json({
-      error: "INVALID_PLAN_TYPE",
-      message: "planType requis : FUN ou EVENT.",
+      error: "INVALID_PACK",
+      message: "pack requis : 50, 100, 250, 500 ou 1000.",
+      packs: listParticipantPacksPublic(),
     });
   }
+  const planType = planTypeForPackSize(pack);
   try {
     const result = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT 1 FROM "User" WHERE "id" = ${req.userId} FOR UPDATE`;
@@ -6553,7 +6760,7 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
       const activation = await tx.eventActivation.findFirst({
         where: {
           userId: req.userId,
-          planType,
+          planType: /** @type {any} */ (planType),
           consumedAt: null,
         },
         orderBy: { createdAt: "asc" },
@@ -6570,7 +6777,7 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
       });
       const creditsBefore = Math.max(0, Number(user?.eventCredits || 0));
 
-      let participantsLimit = defaultParticipantsLimitForPlan(planType);
+      let participantsLimit = pack;
       let appliedPlanType = planType;
       let usedLegacyCredits = false;
 
@@ -6581,9 +6788,9 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
         );
         appliedPlanType = activation.planType;
       } else if (creditsBefore > 0) {
-        // Compat achats historiques sans ligne EventActivation typée.
+        // Reliquat crédits sans ligne typée : applique le pack demandé.
         usedLegacyCredits = true;
-        participantsLimit = defaultParticipantsLimitForPlan(planType);
+        participantsLimit = pack;
         appliedPlanType = planType;
       } else {
         const err = new Error("NO_ACTIVATION_AVAILABLE");
@@ -6712,13 +6919,15 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
       };
     });
     clearAutoRevealTimer(eventId);
-    const activationsAvailable = await countAvailableActivationsByPlan(req.userId);
+    const activationsByPack = await countAvailableActivationsByPack(req.userId);
     await emitEventLiveUpdated(io, eventId);
     return res.json({
       ok: true,
       event: result.updatedEvent,
       eventCredits: result.remainingCredits,
-      activationsAvailable,
+      activationsByPack,
+      activationsAvailable: activationsByPack,
+      pack: packSizeFromPlanType(result.planType) || pack,
       planType: result.planType,
       usedLegacyCredits: result.usedLegacyCredits,
       reset: result.reset,
@@ -10346,6 +10555,7 @@ const io = new Server(server, {
     credentials: true,
   },
 });
+liveIo = io;
 
 pollUpdatedCoalescer = createPollUpdatedCoalescer({
   delayMs: 150,

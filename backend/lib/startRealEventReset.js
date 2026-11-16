@@ -127,12 +127,21 @@ function shouldPerformStartRealRuntimeReset(input = {}) {
 }
 
 /**
- * FUN et EVENT passent par le même reset (planType n’affecte que la conso crédit).
- * @param {"FUN" | "EVENT" | string | null | undefined} planType
+ * Tous les packs (et legacy FUN/EVENT) partagent le même reset runtime.
+ * @param {string | null | undefined} planType
  */
 function startRealResetAppliesToPlan(planType) {
   const p = String(planType || "").trim().toUpperCase();
-  return p === "FUN" || p === "EVENT";
+  return (
+    p === "PACK" ||
+    p === "P50" ||
+    p === "P100" ||
+    p === "P250" ||
+    p === "P500" ||
+    p === "P1000" ||
+    p === "FUN" ||
+    p === "EVENT"
+  );
 }
 
 module.exports = {

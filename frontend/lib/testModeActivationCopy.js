@@ -16,31 +16,31 @@ export const REGIE_NO_ACTIVATION_STATUS =
 export const REGIE_NO_ACTIVATION_HINT =
   "Une activation est requise uniquement pour passer en live réel.";
 
-export const REGIE_PRICING_CTA_LABEL = "Voir les formules";
+export const REGIE_PRICING_CTA_LABEL = "Voir les packs";
 
 export const REGIE_START_REAL_CTA_LABEL = "Passer en live réel";
 
 export const REGIE_START_REAL_MODAL_INTRO =
-  "Le MODE TEST reste gratuit. Une activation sera consommée uniquement pour passer en live réel (audience comptée, données de répétition effacées).";
+  "Le MODE TEST reste gratuit. Un pack participants sera consommé uniquement pour passer en live réel (audience comptée, données de répétition effacées).";
 
 /** Compte — bloc activations à 0. */
 export const ACCOUNT_NO_ACTIVATION_TITLE =
-  "0 activation — vous pouvez tester gratuitement";
+  "0 pack — vous pouvez tester gratuitement";
 
 export const ACCOUNT_NO_ACTIVATION_BODY =
-  "Créez un événement et animez-le en MODE TEST sans activation. Une activation (FUN ou EVENT) est nécessaire seulement pour passer en live réel.";
+  "Créez un événement et animez-le en MODE TEST sans paiement. Un pack participants est nécessaire seulement pour passer en live réel.";
 
-export const ACCOUNT_HAS_ACTIVATIONS_TITLE = "Vos activations par formule";
+export const ACCOUNT_HAS_ACTIVATIONS_TITLE = "Vos packs participants";
 
 export const ACCOUNT_ACTIVATIONS_INTRO =
-  "Les activations servent au live réel. Le MODE TEST (répétition) reste disponible sans activation.";
+  "Les packs servent au live réel. Le MODE TEST (répétition) reste disponible sans paiement. Les recharges utilisent les mêmes packs.";
 
 /** Erreurs API start-real — formulation non anxiogène. */
 export const ERR_NO_EVENT_CREDIT =
-  "Le live réel nécessite une activation. Vous pouvez continuer à tester gratuitement en MODE TEST.";
+  "Le live réel nécessite un pack participants. Vous pouvez continuer à tester gratuitement en MODE TEST.";
 
 export const ERR_NO_ACTIVATION_AVAILABLE =
-  "Pas d’activation pour cette formule. Choisissez une autre formule, ou continuez en MODE TEST.";
+  "Pas de pack disponible pour cette capacité. Choisissez un autre pack, ou continuez en MODE TEST.";
 
 export const ERR_EVENT_ALREADY_CONSUMED =
   "Le mode réel est déjà activé pour cet événement.";
@@ -89,7 +89,7 @@ export function getAccountActivationExplain(args = {}) {
   return {
     title: ACCOUNT_NO_ACTIVATION_TITLE,
     body: ACCOUNT_NO_ACTIVATION_BODY,
-    ctaLabel: "Voir les formules",
+    ctaLabel: "Voir les packs",
   };
 }
 

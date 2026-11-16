@@ -70,9 +70,13 @@ enum AuthProvider {
   GOOGLE
 }
 
+/** Pack capacité acheté (activation initiale ou historique). */
 enum ActivationPlanType {
-  FUN
-  EVENT
+  P50
+  P100
+  P250
+  P500
+  P1000
 }
 
 /** Lot D — profil organisateur (Particulier / Organisation). */
@@ -191,7 +195,7 @@ model Event {
   isLocked Boolean @default(false)
   /** Limite business de participants uniques (voterSessionId) sur l'événement. */
   participantsLimit Int @default(500)
-  /** Formule activée au passage en mode réel (FUN / EVENT). */
+  /** Pack activé au passage en mode réel (P50…P1000). */
   eventPlanType ActivationPlanType?
   /** Landing publique `/e/[slug]` (vitrine + galerie photo). */
   landingEnabled     Boolean @default(false)

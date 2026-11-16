@@ -29,15 +29,15 @@ function test(name, fn) {
   }
 }
 
-test("Confirm FUN / EVENT : effacement explicite", () => {
-  const fun = getStartRealConfirmMessage("FUN");
-  const event = getStartRealConfirmMessage("EVENT");
-  assert.match(fun, /FUN/);
-  assert.match(event, /EVENT/);
-  assert.match(fun, /supprimées définitivement/i);
-  assert.match(fun, /votes/i);
-  assert.match(fun, /question 1/i);
-  assert.doesNotMatch(fun, /conservées/i);
+test("Confirm packs : effacement explicite", () => {
+  const p100 = getStartRealConfirmMessage(100);
+  const p500 = getStartRealConfirmMessage(500);
+  assert.match(p100, /100 participants/);
+  assert.match(p500, /500 participants/);
+  assert.match(p100, /supprimées définitivement/i);
+  assert.match(p100, /votes/i);
+  assert.match(p100, /question 1/i);
+  assert.doesNotMatch(p100, /conservées/i);
 });
 
 test("Clear marqueurs seulement TEST → RÉEL", () => {

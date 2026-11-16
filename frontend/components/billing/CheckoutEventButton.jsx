@@ -2,12 +2,16 @@
 
 import { useState } from "react";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
+import {
+  PARTICIPANT_PACKS,
+  parseParticipantPackSize,
+} from "@/lib/participantPacks";
 
 /**
  * @param {{
  *   label: string;
  *   loadingLabel?: string;
- *   plan?: "FUN" | "EVENT";
+ *   pack: 50 | 100 | 250 | 500 | 1000;
  *   style?: React.CSSProperties;
  *   className?: string;
  * }} props
@@ -15,47 +19,67 @@ import { adminFetch, apiBaseBrowser } from "@/lib/config";
 export function CheckoutEventButton({
   label,
   loadingLabel = "Redirection...",
-  plan = "EVENT",
+  pack: packProp,
   style,
   className,
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const pack = parseParticipantPackSize(packProp);
 
   async function handleClick() {
     if (loading) return;
+    if (!pack) {
+      setError("Pack invalide.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
-      const res = await adminFetch(`${apiBaseBrowser()}/billing/create-checkout-session`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan }),
-      });
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/billing/create-checkout-session`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pack }),
+        },
+      );
       const body = await res.json().catch(() => ({}));
+      if (res.status === 503 && body?.error === "STRIPE_PRICE_MISSING") {
+        throw new Error("PRICE_MISSING");
+      }
       if (!res.ok || typeof body?.url !== "string" || !body.url) {
         throw new Error("CHECKOUT_FAILED");
       }
       window.location.href = body.url;
-    } catch {
-      setError("Impossible de lancer le paiement. Réessayez.");
+    } catch (e) {
+      setError(
+        e?.message === "PRICE_MISSING"
+          ? "Paiement temporairement indisponible (configuration Stripe)."
+          : "Impossible de lancer le paiement. Réessayez.",
+      );
       setLoading(false);
     }
   }
+
+  const packMeta = pack ? PARTICIPANT_PACKS[pack] : null;
 
   return (
     <div style={{ width: "100%" }}>
       <button
         type="button"
         onClick={handleClick}
-        disabled={loading}
+        disabled={loading || !pack}
         style={{
           ...style,
-          cursor: loading ? "not-allowed" : "pointer",
+          cursor: loading || !pack ? "not-allowed" : "pointer",
           opacity: loading ? 0.92 : 1,
           width: style?.width || "100%",
         }}
         className={className}
+        aria-label={
+          packMeta ? `${label} — ${packMeta.label}` : label
+        }
       >
         {loading ? loadingLabel : label}
       </button>

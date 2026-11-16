@@ -3,20 +3,17 @@
  */
 
 /**
- * @param {"FUN" | "EVENT" | string} planType
+ * @param {number | string} packOrPlan
  * @returns {string}
  */
-export function getStartRealConfirmMessage(planType) {
-  const plan = String(planType || "").trim().toUpperCase();
-  const planLabel =
-    plan === "FUN"
-      ? "FUN (100 participants max)"
-      : plan === "EVENT"
-        ? "EVENT (500 participants max)"
-        : plan || "sélectionnée";
+export function getStartRealConfirmMessage(packOrPlan) {
+  const n = Number(packOrPlan);
+  const packLabel = Number.isFinite(n) && n > 0
+    ? `${Math.trunc(n)} participants`
+    : String(packOrPlan || "sélectionné");
   return (
-    `Passer en live réel avec la formule ${plan} ?\n\n` +
-    `1 activation sera consommée (${planLabel}).\n\n` +
+    `Passer en live réel avec le pack ${packLabel} ?\n\n` +
+    `1 activation sera consommée (${packLabel}).\n\n` +
     `Toutes les données de répétition seront supprimées définitivement : ` +
     `votes, résultats, leads, participations et tirages de concours, ` +
     `historique des réponses.\n\n` +
