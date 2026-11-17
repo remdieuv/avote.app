@@ -100,10 +100,34 @@ test("script CLI hors start serveur", () => {
   assert.doesNotMatch(server, /runLoadStaging1000Init/);
 });
 
-test("create n’inclut pas User.role", () => {
+test("User via $executeRaw — pas user.create (évite P2022 role)", () => {
   const lib = readFileSync(join(here, "..", "lib", "loadStagingInit.js"), "utf8");
-  assert.match(lib, /sans User\.role/);
+  assert.match(lib, /\$executeRaw`/);
+  assert.match(lib, /INSERT INTO "User"/);
+  assert.doesNotMatch(lib, /user\.create\s*\(/);
+  assert.doesNotMatch(lib, /["']role["']\s*,/);
   assert.doesNotMatch(lib, /role:\s*["']USER["']/);
+  // Colonnes User explicites (alignées seed SQL staging)
+  for (const col of [
+    '"id"',
+    '"email"',
+    '"passwordHash"',
+    '"provider"',
+    '"eventCredits"',
+    '"createdAt"',
+    '"updatedAt"',
+  ]) {
+    assert.match(lib, new RegExp(col.replace(/"/g, '\\"')));
+  }
+});
+
+test("Event/Poll/PollOption restent en create Prisma (colonnes migrées)", () => {
+  const lib = readFileSync(join(here, "..", "lib", "loadStagingInit.js"), "utf8");
+  assert.match(lib, /event\.create\s*\(/);
+  assert.match(lib, /poll\.create\s*\(/);
+  assert.match(lib, /pollOption\.createMany\s*\(/);
+  assert.match(lib, /participantsLimit:\s*1000/);
+  assert.match(lib, /eventPlanType:\s*["']P1000["']/);
 });
 
 if (failed) {

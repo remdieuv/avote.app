@@ -148,22 +148,44 @@ async function fetchDatabaseMarker(db) {
 }
 
 /**
- * Crée le jeu de données charge (sans User.role — colonne absente sur load-staging migrate-only).
+ * Crée le jeu de données charge.
+ *
+ * User : INSERT SQL explicite (pas `user.create`).
+ * Cause : `schema.prisma` déclare `User.role @default("USER")` sans migration →
+ * la colonne est absente sur load-staging (migrate-only). Prisma Client injecte
+ * quand même `role` dans l’INSERT via le défaut schéma → P2022.
+ * Colonnes User alignées sur le seed SQL validé (id, email, passwordHash,
+ * provider, eventCredits, createdAt, updatedAt) — sans `role` / `googleId`.
+ *
+ * Event / Poll / PollOption : `create` Prisma OK — colonnes utilisées couvertes
+ * par les migrations présentes sur staging (dont packs P1000, landing, invites).
+ *
  * @param {import("@prisma/client").PrismaClient} prisma
  */
 async function createLoadStaging1000Dataset(prisma) {
   const ids = LOAD_SEED_IDS;
 
   await prisma.$transaction(async (tx) => {
-    await tx.user.create({
-      data: {
-        id: ids.userId,
-        email: ids.email,
-        passwordHash: null,
-        provider: "CREDENTIALS",
-        eventCredits: 0,
-      },
-    });
+    // Raw volontaire : contourne le défaut Prisma `role` (colonne absente staging).
+    await tx.$executeRaw`
+      INSERT INTO "User" (
+        "id",
+        "email",
+        "passwordHash",
+        "provider",
+        "eventCredits",
+        "createdAt",
+        "updatedAt"
+      ) VALUES (
+        ${ids.userId},
+        ${ids.email},
+        NULL,
+        'CREDENTIALS'::"AuthProvider",
+        0,
+        NOW(),
+        NOW()
+      )
+    `;
 
     await tx.event.create({
       data: {
