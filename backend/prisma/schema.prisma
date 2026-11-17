@@ -195,6 +195,11 @@ model Event {
   isLocked Boolean @default(false)
   /** Limite business de participants uniques (voterSessionId) sur l'événement. */
   participantsLimit Int @default(500)
+  /**
+   * Compteur atomique de participants uniques (sessions ayant au moins un vote).
+   * Incrémenté au premier vote d’une session ; pas de FOR UPDATE global sur Event.
+   */
+  participantsUsed Int @default(0)
   /** Pack activé au passage en mode réel (P50…P1000). */
   eventPlanType ActivationPlanType?
   /** Landing publique `/e/[slug]` (vitrine + galerie photo). */
