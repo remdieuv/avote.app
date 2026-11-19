@@ -60,6 +60,21 @@ test("siteNavItems connecté = public + perso", () => {
   assert.equal(new Set(hrefs).size, hrefs.length, "pas de doublons href");
 });
 
+test("séparateur avant Mes événements (connecté seulement)", () => {
+  const guest = siteNavItems(false);
+  assert.ok(guest.every((i) => !i.separatorBefore));
+  const authed = siteNavItems(true);
+  const withSep = authed.filter((i) => i.separatorBefore);
+  assert.equal(withSep.length, 1);
+  assert.equal(withSep[0].label, "Mes événements");
+  assert.equal(withSep[0].href, "/admin/events");
+  const shell = read("components/navigation/AppHeaderShell.jsx");
+  assert.match(shell, /app-header-nav-sep/);
+  assert.match(shell, /app-header-mobile-more-sep/);
+  assert.match(shell, /separatorBefore/);
+  assert.doesNotMatch(shell, /Public|Personnel|Rubriques/);
+});
+
 test("SiteHeader : nav dynamique + pas de mobileQuick", () => {
   const src = read("components/navigation/SiteHeader.jsx");
   assert.match(src, /siteNavItems\(isAuthed\)/);
