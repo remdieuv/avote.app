@@ -138,7 +138,8 @@ test("page discover + nav Les événements présents", () => {
   );
   assert.match(header, /\/discover/);
   assert.match(header, /Les événements/);
-  assert.match(header, /Mes événements/);
+  assert.match(header, /HeaderAuthCta/);
+  assert.doesNotMatch(header, /Mes événements/);
   assert.match(header, /mobileMoreItems/);
 });
 

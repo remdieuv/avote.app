@@ -28,18 +28,26 @@ function test(name, fn) {
   }
 }
 
-test("EventLandingNav : logo, discover, CTA auth", () => {
+test("EventLandingNav : logo, discover, CTA auth partagé", () => {
   const src = read("components/event/EventLandingNav.jsx");
   assert.match(src, /logoHref=["']\/["']/);
   assert.match(src, /logoLabel=["']AVOTE["']/);
   assert.match(src, /href:\s*["']\/discover["']/);
   assert.match(src, /Les événements/);
-  assert.match(src, /Mes événements/);
-  assert.match(src, /Se connecter/);
-  assert.match(src, /\/admin\/events/);
-  assert.match(src, /\/login\?next=/);
+  assert.match(src, /HeaderAuthCta/);
   assert.match(src, /AppHeaderShell/);
+  assert.doesNotMatch(src, /Mes événements/);
   assert.doesNotMatch(src, /invite|inviteEnabled|guestAccess/i);
+});
+
+test("HeaderAuthCta : Se connecter / Mon compte (pas Mes événements)", () => {
+  const src = read("components/navigation/HeaderAuthCta.jsx");
+  assert.match(src, /Se connecter/);
+  assert.match(src, /Mon compte/);
+  assert.match(src, /\/admin\/account/);
+  assert.match(src, /\/login\?next=/);
+  assert.doesNotMatch(src, /Mes événements/);
+  assert.doesNotMatch(src, /Créer un événement/);
 });
 
 test("Landing /e/[slug] monte EventLandingNav hors hero", () => {

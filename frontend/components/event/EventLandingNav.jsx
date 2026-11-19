@@ -1,10 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 import { AppHeaderShell } from "@/components/navigation/AppHeaderShell";
-import { adminFetch, apiBaseBrowser } from "@/lib/config";
+import { HeaderAuthCta } from "@/components/navigation/HeaderAuthCta";
 import { MARKETING_CONTENT_MAX } from "@/lib/marketingLayout";
 
 /**
@@ -12,28 +9,6 @@ import { MARKETING_CONTENT_MAX } from "@/lib/marketingLayout";
  * Accès / invitations / médias : hors scope (navigation seule).
  */
 export function EventLandingNav() {
-  const pathname = usePathname();
-  const [isAuthed, setIsAuthed] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await adminFetch(`${apiBaseBrowser()}/auth/me`, {
-          cache: "no-store",
-        });
-        if (!cancelled) setIsAuthed(res.ok);
-      } catch {
-        if (!cancelled) setIsAuthed(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const loginHref = `/login?next=${encodeURIComponent(pathname || "/")}`;
-
   return (
     <div className="ev-landing-nav">
       <AppHeaderShell
@@ -50,14 +25,7 @@ export function EventLandingNav() {
           match: "prefix",
         }}
         mobileMoreItems={null}
-        rightSlot={
-          <Link
-            href={isAuthed ? "/admin/events" : loginHref}
-            className="ev-landing-nav-cta"
-          >
-            {isAuthed ? "Mes événements" : "Se connecter"}
-          </Link>
-        }
+        rightSlot={<HeaderAuthCta variant="subtle" />}
       />
       <style>{`
         .ev-landing-nav {
@@ -77,34 +45,6 @@ export function EventLandingNav() {
         .ev-landing-nav .app-header.scrolled {
           box-shadow: none;
           background: transparent;
-        }
-        .ev-landing-nav-cta {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 9px;
-          border: 1px solid #cbd5e1;
-          background: #fff;
-          color: #0f172a;
-          text-decoration: none;
-          font-size: 0.82rem;
-          font-weight: 750;
-          padding: 0.42rem 0.7rem;
-          white-space: nowrap;
-        }
-        .ev-landing-nav-cta:hover {
-          border-color: #94a3b8;
-          background: #f8fafc;
-        }
-        .ev-landing-nav-cta:focus-visible {
-          outline: 2px solid #93c5fd;
-          outline-offset: 1px;
-        }
-        @media (max-width: 640px) {
-          .ev-landing-nav-cta {
-            font-size: 0.78rem;
-            padding: 0.38rem 0.55rem;
-          }
         }
       `}</style>
     </div>
