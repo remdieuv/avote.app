@@ -3,6 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
+import {
+  clearAuthSession,
+  seedAuthSession,
+} from "@/components/navigation/useAuthMe";
 import { AdminAccountBar } from "./AdminAccountBar";
 import { AdminUserContext } from "./AdminUserContext";
 
@@ -28,6 +32,7 @@ export function AdminAuthShell({ children }) {
         const res = await adminFetch(`${apiBaseBrowser()}/auth/me`);
         if (cancelled) return;
         if (!res.ok) {
+          clearAuthSession();
           router.replace(`/login?next=${encodeURIComponent(path)}`);
           return;
         }
@@ -56,7 +61,7 @@ export function AdminAuthShell({ children }) {
               EVENT: Number.isFinite(eventRaw) ? Math.max(0, eventRaw) : 0,
             };
           }
-          setUser({
+          const nextUser = {
             id: u.id,
             email: u.email,
             eventCredits:
@@ -64,13 +69,17 @@ export function AdminAuthShell({ children }) {
                 ? null
                 : Math.max(0, Number(creditsRaw)),
             activationsAvailable,
-          });
+          };
+          setUser(nextUser);
+          seedAuthSession(nextUser);
           setReady(true);
           return;
         }
+        clearAuthSession();
         router.replace(`/login?next=${encodeURIComponent(path)}`);
       } catch {
         if (!cancelled) {
+          clearAuthSession();
           router.replace(`/login?next=${encodeURIComponent(path)}`);
         }
       }
@@ -87,6 +96,7 @@ export function AdminAuthShell({ children }) {
     } catch {
       /* cookie cleared best-effort */
     }
+    clearAuthSession();
     router.replace("/login");
   }, [router]);
 

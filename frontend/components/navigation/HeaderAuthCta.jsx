@@ -4,31 +4,25 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { computeActivationBalance } from "@/lib/activationBalance";
-import { useAuthMe } from "@/components/navigation/useAuthMe";
 
 /**
- * CTA droit unifié : Se connecter | Mon compte (infos + déconnexion).
+ * CTA droit unifié — état fourni par le parent (pas de /auth/me ici).
  * @param {{
  *  className?: string;
  *  variant?: "primary" | "subtle";
- *  isAuthed?: boolean;
+ *  status: "pending" | "guest" | "authed";
  *  user?: { email?: string; eventCredits?: number | null; activationsAvailable?: Record<string, number> | null } | null;
  *  logout?: () => Promise<void>;
- * }} [props]
+ * }} props
  */
 export function HeaderAuthCta({
   className = "header-auth-cta",
   variant = "primary",
-  isAuthed: isAuthedProp,
-  user: userProp,
-  logout: logoutProp,
+  status,
+  user = null,
+  logout,
 }) {
   const pathname = usePathname();
-  const auth = useAuthMe();
-  const isAuthed = typeof isAuthedProp === "boolean" ? isAuthedProp : auth.isAuthed;
-  const user = userProp !== undefined ? userProp : auth.user;
-  const logout = logoutProp || auth.logout;
-
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
 
@@ -58,7 +52,22 @@ export function HeaderAuthCta({
 
   const loginHref = `/login?next=${encodeURIComponent(pathname || "/")}`;
 
-  if (!isAuthed) {
+  if (status === "pending") {
+    return (
+      <span
+        className={`${className} ${className}--${variant} ${className}--pending`}
+        aria-busy="true"
+        aria-label="Vérification de la session"
+      >
+        <span aria-hidden className={`${className}-pending-spacer`}>
+          Mon compte
+        </span>
+        <AuthCtaStyles className={className} />
+      </span>
+    );
+  }
+
+  if (status !== "authed") {
     return (
       <Link href={loginHref} className={`${className} ${className}--${variant}`}>
         Se connecter
@@ -104,7 +113,7 @@ export function HeaderAuthCta({
             className={`${className}-menu-logout`}
             onClick={() => {
               setOpen(false);
-              void logout();
+              void logout?.();
             }}
           >
             Se déconnecter
@@ -155,6 +164,22 @@ function AuthCtaStyles({ className }) {
       .${className}--subtle:hover {
         border-color: #94a3b8;
         background: #f8fafc;
+      }
+      .${className}--pending {
+        cursor: default;
+        pointer-events: none;
+        opacity: 0.45;
+        box-shadow: none;
+        border-color: #e2e8f0;
+        background: #f8fafc;
+        color: transparent;
+      }
+      .${className}--pending.${className}--primary {
+        border-color: #bfdbfe;
+        background: #dbeafe;
+      }
+      .${className}-pending-spacer {
+        visibility: hidden;
       }
       .${className}:focus-visible {
         outline: 2px solid #93c5fd;

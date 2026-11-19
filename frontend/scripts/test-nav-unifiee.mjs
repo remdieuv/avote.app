@@ -77,7 +77,7 @@ test("séparateur avant Mes événements (connecté seulement)", () => {
 
 test("SiteHeader : nav dynamique + pas de mobileQuick", () => {
   const src = read("components/navigation/SiteHeader.jsx");
-  assert.match(src, /siteNavItems\(isAuthed\)/);
+  assert.match(src, /siteNavItems\(ready && isAuthed\)/);
   assert.match(src, /mobileQuickItem=\{null\}/);
   assert.match(src, /mobileMoreItems=\{navItems\}/);
   assert.match(src, /HeaderAuthCta/);

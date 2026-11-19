@@ -13,8 +13,11 @@ import { siteNavItems } from "@/lib/siteNav";
  * }} props
  */
 export function SiteHeader({ contentMaxWidth, accountVariant = "primary" }) {
-  const { isAuthed, user, logout } = useAuthMe();
-  const navItems = siteNavItems(isAuthed);
+  const { ready, isAuthed, user, logout } = useAuthMe();
+  // Pending / guest : nav publique seule (pas de liens privés non vérifiés).
+  const navItems = siteNavItems(ready && isAuthed);
+  /** @type {"pending" | "guest" | "authed"} */
+  const status = !ready ? "pending" : isAuthed ? "authed" : "guest";
 
   return (
     <AppHeaderShell
@@ -28,7 +31,7 @@ export function SiteHeader({ contentMaxWidth, accountVariant = "primary" }) {
       rightSlot={
         <HeaderAuthCta
           variant={accountVariant}
-          isAuthed={isAuthed}
+          status={status}
           user={user}
           logout={logout}
         />

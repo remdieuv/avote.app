@@ -30,6 +30,7 @@
     "test:header-auth-cta": "node scripts/test-header-auth-cta.mjs",
     "test:header-mobile": "node scripts/test-header-mobile.mjs",
     "test:nav-unifiee": "node scripts/test-nav-unifiee.mjs",
+    "test:header-auth-fluide": "node scripts/test-header-auth-fluide.mjs",
     "test:event-discover-meta": "node scripts/test-event-discover-meta.mjs",
     "test:landing-admin-ux-lot1": "node scripts/test-landing-admin-ux-lot1.mjs",
     "test:landing-admin-preview-sticky": "node scripts/test-landing-admin-preview-sticky.mjs",
