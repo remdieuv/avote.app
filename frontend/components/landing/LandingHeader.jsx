@@ -15,12 +15,11 @@ export function LandingHeader() {
         { href: "/discover", label: "Les événements", match: "prefix" },
         { href: "/pricing", label: "Tarifs", match: "exact" },
       ]}
-      mobileQuickItem={{
-        href: "/discover",
-        label: "Les événements",
-        match: "prefix",
-      }}
-      mobileMoreItems={[{ href: "/pricing", label: "Tarifs", match: "exact" }]}
+      mobileQuickItem={null}
+      mobileMoreItems={[
+        { href: "/discover", label: "Les événements", match: "prefix" },
+        { href: "/pricing", label: "Tarifs", match: "exact" },
+      ]}
       rightSlot={<HeaderAuthCta />}
     />
   );

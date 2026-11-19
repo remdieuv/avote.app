@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 /**
  * @param {{
@@ -32,6 +32,7 @@ export function AppHeaderShell({
   const [scrolled, setScrolled] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const mobileMoreRef = useRef(null);
+  const menuId = useId();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 6);
@@ -52,11 +53,16 @@ export function AppHeaderShell({
       if (host.contains(ev.target)) return;
       setMobileMoreOpen(false);
     }
+    function onKeyDown(ev) {
+      if (ev.key === "Escape") setMobileMoreOpen(false);
+    }
     document.addEventListener("mousedown", onDocPointerDown);
     document.addEventListener("touchstart", onDocPointerDown, { passive: true });
+    document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("mousedown", onDocPointerDown);
       document.removeEventListener("touchstart", onDocPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
     };
   }, [mobileMoreOpen]);
 
@@ -67,6 +73,9 @@ export function AppHeaderShell({
     if (mode === "exact") return pathname === item.href;
     return pathname === item.href || pathname.startsWith(`${item.href}/`);
   };
+
+  const hasMobileMore =
+    Array.isArray(mobileMoreItems) && mobileMoreItems.length > 0;
 
   return (
     <header className={`app-header ${scrolled ? "scrolled" : ""}`}>
@@ -98,6 +107,7 @@ export function AppHeaderShell({
         </nav>
 
         <div className="app-header-right">
+          {rightSlot}
           {mobileQuickItem ? (
             <Link
               href={mobileQuickItem.href}
@@ -108,19 +118,30 @@ export function AppHeaderShell({
               {mobileQuickItem.label}
             </Link>
           ) : null}
-          {Array.isArray(mobileMoreItems) && mobileMoreItems.length > 0 ? (
+          {hasMobileMore ? (
             <div className="app-header-mobile-more-wrap" ref={mobileMoreRef}>
               <button
                 type="button"
                 className="app-header-mobile-more-trigger"
+                aria-label="Menu"
                 aria-expanded={mobileMoreOpen}
                 aria-haspopup="menu"
+                aria-controls={menuId}
                 onClick={() => setMobileMoreOpen((v) => !v)}
               >
-                Plus
+                <span className="app-header-mobile-more-icon" aria-hidden>
+                  <span />
+                  <span />
+                  <span />
+                </span>
               </button>
               {mobileMoreOpen ? (
-                <div className="app-header-mobile-more-menu" role="menu">
+                <div
+                  id={menuId}
+                  className="app-header-mobile-more-menu"
+                  role="menu"
+                  aria-label="Navigation"
+                >
                   {mobileMoreItems.map((item) => (
                     <Link
                       key={`${item.href}-${item.label}-mobile-more`}
@@ -135,7 +156,6 @@ export function AppHeaderShell({
               ) : null}
             </div>
           ) : null}
-          {rightSlot}
         </div>
       </div>
 
@@ -252,22 +272,45 @@ export function AppHeaderShell({
           display: none;
         }
         .app-header-mobile-more-trigger {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 2.25rem;
+          height: 2.25rem;
           border: 1px solid #dbeafe;
           background: #f8fbff;
           color: #1d4ed8;
           border-radius: 9px;
-          padding: 0.38rem 0.62rem;
-          font-size: 0.84rem;
-          font-weight: 700;
-          line-height: 1.2;
+          padding: 0;
           cursor: pointer;
-          white-space: nowrap;
+          flex-shrink: 0;
+        }
+        .app-header-mobile-more-trigger:hover {
+          background: #eff6ff;
+        }
+        .app-header-mobile-more-trigger:focus-visible {
+          outline: 2px solid #93c5fd;
+          outline-offset: 1px;
+        }
+        .app-header-mobile-more-icon {
+          display: inline-flex;
+          flex-direction: column;
+          justify-content: center;
+          gap: 3px;
+          width: 1rem;
+        }
+        .app-header-mobile-more-icon span {
+          display: block;
+          height: 2px;
+          width: 100%;
+          border-radius: 999px;
+          background: currentColor;
         }
         .app-header-mobile-more-menu {
           position: absolute;
           top: calc(100% + 0.35rem);
           right: 0;
-          min-width: 9.75rem;
+          min-width: 10.5rem;
           background: #ffffff;
           border: 1px solid #e2e8f0;
           border-radius: 10px;
@@ -307,15 +350,22 @@ export function AppHeaderShell({
           .app-header-nav::-webkit-scrollbar { display: none; }
         }
         @media (max-width: 640px) {
+          .app-header-inner {
+            padding: 0 12px;
+            gap: 0.4rem;
+            min-height: 52px;
+          }
+          .app-header-right {
+            gap: 0.35rem;
+          }
           .app-header-nav { display: none; }
           .app-header-mobile-quick { display: inline-flex; }
           .app-header-mobile-more-wrap { display: inline-flex; }
           .app-header-logo { font-size: 0.96rem; }
-          .app-header-logo-wordmark { height: 1.78rem; }
+          .app-header-logo-wordmark { height: 1.7rem; }
           .app-header-logo-compact.with-wordmark { display: none; }
         }
       `}</style>
     </header>
   );
 }
-
