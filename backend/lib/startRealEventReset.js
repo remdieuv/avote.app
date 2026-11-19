@@ -136,6 +136,7 @@ function startRealResetAppliesToPlan(planType) {
   const p = String(planType || "").trim().toUpperCase();
   return (
     p === "PACK" ||
+    p === "FREE" ||
     p === "P50" ||
     p === "P100" ||
     p === "P250" ||

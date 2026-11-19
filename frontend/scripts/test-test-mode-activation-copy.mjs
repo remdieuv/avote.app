@@ -35,17 +35,17 @@ function test(name, fn) {
   }
 }
 
-test("0 activation : messages non anxiogènes + MODE TEST gratuit", () => {
+test("0 activation : messages non anxiogènes + MODE TEST / gratuit 10", () => {
   assert.match(REGIE_NO_ACTIVATION_STATUS, /MODE TEST/i);
   assert.match(REGIE_NO_ACTIVATION_STATUS, /gratuit|OK/i);
   assert.doesNotMatch(REGIE_NO_ACTIVATION_STATUS, /^Aucune activation disponible$/);
-  assert.match(REGIE_NO_ACTIVATION_HINT, /live réel/i);
+  assert.match(REGIE_NO_ACTIVATION_HINT, /10|gratuit/i);
   assert.match(ACCOUNT_NO_ACTIVATION_TITLE, /0 pack|gratuit/i);
   assert.match(ACCOUNT_NO_ACTIVATION_BODY, /MODE TEST/i);
-  assert.match(ACCOUNT_NO_ACTIVATION_BODY, /live réel/i);
-  assert.match(getRegieTestModeHelpLine(), /Répétition|gratuit/i);
+  assert.match(ACCOUNT_NO_ACTIVATION_BODY, /10|gratuit/i);
+  assert.match(getRegieTestModeHelpLine(), /Répétition|gratuit|10/i);
   assert.match(REGIE_START_REAL_MODAL_INTRO, /MODE TEST/i);
-  assert.match(REGIE_START_REAL_MODAL_INTRO, /pack|activation/i);
+  assert.match(REGIE_START_REAL_MODAL_INTRO, /pack|gratuit|10/i);
 });
 
 test("Compte : explain 0 vs avec activations", () => {

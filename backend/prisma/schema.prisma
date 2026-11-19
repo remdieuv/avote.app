@@ -77,6 +77,8 @@ enum ActivationPlanType {
   P250
   P500
   P1000
+  /** Offre gratuite permanente (10 participants) — Event.eventPlanType uniquement. */
+  FREE
 }
 
 /** Lot D — profil organisateur (Particulier / Organisation). */

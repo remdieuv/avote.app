@@ -116,6 +116,19 @@ test("Migration packs présente", () => {
   assert.match(sql, /EVENT.*P500/);
 });
 
+test("Non-régression : FREE hors catalogue packs + top-up depuis 10", () => {
+  assert.equal(parseParticipantPackSize(10), null);
+  assert.equal(packSizeFromPlanType("FREE"), null);
+  const top = planCapacityTopUp({
+    participantsLimit: 10,
+    liveState: "LIVE",
+    isLocked: false,
+    delta: 50,
+  });
+  assert.equal(top.ok, true);
+  assert.equal(top.nextLimit, 60);
+});
+
 if (failed) {
   console.error(`\n${failed} test(s) en échec`);
   process.exit(1);

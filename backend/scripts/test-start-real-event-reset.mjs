@@ -37,6 +37,7 @@ test("Packs P50–P1000 (et legacy) : même reset runtime", () => {
   assert.equal(startRealResetAppliesToPlan("P50"), true);
   assert.equal(startRealResetAppliesToPlan("P100"), true);
   assert.equal(startRealResetAppliesToPlan("P1000"), true);
+  assert.equal(startRealResetAppliesToPlan("FREE"), true);
   assert.equal(startRealResetAppliesToPlan("FUN"), true);
   assert.equal(startRealResetAppliesToPlan("EVENT"), true);
   assert.equal(startRealResetAppliesToPlan("OTHER"), false);
