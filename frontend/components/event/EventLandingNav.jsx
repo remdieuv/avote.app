@@ -19,12 +19,10 @@ export function EventLandingNav() {
         navItems={[
           { href: "/discover", label: "Les événements", match: "prefix" },
         ]}
-        mobileQuickItem={{
-          href: "/discover",
-          label: "Les événements",
-          match: "prefix",
-        }}
-        mobileMoreItems={null}
+        mobileQuickItem={null}
+        mobileMoreItems={[
+          { href: "/discover", label: "Les événements", match: "prefix" },
+        ]}
         rightSlot={<HeaderAuthCta variant="subtle" />}
       />
       <style>{`
