@@ -3,7 +3,14 @@
  * Hors scope : régie, vote, projection, parcours auth.
  */
 
-/** @typedef {{ href: string; label: string; match?: "exact" | "prefix" | "none" }} SiteNavItem */
+/**
+ * @typedef {{
+ *  href: string;
+ *  label: string;
+ *  match?: "exact" | "prefix" | "none";
+ *  separatorBefore?: boolean;
+ * }} SiteNavItem
+ */
 
 /** @type {readonly SiteNavItem[]} */
 export const PUBLIC_NAV_ITEMS = Object.freeze([
@@ -25,5 +32,10 @@ export const PERSONAL_NAV_ITEMS = Object.freeze([
  */
 export function siteNavItems(isAuthed) {
   if (!isAuthed) return [...PUBLIC_NAV_ITEMS];
-  return [...PUBLIC_NAV_ITEMS, ...PERSONAL_NAV_ITEMS];
+  const [firstPersonal, ...restPersonal] = PERSONAL_NAV_ITEMS;
+  return [
+    ...PUBLIC_NAV_ITEMS,
+    { ...firstPersonal, separatorBefore: true },
+    ...restPersonal,
+  ];
 }

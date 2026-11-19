@@ -10,9 +10,9 @@ import { useEffect, useId, useRef, useState } from "react";
  *  logoLabel: string;
  *  logoSrc?: string | null;
  *  logoWordmarkSrc?: string | null;
- *  navItems: Array<{ href: string; label: string; match?: "exact" | "prefix" | "none" }>;
+ *  navItems: Array<{ href: string; label: string; match?: "exact" | "prefix" | "none"; separatorBefore?: boolean }>;
  *  mobileQuickItem?: { href: string; label: string; match?: "exact" | "prefix" | "none" } | null;
- *  mobileMoreItems?: Array<{ href: string; label: string; match?: "exact" | "prefix" | "none" }> | null;
+ *  mobileMoreItems?: Array<{ href: string; label: string; match?: "exact" | "prefix" | "none"; separatorBefore?: boolean }> | null;
  *  rightSlot: import("react").ReactNode;
  *  contentMaxWidth?: number | string;
  * }} props
@@ -96,13 +96,17 @@ export function AppHeaderShell({
 
         <nav className="app-header-nav" aria-label="Navigation principale">
           {navItems.map((item) => (
-            <Link
-              key={`${item.href}-${item.label}`}
-              href={item.href}
-              className={`app-header-link ${isActive(item) ? "active" : ""}`}
-            >
-              {item.label}
-            </Link>
+            <span key={`${item.href}-${item.label}`} className="app-header-nav-item">
+              {item.separatorBefore ? (
+                <span className="app-header-nav-sep" aria-hidden="true" />
+              ) : null}
+              <Link
+                href={item.href}
+                className={`app-header-link ${isActive(item) ? "active" : ""}`}
+              >
+                {item.label}
+              </Link>
+            </span>
           ))}
         </nav>
 
@@ -143,14 +147,24 @@ export function AppHeaderShell({
                   aria-label="Navigation"
                 >
                   {mobileMoreItems.map((item) => (
-                    <Link
+                    <span
                       key={`${item.href}-${item.label}-mobile-more`}
-                      href={item.href}
-                      className={`app-header-mobile-more-link ${isActive(item) ? "active" : ""}`}
-                      role="menuitem"
+                      className="app-header-mobile-more-item"
                     >
-                      {item.label}
-                    </Link>
+                      {item.separatorBefore ? (
+                        <span
+                          className="app-header-mobile-more-sep"
+                          aria-hidden="true"
+                        />
+                      ) : null}
+                      <Link
+                        href={item.href}
+                        className={`app-header-mobile-more-link ${isActive(item) ? "active" : ""}`}
+                        role="menuitem"
+                      >
+                        {item.label}
+                      </Link>
+                    </span>
                   ))}
                 </div>
               ) : null}
@@ -240,6 +254,19 @@ export function AppHeaderShell({
           justify-self: center;
           min-width: 0;
         }
+        .app-header-nav-item {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.35rem;
+          min-width: 0;
+        }
+        .app-header-nav-sep {
+          width: 1px;
+          height: 1.15rem;
+          background: #cbd5e1;
+          flex-shrink: 0;
+          align-self: center;
+        }
         .app-header-link,
         .app-header-mobile-quick {
           text-decoration: none;
@@ -317,6 +344,15 @@ export function AppHeaderShell({
           box-shadow: 0 14px 26px rgba(15, 23, 42, 0.14);
           padding: 0.3rem;
           z-index: 30;
+        }
+        .app-header-mobile-more-item {
+          display: block;
+        }
+        .app-header-mobile-more-sep {
+          display: block;
+          height: 1px;
+          margin: 0.28rem 0.4rem;
+          background: #e2e8f0;
         }
         .app-header-mobile-more-link {
           display: block;
