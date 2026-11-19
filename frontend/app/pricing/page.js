@@ -621,7 +621,7 @@ export default function PricingPage() {
           <div className="pricing-bottom-reassurance">
             <span>Aucun engagement</span>
             <span>Paiement sécurisé avec Stripe</span>
-            <span>Cinq packs selon votre capacité</span>
+            <span>Gratuit pour commencer, évolutif selon vos besoins</span>
             <span>Fonctionne sans application</span>
           </div>
         </section>
