@@ -33,6 +33,8 @@
     "test:vote-unique-migration": "node scripts/test-vote-unique-migration.mjs",
     "test:submit-vote-perf-guards": "node scripts/test-submit-vote-perf-guards.mjs",
     "test:participant-capacity": "node scripts/test-participant-capacity.mjs",
+    "test:participant-packs": "node scripts/test-participant-packs.mjs",
+    "test:free-offer": "node scripts/test-free-offer.mjs",
     "test:load-harness": "node scripts/test-load-harness.mjs",
     "load:plan": "node scripts/load-harness.mjs plan",
     "load:guard": "node scripts/load-harness.mjs guard",

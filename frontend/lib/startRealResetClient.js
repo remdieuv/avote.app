@@ -2,6 +2,25 @@
  * Passage TEST → RÉEL — confirmation organisateur + clear marqueurs participant.
  */
 
+const START_REAL_WIPE_FOOTER =
+  `Toutes les données de répétition seront supprimées définitivement : ` +
+  `votes, résultats, leads, participations et tirages de concours, ` +
+  `historique des réponses.\n\n` +
+  `L’événement reviendra à la question 1, en attente d’ouverture. ` +
+  `Les questions, bonnes réponses Quiz, ordre, configuration et liens (QR) sont conservés.`;
+
+/**
+ * Confirmation start-real offre gratuite (10 participants).
+ * @returns {string}
+ */
+export function getStartRealFreeConfirmMessage() {
+  return (
+    `Passer en live réel gratuit (10 participants) ?\n\n` +
+    `Aucun paiement ni pack ne sera consommé. Vous pourrez recharger la capacité à tout moment.\n\n` +
+    START_REAL_WIPE_FOOTER
+  );
+}
+
 /**
  * @param {number | string} packOrPlan
  * @returns {string}
@@ -14,11 +33,7 @@ export function getStartRealConfirmMessage(packOrPlan) {
   return (
     `Passer en live réel avec le pack ${packLabel} ?\n\n` +
     `1 activation sera consommée (${packLabel}).\n\n` +
-    `Toutes les données de répétition seront supprimées définitivement : ` +
-    `votes, résultats, leads, participations et tirages de concours, ` +
-    `historique des réponses.\n\n` +
-    `L’événement reviendra à la question 1, en attente d’ouverture. ` +
-    `Les questions, bonnes réponses Quiz, ordre, configuration et liens (QR) sont conservés.`
+    START_REAL_WIPE_FOOTER
   );
 }
 

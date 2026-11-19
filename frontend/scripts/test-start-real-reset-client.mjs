@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import {
   clearParticipantRepetitionMarkers,
   getStartRealConfirmMessage,
+  getStartRealFreeConfirmMessage,
   shouldClearParticipantMarkersOnStartReal,
   votedOptionsLocalStorageKey,
   votedPollLocalStorageKey,
@@ -38,6 +39,10 @@ test("Confirm packs : effacement explicite", () => {
   assert.match(p100, /votes/i);
   assert.match(p100, /question 1/i);
   assert.doesNotMatch(p100, /conservées/i);
+  const freeMsg = getStartRealFreeConfirmMessage();
+  assert.match(freeMsg, /10 participants/);
+  assert.match(freeMsg, /Aucun paiement|ne sera consommé/i);
+  assert.doesNotMatch(freeMsg, /1 activation sera consommée/);
 });
 
 test("Clear marqueurs seulement TEST → RÉEL", () => {
@@ -100,12 +105,13 @@ test("clearParticipantRepetitionMarkers retire vote + lead keys", () => {
   assert.equal(store.other, "keep");
 });
 
-test("Régie source : getStartRealConfirmMessage", () => {
+test("Régie source : getStartRealConfirmMessage + free", () => {
   const src = readFileSync(
     join(here, "../app/admin/event/[eventId]/page.jsx"),
     "utf8",
   );
   assert.ok(src.includes("getStartRealConfirmMessage"));
+  assert.ok(src.includes("getStartRealFreeConfirmMessage"));
   assert.equal(src.includes("données de la répétition (votes, leads, tirages) sont conservées"), false);
 });
 

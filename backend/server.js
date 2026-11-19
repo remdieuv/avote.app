@@ -207,6 +207,11 @@ const {
   PARTICIPANT_PACKS,
 } = require("./lib/participantPacks");
 const { planCapacityTopUp } = require("./lib/capacityTopUp");
+const {
+  FREE_PARTICIPANTS_LIMIT,
+  FREE_PLAN_TYPE,
+  wantsFreeStartReal,
+} = require("./lib/freeOffer");
 
 /** Anti double-clic rejeu TEST (sérialise par pollId). */
 const runReplayTestExclusive = createPollExclusiveQueue();
@@ -6711,22 +6716,34 @@ app.post("/events/:eventId/finish", requireAuth, async (req, res) => {
 });
 
 /**
- * Régie : démarrer le mode réel (consomme une EventActivation pack, ou reliquat eventCredits).
- * TX atomique : wipe runtime TEST + reset Q1 PRÉPARÉ + consommation crédit.
+ * Régie : démarrer le mode réel.
+ * - Offre FREE : 10 participants, sans achat ni consommation d’activation.
+ * - Packs payants : consomme une EventActivation (ou reliquat eventCredits).
+ * TX atomique : wipe runtime TEST + reset Q1 PRÉPARÉ (+ débit pack si payant).
  */
 app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
   const { eventId } = req.params;
-  const pack =
-    parseParticipantPackSize(req.body?.pack ?? req.body?.packSize) ||
-    packSizeFromPlanType(req.body?.planType);
-  if (!pack || !startRealResetAppliesToPlan("PACK")) {
+  const body = req.body || {};
+  const isFreeStart = wantsFreeStartReal(body);
+  const pack = isFreeStart
+    ? null
+    : parseParticipantPackSize(body.pack ?? body.packSize) ||
+      packSizeFromPlanType(body.planType);
+  if (isFreeStart) {
+    if (!startRealResetAppliesToPlan(FREE_PLAN_TYPE)) {
+      return res.status(400).json({
+        error: "INVALID_FREE_PLAN",
+        message: "Offre gratuite indisponible.",
+      });
+    }
+  } else if (!pack || !startRealResetAppliesToPlan("PACK")) {
     return res.status(400).json({
       error: "INVALID_PACK",
-      message: "pack requis : 50, 100, 250, 500 ou 1000.",
+      message: "pack requis : 50, 100, 250, 500 ou 1000 — ou free: true.",
       packs: listParticipantPacksPublic(),
     });
   }
-  const planType = planTypeForPackSize(pack);
+  const planType = isFreeStart ? FREE_PLAN_TYPE : planTypeForPackSize(pack);
   try {
     const result = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT 1 FROM "User" WHERE "id" = ${req.userId} FOR UPDATE`;
@@ -6767,45 +6784,50 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
         throw err;
       }
 
-      const activation = await tx.eventActivation.findFirst({
-        where: {
-          userId: req.userId,
-          planType: /** @type {any} */ (planType),
-          consumedAt: null,
-        },
-        orderBy: { createdAt: "asc" },
-        select: {
-          id: true,
-          planType: true,
-          participantsLimit: true,
-        },
-      });
-
-      const user = await tx.user.findUnique({
-        where: { id: req.userId },
-        select: { eventCredits: true },
-      });
-      const creditsBefore = Math.max(0, Number(user?.eventCredits || 0));
-
-      let participantsLimit = pack;
+      let participantsLimit = isFreeStart ? FREE_PARTICIPANTS_LIMIT : pack;
       let appliedPlanType = planType;
       let usedLegacyCredits = false;
+      /** @type {{ id: string; planType: string; participantsLimit: number } | null} */
+      let activation = null;
+      let creditsBefore = 0;
 
-      if (activation) {
-        participantsLimit = Math.max(
-          1,
-          Math.trunc(Number(activation.participantsLimit || participantsLimit)),
-        );
-        appliedPlanType = activation.planType;
-      } else if (creditsBefore > 0) {
-        // Reliquat crédits sans ligne typée : applique le pack demandé.
-        usedLegacyCredits = true;
-        participantsLimit = pack;
-        appliedPlanType = planType;
-      } else {
-        const err = new Error("NO_ACTIVATION_AVAILABLE");
-        err.code = "NO_ACTIVATION_AVAILABLE";
-        throw err;
+      if (!isFreeStart) {
+        activation = await tx.eventActivation.findFirst({
+          where: {
+            userId: req.userId,
+            planType: /** @type {any} */ (planType),
+            consumedAt: null,
+          },
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            planType: true,
+            participantsLimit: true,
+          },
+        });
+
+        const user = await tx.user.findUnique({
+          where: { id: req.userId },
+          select: { eventCredits: true },
+        });
+        creditsBefore = Math.max(0, Number(user?.eventCredits || 0));
+
+        if (activation) {
+          participantsLimit = Math.max(
+            1,
+            Math.trunc(Number(activation.participantsLimit || participantsLimit)),
+          );
+          appliedPlanType = activation.planType;
+        } else if (creditsBefore > 0) {
+          // Reliquat crédits sans ligne typée : applique le pack demandé.
+          usedLegacyCredits = true;
+          participantsLimit = pack;
+          appliedPlanType = planType;
+        } else {
+          const err = new Error("NO_ACTIVATION_AVAILABLE");
+          err.code = "NO_ACTIVATION_AVAILABLE";
+          throw err;
+        }
       }
 
       const polls = await tx.poll.findMany({
@@ -6865,7 +6887,8 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
       }
 
       // Consommation crédit APRÈS le wipe — même TX : échec wipe ⇒ pas de débit.
-      if (activation) {
+      // Offre FREE : aucun débit activation / eventCredits.
+      if (!isFreeStart && activation) {
         await tx.eventActivation.update({
           where: { id: activation.id },
           data: { consumedAt: new Date() },
@@ -6873,12 +6896,18 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
       }
 
       let remainingCredits = creditsBefore;
-      if (creditsBefore > 0) {
+      if (!isFreeStart && creditsBefore > 0) {
         remainingCredits = creditsBefore - 1;
         await tx.user.update({
           where: { id: req.userId },
           data: { eventCredits: remainingCredits },
         });
+      } else if (isFreeStart) {
+        const user = await tx.user.findUnique({
+          where: { id: req.userId },
+          select: { eventCredits: true },
+        });
+        remainingCredits = Math.max(0, Number(user?.eventCredits || 0));
       }
 
       const resetPatch = buildStartRealEventResetPatch({
@@ -6894,7 +6923,7 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
           consumedAt: new Date(),
           isLocked: false,
           participantsLimit,
-          eventPlanType: appliedPlanType,
+          eventPlanType: /** @type {any} */ (appliedPlanType),
           ...resetPatch,
         },
         select: {
@@ -6919,6 +6948,7 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
         remainingCredits,
         usedLegacyCredits,
         planType: appliedPlanType,
+        free: isFreeStart,
         reset: {
           activePollId: firstPollId,
           deletedVotes,
@@ -6937,8 +6967,11 @@ app.post("/events/:eventId/start-real", requireAuth, async (req, res) => {
       eventCredits: result.remainingCredits,
       activationsByPack,
       activationsAvailable: activationsByPack,
-      pack: packSizeFromPlanType(result.planType) || pack,
+      pack: isFreeStart
+        ? FREE_PARTICIPANTS_LIMIT
+        : packSizeFromPlanType(result.planType) || pack,
       planType: result.planType,
+      free: Boolean(result.free),
       usedLegacyCredits: result.usedLegacyCredits,
       reset: result.reset,
     });

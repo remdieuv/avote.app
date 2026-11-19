@@ -76,6 +76,8 @@
     "test:demo-public-nav": "node scripts/test-demo-public-nav.mjs",
     "test:test-mode-parity": "node scripts/test-test-mode-live-parity.mjs",
     "test:test-mode-activation-copy": "node scripts/test-test-mode-activation-copy.mjs",
+    "test:participant-packs": "node scripts/test-participant-packs.mjs",
+    "test:free-offer": "node scripts/test-free-offer.mjs",
     "test:test-mode-replay": "node scripts/test-test-mode-replay-poll.mjs",
     "test:lot4": "npm run test:test-mode-parity && npm run test:test-mode-replay",
     "test:lot5": "node scripts/test-lot5-qa-regressions.mjs",

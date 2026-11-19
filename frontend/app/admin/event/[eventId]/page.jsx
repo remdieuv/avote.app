@@ -44,7 +44,15 @@ import {
   getRegiePublicPreviewShellStyle,
   getRegiePublicPreviewTitleFontSize,
 } from "@/lib/regiePublicPreview";
-import { getStartRealConfirmMessage } from "@/lib/startRealResetClient";
+import {
+  getStartRealConfirmMessage,
+  getStartRealFreeConfirmMessage,
+} from "@/lib/startRealResetClient";
+import {
+  FREE_OFFER_LABEL,
+  FREE_PARTICIPANTS_LIMIT,
+  FREE_PLAN_TYPE,
+} from "@/lib/freeOffer";
 import {
   EVENT_PAGE_DISABLED_LABEL,
   EVENT_PAGE_LABEL,
@@ -57,6 +65,7 @@ import {
   REGIE_NO_ACTIVATION_STATUS,
   REGIE_PRICING_CTA_LABEL,
   REGIE_START_REAL_CTA_LABEL,
+  REGIE_START_REAL_FREE_CTA_LABEL,
   REGIE_START_REAL_MODAL_INTRO,
   getRegieTestModeHelpLine,
   isActivationShortageError,
@@ -6009,12 +6018,67 @@ export default function RegieEventPage() {
   function handleStartRealClick() {
     if (!canStartReal || busy) return;
     const options = getStartRealPackOptions();
-    if (options.length === 0) return;
+    if (options.length === 0) {
+      void startRealLiveFree();
+      return;
+    }
     if (options.length === 1) {
       void startRealLive(options[0]);
       return;
     }
     setStartRealPlanModalOpen(true);
+  }
+
+  async function startRealLiveFree() {
+    if (!eventId || !canStartReal) return;
+    if (typeof window !== "undefined") {
+      const ok = window.confirm(getStartRealFreeConfirmMessage());
+      if (!ok) return;
+    }
+    setStartRealPlanModalOpen(false);
+    setAutoRotate(false);
+    setBusy(true);
+    setActionError(null);
+    try {
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/events/${eventId}/start-real`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ free: true, planType: FREE_PLAN_TYPE }),
+        },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(mapApiError(body, res.status));
+      }
+      if (typeof body?.eventCredits === "number") {
+        setEventCredits(Math.max(0, Number(body.eventCredits)));
+      }
+      const avail = body?.activationsByPack ?? body?.activationsAvailable;
+      if (avail && typeof avail === "object") {
+        /** @type {Record<string, number>} */
+        const next = {};
+        for (const size of PARTICIPANT_PACK_SIZES) {
+          const raw = Number(avail[String(size)]);
+          next[String(size)] = Number.isFinite(raw)
+            ? Math.max(0, Math.trunc(raw))
+            : 0;
+        }
+        setActivationsAvailable(next);
+      } else {
+        await fetchMeCredits();
+      }
+      await fetchEvent({ silent: true });
+      setToastNotif(
+        `Mode réel activé (gratuit — ${FREE_PARTICIPANTS_LIMIT} participants)`,
+      );
+      window.setTimeout(() => setToastNotif(null), 2800);
+    } catch (e) {
+      setActionError(e.message || "Activation du mode réel impossible.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   /** @param {number} pack */
@@ -6585,14 +6649,16 @@ export default function RegieEventPage() {
   const totalAvailable = activationBalance.totalAvailable;
   const canStartRealWithActivation =
     activationsLoaded && totalAvailable !== null && totalAvailable > 0;
-  const startRealDisabled = busy || !canStartRealWithActivation;
+  const canStartRealFree = activationsLoaded && canStartReal;
+  const startRealDisabled = busy || !canStartRealFree;
   const startRealPackOptions = getStartRealPackOptions();
   const eventPlanType = eventData?.eventPlanType
     ? String(eventData.eventPlanType).toUpperCase()
     : null;
+  const isFreePlan = eventPlanType === FREE_PLAN_TYPE;
   const eventPackSize =
     parseParticipantPackSize(
-      eventData?.participantsLimit != null && !inTestMode
+      eventData?.participantsLimit != null && !inTestMode && !isFreePlan
         ? eventData.participantsLimit
         : null,
     ) ||
@@ -8892,6 +8958,32 @@ export default function RegieEventPage() {
               {REGIE_START_REAL_MODAL_INTRO}
             </p>
             <div style={{ display: "grid", gap: "0.65rem" }}>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void startRealLiveFree()}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-start",
+                  gap: "0.2rem",
+                  width: "100%",
+                  padding: "0.75rem 0.9rem",
+                  borderRadius: "12px",
+                  border: "1px solid #86efac",
+                  background: "linear-gradient(180deg, #f0fdf4 0%, #dcfce7 100%)",
+                  color: "#166534",
+                  fontWeight: 800,
+                  fontSize: "0.9rem",
+                  cursor: busy ? "not-allowed" : "pointer",
+                  textAlign: "left",
+                }}
+              >
+                <span>{FREE_OFFER_LABEL}</span>
+                <span style={{ fontSize: "0.78rem", fontWeight: 700, opacity: 0.9 }}>
+                  0 € — sans carte · recharge possible ensuite
+                </span>
+              </button>
               {startRealPackOptions.map((size) => {
                 const meta = PARTICIPANT_PACKS[size];
                 return (
@@ -9795,7 +9887,7 @@ export default function RegieEventPage() {
                         >
                           Chargement des activations…
                         </span>
-                      ) : !canStartRealWithActivation ? (
+                      ) : (
                         <>
                           <span
                             style={{
@@ -9827,52 +9919,77 @@ export default function RegieEventPage() {
                               {REGIE_NO_ACTIVATION_HINT}
                             </span>
                           </span>
-                          <Link
-                            href="/pricing"
+                          <button
+                            type="button"
+                            disabled={startRealDisabled}
+                            onClick={() => void startRealLiveFree()}
                             style={{
                               display: "inline-flex",
                               alignItems: "center",
                               justifyContent: "center",
-                              padding: "0.48rem 0.88rem",
+                              padding: "0.5rem 0.95rem",
                               borderRadius: "999px",
-                              border: "1px solid rgba(148, 163, 184, 0.45)",
-                              background: "rgba(255, 255, 255, 0.1)",
-                              color: "#e2e8f0",
+                              border: "1px solid #86efac",
+                              background:
+                                "linear-gradient(180deg, #22c55e 0%, #16a34a 100%)",
+                              color: "#ffffff",
                               fontSize: "0.76rem",
                               fontWeight: 800,
-                              textDecoration: "none",
+                              letterSpacing: "0.01em",
+                              cursor: startRealDisabled
+                                ? "not-allowed"
+                                : "pointer",
+                              opacity: startRealDisabled ? 0.55 : 1,
                               whiteSpace: "nowrap",
+                              boxShadow: "0 12px 26px rgba(34, 197, 94, 0.32)",
                             }}
                           >
-                            {REGIE_PRICING_CTA_LABEL}
-                          </Link>
+                            {REGIE_START_REAL_FREE_CTA_LABEL}
+                          </button>
+                          {canStartRealWithActivation ? (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={handleStartRealClick}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                padding: "0.48rem 0.88rem",
+                                borderRadius: "999px",
+                                border: "1px solid rgba(196, 181, 253, 0.7)",
+                                background: "rgba(255, 255, 255, 0.12)",
+                                color: "#ede9fe",
+                                fontSize: "0.76rem",
+                                fontWeight: 800,
+                                cursor: busy ? "not-allowed" : "pointer",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {REGIE_START_REAL_CTA_LABEL}
+                            </button>
+                          ) : (
+                            <Link
+                              href="/pricing"
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                padding: "0.48rem 0.88rem",
+                                borderRadius: "999px",
+                                border: "1px solid rgba(148, 163, 184, 0.45)",
+                                background: "rgba(255, 255, 255, 0.1)",
+                                color: "#e2e8f0",
+                                fontSize: "0.76rem",
+                                fontWeight: 800,
+                                textDecoration: "none",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {REGIE_PRICING_CTA_LABEL}
+                            </Link>
+                          )}
                         </>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={startRealDisabled}
-                          onClick={handleStartRealClick}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            padding: "0.5rem 0.95rem",
-                            borderRadius: "999px",
-                            border: "1px solid #86efac",
-                            background:
-                              "linear-gradient(180deg, #22c55e 0%, #16a34a 100%)",
-                            color: "#ffffff",
-                            fontSize: "0.76rem",
-                            fontWeight: 800,
-                            letterSpacing: "0.01em",
-                            cursor: startRealDisabled ? "not-allowed" : "pointer",
-                            opacity: startRealDisabled ? 0.55 : 1,
-                            whiteSpace: "nowrap",
-                            boxShadow: "0 12px 26px rgba(34, 197, 94, 0.32)",
-                          }}
-                        >
-                          {REGIE_START_REAL_CTA_LABEL}
-                        </button>
                       )}
                       {activationsLoaded ? (
                         <div
@@ -9921,12 +10038,14 @@ export default function RegieEventPage() {
                     ...(!inTestMode && hasParticipantsLimit
                       ? [
                           {
-                            label: eventPackSize
-                              ? `Pack ${eventPackSize} + recharges`
-                              : `Capacité ${participantsLimitValue}`,
-                            color: "#5b21b6",
-                            bg: "#ede9fe",
-                            border: "#c4b5fd",
+                            label: isFreePlan
+                              ? `${FREE_OFFER_LABEL} + recharges`
+                              : eventPackSize
+                                ? `Pack ${eventPackSize} + recharges`
+                                : `Capacité ${participantsLimitValue}`,
+                            color: isFreePlan ? "#166534" : "#5b21b6",
+                            bg: isFreePlan ? "#dcfce7" : "#ede9fe",
+                            border: isFreePlan ? "#86efac" : "#c4b5fd",
                           },
                           {
                             label: `Capacité ${effectiveParticipantsUsed} / ${participantsLimitValue}`,

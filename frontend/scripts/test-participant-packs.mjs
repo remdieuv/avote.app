@@ -67,10 +67,12 @@ test("CheckoutEventButton + pricing + compte branchent pack=", () => {
   assert.match(pricing, /pack=\{size\}/);
   assert.match(pricing, /PARTICIPANT_PACKS\[size\]/);
   assert.match(pricing, /pricing-packs/);
+  assert.match(pricing, /FREE_OFFER_LABEL/);
   assert.match(account, /pack=\{size\}/);
   assert.match(regie, /create-topup-session/);
   assert.match(regie, /Ajouter des participants/);
   assert.match(regie, /startTopupCheckout/);
+  assert.match(regie, /startRealLiveFree/);
   assert.doesNotMatch(regie, /startRealLive\("FUN"\)/);
 });
 

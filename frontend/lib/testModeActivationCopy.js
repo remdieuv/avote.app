@@ -11,36 +11,38 @@ export const REAL_MODE_BADGE_LABEL = "MODE RÉEL";
 
 /** Régie — 0 activation : ne pas laisser croire que le vote est bloqué. */
 export const REGIE_NO_ACTIVATION_STATUS =
-  "MODE TEST gratuit — vote et régie OK";
+  "MODE TEST — vote et régie OK";
 
 export const REGIE_NO_ACTIVATION_HINT =
-  "Une activation est requise uniquement pour passer en live réel.";
+  "Démarrez gratuitement (10 participants) ou achetez un pack pour plus de capacité. Recharge possible ensuite.";
 
 export const REGIE_PRICING_CTA_LABEL = "Voir les packs";
 
 export const REGIE_START_REAL_CTA_LABEL = "Passer en live réel";
 
+export const REGIE_START_REAL_FREE_CTA_LABEL = "Démarrer gratuitement";
+
 export const REGIE_START_REAL_MODAL_INTRO =
-  "Le MODE TEST reste gratuit. Un pack participants sera consommé uniquement pour passer en live réel (audience comptée, données de répétition effacées).";
+  "Le MODE TEST reste gratuit. Vous pouvez démarrer un live réel gratuit (10 participants) sans carte, ou consommer un pack pour une capacité plus élevée. Un événement gratuit peut être rechargé à tout moment.";
 
 /** Compte — bloc activations à 0. */
 export const ACCOUNT_NO_ACTIVATION_TITLE =
-  "0 pack — vous pouvez tester gratuitement";
+  "0 pack — démarrez gratuitement";
 
 export const ACCOUNT_NO_ACTIVATION_BODY =
-  "Créez un événement et animez-le en MODE TEST sans paiement. Un pack participants est nécessaire seulement pour passer en live réel.";
+  "Créez autant d’événements que vous voulez. Le MODE TEST est illimité ; le live réel gratuit offre 10 participants sans carte bancaire. Les packs augmentent la capacité ; les recharges s’additionnent.";
 
 export const ACCOUNT_HAS_ACTIVATIONS_TITLE = "Vos packs participants";
 
 export const ACCOUNT_ACTIVATIONS_INTRO =
-  "Les packs servent au live réel. Le MODE TEST (répétition) reste disponible sans paiement. Les recharges utilisent les mêmes packs.";
+  "Les packs servent au live réel. Vous pouvez aussi démarrer gratuitement (10 participants) sans consommer de pack. Les recharges utilisent les mêmes packs.";
 
 /** Erreurs API start-real — formulation non anxiogène. */
 export const ERR_NO_EVENT_CREDIT =
-  "Le live réel nécessite un pack participants. Vous pouvez continuer à tester gratuitement en MODE TEST.";
+  "Pas de pack pour cette capacité. Démarrez gratuitement (10 participants), choisissez un autre pack, ou continuez en MODE TEST.";
 
 export const ERR_NO_ACTIVATION_AVAILABLE =
-  "Pas de pack disponible pour cette capacité. Choisissez un autre pack, ou continuez en MODE TEST.";
+  "Pas de pack disponible pour cette capacité. Démarrez gratuitement (10 participants), choisissez un autre pack, ou continuez en MODE TEST.";
 
 export const ERR_EVENT_ALREADY_CONSUMED =
   "Le mode réel est déjà activé pour cet événement.";
@@ -98,5 +100,5 @@ export function getAccountActivationExplain(args = {}) {
  * @returns {string}
  */
 export function getRegieTestModeHelpLine() {
-  return "Répétition gratuite : ouvrez le vote, testez QR et résultats. Passez en live réel seulement le jour J.";
+  return "Répétition gratuite : ouvrez le vote, testez QR et résultats. Le jour J, démarrez gratuitement (10 participants) ou avec un pack — recharge possible ensuite.";
 }

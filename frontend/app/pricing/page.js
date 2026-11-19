@@ -3,6 +3,11 @@ import { LandingHeader } from "@/components/landing/LandingHeader";
 import { CheckoutEventButton } from "@/components/billing/CheckoutEventButton";
 import { marketingContentShellStyle } from "@/lib/marketingLayout";
 import {
+  FREE_OFFER_LABEL,
+  FREE_OFFER_PRICE_LABEL,
+  FREE_PARTICIPANTS_LIMIT,
+} from "@/lib/freeOffer";
+import {
   PARTICIPANT_PACK_SIZES,
   PARTICIPANT_PACKS,
 } from "@/lib/participantPacks";
@@ -10,7 +15,7 @@ import {
 export const metadata = {
   title: "Tarifs Avote | Vote interactif en direct",
   description:
-    "Cinq packs de participants, toutes les fonctionnalités incluses. Paiement unique, recharges cumulatives.",
+    "Offre gratuite permanente (10 participants) et cinq packs payants. Toutes les fonctionnalités incluses. Recharges cumulatives.",
 };
 
 const shell = {
@@ -69,15 +74,15 @@ const plans = [
     name: "Gratuit",
     price: "0€",
     unit: "",
-    label: "Tester en conditions réelles",
+    label: "Live réel permanent — 10 participants",
     cta: "Démarrer gratuitement",
-    href: "/join/demo",
+    href: "/admin",
     features: [
-      "1 sondage actif",
-      "Jusqu'à 50 participations",
-      "QR code + lien de participation",
-      "Résultats en direct",
-      "Branding Avote",
+      "Événements illimités",
+      `Jusqu'à ${FREE_PARTICIPANTS_LIMIT} participants / événement`,
+      "Toutes les fonctionnalités incluses",
+      "Sans carte bancaire ni abonnement",
+      "Recharge possible à tout moment",
     ],
   },
   {
@@ -185,13 +190,14 @@ const offerModes = [
 
 const eventCompareRows = [
   { label: "Prix", free: "0€", starter: "19€ / événement", pro: "49€ / événement", premium: "99€ / événement" },
-  { label: "Événements inclus", free: "1 sondage actif", starter: "1", pro: "1", premium: "1" },
-  { label: "Participations incluses", free: "Jusqu'à 50", starter: "Jusqu'à 100", pro: "Jusqu'à 1 000", premium: "Jusqu'à 5 000" },
+  { label: "Événements inclus", free: "Illimités", starter: "1", pro: "1", premium: "1" },
+  { label: "Participations incluses", free: "Jusqu'à 10", starter: "Jusqu'à 100", pro: "Jusqu'à 1 000", premium: "Jusqu'à 5 000" },
   { label: "QR code", free: "Oui", starter: "Oui", pro: "Oui", premium: "Oui" },
   { label: "Résultats live", free: "Oui", starter: "Oui", pro: "Oui", premium: "Oui" },
-  { label: "Projection écran / OBS", free: "Non", starter: "Non", pro: "Oui", premium: "Oui" },
-  { label: "Personnalisation visuelle", free: "Branding Avote", starter: "Branding Avote", pro: "Logo + couleurs", premium: "Avancée" },
-  { label: "Statistiques + export", free: "Non", starter: "Non", pro: "Oui", premium: "Oui" },
+  { label: "Projection écran / OBS", free: "Oui", starter: "Oui", pro: "Oui", premium: "Oui" },
+  { label: "Personnalisation visuelle", free: "Oui", starter: "Oui", pro: "Logo + couleurs", premium: "Avancée" },
+  { label: "Statistiques + export", free: "Oui", starter: "Oui", pro: "Oui", premium: "Oui" },
+  { label: "Recharge capacité", free: "Oui", starter: "Oui", pro: "Oui", premium: "Oui" },
   { label: "Support", free: "Standard", starter: "Standard", pro: "Prioritaire", premium: "Prioritaire" },
 ];
 
@@ -350,21 +356,24 @@ export default function PricingPage() {
               {isLaunchMode
                 ? (
                   <>
-                    Choisissez la capacité de votre événement. Toutes les fonctionnalités sont incluses.
+                    Démarrez gratuitement (10 participants), puis choisissez un pack si besoin.
                     <br />
-                    Paiement unique — recharges possibles pendant le live.
+                    Toutes les fonctionnalités sont incluses — recharges possibles à tout moment.
                   </>
                 )
-                : "Payez une seule fois pour un événement, ou choisissez un abonnement mensuel si vous utilisez Avote régulièrement."}
+                : "Démarrez gratuitement sans carte, payez une seule fois pour plus de capacité, ou choisissez un abonnement mensuel."}
             </p>
             <p className="pricing-micro-reassurance">
-              Aucun engagement. Paiement sécurisé avec Stripe.
+              Aucun abonnement requis pour démarrer. Paiement sécurisé avec Stripe pour les packs.
             </p>
             <div className="pricing-hero-cta">
               {isLaunchMode ? (
                 <div style={{ display: "grid", gap: "0.55rem", justifyItems: "center" }}>
-                  <Link href="#pricing-packs" style={btnPrimary}>
-                    Voir les packs participants
+                  <Link href="/admin" style={btnPrimary}>
+                    Démarrer gratuitement
+                  </Link>
+                  <Link href="#pricing-packs" style={btnSecondary}>
+                    Voir toutes les offres
                   </Link>
                   <p
                     style={{
@@ -374,16 +383,16 @@ export default function PricingPage() {
                       fontWeight: 800,
                     }}
                   >
-                    👉 Aucun engagement • Paiement sécurisé • Recharges cumulatives
+                    👉 10 participants offerts • Sans carte • Recharges cumulatives
                   </p>
                 </div>
               ) : (
                 <>
-                  <Link href="/join/demo" style={btnPrimary}>
-                    Tester gratuitement
+                  <Link href="/admin" style={btnPrimary}>
+                    Démarrer gratuitement
                   </Link>
-                  <Link href="/admin" style={btnSecondary}>
-                    Créer un événement
+                  <Link href="/join/demo" style={btnSecondary}>
+                    Voir la démo
                   </Link>
                 </>
               )}
@@ -398,12 +407,38 @@ export default function PricingPage() {
             aria-labelledby="pricing-packs-title"
           >
             <h2 id="pricing-packs-title" className="section-title">
-              Packs de participants
+              Offres de participants
             </h2>
             <p className="pricing-section-subtitle">
-              Cinq capacités, un même produit. Les recharges utilisent exactement ces packs et s’additionnent.
+              Six offres, un même produit. L’événement gratuit peut être rechargé à tout moment avec les packs payants.
             </p>
             <div className="pricing-grid pricing-grid-fun-event">
+              <div className="pricing-card-wrap" key="free">
+                <article className="pricing-card pricing-card-offer featured">
+                  <div className="pricing-card-top">
+                    <div className="pricing-card-head">
+                      <p className="pricing-plan-name">{FREE_OFFER_LABEL}</p>
+                    </div>
+                    <div className="pricing-price-box">
+                      <p className="pricing-price">
+                        <strong>{FREE_OFFER_PRICE_LABEL}</strong>
+                      </p>
+                    </div>
+                  </div>
+                  <ul className="pricing-features pricing-offer-features">
+                    <li>Jusqu’à {FREE_PARTICIPANTS_LIMIT} participants uniques</li>
+                    <li>Événements illimités, sans durée</li>
+                    <li>Toutes les fonctionnalités incluses</li>
+                    <li>Sans carte bancaire ni abonnement</li>
+                    <li>Recharge possible à tout moment</li>
+                  </ul>
+                  <div className="pricing-card-cta">
+                    <Link href="/admin" style={btnPrimary}>
+                      Démarrer gratuitement
+                    </Link>
+                  </div>
+                </article>
+              </div>
               {PARTICIPANT_PACK_SIZES.map((size, index) => {
                 const meta = PARTICIPANT_PACKS[size];
                 const featured = size === 250 || size === 500;
@@ -1107,7 +1142,7 @@ export default function PricingPage() {
             grid-template-columns: repeat(4, minmax(0, 1fr));
             align-items: stretch;
           }
-          /* Packs participants : 3 colonnes desktop (5 cartes → 3+2) */
+          /* Six offres : 3 colonnes desktop (gratuit + 5 packs → 3+3) */
           .pricing-grid.pricing-grid-fun-event {
             grid-template-columns: repeat(3, minmax(0, 1fr));
             max-width: none;
