@@ -3,10 +3,10 @@
  * Hors scope : régie, participant / vote, projection, auth carte.
  */
 
-export const CLASSIC_CONTENT_MAX = 1280;
+export const CLASSIC_CONTENT_MAX = 1440;
 
 /**
- * @returns {string} ex. `"1280px"`
+ * @returns {string} ex. `"1440px"`
  */
 export function classicContentMaxWidth() {
   return `${CLASSIC_CONTENT_MAX}px`;

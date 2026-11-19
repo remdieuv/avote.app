@@ -761,8 +761,9 @@ export default function PricingPage() {
           gap: 0.9rem;
         }
         .pricing-grid.pricing-grid-fun-event {
-          max-width: 920px;
-          margin: 0 auto;
+          width: 100%;
+          max-width: none;
+          margin: 0;
         }
         .pricing-offer-desc {
           margin: 0.62rem 0 0;
@@ -1089,7 +1090,7 @@ export default function PricingPage() {
           }
           .pricing-grid.pricing-grid-fun-event {
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            max-width: 920px;
+            max-width: none;
           }
           .pricing-monthly-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1106,10 +1107,11 @@ export default function PricingPage() {
             grid-template-columns: repeat(4, minmax(0, 1fr));
             align-items: stretch;
           }
+          /* Packs participants : 3 colonnes desktop (5 cartes → 3+2) */
           .pricing-grid.pricing-grid-fun-event {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            max-width: 920px;
-            margin-inline: auto;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            max-width: none;
+            margin-inline: 0;
           }
           .pricing-monthly-grid {
             grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -1,6 +1,6 @@
 /**
  * Largeurs desktop partagées pour le site public (marketing).
- * Header et contenu alignés sur le plafond classique (**1280 px**).
+ * Header et contenu alignés sur le plafond classique (**1440 px**).
  */
 
 import {
@@ -10,11 +10,12 @@ import {
 
 export const MARKETING_CONTENT_MAX = CLASSIC_CONTENT_MAX;
 
-/** Padding horizontal typique des conteneurs marketing. */
-export const MARKETING_CONTENT_PADDING = "1.25rem 1.25rem 4rem";
+/** Padding fluide : plus de marge latérale tablette/mobile, desktop borné. */
+export const MARKETING_CONTENT_PADDING =
+  "1.25rem clamp(1rem, 3.2vw, 1.75rem) 4rem";
 
 /**
- * @returns {string} ex. `"1280px"`
+ * @returns {string} ex. `"1440px"`
  */
 export function marketingContentMaxWidth() {
   return classicContentMaxWidth();
