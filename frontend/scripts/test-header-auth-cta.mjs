@@ -35,6 +35,7 @@ test("HeaderAuthCta : libellés et cibles", () => {
   assert.match(src, /Se déconnecter/);
   assert.match(src, /\/admin\/account/);
   assert.match(src, /\/login\?next=/);
+  assert.doesNotMatch(src, /useAuthMe/);
   assert.doesNotMatch(src, /Créer un événement/);
 });
 

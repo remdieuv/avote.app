@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
+import { invalidateAuthSession } from "@/components/navigation/useAuthMe";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 
 const field = {
@@ -44,6 +45,8 @@ function LoginForm() {
       if (!res.ok) {
         throw new Error(body.error || `Erreur ${res.status}`);
       }
+      // Évite de réutiliser un cache « guest » pré-login → flash « Se connecter ».
+      invalidateAuthSession();
       router.replace(nextPath);
       router.refresh();
     } catch (err) {
