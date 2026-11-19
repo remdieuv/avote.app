@@ -1,5 +1,5 @@
 /**
- * Largeurs desktop admin — cadre unique 1280 sur toutes les pages shellées.
+ * Largeurs desktop admin — cadre unique 1440 sur toutes les pages shellées.
  * Exécution : node frontend/scripts/test-admin-desktop-widths.mjs
  */
 import assert from "node:assert/strict";
@@ -11,6 +11,7 @@ import {
   ADMIN_CONTENT_MAX_FORM_NARROW,
   ADMIN_CONTENT_MAX_STANDARD,
   ADMIN_CONTENT_MAX_WORKSPACE,
+  ADMIN_CONTENT_PADDING,
   adminContentMaxWidth,
   adminContentShellStyle,
 } from "../lib/adminLayout.js";
@@ -36,36 +37,37 @@ function read(rel) {
   return readFileSync(join(root, rel), "utf8");
 }
 
-test("Tokens workspace unifié 1280 (+ formNarrow)", () => {
-  assert.equal(CLASSIC_CONTENT_MAX, 1280);
-  assert.equal(ADMIN_CONTENT_MAX_WORKSPACE, 1280);
-  assert.equal(ADMIN_CONTENT_MAX_STANDARD, 1280);
+test("Tokens workspace unifié 1440 (+ formNarrow)", () => {
+  assert.equal(CLASSIC_CONTENT_MAX, 1440);
+  assert.equal(ADMIN_CONTENT_MAX_WORKSPACE, 1440);
+  assert.equal(ADMIN_CONTENT_MAX_STANDARD, 1440);
   assert.equal(ADMIN_CONTENT_MAX_FORM_NARROW, 640);
-  assert.equal(adminContentMaxWidth("workspace"), "1280px");
-  assert.equal(adminContentMaxWidth("standard"), "1280px");
-  assert.equal(adminContentMaxWidth(), "1280px");
+  assert.equal(adminContentMaxWidth("workspace"), "1440px");
+  assert.equal(adminContentMaxWidth("standard"), "1440px");
+  assert.equal(adminContentMaxWidth(), "1440px");
+  assert.match(String(ADMIN_CONTENT_PADDING), /clamp\(/);
 });
 
-test("adminContentShellStyle cadre toujours 1280", () => {
+test("adminContentShellStyle cadre toujours 1440", () => {
   const s = adminContentShellStyle("workspace", { fontFamily: "system-ui" });
-  assert.equal(s.maxWidth, "1280px");
+  assert.equal(s.maxWidth, "1440px");
   assert.equal(s.margin, "0 auto");
   assert.equal(s.width, "100%");
   assert.equal(s.boxSizing, "border-box");
   assert.equal(s.fontFamily, "system-ui");
-  assert.equal(adminContentShellStyle("standard").maxWidth, "1280px");
+  assert.equal(adminContentShellStyle("standard").maxWidth, "1440px");
 });
 
-test("Header admin branche sur workspace 1280", () => {
+test("Header admin branche sur workspace 1440", () => {
   const bar = read("components/admin/AdminAccountBar.jsx");
   assert.match(bar, /ADMIN_CONTENT_MAX_WORKSPACE/);
   assert.match(bar, /contentMaxWidth=\{ADMIN_CONTENT_MAX_WORKSPACE\}/);
   const shell = read("components/navigation/AppHeaderShell.jsx");
-  assert.match(shell, /contentMaxWidth\s*=\s*1280/);
+  assert.match(shell, /contentMaxWidth\s*=\s*1440/);
   assert.match(shell, /contentMaxWidth/);
 });
 
-test("Pages admin shellées à 1280 (pas de rail 1200/1600)", () => {
+test("Pages admin shellées à 1440 (pas de rail 1200/1280/1600)", () => {
   const files = [
     "app/admin/events/page.js",
     "app/admin/leads/page.jsx",
@@ -81,12 +83,18 @@ test("Pages admin shellées à 1280 (pas de rail 1200/1600)", () => {
     if (f === "app/admin/page.js") {
       assert.match(src, /adminContentMaxWidth/, `${f} shell via token`);
       assert.match(src, /max-width:\s*\$\{adminContentMaxWidth/);
-      assert.doesNotMatch(src, /admin-create-form-rail|max-width:\s*1600px|max-width:\s*1200px/);
+      assert.doesNotMatch(
+        src,
+        /admin-create-form-rail|max-width:\s*1600px|max-width:\s*1280px|max-width:\s*1200px/,
+      );
       continue;
     }
     if (f === "app/admin/account/page.jsx") {
       assert.match(src, /AdminContentShell/);
-      assert.doesNotMatch(src, /AdminFormRail|adminFormRailStyle|maxWidth:\s*"1200px"|maxWidth:\s*"1600px"/);
+      assert.doesNotMatch(
+        src,
+        /AdminFormRail|adminFormRailStyle|maxWidth:\s*"1200px"|maxWidth:\s*"1280px"|maxWidth:\s*"1600px"/,
+      );
       assert.match(src, /ADMIN_CONTENT_MAX_FORM_NARROW/);
       continue;
     }
@@ -97,8 +105,8 @@ test("Pages admin shellées à 1280 (pas de rail 1200/1600)", () => {
     );
     assert.doesNotMatch(
       src,
-      /maxWidth:\s*"1200px"|max-width:\s*1200px|maxWidth:\s*"1600px"|max-width:\s*1600px/,
-      `${f} ne doit plus fixer 1200/1600px en dur pour le shell`,
+      /maxWidth:\s*"1200px"|max-width:\s*1200px|maxWidth:\s*"1280px"|max-width:\s*1280px|maxWidth:\s*"1600px"|max-width:\s*1600px/,
+      `${f} ne doit plus fixer d’anciens plafonds en dur pour le shell`,
     );
   }
   const custom = read("app/admin/events/[eventId]/customization/page.jsx");
@@ -136,19 +144,22 @@ test("Leads événement utilise AdminPageHeader + padding token", () => {
   assert.doesNotMatch(leads, /padding:\s*"24px 16px 40px"/);
 });
 
-test("Admin interne aligné workspace 1280", () => {
+test("Admin interne aligné workspace 1440", () => {
   const internal = read("components/internal-admin/InternalAdminShell.jsx");
   assert.match(internal, /ADMIN_CONTENT_MAX_WORKSPACE/);
-  assert.doesNotMatch(internal, /maxWidth:\s*"1200px"|maxWidth:\s*"1600px"/);
+  assert.doesNotMatch(
+    internal,
+    /maxWidth:\s*"1200px"|maxWidth:\s*"1280px"|maxWidth:\s*"1600px"/,
+  );
 });
 
-test("Régie sans plafond 1200/1280/1600 de shell page", () => {
+test("Régie sans plafond 1200/1280/1440/1600 de shell page", () => {
   const regie = read("app/admin/event/[eventId]/page.jsx");
   assert.doesNotMatch(regie, /adminContent(?:MaxWidth|ShellStyle|FormRail)/);
   assert.doesNotMatch(regie, /classicLayout|marketingLayout/);
   assert.doesNotMatch(
     regie,
-    /maxWidth:\s*"1200px"|maxWidth:\s*"1280px"|maxWidth:\s*"1600px"/,
+    /maxWidth:\s*"1200px"|maxWidth:\s*"1280px"|maxWidth:\s*"1440px"|maxWidth:\s*"1600px"/,
   );
 });
 

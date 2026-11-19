@@ -1,5 +1,5 @@
 /**
- * Largeurs desktop marketing (header + contenu 1280).
+ * Largeurs desktop marketing (header + contenu 1440).
  * Exécution : node frontend/scripts/test-marketing-desktop-widths.mjs
  */
 import assert from "node:assert/strict";
@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { CLASSIC_CONTENT_MAX } from "../lib/classicLayout.js";
 import {
   MARKETING_CONTENT_MAX,
+  MARKETING_CONTENT_PADDING,
   marketingContentMaxWidth,
   marketingContentShellStyle,
 } from "../lib/marketingLayout.js";
@@ -34,14 +35,15 @@ function read(rel) {
   return readFileSync(join(root, rel), "utf8");
 }
 
-test("Token classique + marketing 1280", () => {
-  assert.equal(CLASSIC_CONTENT_MAX, 1280);
-  assert.equal(MARKETING_CONTENT_MAX, 1280);
-  assert.equal(marketingContentMaxWidth(), "1280px");
+test("Token classique + marketing 1440", () => {
+  assert.equal(CLASSIC_CONTENT_MAX, 1440);
+  assert.equal(MARKETING_CONTENT_MAX, 1440);
+  assert.equal(marketingContentMaxWidth(), "1440px");
   const s = marketingContentShellStyle({ flex: 1 });
-  assert.equal(s.maxWidth, "1280px");
+  assert.equal(s.maxWidth, "1440px");
   assert.equal(s.margin, "0 auto");
   assert.equal(s.flex, 1);
+  assert.match(String(MARKETING_CONTENT_PADDING), /clamp\(/);
 });
 
 test("LandingHeader aligné sur token marketing", () => {
@@ -57,32 +59,53 @@ test("EventLandingNav aligné sur token marketing", () => {
   assert.doesNotMatch(nav, /contentMaxWidth=\{1100\}/);
 });
 
-test("Pages marketing utilisent le shell 1280", () => {
+test("Pages marketing utilisent le shell 1440", () => {
   for (const f of ["app/page.js", "app/pricing/page.js", "app/success/page.js"]) {
     const src = read(f);
     assert.match(src, /marketingContentShellStyle/, `${f} doit utiliser marketingLayout`);
     assert.doesNotMatch(
       src,
-      /maxWidth:\s*"1100px"|maxWidth:\s*"920px"|maxWidth:\s*"1200px"/,
-      `${f} ne doit plus fixer 1100/920/1200 en shell`,
+      /maxWidth:\s*"1100px"|maxWidth:\s*"920px"|maxWidth:\s*"1200px"|maxWidth:\s*"1280px"/,
+      `${f} ne doit plus fixer d’anciens plafonds en shell`,
     );
   }
 });
 
-test("Rapport partagé + landings événement à 1280", () => {
+test("Rapport partagé + landings événement via token marketing", () => {
   const report = read("app/report/account/[token]/page.jsx");
   assert.match(report, /marketingContentShellStyle/);
   const eventLanding = read("app/e/[slug]/page.jsx");
   assert.match(eventLanding, /marketingContentMaxWidth\(\)/);
-  assert.doesNotMatch(eventLanding, /maxWidth:\s*"1200px"|maxWidth:\s*"1100px"/);
+  assert.doesNotMatch(
+    eventLanding,
+    /maxWidth:\s*"1200px"|maxWidth:\s*"1100px"|maxWidth:\s*"1280px"/,
+  );
   const demo = read("components/event/EventLandingDemoPage.jsx");
   assert.match(demo, /marketingContentMaxWidth\(\)/);
-  assert.doesNotMatch(demo, /max-width:\s*1200px/);
+  assert.doesNotMatch(demo, /max-width:\s*(1200|1280)px/);
 });
 
-test("AppHeaderShell défaut 1280", () => {
+test("AppHeaderShell défaut 1440", () => {
   const shell = read("components/navigation/AppHeaderShell.jsx");
-  assert.match(shell, /contentMaxWidth\s*=\s*1280/);
+  assert.match(shell, /contentMaxWidth\s*=\s*1440/);
+});
+
+test("Pricing packs : 1 / 2 / 3 colonnes (mobile / tablette / desktop)", () => {
+  const pricing = read("app/pricing/page.js");
+  assert.match(pricing, /pricing-grid-fun-event/);
+  assert.match(
+    pricing,
+    /\.pricing-grid\.pricing-grid-fun-event[\s\S]*?grid-template-columns:\s*repeat\(2/,
+  );
+  assert.match(
+    pricing,
+    /@media \(min-width: 1040px\)[\s\S]*?\.pricing-grid\.pricing-grid-fun-event[\s\S]*?grid-template-columns:\s*repeat\(3/,
+  );
+  assert.doesNotMatch(
+    pricing,
+    /\.pricing-grid\.pricing-grid-fun-event\s*\{[^}]*max-width:\s*920px/,
+  );
+  assert.doesNotMatch(pricing, /10 participants|offre gratuite|pack.?gratuit/i);
 });
 
 test("Participant / diffusion / auth non touchés par marketingLayout", () => {

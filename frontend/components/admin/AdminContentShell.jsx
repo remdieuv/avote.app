@@ -3,7 +3,7 @@
 import { adminContentShellStyle } from "@/lib/adminLayout";
 
 /**
- * Cadre admin desktop (1280 px) — aligné sur le header.
+ * Cadre admin desktop (1440 px) — aligné sur le header.
  * @param {{
  *  children: import("react").ReactNode;
  *  as?: string;
