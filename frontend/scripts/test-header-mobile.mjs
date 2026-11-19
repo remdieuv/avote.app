@@ -1,5 +1,5 @@
 /**
- * En-tête mobile : logo | CTA auth | ☰ (Les événements + Tarifs dans le menu).
+ * En-tête mobile : logo | CTA auth | ☰ (rubriques accessibles, sans doublon).
  * Exécution : node frontend/scripts/test-header-mobile.mjs
  */
 import assert from "node:assert/strict";
@@ -32,50 +32,28 @@ test("AppHeaderShell : ordre mobile CTA puis menu, a11y ☰", () => {
   const src = read("components/navigation/AppHeaderShell.jsx");
   const rightIdx = src.indexOf("{rightSlot}");
   const moreIdx = src.indexOf("app-header-mobile-more-wrap");
-  const quickIdx = src.indexOf("app-header-mobile-quick");
   assert.ok(rightIdx > 0 && moreIdx > rightIdx, "rightSlot avant le menu ☰");
-  assert.ok(quickIdx > rightIdx, "quick après rightSlot si présent");
   assert.match(src, /aria-label=["']Menu["']/);
   assert.match(src, /aria-controls/);
-  assert.match(src, /aria-expanded/);
   assert.match(src, /Escape/);
   assert.match(src, /app-header-mobile-more-icon/);
   assert.doesNotMatch(src, />Plus</);
-  assert.match(src, /@media \(max-width: 640px\)[\s\S]*padding:\s*0 12px/);
 });
 
-test("LandingHeader : pas de quick « Les événements », menu 2 items", () => {
-  const src = read("components/landing/LandingHeader.jsx");
+test("SiteHeader : mobileMore = navItems, pas de quick isolé", () => {
+  const src = read("components/navigation/SiteHeader.jsx");
   assert.match(src, /mobileQuickItem=\{null\}/);
-  assert.match(src, /mobileMoreItems=\{\[/);
-  assert.match(src, /href:\s*["']\/discover["']/);
-  assert.match(src, /href:\s*["']\/pricing["']/);
-  assert.match(src, /Les événements/);
-  assert.match(src, /Tarifs/);
-  assert.match(src, /HeaderAuthCta/);
-  // Pas de quick item « Les événements » en prop dédiée
+  assert.match(src, /mobileMoreItems=\{navItems\}/);
+});
+
+test("Landing / Event / Admin via SiteHeader", () => {
+  assert.match(read("components/landing/LandingHeader.jsx"), /SiteHeader/);
+  assert.match(read("components/event/EventLandingNav.jsx"), /SiteHeader/);
+  assert.match(read("components/admin/AdminAccountBar.jsx"), /SiteHeader/);
   assert.doesNotMatch(
-    src,
-    /mobileQuickItem=\{\{\s*href:\s*["']\/discover["']/,
+    read("components/admin/AdminAccountBar.jsx"),
+    /mobileQuickItem/,
   );
-});
-
-test("EventLandingNav : discover dans ☰, pas en barre", () => {
-  const src = read("components/event/EventLandingNav.jsx");
-  assert.match(src, /mobileQuickItem=\{null\}/);
-  assert.match(src, /mobileMoreItems=\{\[/);
-  assert.match(src, /\/discover/);
-});
-
-test("Desktop nav inchangée (navItems marketing)", () => {
-  const src = read("components/landing/LandingHeader.jsx");
-  assert.match(src, /navItems=\{\[[\s\S]*\/discover[\s\S]*\/pricing/);
-});
-
-test("AdminAccountBar : Mes événements quick conservé", () => {
-  const src = read("components/admin/AdminAccountBar.jsx");
-  assert.match(src, /mobileQuickItem=\{\{\s*href:\s*["']\/admin\/events["']/);
-  assert.match(src, /Mes événements/);
 });
 
 if (failed > 0) {

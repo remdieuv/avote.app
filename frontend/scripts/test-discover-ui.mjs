@@ -136,11 +136,8 @@ test("page discover + nav Les événements présents", () => {
     join(root, "components/landing/LandingHeader.jsx"),
     "utf8",
   );
-  assert.match(header, /\/discover/);
-  assert.match(header, /Les événements/);
-  assert.match(header, /HeaderAuthCta/);
-  assert.doesNotMatch(header, /Mes événements/);
-  assert.match(header, /mobileMoreItems/);
+  assert.match(header, /SiteHeader/);
+  assert.match(header, /MARKETING_CONTENT_MAX/);
 });
 
 test("Lot 5 — persistence URL Discover (helpers + client)", async () => {

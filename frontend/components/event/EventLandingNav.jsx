@@ -1,7 +1,6 @@
 "use client";
 
-import { AppHeaderShell } from "@/components/navigation/AppHeaderShell";
-import { HeaderAuthCta } from "@/components/navigation/HeaderAuthCta";
+import { SiteHeader } from "@/components/navigation/SiteHeader";
 import { MARKETING_CONTENT_MAX } from "@/lib/marketingLayout";
 
 /**
@@ -11,19 +10,9 @@ import { MARKETING_CONTENT_MAX } from "@/lib/marketingLayout";
 export function EventLandingNav() {
   return (
     <div className="ev-landing-nav">
-      <AppHeaderShell
-        logoHref="/"
-        logoLabel="AVOTE"
-        logoWordmarkSrc="/avote-wordmark.png"
+      <SiteHeader
         contentMaxWidth={MARKETING_CONTENT_MAX}
-        navItems={[
-          { href: "/discover", label: "Les événements", match: "prefix" },
-        ]}
-        mobileQuickItem={null}
-        mobileMoreItems={[
-          { href: "/discover", label: "Les événements", match: "prefix" },
-        ]}
-        rightSlot={<HeaderAuthCta variant="subtle" />}
+        accountVariant="subtle"
       />
       <style>{`
         .ev-landing-nav {
