@@ -32,38 +32,34 @@ test("HeaderAuthCta : libellés et cibles", () => {
   const src = read("components/navigation/HeaderAuthCta.jsx");
   assert.match(src, /Se connecter/);
   assert.match(src, /Mon compte/);
+  assert.match(src, /Se déconnecter/);
   assert.match(src, /\/admin\/account/);
   assert.match(src, /\/login\?next=/);
-  assert.doesNotMatch(src, /Mes événements|Créer un événement|\/admin\/events/);
+  assert.doesNotMatch(src, /Créer un événement/);
 });
 
-test("LandingHeader : un seul CTA via HeaderAuthCta", () => {
+test("LandingHeader : SiteHeader unifié", () => {
   const src = read("components/landing/LandingHeader.jsx");
-  assert.match(src, /HeaderAuthCta/);
-  assert.match(src, /rightSlot=\{<HeaderAuthCta/);
-  assert.doesNotMatch(src, /Mes événements|Créer un événement|landing-header-cta/);
+  assert.match(src, /SiteHeader/);
+  assert.doesNotMatch(src, /Créer un événement|landing-header-cta/);
 });
 
-test("EventLandingNav : même CTA (variant subtle)", () => {
+test("EventLandingNav : SiteHeader", () => {
   const src = read("components/event/EventLandingNav.jsx");
-  assert.match(src, /HeaderAuthCta/);
-  assert.match(src, /variant=["']subtle["']/);
-  assert.doesNotMatch(src, /Mes événements|\/admin\/events/);
+  assert.match(src, /SiteHeader/);
+  assert.match(src, /accountVariant=["']subtle["']/);
 });
 
-test("AdminAccountBar : Mes événements reste en nav, Mon compte à droite", () => {
+test("AdminAccountBar : SiteHeader (nav publique + perso)", () => {
   const bar = read("components/admin/AdminAccountBar.jsx");
-  assert.match(bar, /href:\s*["']\/admin\/events["']/);
-  assert.match(bar, /Mes événements/);
-  assert.match(bar, /AdminAccountMenu/);
-  const menu = read("components/admin/AdminAccountMenu.jsx");
-  assert.match(menu, /Mon compte/);
-  assert.match(menu, /\/admin\/account/);
+  assert.match(bar, /SiteHeader/);
+  assert.match(bar, /ADMIN_CONTENT_MAX_WORKSPACE/);
+  assert.doesNotMatch(bar, /mobileQuickItem/);
 });
 
 test("Régie non touchée", () => {
   const regie = read("app/admin/event/[eventId]/page.jsx");
-  assert.doesNotMatch(regie, /HeaderAuthCta|LandingHeader/);
+  assert.doesNotMatch(regie, /HeaderAuthCta|LandingHeader|SiteHeader/);
 });
 
 if (failed > 0) {

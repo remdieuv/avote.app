@@ -1,26 +1,8 @@
 "use client";
 
-import { AppHeaderShell } from "@/components/navigation/AppHeaderShell";
-import { HeaderAuthCta } from "@/components/navigation/HeaderAuthCta";
+import { SiteHeader } from "@/components/navigation/SiteHeader";
 import { MARKETING_CONTENT_MAX } from "@/lib/marketingLayout";
 
 export function LandingHeader() {
-  return (
-    <AppHeaderShell
-      logoHref="/"
-      logoLabel="AVOTE"
-      logoWordmarkSrc="/avote-wordmark.png"
-      contentMaxWidth={MARKETING_CONTENT_MAX}
-      navItems={[
-        { href: "/discover", label: "Les événements", match: "prefix" },
-        { href: "/pricing", label: "Tarifs", match: "exact" },
-      ]}
-      mobileQuickItem={null}
-      mobileMoreItems={[
-        { href: "/discover", label: "Les événements", match: "prefix" },
-        { href: "/pricing", label: "Tarifs", match: "exact" },
-      ]}
-      rightSlot={<HeaderAuthCta />}
-    />
-  );
+  return <SiteHeader contentMaxWidth={MARKETING_CONTENT_MAX} />;
 }
