@@ -1,18 +1,23 @@
 /**
  * Largeurs desktop partagées pour le site public (marketing).
- * Header et contenu alignés sur **1200 px**.
+ * Header et contenu alignés sur le plafond classique (**1280 px**).
  */
 
-export const MARKETING_CONTENT_MAX = 1200;
+import {
+  CLASSIC_CONTENT_MAX,
+  classicContentMaxWidth,
+} from "./classicLayout.js";
+
+export const MARKETING_CONTENT_MAX = CLASSIC_CONTENT_MAX;
 
 /** Padding horizontal typique des conteneurs marketing. */
 export const MARKETING_CONTENT_PADDING = "1.25rem 1.25rem 4rem";
 
 /**
- * @returns {string} ex. `"1200px"`
+ * @returns {string} ex. `"1280px"`
  */
 export function marketingContentMaxWidth() {
-  return `${MARKETING_CONTENT_MAX}px`;
+  return classicContentMaxWidth();
 }
 
 /**

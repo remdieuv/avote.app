@@ -1,7 +1,7 @@
 import { marketingContentShellStyle } from "@/lib/marketingLayout";
 
 /**
- * Conteneur marketing desktop (1200 px) — aligné sur LandingHeader.
+ * Conteneur marketing desktop (1280 px) — aligné sur LandingHeader.
  * @param {{
  *  children: import("react").ReactNode;
  *  as?: keyof JSX.IntrinsicElements;
