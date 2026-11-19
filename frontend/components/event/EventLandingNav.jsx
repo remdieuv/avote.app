@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AppHeaderShell } from "@/components/navigation/AppHeaderShell";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
+import { MARKETING_CONTENT_MAX } from "@/lib/marketingLayout";
 
 /**
  * En-tête discret des Landing `/e/[slug]` — ne recouvre pas le hero.
@@ -39,7 +40,7 @@ export function EventLandingNav() {
         logoHref="/"
         logoLabel="AVOTE"
         logoWordmarkSrc="/avote-wordmark.png"
-        contentMaxWidth={1100}
+        contentMaxWidth={MARKETING_CONTENT_MAX}
         navItems={[
           { href: "/discover", label: "Les événements", match: "prefix" },
         ]}

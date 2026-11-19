@@ -2,16 +2,21 @@
  * Largeurs desktop partagées pour l’espace organisateur `/admin`.
  *
  * Contrat produit :
- * — cadre / header admin : **1600 px** sur toutes les pages shellées
+ * — cadre / header admin : **1280 px** sur toutes les pages shellées
  *   (événements, leads, analytics, création, compte, dual-pane, etc.)
  * — formNarrow : sous-blocs de champs (ex. mot de passe) — pas un plafond de page
  *
  * Ne pas élargir la régie : elle reste en pleine largeur viewport.
  */
 
-export const ADMIN_CONTENT_MAX_WORKSPACE = 1600;
+import {
+  CLASSIC_CONTENT_MAX,
+  classicContentMaxWidth,
+} from "./classicLayout.js";
 
-/** Alias historique — même valeur que workspace (toutes pages admin = 1600). */
+export const ADMIN_CONTENT_MAX_WORKSPACE = CLASSIC_CONTENT_MAX;
+
+/** Alias historique — même valeur que workspace (toutes pages admin = 1280). */
 export const ADMIN_CONTENT_MAX_STANDARD = ADMIN_CONTENT_MAX_WORKSPACE;
 
 export const ADMIN_CONTENT_MAX_FORM_NARROW = 640;
@@ -22,16 +27,16 @@ export const ADMIN_CONTENT_PADDING =
 
 /**
  * @param {"standard" | "workspace"} [tier="workspace"]
- * @returns {string} ex. `"1600px"`
+ * @returns {string} ex. `"1280px"`
  */
 export function adminContentMaxWidth(_tier = "workspace") {
-  return `${ADMIN_CONTENT_MAX_WORKSPACE}px`;
+  return classicContentMaxWidth();
 }
 
 /**
- * Style du cadre admin centré (1600).
+ * Style du cadre admin centré (1280).
  * Le 1er argument `tier` est accepté pour rétrocompatibilité mais n’affecte
- * plus la largeur — toutes les pages admin shellées partagent 1600.
+ * plus la largeur — toutes les pages admin shellées partagent 1280.
  *
  * @param {"standard" | "workspace" | Record<string, string | number>} [tierOrExtra="workspace"]
  * @param {Record<string, string | number>} [extra]

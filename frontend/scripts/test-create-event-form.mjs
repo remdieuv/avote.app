@@ -315,7 +315,7 @@ test("page création : patterns UX présents", () => {
   assert.match(src, /moveItem|réorganiser|Monter|Descendre/i);
   assert.match(src, /mobilePanel|Formulaire|Aperçu/);
   assert.match(src, /QUESTION_TYPE_META|admin-type-card/);
-  assert.match(src, /max-width:\s*1600px/);
+  assert.match(src, /adminContentMaxWidth|max-width:\s*\$\{adminContentMaxWidth/);
   assert.match(src, /validateCreateEventForm/);
   assert.match(src, /visibilityIntent|create-visibility/);
   assert.match(src, /validateCreateVisibilityIntent|publicConfirmed/);

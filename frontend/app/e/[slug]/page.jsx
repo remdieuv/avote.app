@@ -33,6 +33,7 @@ import {
   sortLandingProgramItems,
 } from "@/lib/landingEventPresentation";
 import { getOrCreateVoterSessionId } from "@/lib/votes/voter-session";
+import { marketingContentMaxWidth } from "@/lib/marketingLayout";
 import { resolveEventLandingPhase } from "@/lib/participantLiveFlow";
 
 function mapApiError(body, status) {
@@ -1409,7 +1410,7 @@ export default function EventLandingPage() {
 
       <div
         style={{
-          maxWidth: "1200px",
+          maxWidth: marketingContentMaxWidth(),
           margin: "0 auto",
           padding: "clamp(1.5rem, 4vw, 2.5rem) clamp(1.15rem, 4vw, 2rem) 2.75rem",
           boxSizing: "border-box",

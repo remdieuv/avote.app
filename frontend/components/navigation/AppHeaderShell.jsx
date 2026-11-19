@@ -26,7 +26,7 @@ export function AppHeaderShell({
   mobileQuickItem = null,
   mobileMoreItems = null,
   rightSlot,
-  contentMaxWidth = 1200,
+  contentMaxWidth = 1280,
 }) {
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);

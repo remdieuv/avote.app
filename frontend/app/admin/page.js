@@ -9,6 +9,7 @@ import { EventLivePreview } from "@/components/admin/EventLivePreview";
 import { EventStructuredInfoFields } from "@/components/admin/EventStructuredInfoFields";
 import { FormBuilderPanel } from "@/components/admin/FormBuilderPanel";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
+import { adminContentMaxWidth } from "@/lib/adminLayout";
 import {
   CONTEST_PRIZE_PLACEHOLDER,
   QUESTION_TYPE_META,
@@ -1796,7 +1797,7 @@ export default function AdminPage() {
         }
         .admin-create-shell {
           width: 100%;
-          max-width: 1600px;
+          max-width: ${adminContentMaxWidth("workspace")};
           margin: 0 auto;
           padding: 24px clamp(16px, 3vw, 24px) 40px;
           box-sizing: border-box;
