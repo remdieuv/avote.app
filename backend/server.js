@@ -189,6 +189,12 @@ const {
   resolveVoteCountsFromPoll,
 } = require("./lib/voteAggregates");
 const {
+  lockParticipantSession,
+  claimParticipantSlot,
+  releaseParticipantSlot,
+  syncParticipantsUsedFromVotes,
+} = require("./lib/participantCapacity");
+const {
   createPollUpdatedCoalescer,
 } = require("./lib/pollUpdatedCoalesce");
 const {
@@ -1088,6 +1094,7 @@ async function submitVote(input) {
             id: true,
             isLocked: true,
             participantsLimit: true,
+            participantsUsed: true,
             voteState: true,
           },
         },
@@ -1097,25 +1104,13 @@ async function submitVote(input) {
     if (!poll) {
       return { ok: false, message: "Sondage introuvable." };
     }
-    await tx.$executeRaw`SELECT 1 FROM "Poll" WHERE "id" = ${input.pollId} FOR UPDATE`;
 
     const eventId = String(poll.eventId || "").trim();
     if (!eventId) {
       return { ok: false, message: "Événement introuvable." };
     }
 
-    // Verrou logique par événement pour sérialiser le contrôle de capacité.
-    await tx.$executeRaw`SELECT 1 FROM "Event" WHERE "id" = ${eventId} FOR UPDATE`;
-
-    const event = await tx.event.findUnique({
-      where: { id: eventId },
-      select: {
-        id: true,
-        isLocked: true,
-        participantsLimit: true,
-        voteState: true,
-      },
-    });
+    const event = poll.event;
     if (!event) {
       return { ok: false, message: "Événement introuvable." };
     }
@@ -1137,6 +1132,26 @@ async function submitVote(input) {
     if (poll.status !== "ACTIVE") {
       return { ok: false, message: "Ce sondage n'est pas ouvert au vote." };
     }
+
+    const allowed = new Set(poll.options.map((option) => option.id));
+    const cleaned = [...new Set(input.optionIds)].filter((id) => allowed.has(id));
+
+    if (cleaned.length === 0) {
+      return {
+        ok: false,
+        message: "Aucune réponse valide sélectionnée.",
+      };
+    }
+
+    if (poll.type !== "MULTIPLE_CHOICE" && cleaned.length > 1) {
+      return {
+        ok: false,
+        message: "Une seule réponse est autorisée pour ce sondage.",
+      };
+    }
+
+    // Sérialise uniquement cette session (pas tout l’événement).
+    await lockParticipantSession(tx, eventId, input.voterSessionId);
 
     const existingVotes = await tx.vote.findMany({
       where: {
@@ -1163,23 +1178,6 @@ async function submitVote(input) {
       };
     }
 
-    const allowed = new Set(poll.options.map((option) => option.id));
-    const cleaned = [...new Set(input.optionIds)].filter((id) => allowed.has(id));
-
-    if (cleaned.length === 0) {
-      return {
-        ok: false,
-        message: "Aucune réponse valide sélectionnée.",
-      };
-    }
-
-    if (poll.type !== "MULTIPLE_CHOICE" && cleaned.length > 1) {
-      return {
-        ok: false,
-        message: "Une seule réponse est autorisée pour ce sondage.",
-      };
-    }
-
     const sameAsExisting =
       hasExistingVote &&
       existingVotes.length === cleaned.length &&
@@ -1196,21 +1194,18 @@ async function submitVote(input) {
       select: { id: true },
     });
 
+    let claimedSlot = false;
     if (!participantExistsOnEvent) {
-      const participantsUsed = await countDistinctParticipantsForEvent(
-        tx,
-        eventId,
-      );
-      const participantsLimit = Math.max(1, Number(event.participantsLimit || 500));
-      if (participantsUsed >= participantsLimit) {
+      const claim = await claimParticipantSlot(tx, eventId);
+      if (!claim.ok) {
         // Saturation ≠ clôture : ne pas poser isLocked (réservé à Terminer).
-        // Les voterSessionId déjà comptés peuvent encore voter aux questions suivantes.
         return {
           ok: false,
           limitReached: true,
           message: "Limite de participants atteinte",
         };
       }
+      claimedSlot = true;
     }
 
     try {
@@ -1245,11 +1240,26 @@ async function submitVote(input) {
       }
     } catch (err) {
       if (err?.code === "P2002") {
+        // Unique DB : la session a un vote — resync compteur si on avait claimé.
+        if (claimedSlot) {
+          try {
+            await syncParticipantsUsedFromVotes(tx, eventId);
+          } catch (syncErr) {
+            console.error("syncParticipantsUsedFromVotes", syncErr);
+          }
+        }
         return {
           ok: false,
           alreadyVoted: true,
           message: "Vous avez déjà voté pour ce sondage.",
         };
+      }
+      if (claimedSlot) {
+        try {
+          await releaseParticipantSlot(tx, eventId);
+        } catch (releaseErr) {
+          console.error("releaseParticipantSlot", releaseErr);
+        }
       }
       throw err;
     }
@@ -7319,6 +7329,9 @@ app.post("/polls/:pollId/replay-test", requireAuth, async (req, res) => {
           where: { id: poll.eventId },
           data: eventPatch,
         });
+
+        // Wipe partiel → resync compteur (sessions pouvant encore avoir d’autres votes).
+        await syncParticipantsUsedFromVotes(tx, poll.eventId);
 
         return {
           deletedVotes,

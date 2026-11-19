@@ -51,6 +51,8 @@ function buildStartRealEventResetPatch(input = {}) {
     questionTimerAccumulatedSec: 0,
     questionTimerStartedAt: null,
     questionTimerIsPaused: true,
+    /** Wipe votes start-real → compteur capacité à zéro. */
+    participantsUsed: 0,
   };
   if (sds !== "BLACK") {
     data.screenDisplayState = null;

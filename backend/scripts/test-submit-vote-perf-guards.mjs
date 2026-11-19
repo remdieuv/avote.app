@@ -1,5 +1,5 @@
 /**
- * Contrats submitVote après perf : replace Lead/Concours, capacité, MC.
+ * Contrats submitVote après perf : replace Lead/Concours, capacité atomique, MC.
  * Exécution : node backend/scripts/test-submit-vote-perf-guards.mjs
  */
 import assert from "node:assert/strict";
@@ -38,20 +38,17 @@ test("alreadyVoted si non-replaceable", () => {
   assert.match(body, /MULTIPLE_CHOICE/);
 });
 
-test("capacité via COUNT DISTINCT helper + isLocked", () => {
-  assert.match(body, /countDistinctParticipantsForEvent/);
+test("capacité atomique + isLocked (plus de COUNT sous FOR UPDATE)", () => {
+  assert.match(body, /claimParticipantSlot/);
+  assert.match(body, /lockParticipantSession/);
   assert.match(body, /limitReached:\s*true/);
   assert.match(body, /isLocked:\s*true/);
   assert.match(body, /participantsLimit/);
+  assert.doesNotMatch(body, /countDistinctParticipantsForEvent/);
+  assert.doesNotMatch(body, /FOR UPDATE/);
 });
 
-test("FOR UPDATE Event + Poll conservés", () => {
-  assert.match(body, /FOR UPDATE/);
-  assert.match(body, /SELECT 1 FROM "Event"/);
-  assert.match(body, /SELECT 1 FROM "Poll"/);
-});
-
-test("P2002 alwaysVoted conservé (unique DB)", () => {
+test("unicité P2002 conservée", () => {
   assert.match(body, /P2002/);
 });
 
