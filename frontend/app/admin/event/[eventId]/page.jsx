@@ -172,6 +172,7 @@ import {
   shouldUseTelecommandeChrome,
 } from "@/lib/regieTelecommande";
 import { RegieTelecommande } from "@/components/admin/RegieTelecommande";
+import { ConsultationModePanel } from "@/components/admin/ConsultationModePanel";
 import {
   TelecommandeIcon,
   TelecommandeQrModal,
@@ -7832,9 +7833,18 @@ export default function RegieEventPage() {
         flexDirection: "column",
       }}
     >
+      <ConsultationModePanel
+        eventId={eventId}
+        consultationMode={eventData?.consultationMode}
+        selfServiceOpen={Boolean(eventData?.selfServiceOpen)}
+        polls={pollsOrdonnes}
+        busy={busy}
+        eventLocked={Boolean(eventData?.isLocked)}
+        onChanged={() => fetchEvent({ silent: true })}
+      />
       <p
         style={{
-          margin: "0 0 0.5rem 0",
+          margin: "0.85rem 0 0.5rem 0",
           fontSize: "0.62rem",
           fontWeight: 700,
           letterSpacing: "0.09em",

@@ -3,6 +3,8 @@
  * Partagé entre broadcast régie et snapshot socket-only au join_event.
  */
 
+const { consultationModeApiFields } = require("./consultationMode");
+
 /**
  * Décide si le poll actif doit être inclus dans `event_live_updated`.
  * @param {{
@@ -73,6 +75,7 @@ function buildEventLiveUpdatedPayload(event, pollJson, questionTimer) {
     screenDisplayState: event.screenDisplayState
       ? String(event.screenDisplayState).toLowerCase()
       : null,
+    ...consultationModeApiFields(event),
     activePollId: event.activePollId,
     participantsLimit:
       event.participantsLimit == null

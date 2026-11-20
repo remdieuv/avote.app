@@ -480,6 +480,24 @@ test("LOT-1. résultats live après vote (comportement /p prod) aussi en Salle",
     }),
     true,
   );
+  // Libre-service : votable même si event.voteState CLOSED
+  assert.equal(
+    isParticipantVoteSessionOpen({
+      voteState: "closed",
+      pollStatus: "ACTIVE",
+      liveScene: "waiting",
+      selfServiceVotable: true,
+    }),
+    true,
+  );
+  assert.equal(
+    isParticipantVoteSessionOpen({
+      voteState: "closed",
+      pollStatus: "ACTIVE",
+      selfServiceVotable: false,
+    }),
+    false,
+  );
   assert.equal(
     shouldShowParticipantLiveResultsBlock({
       hasPoll: true,

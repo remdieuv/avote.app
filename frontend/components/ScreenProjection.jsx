@@ -40,6 +40,7 @@ import {
   screenShellTopBorderStyle,
   screenStateTitleFontSizeClamp,
 } from "@/lib/liveStateVisual";
+import { normalizeConsultationModeUi } from "@/lib/consultationMode";
 import {
   applyMainDisplayToClientState,
   applyScreenBModeToClientState,
@@ -178,6 +179,8 @@ export function ScreenProjection({
   const [eventTitle, setEventTitle] = useState(
     /** @type {string | null} */ (null),
   );
+  /** live | self_service — écran neutre en libre-service (pas de question courante trompeuse). */
+  const [consultationMode, setConsultationMode] = useState("live");
   const [resultsBarsAnimated, setResultsBarsAnimated] = useState(false);
   /** Rafraîchit l’affichage du chrono chaque seconde quand il est actif */
   const [chronoTick, setChronoTick] = useState(0);
@@ -253,6 +256,7 @@ export function ScreenProjection({
   const applyEventSlugMeta = useCallback((meta) => {
     setEventId(meta.id);
     setLiveScene(meta.liveState ?? null);
+    setConsultationMode(normalizeConsultationModeUi(meta.consultationMode));
     if (typeof meta.title === "string" && meta.title.trim()) {
       setEventTitle(meta.title.trim());
     } else {
@@ -886,6 +890,11 @@ export function ScreenProjection({
       }
 
       setLiveScene(payload.liveState ?? null);
+      if (payload.consultationMode != null) {
+        setConsultationMode(
+          normalizeConsultationModeUi(payload.consultationMode),
+        );
+      }
       applyMainDisplaySafe(mainDisplayFromLivePayload(payload));
       // Progression Question x/y (pollsProgress) — refetch meta, pas un 2e socket.
       // applyEventSlugMeta respecte indep + targeted (ne retombe plus sur A).
@@ -1241,6 +1250,28 @@ export function ScreenProjection({
           {error || getLiveStateLabel(LIVE_UX_LOCAL.ERROR)}
         </p>
       </main>,
+      { hideStatePill: true },
+    );
+  }
+
+  /**
+   * Libre-service : pas de « question courante » trompeuse sur /screen.
+   * Catalogue projection dédié prévu ultérieurement — affichage neutre + QR salle.
+   */
+  if (consultationMode === "self_service") {
+    return wrapOut(
+      false,
+      <ScreenWaiting
+        shell={shell}
+        joinSlug={slugPublic}
+        pollsProgress={null}
+        waitingTitle={
+          eventTitle
+            ? `${eventTitle} — Libre-service`
+            : "Libre-service en cours"
+        }
+        waitingBody="Les participants choisissent et votent depuis leur téléphone. Scannez le QR pour rejoindre la salle."
+      />,
       { hideStatePill: true },
     );
   }
