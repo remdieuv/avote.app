@@ -61,6 +61,13 @@ const {
   isDiscoverEligible,
 } = require("./lib/eventVisibility");
 const {
+  consultationModeApiFields,
+  evaluateSetConsultationMode,
+  evaluateOpenSelfServiceConsultation,
+  evaluateCloseSelfServiceConsultation,
+  buildNormalizeLivePollsPlan,
+} = require("./lib/consultationMode");
+const {
   normalizeDiscoverCity,
   parseDiscoverStartsAt,
   normalizeThemeRef,
@@ -4352,6 +4359,7 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
       screenDisplayState: event.screenDisplayState
         ? String(event.screenDisplayState).toLowerCase()
         : null,
+      ...consultationModeApiFields(event),
       activePollId: event.activePollId,
       participantsLimit: Number(event.participantsLimit || 500),
       participantsUsed,
@@ -6670,6 +6678,312 @@ app.post("/events/:eventId/skip-poll", requireAuth, async (req, res) => {
     });
   } catch (e) {
     console.error("events/:eventId/skip-poll", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/**
+ * Libre-service étape 1 — lecture du mode de consultation (orga).
+ * Aussi exposé sur GET /events/:eventId.
+ */
+app.get("/events/:eventId/consultation-mode", requireAuth, async (req, res) => {
+  const { eventId } = req.params;
+  try {
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true,
+        slug: true,
+        consultationMode: true,
+        selfServiceOpen: true,
+        voteState: true,
+        liveState: true,
+        isLocked: true,
+        activePollId: true,
+      },
+    });
+    if (!event) {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+    return res.json({
+      id: event.id,
+      slug: event.slug,
+      ...consultationModeApiFields(event),
+      voteState: String(event.voteState).toLowerCase(),
+      liveState: String(event.liveState).toLowerCase(),
+      isLocked: Boolean(event.isLocked),
+      activePollId: event.activePollId ?? null,
+    });
+  } catch (e) {
+    console.error("GET /events/:eventId/consultation-mode", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/**
+ * Libre-service étape 1 — bascule LIVE ↔ SELF_SERVICE.
+ * Body : { mode: "live" | "self_service" }
+ * Ne purge ni votes ni slug. Retour LIVE → votes fermés + au plus un poll ACTIVE.
+ */
+app.patch("/events/:eventId/consultation-mode", requireAuth, async (req, res) => {
+  const { eventId } = req.params;
+  const body = req.body ?? {};
+  try {
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true,
+        slug: true,
+        consultationMode: true,
+        selfServiceOpen: true,
+        isLocked: true,
+        liveState: true,
+        voteState: true,
+        activePollId: true,
+        polls: {
+          select: { id: true, status: true, order: true },
+          orderBy: { order: "asc" },
+        },
+      },
+    });
+    if (!event) {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+
+    const decision = evaluateSetConsultationMode({
+      currentMode: event.consultationMode,
+      nextMode: body.mode ?? body.consultationMode,
+      isLocked: event.isLocked,
+      liveState: event.liveState,
+      selfServiceOpen: event.selfServiceOpen,
+    });
+    if (!decision.ok) {
+      return res.status(decision.status).json({ error: decision.error });
+    }
+
+    if (decision.unchanged) {
+      return res.json({
+        ok: true,
+        unchanged: true,
+        id: event.id,
+        slug: event.slug,
+        ...consultationModeApiFields(event),
+        voteState: String(event.voteState).toLowerCase(),
+        activePollId: event.activePollId ?? null,
+        votesPreserved: true,
+      });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      /** @type {Record<string, unknown>} */
+      const data = { ...decision.eventData };
+      let nextActive = event.activePollId ?? null;
+
+      if (decision.normalizeLivePolls) {
+        const plan = buildNormalizeLivePollsPlan({
+          polls: event.polls,
+          activePollId: event.activePollId,
+        });
+        nextActive = plan.activePollId;
+        data.activePollId = plan.activePollId;
+        if (plan.pollIdsToClose.length > 0) {
+          await tx.poll.updateMany({
+            where: { id: { in: plan.pollIdsToClose } },
+            data: { status: "CLOSED" },
+          });
+        }
+        // Ne force pas DRAFT→ACTIVE : la régie ouvre le vote ; on pose seulement le pointeur.
+      }
+
+      const row = await tx.event.update({
+        where: { id: eventId },
+        data,
+        select: {
+          id: true,
+          slug: true,
+          consultationMode: true,
+          selfServiceOpen: true,
+          voteState: true,
+          liveState: true,
+          isLocked: true,
+          activePollId: true,
+        },
+      });
+      return { row, nextActive };
+    });
+
+    await emitEventLiveUpdated(io, eventId);
+
+    return res.json({
+      ok: true,
+      unchanged: false,
+      id: updated.row.id,
+      slug: updated.row.slug,
+      ...consultationModeApiFields(updated.row),
+      voteState: String(updated.row.voteState).toLowerCase(),
+      liveState: String(updated.row.liveState).toLowerCase(),
+      isLocked: Boolean(updated.row.isLocked),
+      activePollId: updated.row.activePollId ?? updated.nextActive ?? null,
+      votesPreserved: true,
+      mode: consultationModeApiFields(updated.row).consultationMode,
+    });
+  } catch (e) {
+    console.error("PATCH /events/:eventId/consultation-mode", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/**
+ * Libre-service étape 1 — ouvrir la consultation (réversible, flag selfServiceOpen).
+ * N’active pas encore plusieurs sondages votables (étape 2).
+ */
+app.post("/events/:eventId/consultation/open", requireAuth, async (req, res) => {
+  const { eventId } = req.params;
+  try {
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true,
+        slug: true,
+        consultationMode: true,
+        selfServiceOpen: true,
+        isLocked: true,
+        liveState: true,
+        voteState: true,
+      },
+    });
+    if (!event) {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+    const decision = evaluateOpenSelfServiceConsultation({
+      mode: event.consultationMode,
+      selfServiceOpen: event.selfServiceOpen,
+      isLocked: event.isLocked,
+      liveState: event.liveState,
+    });
+    if (!decision.ok) {
+      return res.status(decision.status).json({ error: decision.error });
+    }
+    if (decision.unchanged) {
+      return res.json({
+        ok: true,
+        unchanged: true,
+        id: event.id,
+        slug: event.slug,
+        ...consultationModeApiFields(event),
+        votesPreserved: true,
+      });
+    }
+    const row = await prisma.event.update({
+      where: { id: eventId },
+      data: decision.eventData,
+      select: {
+        id: true,
+        slug: true,
+        consultationMode: true,
+        selfServiceOpen: true,
+        voteState: true,
+        isLocked: true,
+      },
+    });
+    await emitEventLiveUpdated(io, eventId);
+    return res.json({
+      ok: true,
+      unchanged: false,
+      id: row.id,
+      slug: row.slug,
+      ...consultationModeApiFields(row),
+      voteState: String(row.voteState).toLowerCase(),
+      isLocked: Boolean(row.isLocked),
+      votesPreserved: true,
+    });
+  } catch (e) {
+    console.error("POST /events/:eventId/consultation/open", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/**
+ * Libre-service étape 1 — fermer la consultation (réversible ≠ Terminer / isLocked).
+ */
+app.post("/events/:eventId/consultation/close", requireAuth, async (req, res) => {
+  const { eventId } = req.params;
+  try {
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true,
+        slug: true,
+        consultationMode: true,
+        selfServiceOpen: true,
+        isLocked: true,
+        liveState: true,
+        voteState: true,
+      },
+    });
+    if (!event) {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+    const decision = evaluateCloseSelfServiceConsultation({
+      mode: event.consultationMode,
+      selfServiceOpen: event.selfServiceOpen,
+      isLocked: event.isLocked,
+      liveState: event.liveState,
+    });
+    if (!decision.ok) {
+      return res.status(decision.status).json({ error: decision.error });
+    }
+    if (decision.unchanged) {
+      return res.json({
+        ok: true,
+        unchanged: true,
+        id: event.id,
+        slug: event.slug,
+        ...consultationModeApiFields(event),
+        votesPreserved: true,
+      });
+    }
+    const row = await prisma.event.update({
+      where: { id: eventId },
+      data: decision.eventData,
+      select: {
+        id: true,
+        slug: true,
+        consultationMode: true,
+        selfServiceOpen: true,
+        voteState: true,
+        isLocked: true,
+      },
+    });
+    await emitEventLiveUpdated(io, eventId);
+    return res.json({
+      ok: true,
+      unchanged: false,
+      id: row.id,
+      slug: row.slug,
+      ...consultationModeApiFields(row),
+      voteState: String(row.voteState).toLowerCase(),
+      isLocked: Boolean(row.isLocked),
+      votesPreserved: true,
+    });
+  } catch (e) {
+    console.error("POST /events/:eventId/consultation/close", e);
     return res.status(500).json({ error: "Erreur serveur." });
   }
 });

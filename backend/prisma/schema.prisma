@@ -65,6 +65,16 @@ enum VoteState {
   CLOSED
 }
 
+/**
+ * Mode de consultation d’un événement (étape Libre-service).
+ * LIVE = régie anime (comportement historique) ;
+ * SELF_SERVICE = participants répondent à leur rythme (UI/vote multi à l’étape 2).
+ */
+enum ConsultationMode {
+  LIVE
+  SELF_SERVICE
+}
+
 enum AuthProvider {
   CREDENTIALS
   GOOGLE
@@ -178,6 +188,16 @@ model Event {
   screenDisplayState DisplayState?
   /** Participants peuvent voter (indépendant de displayState) */
   voteState    VoteState    @default(CLOSED)
+  /**
+   * Mode Live animé vs Libre-service (interchangeable, même event / slug / votes).
+   * Défaut LIVE = non-régression événements existants.
+   */
+  consultationMode ConsultationMode @default(LIVE)
+  /**
+   * Libre-service : consultation ouverte (réversible).
+   * Distinct de isLocked / Terminer — ne purge pas les votes.
+   */
+  selfServiceOpen Boolean @default(false)
   /** Affichage automatique des résultats après fermeture du vote (délai en secondes) */
   autoReveal             Boolean   @default(true)
   autoRevealDelaySec     Int       @default(5)

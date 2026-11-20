@@ -36,6 +36,7 @@
     "test:participant-packs": "node scripts/test-participant-packs.mjs",
     "test:free-offer": "node scripts/test-free-offer.mjs",
     "test:user-role-migration": "node scripts/test-user-role-migration.mjs",
+    "test:consultation-mode": "node scripts/test-consultation-mode.mjs",
     "test:load-harness": "node scripts/test-load-harness.mjs",
     "load:plan": "node scripts/load-harness.mjs plan",
     "load:guard": "node scripts/load-harness.mjs guard",
