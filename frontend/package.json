@@ -11,6 +11,7 @@
     "test:diffusion": "node scripts/test-diffusion-ux.mjs",
     "test:participant": "node scripts/test-participant-live-flow.mjs",
     "test:consultation-self-service": "node scripts/test-consultation-self-service.mjs",
+    "test:regie-ux-modes": "node scripts/test-regie-ux-modes-separation.mjs",
     "test:normalize-live": "node scripts/test-normalize-live-payload.mjs",
     "test:backend-proxy": "node scripts/test-backend-proxy-upstream.mjs",
     "test:api-browser-base": "node scripts/test-api-browser-base.mjs",

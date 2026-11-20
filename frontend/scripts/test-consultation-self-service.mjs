@@ -46,7 +46,8 @@ test("helpers mode / catalogue", () => {
 test("composants / pages branchés", () => {
   const files = [
     "components/SelfServiceJoinCatalog.jsx",
-    "components/admin/ConsultationModePanel.jsx",
+    "components/admin/RegieModeSelector.jsx",
+    "components/admin/SelfServiceRegieWorkspace.jsx",
     "components/JoinLiveHub.jsx",
     "components/PollExperience.jsx",
     "components/ScreenProjection.jsx",
@@ -83,7 +84,9 @@ test("composants / pages branchés", () => {
     join(root, "app/admin/event/[eventId]/page.jsx"),
     "utf8",
   );
-  assert.match(regieSrc, /ConsultationModePanel/);
+  assert.match(regieSrc, /RegieModeSelector/);
+  assert.match(regieSrc, /SelfServiceRegieWorkspace/);
+  assert.doesNotMatch(regieSrc, /ConsultationModePanel/);
 });
 
 if (failed > 0) {
