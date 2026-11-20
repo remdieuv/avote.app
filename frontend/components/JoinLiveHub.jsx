@@ -42,6 +42,7 @@ import {
 } from "@/lib/liveStateVisual";
 import { ExperienceHeader } from "@/components/navigation/ExperienceHeader";
 import { PollExperience } from "@/components/PollExperience";
+import { SelfServiceJoinCatalog } from "@/components/SelfServiceJoinCatalog";
 import {
   leadDraftStorageKey,
   leadSubmittedStorageKey,
@@ -50,8 +51,13 @@ import {
 import {
   clearParticipantRepetitionMarkers,
   shouldClearParticipantMarkersOnStartReal,
+  votedPollLocalStorageKey,
 } from "@/lib/startRealResetClient";
 import { getOrCreateVoterSessionId } from "@/lib/votes/voter-session";
+import {
+  isSelfServiceMode,
+  normalizeConsultationModeUi,
+} from "@/lib/consultationMode";
 
 /**
  * @param {{ accent: string; pulseAllowed: boolean }} props
@@ -187,6 +193,7 @@ export function JoinLiveHub({ slug }) {
   const socketRef = useRef(/** @type {import("socket.io-client").Socket | null} */ (null));
   const activePollIdRef = useRef(/** @type {string | null} */ (null));
   const joinedPollIdRef = useRef(/** @type {string | null} */ (null));
+  const selectedSelfServicePollIdRef = useRef(/** @type {string | null} */ (null));
   /** Personnalisation salle (/admin/.../customization) */
   const [roomDescription, setRoomDescription] = useState(null);
   const [logoUrl, setLogoUrl] = useState(null);
@@ -206,6 +213,15 @@ export function JoinLiveHub({ slug }) {
   const [infoShowOnFinished, setInfoShowOnFinished] = useState(true);
   /** Landing `/e/[slug]` activée (lien discret vers vitrine). */
   const [landingEnabled, setLandingEnabled] = useState(false);
+  /** live | self_service */
+  const [consultationMode, setConsultationMode] = useState("live");
+  const [selfServiceOpen, setSelfServiceOpen] = useState(false);
+  /** @type {Array<{ id: string; label: string; type?: string; open?: boolean; votable?: boolean }>} */
+  const [catalogPolls, setCatalogPolls] = useState([]);
+  /** Question choisie dans le catalogue libre-service (null = vue catalogue). */
+  const [selectedSelfServicePollId, setSelectedSelfServicePollId] =
+    useState(/** @type {string | null} */ (null));
+  const [votedPollIdsTick, setVotedPollIdsTick] = useState(0);
   const [prefersDark, setPrefersDark] = useState(true);
   /**
    * Surcharge visuelle depuis la page admin (iframe + postMessage), non persistée.
@@ -262,6 +278,10 @@ export function JoinLiveHub({ slug }) {
       setInfoShowOnFinished(true);
       setLandingEnabled(false);
       setIsLocked(false);
+      setConsultationMode("live");
+      setSelfServiceOpen(false);
+      setCatalogPolls([]);
+      setSelectedSelfServicePollId(null);
       setPreviewCustomization(null);
       return;
     }
@@ -291,6 +311,33 @@ export function JoinLiveHub({ slug }) {
     setLiveState(axes.liveState);
     setVoteState(axes.voteState);
     setDisplayState(axes.displayState);
+    {
+      const nextMode = normalizeConsultationModeUi(data.consultationMode);
+      setConsultationMode(nextMode);
+      if (nextMode !== "self_service") {
+        setSelectedSelfServicePollId(null);
+        selectedSelfServicePollIdRef.current = null;
+      }
+    }
+    setSelfServiceOpen(Boolean(data.selfServiceOpen));
+    if (Array.isArray(data.catalogPolls)) {
+      setCatalogPolls(
+        data.catalogPolls
+          .filter((x) => x && typeof x.id === "string" && x.id.trim())
+          .map((x) => ({
+            id: x.id.trim(),
+            label:
+              typeof x.label === "string" && x.label.trim()
+                ? x.label.trim()
+                : "Question",
+            type: typeof x.type === "string" ? x.type : undefined,
+            open: Boolean(x.open),
+            votable: Boolean(x.votable),
+          })),
+      );
+    } else {
+      setCatalogPolls([]);
+    }
     setAutoRevealShowResultsAt(
       typeof data.autoRevealShowResultsAt === "string"
         ? data.autoRevealShowResultsAt
@@ -667,6 +714,14 @@ export function JoinLiveHub({ slug }) {
           setActivePollStatus("ACTIVE");
           setEmbeddedPollSnapshot(null);
         }
+        if (payload?.consultationMode != null) {
+          setConsultationMode(
+            normalizeConsultationModeUi(payload.consultationMode),
+          );
+        }
+        if (typeof payload?.selfServiceOpen === "boolean") {
+          setSelfServiceOpen(payload.selfServiceOpen);
+        }
         if (typeof payload?.isLiveConsumed === "boolean") {
           if (
             shouldClearParticipantMarkersOnStartReal({
@@ -707,7 +762,11 @@ export function JoinLiveHub({ slug }) {
     function onPollUpdated(payload) {
       if (!payload || typeof payload !== "object" || !payload.id) return;
       const current = activePollIdRef.current;
-      if (current && String(payload.id) !== String(current)) return;
+      const ssSelected = selectedSelfServicePollIdRef.current;
+      const matchesLive = current && String(payload.id) === String(current);
+      const matchesSs =
+        ssSelected && String(payload.id) === String(ssSelected);
+      if (!matchesLive && !matchesSs) return;
       const pollNorm = normalizePollJson(payload);
       const axes = normalizeLiveAxes(pollNorm);
       setEmbeddedPollSnapshot(pollNorm);
@@ -718,6 +777,14 @@ export function JoinLiveHub({ slug }) {
       if (axes.liveState) setLiveState(axes.liveState);
       if (axes.voteState) setVoteState(axes.voteState);
       if (axes.displayState) setDisplayState(axes.displayState);
+      if (payload?.consultationMode != null) {
+        setConsultationMode(
+          normalizeConsultationModeUi(payload.consultationMode),
+        );
+      }
+      if (typeof payload?.selfServiceOpen === "boolean") {
+        setSelfServiceOpen(payload.selfServiceOpen);
+      }
     }
 
     /** @param {any} payload */
@@ -762,25 +829,36 @@ export function JoinLiveHub({ slug }) {
     };
   }, [eventId, fetchMeta]);
 
-  /** Quand activePollId change (meta/socket), rejoindre la room poll sur le même io. */
+  /** Quand activePollId / sélection SS change, rejoindre la room poll sur le même io. */
   useEffect(() => {
     const socket = socketRef.current;
     if (!socket?.connected) return;
-    const next =
-      typeof activePollId === "string" && activePollId.trim()
+    const ssMode = isSelfServiceMode({ consultationMode });
+    const next = ssMode
+      ? typeof selectedSelfServicePollId === "string" &&
+        selectedSelfServicePollId.trim()
+        ? selectedSelfServicePollId.trim()
+        : null
+      : typeof activePollId === "string" && activePollId.trim()
         ? activePollId.trim()
         : null;
+    selectedSelfServicePollIdRef.current = ssMode
+      ? next
+      : selectedSelfServicePollId;
     const prev = joinedPollIdRef.current;
     if (prev && prev !== next) {
       socket.emit("leave_poll", prev);
     }
-    if (next && shouldJoinSocketJoinActivePoll({ activePollId: next })) {
+    if (
+      next &&
+      (ssMode || shouldJoinSocketJoinActivePoll({ activePollId: next }))
+    ) {
       socket.emit("join_poll", next);
       joinedPollIdRef.current = next;
     } else if (!next) {
       joinedPollIdRef.current = null;
     }
-  }, [activePollId]);
+  }, [activePollId, selectedSelfServicePollId, consultationMode]);
 
   const sceneRaw = String(liveState || "").toLowerCase();
   const vs = String(voteState || "").toLowerCase();
@@ -854,20 +932,65 @@ export function JoinLiveHub({ slug }) {
     loading,
   });
 
+  const selfServiceHub = isSelfServiceMode({ consultationMode });
+
   /** Vote / confirmation / CLOSED / RESULTS — dans la Salle, sans quitter `/join`. */
-  const embedPollSurface = shouldEmbedPollSurfaceInRoom({
-    uxState: scene,
-    isFull: roomIsFull,
-    loading: loading || !!error || !eventId,
-  });
+  const embedPollSurface =
+    !selfServiceHub &&
+    shouldEmbedPollSurfaceInRoom({
+      uxState: scene,
+      isFull: roomIsFull,
+      loading: loading || !!error || !eventId,
+    });
+
+  const embedSelfServicePoll =
+    selfServiceHub &&
+    !roomIsFull &&
+    Boolean(selectedSelfServicePollId) &&
+    !loading &&
+    !error &&
+    Boolean(eventId);
 
   const getPollUrlForRoom = useCallback(() => {
     const base = `${API_URL}/p/${encodeURIComponent(slug)}`;
-    if (activePollId) {
-      return `${base}?poll=${encodeURIComponent(activePollId)}`;
+    const pollId = selfServiceHub
+      ? selectedSelfServicePollId
+      : activePollId;
+    if (pollId) {
+      return `${base}?poll=${encodeURIComponent(pollId)}`;
     }
     return base;
-  }, [slug, activePollId]);
+  }, [slug, activePollId, selectedSelfServicePollId, selfServiceHub]);
+
+  const votedPollIds = useMemo(() => {
+    void votedPollIdsTick;
+    const set = new Set();
+    if (typeof window === "undefined") return set;
+    for (const p of catalogPolls) {
+      try {
+        if (window.localStorage.getItem(votedPollLocalStorageKey(p.id)) === "true") {
+          set.add(p.id);
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return set;
+  }, [catalogPolls, votedPollIdsTick]);
+
+  const handleSelectSelfServicePoll = useCallback((pollId) => {
+    setSelectedSelfServicePollId(pollId);
+    selectedSelfServicePollIdRef.current = pollId;
+    setEmbeddedPollSnapshot(null);
+    setVotedPollIdsTick((n) => n + 1);
+  }, []);
+
+  const handleBackToSelfServiceCatalog = useCallback(() => {
+    setSelectedSelfServicePollId(null);
+    selectedSelfServicePollIdRef.current = null;
+    setEmbeddedPollSnapshot(null);
+    setVotedPollIdsTick((n) => n + 1);
+  }, []);
 
   const progressionLigne = useMemo(() => {
     if (!pollsProgress) return null;
@@ -1059,7 +1182,7 @@ export function JoinLiveHub({ slug }) {
   );
 
   const piedEncouragement =
-    roomIsFull || embedPollSurface
+    roomIsFull || embedPollSurface || embedSelfServicePoll || selfServiceHub
       ? null
       : scene === "finished"
         ? null
@@ -1067,7 +1190,13 @@ export function JoinLiveHub({ slug }) {
 
   let corps = null;
 
-  if (!loading && !error && eventId && !embedPollSurface) {
+  if (
+    !loading &&
+    !error &&
+    eventId &&
+    !embedPollSurface &&
+    !selfServiceHub
+  ) {
     if (roomIsFull) {
       corps = (
         <>
@@ -1507,7 +1636,94 @@ export function JoinLiveHub({ slug }) {
           </div>
         ) : null}
 
-        {!loading && !error && !embedPollSurface && corps ? (
+        {!loading && !error && selfServiceHub && !roomIsFull ? (
+          <div
+            style={{
+              width: "100%",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              boxSizing: "border-box",
+              gap: "0.75rem",
+            }}
+          >
+            {embedSelfServicePoll ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleBackToSelfServiceCatalog}
+                  style={{
+                    alignSelf: "flex-start",
+                    maxWidth: "36rem",
+                    width: "100%",
+                    margin: "0 auto",
+                    padding: "0.55rem 0.85rem",
+                    borderRadius: "10px",
+                    border: `1px solid ${palette.headerBorder}`,
+                    background: palette.cardBg,
+                    color: palette.fg2,
+                    fontWeight: 700,
+                    fontSize: "0.88rem",
+                    cursor: "pointer",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  ← Retour aux questions
+                </button>
+                <div
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    justifyContent: "center",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <PollExperience
+                    key={`ss-poll-${selectedSelfServicePollId}-sr${storageResetRevision}`}
+                    getPollUrl={getPollUrlForRoom}
+                    titrePage={eventTitle || "Libre-service"}
+                    slugPublic={slug}
+                    embedded
+                    parentSocketOnline={socketOnline}
+                    parentLiveRevision={liveSyncRevision}
+                    parentPollSnapshot={embeddedPollSnapshot}
+                    parentPollRevision={embeddedPollRevision}
+                    parentEventId={eventId}
+                    parentLiveState={liveState}
+                    parentVoteState={voteState}
+                    parentDisplayState={displayState}
+                    parentIsLocked={isLocked}
+                    parentPrimaryColor={effectivePrimaryColor}
+                    parentThemeMode={effectiveThemeMode}
+                    parentOverlayStrength={effectiveOverlayStrength}
+                  />
+                </div>
+              </>
+            ) : (
+              <div
+                className="join-live-card"
+                style={{
+                  ...carteCentral,
+                  textAlign: "left",
+                  maxWidth: "min(36rem, 100%)",
+                }}
+              >
+                <SelfServiceJoinCatalog
+                  eventTitle={eventTitle}
+                  consultationOpen={Boolean(selfServiceOpen)}
+                  catalogPolls={catalogPolls}
+                  votedPollIds={votedPollIds}
+                  slug={slug}
+                  accent={accent}
+                  onSelectPoll={handleSelectSelfServicePoll}
+                  selectedPollId={selectedSelfServicePollId}
+                />
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        {!loading && !error && !embedPollSurface && !selfServiceHub && corps ? (
           <div className="join-live-card" style={carteCentral}>
             {/*
               G15 — l’eyebrow reprenait le même libellé FINISHED au-dessus du corps
@@ -1532,7 +1748,7 @@ export function JoinLiveHub({ slug }) {
           </div>
         ) : null}
 
-        {!loading && !error && historiqueQuestions.length > 0 ? (
+        {!loading && !error && !selfServiceHub && historiqueQuestions.length > 0 ? (
           scene === "finished" ? (
             <section
               style={{

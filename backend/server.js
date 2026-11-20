@@ -61,11 +61,17 @@ const {
   isDiscoverEligible,
 } = require("./lib/eventVisibility");
 const {
+  CONSULTATION_MODE,
+  normalizeConsultationMode,
   consultationModeApiFields,
   evaluateSetConsultationMode,
   evaluateOpenSelfServiceConsultation,
   evaluateCloseSelfServiceConsultation,
   buildNormalizeLivePollsPlan,
+  canAcceptSelfServiceVote,
+  evaluateSetSelfServiceOpenPolls,
+  buildSelfServiceCatalog,
+  isSelfServiceCatalogType,
 } = require("./lib/consultationMode");
 const {
   normalizeDiscoverCity,
@@ -934,6 +940,14 @@ function pollToJson(poll) {
       : null,
     eventIsLiveConsumed: poll.event?.isLiveConsumed ?? null,
     eventIsLocked: poll.event?.isLocked ?? null,
+    ...consultationModeApiFields(poll.event),
+    selfServiceVotable: canAcceptSelfServiceVote({
+      mode: poll.event?.consultationMode,
+      selfServiceOpen: poll.event?.selfServiceOpen,
+      isLocked: poll.event?.isLocked,
+      pollStatus: poll.status,
+      pollType: poll.type,
+    }).ok,
     autoReveal: Boolean(poll.event?.autoReveal),
     autoRevealDelaySec: poll.event?.autoRevealDelaySec ?? 5,
     autoRevealShowResultsAt:
@@ -1108,6 +1122,8 @@ async function submitVote(input) {
             participantsLimit: true,
             participantsUsed: true,
             voteState: true,
+            consultationMode: true,
+            selfServiceOpen: true,
           },
         },
       },
@@ -1134,15 +1150,33 @@ async function submitVote(input) {
       };
     }
 
-    if (String(event.voteState).toUpperCase() !== "OPEN") {
-      return {
-        ok: false,
-        message: "Le vote n'est pas ouvert pour cet événement.",
-      };
-    }
+    const consultationMode = normalizeConsultationMode(event.consultationMode);
+    if (consultationMode === CONSULTATION_MODE.SELF_SERVICE) {
+      const ss = canAcceptSelfServiceVote({
+        mode: event.consultationMode,
+        selfServiceOpen: event.selfServiceOpen,
+        isLocked: event.isLocked,
+        pollStatus: poll.status,
+        pollType: poll.type,
+      });
+      if (!ss.ok) {
+        return {
+          ok: false,
+          consultationClosed: ss.code === "CONSULTATION_CLOSED",
+          message: ss.message,
+        };
+      }
+    } else {
+      if (String(event.voteState).toUpperCase() !== "OPEN") {
+        return {
+          ok: false,
+          message: "Le vote n'est pas ouvert pour cet événement.",
+        };
+      }
 
-    if (poll.status !== "ACTIVE") {
-      return { ok: false, message: "Ce sondage n'est pas ouvert au vote." };
+      if (poll.status !== "ACTIVE") {
+        return { ok: false, message: "Ce sondage n'est pas ouvert au vote." };
+      }
     }
 
     const allowed = new Set(poll.options.map((option) => option.id));
@@ -3936,9 +3970,20 @@ app.get("/events/slug/:slug", async (req, res) => {
         title: true,
         type: true,
         leadEnabled: true,
+        status: true,
+        order: true,
       },
     });
     const pollsTotal = pollsOrdered.length;
+    const consultationFields = consultationModeApiFields(eventApres);
+    const catalogPolls =
+      consultationFields.consultationMode === "self_service"
+        ? buildSelfServiceCatalog({
+            polls: pollsOrdered,
+            selfServiceOpen: eventApres.selfServiceOpen,
+          })
+        : [];
+
     /** @type {{ current: number; total: number } | null} */
     let pollsProgress = null;
     /** @type {{ id: string; label: string; type: string; leadEnabled: boolean }[]} */
@@ -4005,6 +4050,8 @@ app.get("/events/slug/:slug", async (req, res) => {
       isLocked: Boolean(eventApres.isLocked),
       /** LOT-5 — badge MODE TEST sur hub /join (conception §5.2 / §9.3). */
       isLiveConsumed: Boolean(eventApres.isLiveConsumed),
+      ...consultationFields,
+      catalogPolls,
     });
   } catch (e) {
     console.error(e);
@@ -6400,13 +6447,21 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
 
   const eventMode = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { isLocked: true, screenDisplayState: true },
+    select: {
+      isLocked: true,
+      screenDisplayState: true,
+      consultationMode: true,
+      selfServiceOpen: true,
+    },
   });
   if (eventMode?.isLocked) {
     return res.status(403).json({
       error: "Cet événement est terminé et ne peut plus être rejoué.",
     });
   }
+  const eventIsSelfService =
+    normalizeConsultationMode(eventMode?.consultationMode) ===
+    CONSULTATION_MODE.SELF_SERVICE;
 
   const body = req.body ?? {};
   const questionBrute =
@@ -6507,38 +6562,52 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
 
     if (launchNow) {
       await annulationAutoRevealProgrammee(eventId);
-      await prisma.poll.updateMany({
-        where: {
-          eventId,
-          status: "ACTIVE",
-          NOT: { id: created.id },
-        },
-        data: { status: "CLOSED" },
-      });
-      await prisma.poll.update({
-        where: { id: created.id },
-        data: { status: "ACTIVE" },
-      });
-      const screenAfterLaunch = screenDisplayStateForLiveTransition(
-        eventMode?.screenDisplayState,
-        "open",
-      );
-      await prisma.event.update({
-        where: { id: eventId },
-        data: {
-          activePollId: created.id,
-          voteState: "OPEN",
-          displayState: "QUESTION",
-          liveState: "VOTING",
-          autoRevealShowResultsAt: null,
-          // LOT-5 — comme POST /open : nettoyer RESULTS collant (préserve BLACK).
-          ...(screenAfterLaunch !== undefined
-            ? { screenDisplayState: screenAfterLaunch }
-            : {}),
-          // LOT-4 : pas de chrono auto 30 s en TEST — même comportement que RÉEL
-          // (lancer via POST /events/:id/question-timer si besoin).
-        },
-      });
+      if (eventIsSelfService) {
+        // Libre-service : activer sans fermer les autres questions ouvertes.
+        if (!isSelfServiceCatalogType(pollType)) {
+          return res.status(400).json({
+            error:
+              "Ce type de question n’est pas disponible en libre-service (V1).",
+          });
+        }
+        await prisma.poll.update({
+          where: { id: created.id },
+          data: { status: "ACTIVE" },
+        });
+      } else {
+        await prisma.poll.updateMany({
+          where: {
+            eventId,
+            status: "ACTIVE",
+            NOT: { id: created.id },
+          },
+          data: { status: "CLOSED" },
+        });
+        await prisma.poll.update({
+          where: { id: created.id },
+          data: { status: "ACTIVE" },
+        });
+        const screenAfterLaunch = screenDisplayStateForLiveTransition(
+          eventMode?.screenDisplayState,
+          "open",
+        );
+        await prisma.event.update({
+          where: { id: eventId },
+          data: {
+            activePollId: created.id,
+            voteState: "OPEN",
+            displayState: "QUESTION",
+            liveState: "VOTING",
+            autoRevealShowResultsAt: null,
+            // LOT-5 — comme POST /open : nettoyer RESULTS collant (préserve BLACK).
+            ...(screenAfterLaunch !== undefined
+              ? { screenDisplayState: screenAfterLaunch }
+              : {}),
+            // LOT-4 : pas de chrono auto 30 s en TEST — même comportement que RÉEL
+            // (lancer via POST /events/:id/question-timer si besoin).
+          },
+        });
+      }
     }
 
     await emitEventLiveUpdated(io, eventId);
@@ -6561,6 +6630,20 @@ app.post("/events/:eventId/next-poll", requireAuth, async (req, res) => {
     if (!owned.ok) {
       return res.status(owned.status).json({ error: "Événement introuvable." });
     }
+    const modeRow = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { consultationMode: true },
+    });
+    if (
+      normalizeConsultationMode(modeRow?.consultationMode) ===
+      CONSULTATION_MODE.SELF_SERVICE
+    ) {
+      return res.status(409).json({
+        error:
+          "Playlist « suivante » indisponible en libre-service — utilisez le catalogue de questions.",
+      });
+    }
+
 
     const eventMode = await prisma.event.findUnique({
       where: { id: eventId },
@@ -6984,6 +7067,95 @@ app.post("/events/:eventId/consultation/close", requireAuth, async (req, res) =>
     });
   } catch (e) {
     console.error("POST /events/:eventId/consultation/close", e);
+    return res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/**
+ * Libre-service — choisir les questions ouvertes (multi ACTIVE).
+ * Body : { pollIds: string[] }
+ */
+app.put("/events/:eventId/consultation/polls", requireAuth, async (req, res) => {
+  const { eventId } = req.params;
+  const body = req.body ?? {};
+  try {
+    const owned = await assertEventOwnedBy(eventId, req.userId);
+    if (!owned.ok) {
+      return res.status(owned.status).json({ error: "Événement introuvable." });
+    }
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true,
+        slug: true,
+        consultationMode: true,
+        selfServiceOpen: true,
+        isLocked: true,
+        liveState: true,
+        polls: {
+          select: { id: true, status: true, type: true, order: true },
+          orderBy: { order: "asc" },
+        },
+      },
+    });
+    if (!event) {
+      return res.status(404).json({ error: "Événement introuvable." });
+    }
+    const decision = evaluateSetSelfServiceOpenPolls({
+      mode: event.consultationMode,
+      isLocked: event.isLocked,
+      liveState: event.liveState,
+      polls: event.polls,
+      requestedPollIds: body.pollIds ?? body.openPollIds,
+    });
+    if (!decision.ok) {
+      return res.status(decision.status).json({ error: decision.error });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      if (decision.pollIdsToDeactivate.length > 0) {
+        await tx.poll.updateMany({
+          where: { id: { in: decision.pollIdsToDeactivate } },
+          data: { status: "CLOSED" },
+        });
+      }
+      if (decision.pollIdsToActivate.length > 0) {
+        await tx.poll.updateMany({
+          where: { id: { in: decision.pollIdsToActivate } },
+          data: { status: "ACTIVE" },
+        });
+      }
+    });
+
+    const pollsAfter = await prisma.poll.findMany({
+      where: { eventId },
+      orderBy: { order: "asc" },
+      select: {
+        id: true,
+        question: true,
+        title: true,
+        type: true,
+        status: true,
+        order: true,
+        leadEnabled: true,
+      },
+    });
+    await emitEventLiveUpdated(io, eventId);
+    return res.json({
+      ok: true,
+      id: event.id,
+      slug: event.slug,
+      ...consultationModeApiFields(event),
+      openPollIds: decision.pollIdsToActivate,
+      rejectedPollIds: decision.rejectedPollIds,
+      catalogPolls: buildSelfServiceCatalog({
+        polls: pollsAfter,
+        selfServiceOpen: event.selfServiceOpen,
+      }),
+      votesPreserved: true,
+    });
+  } catch (e) {
+    console.error("PUT /events/:eventId/consultation/polls", e);
     return res.status(500).json({ error: "Erreur serveur." });
   }
 });
@@ -8719,6 +8891,12 @@ app.post(
       return res.status(403).json({
         error: "EVENT_LOCKED",
         message: result.message || "Cet événement est verrouillé.",
+      });
+    }
+    if (result.consultationClosed) {
+      return res.status(403).json({
+        error: "CONSULTATION_CLOSED",
+        message: result.message || "La consultation libre-service est fermée.",
       });
     }
 

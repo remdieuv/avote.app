@@ -16,6 +16,8 @@ import {
  *   joinSlug: string | null | undefined;
  *   pollsProgress?: { current?: number; total?: number } | null;
  *   pastPollsCount?: number | null;
+ *   waitingTitle?: string | null;
+ *   waitingBody?: string | null;
  * }} props
  */
 export function ScreenWaiting({
@@ -23,6 +25,8 @@ export function ScreenWaiting({
   joinSlug,
   pollsProgress = null,
   pastPollsCount = null,
+  waitingTitle = null,
+  waitingBody = null,
 }) {
   const [joinUrl, setJoinUrl] = useState("");
   const [cotePx, setCotePx] = useState(320);
@@ -73,12 +77,28 @@ export function ScreenWaiting({
           letterSpacing: "-0.02em",
           lineHeight: 1.05,
           color: "#f8fafc",
-          maxWidth: "18ch",
+          maxWidth: waitingTitle ? "22ch" : "18ch",
           textWrap: "balance",
         }}
       >
-        {getScreenWaitingDiffusionLabel({ pollsProgress, pastPollsCount })}
+        {waitingTitle ||
+          getScreenWaitingDiffusionLabel({ pollsProgress, pastPollsCount })}
       </h1>
+
+      {waitingBody ? (
+        <p
+          style={{
+            margin: 0,
+            fontSize: "clamp(1rem, 2.6vw, 1.45rem)",
+            fontWeight: 600,
+            lineHeight: 1.4,
+            color: "#cbd5e1",
+            maxWidth: "36ch",
+          }}
+        >
+          {waitingBody}
+        </p>
+      ) : null}
 
       <p
         style={{

@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 const require = createRequire(import.meta.url);
 const {
   CONSULTATION_MODE,
+  SELF_SERVICE_EXCLUDED_TYPES,
   parseConsultationMode,
   normalizeConsultationMode,
   consultationModeApiFields,
@@ -18,6 +19,10 @@ const {
   evaluateOpenSelfServiceConsultation,
   evaluateCloseSelfServiceConsultation,
   buildNormalizeLivePollsPlan,
+  isSelfServiceCatalogType,
+  canAcceptSelfServiceVote,
+  evaluateSetSelfServiceOpenPolls,
+  buildSelfServiceCatalog,
 } = require("../lib/consultationMode.js");
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -192,8 +197,12 @@ test("Routes API branchées dans server.js (auth orga)", () => {
   assert.match(src, /\/events\/:eventId\/consultation-mode/);
   assert.match(src, /\/events\/:eventId\/consultation\/open/);
   assert.match(src, /\/events\/:eventId\/consultation\/close/);
+  assert.match(src, /\/events\/:eventId\/consultation\/polls/);
   assert.match(src, /evaluateSetConsultationMode/);
+  assert.match(src, /canAcceptSelfServiceVote/);
+  assert.match(src, /buildSelfServiceCatalog/);
   assert.match(src, /votesPreserved:\s*true/);
+  assert.match(src, /CONSULTATION_CLOSED/);
   // Non-régression : finish / start-real toujours là ; pas de wipe Vote dans ces routes mode.
   assert.match(src, /app\.post\("\/events\/:eventId\/finish"/);
   assert.match(src, /app\.post\("\/events\/:eventId\/start-real"/);
@@ -201,6 +210,98 @@ test("Routes API branchées dans server.js (auth orga)", () => {
     src,
     /consultation\/open[\s\S]{0,800}vote\.deleteMany/,
   );
+});
+
+test("Catalogue V1 : types exclus + multi ACTIVE", () => {
+  assert.ok(SELF_SERVICE_EXCLUDED_TYPES.includes("CONTEST_ENTRY"));
+  assert.equal(isSelfServiceCatalogType("SINGLE_CHOICE"), true);
+  assert.equal(isSelfServiceCatalogType("MULTIPLE_CHOICE"), true);
+  assert.equal(isSelfServiceCatalogType("QUIZ"), true);
+  assert.equal(isSelfServiceCatalogType("CONTEST_ENTRY"), false);
+  assert.equal(isSelfServiceCatalogType("WORD_CLOUD"), false);
+
+  const catalog = buildSelfServiceCatalog({
+    selfServiceOpen: true,
+    polls: [
+      { id: "a", type: "SINGLE_CHOICE", status: "ACTIVE", question: "Q1", order: 0 },
+      { id: "b", type: "CONTEST_ENTRY", status: "ACTIVE", question: "Concours", order: 1 },
+      { id: "c", type: "MULTIPLE_CHOICE", status: "DRAFT", question: "Q2", order: 2 },
+      { id: "d", type: "QUIZ", status: "ACTIVE", question: "Quiz", order: 3 },
+    ],
+  });
+  assert.equal(catalog.length, 3);
+  assert.deepEqual(
+    catalog.map((x) => x.id),
+    ["a", "c", "d"],
+  );
+  assert.equal(catalog.find((x) => x.id === "a").votable, true);
+  assert.equal(catalog.find((x) => x.id === "c").votable, false);
+  assert.equal(catalog.find((x) => x.id === "d").votable, true);
+});
+
+test("canAcceptSelfServiceVote : open / fermé / type exclu", () => {
+  assert.equal(
+    canAcceptSelfServiceVote({
+      mode: "SELF_SERVICE",
+      selfServiceOpen: true,
+      pollStatus: "ACTIVE",
+      pollType: "SINGLE_CHOICE",
+    }).ok,
+    true,
+  );
+  assert.equal(
+    canAcceptSelfServiceVote({
+      mode: "SELF_SERVICE",
+      selfServiceOpen: false,
+      pollStatus: "ACTIVE",
+      pollType: "SINGLE_CHOICE",
+    }).code,
+    "CONSULTATION_CLOSED",
+  );
+  assert.equal(
+    canAcceptSelfServiceVote({
+      mode: "LIVE",
+      selfServiceOpen: true,
+      pollStatus: "ACTIVE",
+      pollType: "SINGLE_CHOICE",
+    }).code,
+    "NOT_SELF_SERVICE",
+  );
+  assert.equal(
+    canAcceptSelfServiceVote({
+      mode: "SELF_SERVICE",
+      selfServiceOpen: true,
+      pollStatus: "ACTIVE",
+      pollType: "RANKING",
+    }).code,
+    "POLL_TYPE_EXCLUDED",
+  );
+});
+
+test("evaluateSetSelfServiceOpenPolls : multi + rejet exclus", () => {
+  const d = evaluateSetSelfServiceOpenPolls({
+    mode: "SELF_SERVICE",
+    polls: [
+      { id: "a", status: "DRAFT", type: "SINGLE_CHOICE" },
+      { id: "b", status: "ACTIVE", type: "MULTIPLE_CHOICE" },
+      { id: "c", status: "DRAFT", type: "CONTEST_ENTRY" },
+    ],
+    requestedPollIds: ["a", "c", "ghost"],
+  });
+  assert.equal(d.ok, true);
+  assert.deepEqual(d.pollIdsToActivate, ["a"]);
+  assert.deepEqual(d.pollIdsToDeactivate, ["b"]);
+  assert.ok(d.rejectedPollIds.includes("c"));
+  assert.ok(d.rejectedPollIds.includes("ghost"));
+});
+
+test("Snapshot socket expose consultationMode", () => {
+  const snap = join(
+    here,
+    "../lib/eventLiveSnapshot.js",
+  );
+  const src = readFileSync(snap, "utf8");
+  assert.match(src, /consultationModeApiFields/);
 });
 
 if (failed > 0) {

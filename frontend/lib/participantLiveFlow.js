@@ -304,6 +304,8 @@ export function shouldPollShowStandaloneArchiveResults(input = {}) {
 export function isParticipantVoteSessionOpen(input = {}) {
   const status = String(input.pollStatus ?? "").toUpperCase();
   if (status !== "ACTIVE") return false;
+  /** Libre-service : le vote ne dépend plus de event.voteState. */
+  if (input.selfServiceVotable === true) return true;
   const vs = String(input.voteState ?? "").toLowerCase().trim();
   if (vs === "open") return true;
   if (!vs && String(input.liveScene ?? "").toLowerCase() === "voting") {

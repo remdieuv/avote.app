@@ -1175,10 +1175,12 @@ export function PollExperience({
    * Session vote ouverte — même règle que `/p` prod (eventVoteState open,
    * fallback liveScene voting si axe vote absent).
    */
+  const selfServiceVotable = Boolean(poll?.selfServiceVotable);
   const voteSessionOpen = isParticipantVoteSessionOpen({
     voteState: voteStateParticipant,
     pollStatus: poll?.status,
     liveScene,
+    selfServiceVotable,
   });
 
   /**
@@ -1422,6 +1424,7 @@ export function PollExperience({
       voteState: poll?.eventVoteState ?? poll?.voteState ?? eventVoteStateUi,
       pollStatus: poll?.status,
       liveScene,
+      selfServiceVotable: Boolean(poll?.selfServiceVotable),
     });
     const amendOk =
       !isMultipleChoice &&
@@ -1477,6 +1480,14 @@ export function PollExperience({
         if (code === "LIMIT_REACHED" || code === "EVENT_LOCKED") {
           setRoomFullLocal(true);
           throw new Error(code);
+        }
+        if (
+          code === "CONSULTATION_CLOSED" ||
+          String(errBody.error || "") === "CONSULTATION_CLOSED"
+        ) {
+          throw new Error(
+            "La consultation libre-service est fermée. Revenez plus tard ou choisissez une autre question.",
+          );
         }
         throw new Error(errBody.error || `Erreur ${res.status}`);
       }
@@ -1773,8 +1784,14 @@ export function PollExperience({
     secondesChronoVote <= 10;
 
   const evtVoteState = String(poll?.eventVoteState ?? "").toLowerCase();
-  const voteFerme = evtVoteState === "closed";
+  /** En libre-service votable, event.voteState LIVE ne ferme pas la session. */
+  const voteFerme =
+    poll?.selfServiceVotable === true ? false : evtVoteState === "closed";
   const liveSceneNorm = String(liveScene || "").toLowerCase();
+  const consultationPausedSs =
+    String(poll?.consultationMode || "").toLowerCase() === "self_service" &&
+    poll?.selfServiceOpen === false &&
+    !voteSessionOpen;
   /**
    * Carte « résultats bientôt » : uniquement si le vote est fermé, pas encore RESULTS,
    * et qu’on n’affiche pas déjà le bloc barres (continuité votant VOTING→CLOSED).
@@ -1803,6 +1820,8 @@ export function PollExperience({
     String(eventDisplayStateUi || "").toLowerCase() !== "results";
 
   const voteStateForUx = useMemo(() => {
+    /** Libre-service votable : présenter comme vote ouvert (indépendant de event.voteState LIVE). */
+    if (poll?.selfServiceVotable === true) return "open";
     if (
       poll &&
       typeof poll.eventVoteState === "string" &&
@@ -2189,6 +2208,33 @@ export function PollExperience({
           }}
         >
           {topUxLabel}
+        </div>
+      ) : null}
+      {!loading && !error && consultationPausedSs ? (
+        <div
+          role="status"
+          style={{
+            marginBottom: "1rem",
+            padding: "0.85rem 1rem",
+            borderRadius: "12px",
+            border: `1px solid ${palette.cardBorder}`,
+            background: isDark ? "rgba(15, 23, 42, 0.45)" : "rgba(248, 250, 252, 0.95)",
+            color: palette.fg2,
+            textAlign: "center",
+          }}
+        >
+          <p style={{ margin: 0, fontWeight: 700 }}>Consultation fermée</p>
+          <p
+            style={{
+              margin: "0.35rem 0 0",
+              fontSize: "0.9rem",
+              color: palette.muted,
+              lineHeight: 1.45,
+            }}
+          >
+            Les votes libre-service sont en pause. Vous pouvez consulter les
+            résultats si déjà disponibles.
+          </p>
         </div>
       ) : null}
       {loading && (

@@ -1,7 +1,16 @@
 /**
- * Libre-service étape 1 — mode Event LIVE | SELF_SERVICE + ouverture réversible.
+ * Libre-service — mode Event LIVE | SELF_SERVICE + ouverture réversible + catalogue.
  * Pure : pas d’I/O. Aucune purge de votes / slug.
  */
+
+/** Types exclus du catalogue V1 (nécessitent une régie / FE incomplet). */
+const SELF_SERVICE_EXCLUDED_TYPES = Object.freeze([
+  "CONTEST_ENTRY",
+  "OPEN_TEXT",
+  "WORD_CLOUD",
+  "RANKING",
+]);
+
 
 const CONSULTATION_MODE = Object.freeze({
   LIVE: "LIVE",
@@ -259,8 +268,200 @@ function buildNormalizeLivePollsPlan(input = {}) {
   return { activePollId: keepId, pollIdsToClose };
 }
 
+/**
+ * @param {unknown} pollType
+ * @returns {boolean}
+ */
+function isSelfServiceCatalogType(pollType) {
+  const t = String(pollType || "").toUpperCase();
+  if (!t) return false;
+  if (SELF_SERVICE_EXCLUDED_TYPES.includes(t)) return false;
+  return true;
+}
+
+/**
+ * Vote libre-service autorisé ?
+ * @param {{
+ *   mode?: unknown;
+ *   selfServiceOpen?: unknown;
+ *   isLocked?: unknown;
+ *   pollStatus?: unknown;
+ *   pollType?: unknown;
+ * }} input
+ * @returns {{ ok: true } | { ok: false; code: string; message: string }}
+ */
+function canAcceptSelfServiceVote(input = {}) {
+  if (Boolean(input.isLocked)) {
+    return {
+      ok: false,
+      code: "EVENT_LOCKED",
+      message: "Cet événement est terminé et ne peut plus accepter de votes.",
+    };
+  }
+  if (normalizeConsultationMode(input.mode) !== CONSULTATION_MODE.SELF_SERVICE) {
+    return {
+      ok: false,
+      code: "NOT_SELF_SERVICE",
+      message: "Ce sondage n’est pas en libre-service.",
+    };
+  }
+  if (!Boolean(input.selfServiceOpen)) {
+    return {
+      ok: false,
+      code: "CONSULTATION_CLOSED",
+      message: "La consultation libre-service est fermée.",
+    };
+  }
+  if (String(input.pollStatus || "").toUpperCase() !== "ACTIVE") {
+    return {
+      ok: false,
+      code: "POLL_NOT_OPEN",
+      message: "Cette question n’est pas ouverte au vote.",
+    };
+  }
+  if (!isSelfServiceCatalogType(input.pollType)) {
+    return {
+      ok: false,
+      code: "POLL_TYPE_EXCLUDED",
+      message: "Ce type de question n’est pas disponible en libre-service.",
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * Choisir les questions ouvertes (ACTIVE) en libre-service — multi autorisé.
+ * @param {{
+ *   mode?: unknown;
+ *   isLocked?: unknown;
+ *   liveState?: unknown;
+ *   polls?: Array<{ id?: unknown; status?: unknown; type?: unknown; order?: unknown }> | null;
+ *   requestedPollIds?: unknown;
+ * }} input
+ */
+function evaluateSetSelfServiceOpenPolls(input = {}) {
+  const mutable = assertConsultationModeMutable(input);
+  if (!mutable.ok) return mutable;
+  if (normalizeConsultationMode(input.mode) !== CONSULTATION_MODE.SELF_SERVICE) {
+    return {
+      ok: false,
+      status: 409,
+      error: "Sélection des questions ouvertes réservée au mode libre-service.",
+    };
+  }
+  const requested = Array.isArray(input.requestedPollIds)
+    ? [
+        ...new Set(
+          input.requestedPollIds
+            .map((x) => String(x || "").trim())
+            .filter(Boolean),
+        ),
+      ]
+    : null;
+  if (requested == null) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'Corps attendu : { pollIds: string[] }.',
+    };
+  }
+
+  const polls = Array.isArray(input.polls) ? input.polls : [];
+  const byId = new Map();
+  for (const p of polls) {
+    const id = typeof p?.id === "string" ? p.id.trim() : "";
+    if (!id) continue;
+    byId.set(id, {
+      id,
+      status: String(p?.status || "").toUpperCase(),
+      type: String(p?.type || "").toUpperCase(),
+    });
+  }
+
+  /** @type {string[]} */
+  const pollIdsToActivate = [];
+  /** @type {string[]} */
+  const rejected = [];
+  for (const id of requested) {
+    const p = byId.get(id);
+    if (!p || p.status === "ARCHIVED") {
+      rejected.push(id);
+      continue;
+    }
+    if (!isSelfServiceCatalogType(p.type)) {
+      rejected.push(id);
+      continue;
+    }
+    pollIdsToActivate.push(id);
+  }
+
+  /** @type {string[]} */
+  const pollIdsToDeactivate = [];
+  for (const p of byId.values()) {
+    if (p.status !== "ACTIVE") continue;
+    if (!isSelfServiceCatalogType(p.type)) continue;
+    if (!pollIdsToActivate.includes(p.id)) {
+      pollIdsToDeactivate.push(p.id);
+    }
+  }
+
+  return {
+    ok: true,
+    pollIdsToActivate,
+    pollIdsToDeactivate,
+    rejectedPollIds: rejected,
+  };
+}
+
+/**
+ * Entrées catalogue public (questions éligibles).
+ * @param {{
+ *   polls?: Array<{
+ *     id?: unknown;
+ *     status?: unknown;
+ *     type?: unknown;
+ *     order?: unknown;
+ *     question?: unknown;
+ *     title?: unknown;
+ *     leadEnabled?: unknown;
+ *   }> | null;
+ *   selfServiceOpen?: unknown;
+ * }} input
+ */
+function buildSelfServiceCatalog(input = {}) {
+  const open = Boolean(input.selfServiceOpen);
+  const polls = Array.isArray(input.polls) ? input.polls : [];
+  return polls
+    .map((p, i) => {
+      const id = typeof p?.id === "string" ? p.id.trim() : "";
+      const type = String(p?.type || "").toUpperCase();
+      const status = String(p?.status || "").toUpperCase();
+      if (!id || !isSelfServiceCatalogType(type) || status === "ARCHIVED") {
+        return null;
+      }
+      const label =
+        (typeof p.question === "string" && p.question.trim()) ||
+        (typeof p.title === "string" && p.title.trim()) ||
+        `Question ${i + 1}`;
+      const isOpen = open && status === "ACTIVE";
+      return {
+        id,
+        label,
+        type,
+        status,
+        order: Number.isFinite(Number(p.order)) ? Number(p.order) : i,
+        leadEnabled: Boolean(p.leadEnabled),
+        open: isOpen,
+        votable: isOpen,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.order - b.order);
+}
+
 module.exports = {
   CONSULTATION_MODE,
+  SELF_SERVICE_EXCLUDED_TYPES,
   parseConsultationMode,
   normalizeConsultationMode,
   consultationModeApiFields,
@@ -269,4 +470,8 @@ module.exports = {
   evaluateOpenSelfServiceConsultation,
   evaluateCloseSelfServiceConsultation,
   buildNormalizeLivePollsPlan,
+  isSelfServiceCatalogType,
+  canAcceptSelfServiceVote,
+  evaluateSetSelfServiceOpenPolls,
+  buildSelfServiceCatalog,
 };
