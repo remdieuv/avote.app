@@ -740,11 +740,11 @@ export default function HomePage() {
             <HeroFeatureStrip />
             <p className="hero-subtitle">{HERO_SUPPORT_TEXT}</p>
             <div className="hero-cta-row">
-              <Link href="/join/demo" style={btnPrimary} className="hero-cta-primary">
-                Tester en live
-              </Link>
-              <Link href="/admin" style={btnSecondary} className="hero-cta-secondary">
+              <Link href="/admin" style={btnPrimary} className="hero-cta-primary">
                 Créer un événement gratuit
+              </Link>
+              <Link href="/join/demo" style={btnSecondary} className="hero-cta-secondary">
+                Tester en live
               </Link>
             </div>
             <p className="hero-reassurance">
@@ -1085,11 +1085,11 @@ export default function HomePage() {
               </article>
             </div>
             <div className="usecase-scenarios-cta">
-              <Link href="/join/demo" style={btnPrimary} className="hero-cta-primary">
-                Tester en live
-              </Link>
-              <Link href="/admin" style={btnSecondary} className="hero-cta-secondary">
+              <Link href="/admin" style={btnPrimary} className="hero-cta-primary">
                 Créer un événement gratuit
+              </Link>
+              <Link href="/join/demo" style={btnSecondary} className="hero-cta-secondary">
+                Tester en live
               </Link>
             </div>
           </div>

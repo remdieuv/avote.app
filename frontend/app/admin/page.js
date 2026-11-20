@@ -42,6 +42,10 @@ import { EVENT_PAGE_ROLE_HINT } from "@/lib/eventPageLabels";
 import { PUBLISH_PUBLIC_WARNING_LINES } from "@/lib/eventVisibility";
 import { formatDatetimeLocalFr } from "@/lib/frDateTime";
 import { rememberMyEvent } from "@/lib/myEventsStorage";
+import {
+  CREATE_EVENT_AFTER_FOOTNOTE,
+  NEW_USER_FREE_LIVE_LINE,
+} from "@/lib/testModeActivationCopy";
 
 const inputStyle = {
   width: "100%",
@@ -1715,8 +1719,8 @@ export default function AdminPage() {
             </button>
 
             <p className="admin-footnote">
-              Après création : régie en MODE TEST (gratuit). Vous pourrez activer
-              la page de l’événement plus tard. Retrouvez vos événements dans{" "}
+              {CREATE_EVENT_AFTER_FOOTNOTE} Vous pourrez activer la page de
+              l’événement plus tard. Retrouvez vos événements dans{" "}
               <Link
                 href="/admin/events"
                 style={{ color: "#7c3aed", fontWeight: 700 }}
@@ -1769,8 +1773,8 @@ export default function AdminPage() {
                 <p className="admin-side-kicker">Ce qui sera créé</p>
                 <p className="admin-side-text">
                   Un événement en MODE TEST, des questions prêtes pour la régie,
-                  et un accès salle / écran. La page de l’événement reste
-                  optionnelle.
+                  et un accès salle / écran. {NEW_USER_FREE_LIVE_LINE} La page de
+                  l’événement reste optionnelle.
                 </p>
               </section>
 

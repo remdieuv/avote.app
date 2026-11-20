@@ -9,8 +9,12 @@ import { fileURLToPath } from "node:url";
 import {
   ACCOUNT_NO_ACTIVATION_BODY,
   ACCOUNT_NO_ACTIVATION_TITLE,
+  CREATE_EVENT_AFTER_FOOTNOTE,
   ERR_NO_ACTIVATION_AVAILABLE,
   ERR_NO_EVENT_CREDIT,
+  NEW_USER_FREE_LIVE_LINE,
+  NEW_USER_TOPUP_LINE,
+  NEW_USER_TOPUP_LINE_SHORT,
   REGIE_NO_ACTIVATION_HINT,
   REGIE_NO_ACTIVATION_STATUS,
   REGIE_START_REAL_MODAL_INTRO,
@@ -44,8 +48,22 @@ test("0 activation : messages non anxiogènes + MODE TEST / gratuit 10", () => {
   assert.match(ACCOUNT_NO_ACTIVATION_BODY, /MODE TEST/i);
   assert.match(ACCOUNT_NO_ACTIVATION_BODY, /10|gratuit/i);
   assert.match(getRegieTestModeHelpLine(), /Répétition|gratuit|10/i);
+  assert.match(getRegieTestModeHelpLine(), /Démarrer gratuitement dans la régie/);
+  assert.match(getRegieTestModeHelpLine(), /Ajoutez des participants/);
   assert.match(REGIE_START_REAL_MODAL_INTRO, /MODE TEST/i);
   assert.match(REGIE_START_REAL_MODAL_INTRO, /pack|gratuit|10/i);
+});
+
+test("Parcours nouvel utilisateur : free live + recharge (sans double 10)", () => {
+  assert.match(NEW_USER_FREE_LIVE_LINE, /10 participants/);
+  assert.match(NEW_USER_FREE_LIVE_LINE, /Démarrer gratuitement dans la régie/);
+  assert.match(NEW_USER_TOPUP_LINE, /10 participants inclus/);
+  assert.match(NEW_USER_TOPUP_LINE, /Ajoutez des participants/);
+  assert.match(NEW_USER_TOPUP_LINE_SHORT, /Ajoutez des participants/);
+  assert.doesNotMatch(NEW_USER_TOPUP_LINE_SHORT, /10 participants/);
+  assert.match(CREATE_EVENT_AFTER_FOOTNOTE, /MODE TEST/);
+  assert.match(CREATE_EVENT_AFTER_FOOTNOTE, /Démarrer gratuitement dans la régie/);
+  assert.match(CREATE_EVENT_AFTER_FOOTNOTE, /Ajoutez des participants/);
 });
 
 test("Compte : explain 0 vs avec activations", () => {
@@ -84,12 +102,13 @@ test("isActivationShortageError couvre anciennes et nouvelles formulations", () 
   assert.equal(isActivationShortageError(""), false);
 });
 
-test("Régie + compte branchent la lib (pas de libellé brut isolé)", () => {
+test("Régie + compte + create branchent la lib (pas de libellé brut isolé)", () => {
   const regie = readFileSync(
     join(here, "../app/admin/event/[eventId]/page.jsx"),
     "utf8",
   );
   const account = readFileSync(join(here, "../app/admin/account/page.jsx"), "utf8");
+  const create = readFileSync(join(here, "../app/admin/page.js"), "utf8");
   assert.match(regie, /testModeActivationCopy/);
   assert.match(regie, /REGIE_NO_ACTIVATION_STATUS/);
   assert.match(regie, /isActivationShortageError/);
@@ -98,6 +117,8 @@ test("Régie + compte branchent la lib (pas de libellé brut isolé)", () => {
   assert.match(regie, /REGIE_START_REAL_MODAL_INTRO/);
   assert.match(account, /getAccountActivationExplain/);
   assert.match(account, /ACCOUNT_ACTIVATIONS_INTRO/);
+  assert.match(create, /CREATE_EVENT_AFTER_FOOTNOTE/);
+  assert.match(create, /NEW_USER_FREE_LIVE_LINE/);
   assert.ok(
     !regie.includes(">Aucune activation disponible<") &&
       !regie.includes('"Aucune activation disponible"'),

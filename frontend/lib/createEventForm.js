@@ -778,7 +778,8 @@ export function buildCreateEventPrepChecklist(args = {}) {
     },
     {
       id: "after",
-      label: "Après création : tester en MODE TEST, puis page de l’événement",
+      label:
+        "Après création : MODE TEST, puis live réel gratuit (10) dans la régie",
       done: false,
       optional: true,
     },

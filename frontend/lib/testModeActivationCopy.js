@@ -13,8 +13,23 @@ export const REAL_MODE_BADGE_LABEL = "MODE RÉEL";
 export const REGIE_NO_ACTIVATION_STATUS =
   "MODE TEST — vote et régie OK";
 
+/** Parcours nouvel utilisateur — promesse live gratuit (près du CTA régie). */
+export const NEW_USER_FREE_LIVE_LINE =
+  "Live réel gratuit jusqu'à 10 participants — Démarrer gratuitement dans la régie.";
+
+/** Recharge : formulation complète (quand « 10 » n’est pas déjà dit juste au-dessus). */
+export const NEW_USER_TOPUP_LINE =
+  "10 participants inclus gratuitement. Besoin de plus ? Ajoutez des participants à tout moment.";
+
+/** Recharge courte (évite de répéter « 10 participants » déjà annoncé). */
+export const NEW_USER_TOPUP_LINE_SHORT =
+  "Besoin de plus ? Ajoutez des participants à tout moment.";
+
+/** Footnote création d’événement : MODE TEST + live gratuit + recharge. */
+export const CREATE_EVENT_AFTER_FOOTNOTE = `Après création : régie en MODE TEST (gratuit). ${NEW_USER_FREE_LIVE_LINE} ${NEW_USER_TOPUP_LINE_SHORT}`;
+
 export const REGIE_NO_ACTIVATION_HINT =
-  "Démarrez gratuitement (10 participants) ou achetez un pack pour plus de capacité. Recharge possible ensuite.";
+  "Démarrez gratuitement (10 participants) ou achetez un pack pour plus de capacité.";
 
 export const REGIE_PRICING_CTA_LABEL = "Voir les packs";
 
@@ -97,8 +112,9 @@ export function getAccountActivationExplain(args = {}) {
 
 /**
  * Pastille d’aide sous le badge MODE TEST (régie).
+ * Free live + recharge ; le hint CTA (REGIE_NO_ACTIVATION_HINT) reste plus court à côté du bouton.
  * @returns {string}
  */
 export function getRegieTestModeHelpLine() {
-  return "Répétition gratuite : ouvrez le vote, testez QR et résultats. Le jour J, démarrez gratuitement (10 participants) ou avec un pack — recharge possible ensuite.";
+  return `Répétition gratuite : ouvrez le vote, testez QR et résultats. ${NEW_USER_FREE_LIVE_LINE} ${NEW_USER_TOPUP_LINE_SHORT}`;
 }
