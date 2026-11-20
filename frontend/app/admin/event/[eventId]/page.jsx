@@ -172,12 +172,15 @@ import {
   shouldUseTelecommandeChrome,
 } from "@/lib/regieTelecommande";
 import { RegieTelecommande } from "@/components/admin/RegieTelecommande";
-import { ConsultationModePanel } from "@/components/admin/ConsultationModePanel";
+import { RegieModeSelector } from "@/components/admin/RegieModeSelector";
+import { SelfServiceRegieWorkspace } from "@/components/admin/SelfServiceRegieWorkspace";
 import {
   TelecommandeIcon,
   TelecommandeQrModal,
 } from "@/components/admin/TelecommandeQrModal";
 import { TELECOMMANDE_QR_COPY } from "@/lib/telecommandeQr";
+import { isSelfServiceMode } from "@/lib/consultationMode";
+import { resolveRegieParticipantsCounterDisplay } from "@/lib/regieParticipantsDisplay";
 
 const VOTE_STATE_LABELS = {
   open: "Vote ouvert",
@@ -6644,6 +6647,7 @@ export default function RegieEventPage() {
   const eventLocked = Boolean(eventData?.isLocked);
   const playlistEditActionLabel = eventLocked ? "Consulter" : "Modifier";
   const inTestMode = eventData?.isLiveConsumed === false;
+  const isSelfServiceRegie = isSelfServiceMode(eventData);
   const canStartReal = inTestMode && !eventLocked;
   const activationBalance = computeActivationBalance(eventCredits, activationsAvailable);
   const activationsLoaded = activationBalance.typedLoaded;
@@ -6967,9 +6971,19 @@ export default function RegieEventPage() {
   const participantsProgressPercent = participantsRatio !== null
     ? Math.max(0, Math.min(100, Math.round(participantsRatio * 100)))
     : 0;
+  /** En MODE TEST : ne pas présenter le plafond technique 500 comme offre commerciale. */
+  const participantsDisplay = resolveRegieParticipantsCounterDisplay({
+    inTestMode,
+    participantsUsed: effectiveParticipantsUsed,
+    participantsLimit: participantsLimitValue,
+    isFreePlan,
+  });
   const participantsStatus =
-    participantsRatio === null || participantsRatio < 0.8
-      ? { tone: "neutral", message: "" }
+    inTestMode || participantsRatio === null || participantsRatio < 0.8
+      ? {
+          tone: "neutral",
+          message: inTestMode ? participantsDisplay.hint || "" : "",
+        }
       : participantsRatio < 1
         ? {
             tone: "soft",
@@ -6977,9 +6991,9 @@ export default function RegieEventPage() {
           }
         : { tone: "strong", message: "🚫 Limite atteinte — nouveaux participants bloqués" };
   const participantsCounterLabel =
-    participantsLimitValue == null
+    participantsLimitValue == null && !inTestMode
       ? "Participants non disponibles"
-      : `Participants : ${effectiveParticipantsUsed} / ${participantsLimitValue}`;
+      : participantsDisplay.label;
   const landingPhotosCount = Array.isArray(eventData?.landingPhotos)
     ? eventData.landingPhotos.length
     : 0;
@@ -7820,6 +7834,39 @@ export default function RegieEventPage() {
     [eventId, router],
   );
 
+  const setConsultationModeUi = useCallback(
+    async (nextMode) => {
+      if (!eventId || busy || eventLocked) return;
+      setBusy(true);
+      setError(null);
+      try {
+        const res = await adminFetch(
+          `${apiBaseBrowser()}/events/${eventId}/consultation-mode`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: nextMode }),
+          },
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(body.error || `Erreur ${res.status}`);
+        }
+        await fetchEvent({ silent: true });
+        setToastNotif(
+          nextMode === "self_service"
+            ? "Mode Libre-service activé"
+            : "Mode Live animé activé",
+        );
+      } catch (e) {
+        setError(e?.message || "Changement de mode impossible.");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [eventId, busy, eventLocked, fetchEvent],
+  );
+
   const regiePollsBloc = (
     <nav
       aria-label="Liste des questions"
@@ -7833,18 +7880,9 @@ export default function RegieEventPage() {
         flexDirection: "column",
       }}
     >
-      <ConsultationModePanel
-        eventId={eventId}
-        consultationMode={eventData?.consultationMode}
-        selfServiceOpen={Boolean(eventData?.selfServiceOpen)}
-        polls={pollsOrdonnes}
-        busy={busy}
-        eventLocked={Boolean(eventData?.isLocked)}
-        onChanged={() => fetchEvent({ silent: true })}
-      />
       <p
         style={{
-          margin: "0.85rem 0 0.5rem 0",
+          margin: "0 0 0.5rem 0",
           fontSize: "0.62rem",
           fontWeight: 700,
           letterSpacing: "0.09em",
@@ -9807,7 +9845,11 @@ export default function RegieEventPage() {
                 boxShadow: "0 22px 46px rgba(30, 27, 75, 0.24)",
                 minWidth: 0,
               }}
-              aria-label="État live"
+              aria-label={
+                isSelfServiceRegie
+                  ? "Régie — mode Libre-service"
+                  : "Régie — mode Live animé"
+              }
             >
               <div style={{ display: "grid", gap: "0.78rem" }}>
                 <div
@@ -9830,7 +9872,7 @@ export default function RegieEventPage() {
                         color: "rgba(224, 231, 255, 0.72)",
                       }}
                     >
-                      Console live
+                      {isSelfServiceRegie ? "Régie" : "Console live"}
                     </p>
                     <h2
                       style={{
@@ -9846,6 +9888,14 @@ export default function RegieEventPage() {
                       {eventData.title}
                     </h2>
                   </div>
+                  <RegieModeSelector
+                    consultationMode={eventData?.consultationMode}
+                    disabled={busy || eventLocked}
+                    onSelect={(mode) => {
+                      void setConsultationModeUi(mode);
+                    }}
+                    compact={!desktop}
+                  />
                   <div
                     style={{
                       display: "flex",
@@ -9856,7 +9906,7 @@ export default function RegieEventPage() {
                       flexShrink: 0,
                     }}
                   >
-                  {desktop ? (
+                  {desktop && !isSelfServiceRegie ? (
                     <button
                       type="button"
                       onClick={() => setTelecommandeAccessQrOpen(true)}
@@ -10040,11 +10090,44 @@ export default function RegieEventPage() {
                   }}
                 >
                   {[
-                    { label: pilotageTag, color: statePanel.pillColor, bg: "rgba(255,255,255,0.74)", border: `${statePanel.accent}22` },
-                    { label: voteLabel, color: voteIsOpen ? "#166534" : "#334155", bg: voteIsOpen ? "#dcfce7" : "rgba(255,255,255,0.74)", border: voteIsOpen ? "#86efac" : "#cbd5e1" },
+                    ...(isSelfServiceRegie
+                      ? [
+                          {
+                            label: eventData?.selfServiceOpen
+                              ? "Consultation ouverte"
+                              : "Consultation en pause",
+                            color: eventData?.selfServiceOpen ? "#166534" : "#9a3412",
+                            bg: eventData?.selfServiceOpen ? "#dcfce7" : "#ffedd5",
+                            border: eventData?.selfServiceOpen ? "#86efac" : "#fdba74",
+                          },
+                        ]
+                      : [
+                          {
+                            label: pilotageTag,
+                            color: statePanel.pillColor,
+                            bg: "rgba(255,255,255,0.74)",
+                            border: `${statePanel.accent}22`,
+                          },
+                          {
+                            label: voteLabel,
+                            color: voteIsOpen ? "#166534" : "#334155",
+                            bg: voteIsOpen ? "#dcfce7" : "rgba(255,255,255,0.74)",
+                            border: voteIsOpen ? "#86efac" : "#cbd5e1",
+                          },
+                        ]),
                     { label: participantsCounterLabel, color: participantsCounterStyle.valueColor, bg: participantsCounterStyle.background, border: participantsCounterStyle.borderColor || "#cbd5e1" },
                     { label: socketStatusLabel, color: socketStatusColor, bg: socketStatusBg, border: "#cbd5e1" },
                     { label: modeBadge.label, color: modeBadge.color, bg: modeBadge.bg, border: modeBadge.border },
+                    ...(inTestMode
+                      ? [
+                          {
+                            label: `Live gratuit : ${FREE_PARTICIPANTS_LIMIT}`,
+                            color: "#166534",
+                            bg: "#dcfce7",
+                            border: "#86efac",
+                          },
+                        ]
+                      : []),
                     ...(!inTestMode && hasParticipantsLimit
                       ? [
                           {
@@ -10164,6 +10247,7 @@ export default function RegieEventPage() {
                   </p>
                 ) : null}
 
+                {!isSelfServiceRegie ? (
                 <div
                   style={{
                     display: "flex",
@@ -10312,10 +10396,27 @@ export default function RegieEventPage() {
                     </button>
                   </div>
                 </div>
+                ) : null}
               </div>
             </section>
 
+            {isSelfServiceRegie ? (
+              <SelfServiceRegieWorkspace
+                eventId={eventId}
+                slug={eventData.slug}
+                selfServiceOpen={Boolean(eventData.selfServiceOpen)}
+                polls={pollsOrdonnes}
+                busy={busy}
+                eventLocked={eventLocked}
+                onChanged={() => fetchEvent({ silent: true })}
+                onAddQuestion={() => setAddQuestionModalOpen(true)}
+                desktop={desktop}
+              />
+            ) : null}
+
+            {!isSelfServiceRegie ? (
             <div
+              data-testid="regie-live-only"
               style={{
                 display: "flex",
                 flexDirection:
@@ -11802,6 +11903,9 @@ export default function RegieEventPage() {
               />
             </details>
           ) : null}
+              </div>
+            </div>
+            ) : null}
 
           {!desktop && eventData.slug ? (
             <details
@@ -11844,8 +11948,6 @@ export default function RegieEventPage() {
               </div>
             </details>
           ) : null}
-              </div>
-            </div>
           </div>
           {desktop && eventData.slug ? (
             <div id="regie-overlay-panel">
