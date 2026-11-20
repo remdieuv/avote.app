@@ -92,7 +92,9 @@ function LoginForm() {
           {mode === "register" ? "Créer un compte" : "Connexion"}
         </h1>
         <p style={{ margin: "0 0 1.25rem", color: "#64748b", fontSize: "0.9rem" }}>
-          Accès réservé à l’administration des événements.
+          {mode === "register"
+            ? "Créez votre compte gratuitement et lancez votre premier événement jusqu'à 10 participants."
+            : "Connectez-vous pour organiser et gérer vos événements."}
         </p>
 
         <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
