@@ -47,8 +47,10 @@ test("Constantes FREE alignées", () => {
 test("Copy régie mentionne gratuit + recharge", () => {
   assert.match(REGIE_START_REAL_FREE_CTA_LABEL, /gratuit/i);
   assert.match(REGIE_NO_ACTIVATION_HINT, /10/);
-  assert.match(REGIE_NO_ACTIVATION_HINT, /[Rr]echarge/);
+  assert.match(REGIE_NO_ACTIVATION_HINT, /gratuit|pack/i);
   assert.match(getRegieTestModeHelpLine(), /10/);
+  assert.match(getRegieTestModeHelpLine(), /Ajoutez des participants/i);
+  assert.match(getRegieTestModeHelpLine(), /Démarrer gratuitement/i);
 });
 
 test("Confirmations start-real free vs pack", () => {

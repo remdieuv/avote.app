@@ -89,7 +89,7 @@ test("page.js branche le Hero sur landingHero + bandeau", () => {
   );
 });
 
-test("CTAs Hero inchangés (pas de feature métier ajoutée)", () => {
+test("CTAs Hero : créer gratuit en primaire, tester en secondaire", () => {
   const src = read("app/page.js");
   const heroSlice = src.slice(
     src.indexOf('id="hero"'),
@@ -97,6 +97,17 @@ test("CTAs Hero inchangés (pas de feature métier ajoutée)", () => {
   );
   assert.match(heroSlice, /Tester en live/);
   assert.match(heroSlice, /Créer un événement gratuit/);
+  const createIdx = heroSlice.indexOf("Créer un événement gratuit");
+  const demoIdx = heroSlice.indexOf("Tester en live");
+  assert.ok(createIdx >= 0 && demoIdx >= 0 && createIdx < demoIdx);
+  assert.match(
+    heroSlice.slice(0, createIdx),
+    /hero-cta-primary/,
+  );
+  assert.match(
+    heroSlice.slice(createIdx, demoIdx + 20),
+    /hero-cta-secondary/,
+  );
   assert.doesNotMatch(heroSlice, /pricing|stripe|abonnement/i);
 });
 
