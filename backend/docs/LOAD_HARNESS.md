@@ -16,6 +16,19 @@ Mesure progressive jusqu’à **1 000** participants synthétiques (HTTP vote + 
 | IP partagée (1 IP runner) | |
 | Top-up **simulé** (`planCapacityTopUp`) | |
 
+## Init ponctuelle `load-1000` (Railway `load-staging` seulement)
+
+Script **one-shot** (hors `npm start`, hors HTTP) : `scripts/init-load-staging-1000.mjs`.
+
+```bash
+# Dans le conteneur API de l’env load-staging (après deploy de la branche) :
+LOAD_STAGING_INIT=1 node scripts/init-load-staging-1000.mjs --confirm-load-staging
+```
+
+Gardes : `LOAD_STAGING_INIT=1` + confirmation + commentaire DB `avote-railway-load-staging` (+ `RAILWAY_ENVIRONMENT_NAME=load-staging` s’il est défini) + refus collisions.  
+IDs fixes : `cldstgevt…001` / `cldstgpoll…001` / `cldstgopt…001`.  
+**Retrait** après tests : supprimer le script + `lib/loadStagingInit.js` (PR de nettoyage).
+
 ## Prérequis staging isolé
 
 1. Environnement **non prod** (Railway staging ou API locale) + DB jetable.
