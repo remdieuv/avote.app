@@ -73,7 +73,7 @@ export function SelfServiceJoinCatalog({
           }}
         >
           <p style={{ margin: 0, fontWeight: 700, color: "#0f172a" }}>
-            Consultation fermée
+            Consultation en pause
           </p>
           <p
             style={{
@@ -83,8 +83,8 @@ export function SelfServiceJoinCatalog({
               lineHeight: 1.45,
             }}
           >
-            Les votes ne sont pas ouverts pour le moment. Vous pouvez consulter
-            les résultats des questions déjà fermées si disponibles.
+            Les votes sont temporairement fermés. Vous pouvez consulter les
+            résultats actuels des questions déjà répondues.
           </p>
         </div>
       ) : (
@@ -153,7 +153,7 @@ export function SelfServiceJoinCatalog({
                       color: done ? "#166534" : accent,
                     }}
                   >
-                    {done ? "Déjà répondu · voir / modifier si autorisé" : "À répondre"}
+                    {done ? "Répondu" : "À répondre"}
                   </span>
                 </button>
                 <div style={{ marginTop: "0.35rem", paddingLeft: "0.15rem" }}>

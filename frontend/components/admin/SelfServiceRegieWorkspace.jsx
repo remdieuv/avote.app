@@ -1,12 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 import {
   isSelfServiceCatalogType,
 } from "@/lib/consultationMode";
 import { getRegiePollTypeLabel } from "@/lib/regieDesktopLayout";
+import { SelfServiceResultsModal } from "@/components/admin/SelfServiceResultsModal";
 
 /**
  * Espace central régie — Libre-service (remplace le pilotage live).
@@ -45,6 +45,9 @@ export function SelfServiceRegieWorkspace({
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(/** @type {string | null} */ (null));
+  const [resultsPollId, setResultsPollId] = useState(
+    /** @type {string | null} */ (null),
+  );
 
   const eligiblePolls = useMemo(
     () =>
@@ -114,6 +117,13 @@ export function SelfServiceRegieWorkspace({
 
   const disabled = busy || eventLocked || pending;
   const joinHref = slug ? `/join/${encodeURIComponent(slug)}` : null;
+  const resultsPoll = useMemo(
+    () =>
+      resultsPollId
+        ? eligiblePolls.find((p) => p.id === resultsPollId) || null
+        : null,
+    [eligiblePolls, resultsPollId],
+  );
 
   return (
     <div
@@ -359,23 +369,23 @@ export function SelfServiceRegieWorkspace({
                   >
                     {selected ? "Sélectionnée" : "Masquée"}
                   </span>
-                  {slug ? (
-                    <Link
-                      href={`/p/${encodeURIComponent(slug)}?poll=${encodeURIComponent(p.id)}`}
-                      style={{
-                        fontSize: "0.78rem",
-                        fontWeight: 700,
-                        color: "#4338ca",
-                        textDecoration: "none",
-                        padding: "0.35rem 0.55rem",
-                        borderRadius: "8px",
-                        border: "1px solid #c7d2fe",
-                        background: "#eef2ff",
-                      }}
-                    >
-                      Résultats ({votes})
-                    </Link>
-                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setResultsPollId(p.id)}
+                    data-testid={`self-service-results-btn-${p.id}`}
+                    style={{
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      color: "#4338ca",
+                      padding: "0.35rem 0.55rem",
+                      borderRadius: "8px",
+                      border: "1px solid #c7d2fe",
+                      background: "#eef2ff",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Résultats ({votes})
+                  </button>
                 </li>
               );
             })}
@@ -427,6 +437,12 @@ export function SelfServiceRegieWorkspace({
           {error}
         </p>
       ) : null}
+
+      <SelfServiceResultsModal
+        open={Boolean(resultsPollId && resultsPoll)}
+        poll={resultsPoll}
+        onClose={() => setResultsPollId(null)}
+      />
     </div>
   );
 }

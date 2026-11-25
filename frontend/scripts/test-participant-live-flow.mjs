@@ -613,6 +613,13 @@ test("LOT-1. résultats live après vote (comportement /p prod) aussi en Salle",
     getParticipantResultsBlockTitle({ voteSessionOpen: false }),
     "Résultats finaux",
   );
+  assert.equal(
+    getParticipantResultsBlockTitle({
+      voteSessionOpen: false,
+      consultationPaused: true,
+    }),
+    "Résultats actuels",
+  );
   assert.equal(isParticipantVoteClosed({ voteState: "closed" }), true);
   assert.equal(
     isParticipantVoteClosed({ voteState: "open", pollStatus: "ACTIVE" }),

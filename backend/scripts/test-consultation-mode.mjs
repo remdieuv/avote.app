@@ -19,6 +19,8 @@ const {
   evaluateOpenSelfServiceConsultation,
   evaluateCloseSelfServiceConsultation,
   buildNormalizeLivePollsPlan,
+  snapshotSelfServiceSelectedPollIds,
+  buildRestoreSelfServicePollsPlan,
   isSelfServiceCatalogType,
   canAcceptSelfServiceVote,
   evaluateSetSelfServiceOpenPolls,
@@ -78,6 +80,7 @@ test("Schema Prisma : ConsultationMode + champs Event", () => {
     /consultationMode\s+ConsultationMode\s+@default\(LIVE\)/,
   );
   assert.match(s, /selfServiceOpen\s+Boolean\s+@default\(false\)/);
+  assert.match(s, /selfServiceSelectedPollIds\s+Json/);
 });
 
 test("Migration additive présente (défaut LIVE)", () => {
@@ -189,6 +192,30 @@ test("Normalize LIVE : un seul ACTIVE, votes non touchés", () => {
   });
   assert.equal(plan.activePollId, "p2");
   assert.deepEqual(plan.pollIdsToClose, ["p1"]);
+});
+
+test("Snapshot + restore sélection SS indépendante du Live", () => {
+  const polls = [
+    { id: "p1", status: "ACTIVE", type: "SINGLE_CHOICE", order: 0 },
+    { id: "p2", status: "ACTIVE", type: "SINGLE_CHOICE", order: 1 },
+    { id: "p3", status: "CLOSED", type: "SINGLE_CHOICE", order: 2 },
+    { id: "px", status: "ACTIVE", type: "CONTEST_ENTRY", order: 3 },
+  ];
+  const snap = snapshotSelfServiceSelectedPollIds({ polls });
+  assert.deepEqual(snap, ["p1", "p2"]);
+
+  // Après normalize Live : seul p1 ACTIVE
+  const afterLive = [
+    { id: "p1", status: "ACTIVE", type: "SINGLE_CHOICE", order: 0 },
+    { id: "p2", status: "CLOSED", type: "SINGLE_CHOICE", order: 1 },
+    { id: "p3", status: "CLOSED", type: "SINGLE_CHOICE", order: 2 },
+  ];
+  const restore = buildRestoreSelfServicePollsPlan({
+    polls: afterLive,
+    savedPollIds: snap,
+  });
+  assert.deepEqual(restore.pollIdsToActivate, ["p1", "p2"]);
+  assert.deepEqual(restore.pollIdsToDeactivate, []);
 });
 
 test("Routes API branchées dans server.js (auth orga)", () => {

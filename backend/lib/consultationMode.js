@@ -222,6 +222,96 @@ function evaluateCloseSelfServiceConsultation(input = {}) {
 }
 
 /**
+ * Normalise une liste d’IDs persistés (Json Prisma / body).
+ * @param {unknown} raw
+ * @returns {string[]}
+ */
+function normalizeSelfServiceSelectedPollIds(raw) {
+  if (!Array.isArray(raw)) return [];
+  return [
+    ...new Set(
+      raw
+        .map((x) => String(x || "").trim())
+        .filter(Boolean),
+    ),
+  ];
+}
+
+/**
+ * Snapshot des questions actuellement ouvertes (ACTIVE) et éligibles SS.
+ * @param {{
+ *   polls?: Array<{ id?: unknown; status?: unknown; type?: unknown }> | null;
+ * }} input
+ * @returns {string[]}
+ */
+function snapshotSelfServiceSelectedPollIds(input = {}) {
+  const polls = Array.isArray(input.polls) ? input.polls : [];
+  /** @type {string[]} */
+  const ids = [];
+  for (const p of polls) {
+    const id = typeof p?.id === "string" ? p.id.trim() : "";
+    if (!id) continue;
+    if (String(p?.status || "").toUpperCase() !== "ACTIVE") continue;
+    if (!isSelfServiceCatalogType(p?.type)) continue;
+    ids.push(id);
+  }
+  return ids;
+}
+
+/**
+ * Plan de restauration des questions SS après un passage Live.
+ * Ne touche pas les votes. Ignore les IDs archivés / exclus.
+ * @param {{
+ *   polls?: Array<{ id?: unknown; status?: unknown; type?: unknown }> | null;
+ *   savedPollIds?: unknown;
+ * }} input
+ * @returns {{
+ *   pollIdsToActivate: string[];
+ *   pollIdsToDeactivate: string[];
+ *   selectedPollIds: string[];
+ * }}
+ */
+function buildRestoreSelfServicePollsPlan(input = {}) {
+  const saved = normalizeSelfServiceSelectedPollIds(input.savedPollIds);
+  const polls = Array.isArray(input.polls) ? input.polls : [];
+  const byId = new Map();
+  for (const p of polls) {
+    const id = typeof p?.id === "string" ? p.id.trim() : "";
+    if (!id) continue;
+    byId.set(id, {
+      id,
+      status: String(p?.status || "").toUpperCase(),
+      type: String(p?.type || "").toUpperCase(),
+    });
+  }
+
+  /** @type {string[]} */
+  const pollIdsToActivate = [];
+  for (const id of saved) {
+    const p = byId.get(id);
+    if (!p || p.status === "ARCHIVED") continue;
+    if (!isSelfServiceCatalogType(p.type)) continue;
+    pollIdsToActivate.push(id);
+  }
+
+  /** @type {string[]} */
+  const pollIdsToDeactivate = [];
+  for (const p of byId.values()) {
+    if (p.status !== "ACTIVE") continue;
+    if (!isSelfServiceCatalogType(p.type)) continue;
+    if (!pollIdsToActivate.includes(p.id)) {
+      pollIdsToDeactivate.push(p.id);
+    }
+  }
+
+  return {
+    pollIdsToActivate,
+    pollIdsToDeactivate,
+    selectedPollIds: pollIdsToActivate,
+  };
+}
+
+/**
  * Plan de normalisation playlist LIVE : au plus un poll ACTIVE.
  * Ne supprime aucun vote.
  * @param {{
@@ -470,6 +560,9 @@ module.exports = {
   evaluateOpenSelfServiceConsultation,
   evaluateCloseSelfServiceConsultation,
   buildNormalizeLivePollsPlan,
+  normalizeSelfServiceSelectedPollIds,
+  snapshotSelfServiceSelectedPollIds,
+  buildRestoreSelfServicePollsPlan,
   isSelfServiceCatalogType,
   canAcceptSelfServiceVote,
   evaluateSetSelfServiceOpenPolls,

@@ -1176,12 +1176,18 @@ export function PollExperience({
    * fallback liveScene voting si axe vote absent).
    */
   const selfServiceVotable = Boolean(poll?.selfServiceVotable);
+  const selfServiceModePoll =
+    String(poll?.consultationMode || "").toLowerCase() === "self_service";
   const voteSessionOpen = isParticipantVoteSessionOpen({
     voteState: voteStateParticipant,
     pollStatus: poll?.status,
     liveScene,
     selfServiceVotable,
   });
+  const consultationPausedSsEarly =
+    selfServiceModePoll &&
+    poll?.selfServiceOpen === false &&
+    !voteSessionOpen;
 
   /**
    * Bloc résultats : RESULTS, archive `/p`, ou après mon vote en VOTING **et** CLOSED
@@ -1221,6 +1227,7 @@ export function PollExperience({
 
   const resultsBlockTitle = getParticipantResultsBlockTitle({
     voteSessionOpen,
+    consultationPaused: consultationPausedSsEarly,
   });
 
   /** Fiche résultat autonome : header / eyebrow / CTA adaptés (pas de 2ᵉ logique de totaux). */
@@ -1788,10 +1795,7 @@ export function PollExperience({
   const voteFerme =
     poll?.selfServiceVotable === true ? false : evtVoteState === "closed";
   const liveSceneNorm = String(liveScene || "").toLowerCase();
-  const consultationPausedSs =
-    String(poll?.consultationMode || "").toLowerCase() === "self_service" &&
-    poll?.selfServiceOpen === false &&
-    !voteSessionOpen;
+  const consultationPausedSs = consultationPausedSsEarly;
   /**
    * Carte « résultats bientôt » : uniquement si le vote est fermé, pas encore RESULTS,
    * et qu’on n’affiche pas déjà le bloc barres (continuité votant VOTING→CLOSED).
@@ -2223,7 +2227,7 @@ export function PollExperience({
             textAlign: "center",
           }}
         >
-          <p style={{ margin: 0, fontWeight: 700 }}>Consultation fermée</p>
+          <p style={{ margin: 0, fontWeight: 700 }}>Consultation en pause</p>
           <p
             style={{
               margin: "0.35rem 0 0",
@@ -2232,8 +2236,8 @@ export function PollExperience({
               lineHeight: 1.45,
             }}
           >
-            Les votes libre-service sont en pause. Vous pouvez consulter les
-            résultats si déjà disponibles.
+            Les votes sont temporairement fermés. Vous pouvez consulter les
+            résultats actuels.
           </p>
         </div>
       ) : null}

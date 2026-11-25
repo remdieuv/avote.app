@@ -5611,14 +5611,22 @@ export default function RegieEventPage() {
     if (!eventId) return;
 
     const activePollId = eventData?.activePollId ?? null;
+    const selfServiceSocket = isSelfServiceMode(eventData);
+    const pollIdsToJoin = selfServiceSocket
+      ? (Array.isArray(eventData?.polls) ? eventData.polls : [])
+          .map((p) => (p?.id != null ? String(p.id) : ""))
+          .filter(Boolean)
+      : activePollId
+        ? [String(activePollId)]
+        : [];
 
     const socket = io(SOCKET, { transports: ["websocket", "polling"] });
     socketRef.current = socket;
 
     function joinSalles() {
       socket.emit("join_event", eventId);
-      if (activePollId) {
-        socket.emit("join_poll", activePollId);
+      for (const pid of pollIdsToJoin) {
+        socket.emit("join_poll", pid);
       }
       socket.emit("screen:auto_rotate", {
         eventId,
@@ -5724,6 +5732,14 @@ export default function RegieEventPage() {
                 payload.activePollId !== undefined
                   ? payload.activePollId
                   : prev.activePollId,
+              consultationMode:
+                payload.consultationMode !== undefined
+                  ? payload.consultationMode
+                  : prev.consultationMode,
+              selfServiceOpen:
+                typeof payload.selfServiceOpen === "boolean"
+                  ? payload.selfServiceOpen
+                  : prev.selfServiceOpen,
               questionTimer:
                 payload.questionTimer !== undefined
                   ? payload.questionTimer
@@ -5756,6 +5772,10 @@ export default function RegieEventPage() {
                 payload.participantsLimit != null
                   ? payload.participantsLimit
                   : prev.participantsLimit,
+              participantsUsed:
+                payload.participantsUsed != null
+                  ? payload.participantsUsed
+                  : prev.participantsUsed,
             }
           : prev,
       );
@@ -5836,8 +5856,8 @@ export default function RegieEventPage() {
     return () => {
       socketRef.current = null;
       socket.emit("leave_event", eventId);
-      if (activePollId) {
-        socket.emit("leave_poll", activePollId);
+      for (const pid of pollIdsToJoin) {
+        socket.emit("leave_poll", pid);
       }
       socket.off("connect", onSocketConnect);
       socket.off("disconnect", onSocketDisconnect);
@@ -5849,7 +5869,16 @@ export default function RegieEventPage() {
       socket.off("screen:update", onScreenUpdate);
       socket.disconnect();
     };
-  }, [eventId, fetchEvent, eventData?.activePollId]);
+  }, [
+    eventId,
+    fetchEvent,
+    eventData?.activePollId,
+    eventData?.consultationMode,
+    // Rejoindre les rooms poll quand la playlist change (Libre-service multi).
+    Array.isArray(eventData?.polls)
+      ? eventData.polls.map((p) => p?.id).filter(Boolean).join(",")
+      : "",
+  ]);
 
   const tm = eventData?.questionTimer;
   useEffect(() => {
@@ -10121,7 +10150,9 @@ export default function RegieEventPage() {
                     ...(inTestMode
                       ? [
                           {
-                            label: `Live gratuit : ${FREE_PARTICIPANTS_LIMIT}`,
+                            label: isSelfServiceRegie
+                              ? `Offre gratuite : ${FREE_PARTICIPANTS_LIMIT}`
+                              : `Live gratuit : ${FREE_PARTICIPANTS_LIMIT}`,
                             color: "#166534",
                             bg: "#dcfce7",
                             border: "#86efac",
@@ -10167,7 +10198,7 @@ export default function RegieEventPage() {
                       {item.label}
                     </span>
                   ))}
-                  {hasDisplayGap ? (
+                  {!isSelfServiceRegie && hasDisplayGap ? (
                     <span
                       style={{
                         display: "inline-flex",
@@ -10231,7 +10262,7 @@ export default function RegieEventPage() {
                     ) : null}
                   </div>
                 ) : null}
-                {inTestMode && !eventLocked ? (
+                {inTestMode && !eventLocked && !isSelfServiceRegie ? (
                   <p
                     data-testid="regie-test-mode-help"
                     style={{

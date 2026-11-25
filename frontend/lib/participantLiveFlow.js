@@ -427,15 +427,21 @@ export function shouldShowParticipantLiveResultsBlock(input = {}) {
 /**
  * Titre du bloc résultats Salle / embed.
  * VOTING (session ouverte) → « Résultats en direct » ;
+ * Libre-service en pause → « Résultats actuels » ;
  * CLOSED / RESULTS / archive → « Résultats finaux ».
  *
- * @param {{ voteSessionOpen?: boolean }} input
- * @returns {"Résultats en direct" | "Résultats finaux"}
+ * @param {{
+ *   voteSessionOpen?: boolean;
+ *   consultationPaused?: boolean;
+ *   selfServiceMode?: boolean;
+ * }} input
+ * @returns {"Résultats en direct" | "Résultats actuels" | "Résultats finaux"}
  */
 export function getParticipantResultsBlockTitle(input = {}) {
-  return input.voteSessionOpen === true
-    ? "Résultats en direct"
-    : "Résultats finaux";
+  if (input.voteSessionOpen === true) return "Résultats en direct";
+  // Pause SS (votes fermés temporairement) ≠ fin d’événement.
+  if (input.consultationPaused === true) return "Résultats actuels";
+  return "Résultats finaux";
 }
 
 /**

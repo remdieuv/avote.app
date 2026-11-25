@@ -198,6 +198,11 @@ model Event {
    * Distinct de isLocked / Terminer — ne purge pas les votes.
    */
   selfServiceOpen Boolean @default(false)
+  /**
+   * Libre-service : IDs des questions sélectionnées (indépendant du status LIVE ACTIVE).
+   * Conservé au passage Live animé pour restauration au retour Libre-service.
+   */
+  selfServiceSelectedPollIds Json @default("[]")
   /** Affichage automatique des résultats après fermeture du vote (délai en secondes) */
   autoReveal             Boolean   @default(true)
   autoRevealDelaySec     Int       @default(5)
