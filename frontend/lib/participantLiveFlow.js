@@ -188,12 +188,113 @@ export function shouldJoinSocketJoinActivePoll(input = {}) {
 
 /**
  * Poll embedded applique un snapshot `poll_updated` relayé par Join (pas de 2ᵉ socket).
- * @param {{ embedded?: boolean; parentPollRevision?: number }} input
+ * Si `expectedPollId` est fourni, le snapshot doit correspondre (Libre-service).
+ * @param {{
+ *   embedded?: boolean;
+ *   parentPollRevision?: number;
+ *   snapshotPollId?: string | null;
+ *   expectedPollId?: string | null;
+ * }} input
  */
 export function shouldPollApplyParentPollSnapshot(input = {}) {
-  return (
-    input.embedded === true && Number(input.parentPollRevision || 0) > 0
-  );
+  if (input.embedded !== true) return false;
+  if (!(Number(input.parentPollRevision || 0) > 0)) return false;
+  const expected =
+    typeof input.expectedPollId === "string" && input.expectedPollId.trim()
+      ? input.expectedPollId.trim()
+      : null;
+  if (!expected) return true;
+  const snap =
+    typeof input.snapshotPollId === "string" && input.snapshotPollId.trim()
+      ? input.snapshotPollId.trim()
+      : null;
+  return Boolean(snap && snap === expected);
+}
+
+/**
+ * Libre-service : n’écraser le poll embed Join avec `event_live_updated.poll`
+ * que si l’id correspond à la sélection participant (pas `activePollId` Live).
+ * Live animé : conserver l’application du poll antenne.
+ *
+ * @param {{
+ *   consultationMode?: unknown;
+ *   selectedSelfServicePollId?: string | null;
+ *   payloadPollId?: string | null;
+ * }} input
+ */
+export function shouldJoinApplyEventLivePollSnapshot(input = {}) {
+  const mode = String(input.consultationMode || "")
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, "_");
+  const isSs = mode === "self_service" || mode === "selfservice";
+  if (!isSs) return true;
+  const selected =
+    typeof input.selectedSelfServicePollId === "string" &&
+    input.selectedSelfServicePollId.trim()
+      ? input.selectedSelfServicePollId.trim()
+      : null;
+  if (!selected) return false;
+  const payloadId =
+    typeof input.payloadPollId === "string" && input.payloadPollId.trim()
+      ? input.payloadPollId.trim()
+      : null;
+  return Boolean(payloadId && payloadId === selected);
+}
+
+/**
+ * Room poll à rejoindre après `event_live_updated` : en Libre-service la
+ * sélection participant prime sur `activePollId`.
+ *
+ * @param {{
+ *   consultationMode?: unknown;
+ *   selectedSelfServicePollId?: string | null;
+ *   activePollId?: string | null;
+ * }} input
+ * @returns {string | null}
+ */
+export function resolveJoinPollRoomAfterEventLive(input = {}) {
+  const mode = String(input.consultationMode || "")
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, "_");
+  const isSs = mode === "self_service" || mode === "selfservice";
+  if (isSs) {
+    const selected =
+      typeof input.selectedSelfServicePollId === "string" &&
+      input.selectedSelfServicePollId.trim()
+        ? input.selectedSelfServicePollId.trim()
+        : null;
+    return selected;
+  }
+  const ap =
+    typeof input.activePollId === "string" && input.activePollId.trim()
+      ? input.activePollId.trim()
+      : null;
+  return ap;
+}
+
+/**
+ * `/p` et PollExperience : n’appliquer `event_live_updated.poll` que s’il
+ * correspond au poll épinglé (query `?poll=` ou sélection SS).
+ * Sans épinglage (Live antenne) → appliquer.
+ *
+ * @param {{
+ *   pinnedPollId?: string | null;
+ *   payloadPollId?: string | null;
+ * }} input
+ */
+export function shouldApplyEventLivePollToExperience(input = {}) {
+  const pinned =
+    typeof input.pinnedPollId === "string" && input.pinnedPollId.trim()
+      ? input.pinnedPollId.trim()
+      : null;
+  if (!pinned) return true;
+  const payloadId =
+    typeof input.payloadPollId === "string" && input.payloadPollId.trim()
+      ? input.payloadPollId.trim()
+      : null;
+  return Boolean(payloadId && payloadId === pinned);
 }
 
 /** Join applique les axes live du socket avant le round-trip `fetchMeta`. */

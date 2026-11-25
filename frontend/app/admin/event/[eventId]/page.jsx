@@ -7578,10 +7578,12 @@ export default function RegieEventPage() {
     setSelectedPollId(String(pollId || "") || null);
   }, []);
 
-  const useTelecommandeChrome = shouldUseTelecommandeChrome({
-    desktop,
-    forceFullRegie: mobileFullRegie,
-  });
+  const useTelecommandeChrome =
+    !isSelfServiceRegie &&
+    shouldUseTelecommandeChrome({
+      desktop,
+      forceFullRegie: mobileFullRegie,
+    });
 
   const telecommandeVoteToggle = getTelecommandeVoteToggle({
     canOpenVote,

@@ -228,6 +228,9 @@ test("Routes API branchées dans server.js (auth orga)", () => {
   assert.match(src, /evaluateSetConsultationMode/);
   assert.match(src, /canAcceptSelfServiceVote/);
   assert.match(src, /buildSelfServiceCatalog/);
+  assert.match(src, /isSelfServicePublicPollStatus/);
+  assert.match(src, /initialPollStatus = eventIsSelfService \? "DRAFT"/);
+  assert.match(src, /ssLive/);
   assert.match(src, /votesPreserved:\s*true/);
   assert.match(src, /CONSULTATION_CLOSED/);
   // Non-régression : finish / start-real toujours là ; pas de wipe Vote dans ces routes mode.
@@ -254,16 +257,19 @@ test("Catalogue V1 : types exclus + multi ACTIVE", () => {
       { id: "b", type: "CONTEST_ENTRY", status: "ACTIVE", question: "Concours", order: 1 },
       { id: "c", type: "MULTIPLE_CHOICE", status: "DRAFT", question: "Q2", order: 2 },
       { id: "d", type: "QUIZ", status: "ACTIVE", question: "Quiz", order: 3 },
+      { id: "e", type: "SINGLE_CHOICE", status: "CLOSED", question: "Q3", order: 4 },
     ],
   });
+  // DRAFT jamais publié exclu ; CLOSED publié conservé pour résultats.
   assert.equal(catalog.length, 3);
   assert.deepEqual(
     catalog.map((x) => x.id),
-    ["a", "c", "d"],
+    ["a", "d", "e"],
   );
   assert.equal(catalog.find((x) => x.id === "a").votable, true);
-  assert.equal(catalog.find((x) => x.id === "c").votable, false);
   assert.equal(catalog.find((x) => x.id === "d").votable, true);
+  assert.equal(catalog.find((x) => x.id === "e").votable, false);
+  assert.equal(catalog.find((x) => x.id === "c"), undefined);
 });
 
 test("canAcceptSelfServiceVote : open / fermé / type exclu", () => {

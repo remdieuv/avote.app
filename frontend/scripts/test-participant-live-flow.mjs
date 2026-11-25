@@ -37,6 +37,9 @@ import {
   shouldEmbedPollSurfaceInRoom,
   resolveJoinSocketOnlineTransition,
   shouldJoinApplySocketLiveAxesImmediately,
+  shouldJoinApplyEventLivePollSnapshot,
+  resolveJoinPollRoomAfterEventLive,
+  shouldApplyEventLivePollToExperience,
   shouldJoinSocketJoinActivePoll,
   shouldClearPollLoadingAfterFetch,
   shouldPollApplyParentPollSnapshot,
@@ -455,6 +458,81 @@ test("A3. peer votes : Join join_poll sur même io, Poll embed sans 2ᵉ socket"
       parentPollRevision: 3,
     }),
     false,
+  );
+  assert.equal(
+    shouldPollApplyParentPollSnapshot({
+      embedded: true,
+      parentPollRevision: 2,
+      snapshotPollId: "q1",
+      expectedPollId: "q3",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldPollApplyParentPollSnapshot({
+      embedded: true,
+      parentPollRevision: 2,
+      snapshotPollId: "q3",
+      expectedPollId: "q3",
+    }),
+    true,
+  );
+});
+
+test("SS : event_live ne doit pas écraser la question sélectionnée (Q3 vs Q1)", () => {
+  assert.equal(
+    shouldJoinApplyEventLivePollSnapshot({
+      consultationMode: "self_service",
+      selectedSelfServicePollId: "q3",
+      payloadPollId: "q1",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldJoinApplyEventLivePollSnapshot({
+      consultationMode: "self_service",
+      selectedSelfServicePollId: "q3",
+      payloadPollId: "q3",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldJoinApplyEventLivePollSnapshot({
+      consultationMode: "live",
+      selectedSelfServicePollId: "q3",
+      payloadPollId: "q1",
+    }),
+    true,
+  );
+  assert.equal(
+    resolveJoinPollRoomAfterEventLive({
+      consultationMode: "self_service",
+      selectedSelfServicePollId: "q3",
+      activePollId: "q1",
+    }),
+    "q3",
+  );
+  assert.equal(
+    resolveJoinPollRoomAfterEventLive({
+      consultationMode: "live",
+      selectedSelfServicePollId: "q3",
+      activePollId: "q1",
+    }),
+    "q1",
+  );
+  assert.equal(
+    shouldApplyEventLivePollToExperience({
+      pinnedPollId: "q3",
+      payloadPollId: "q1",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldApplyEventLivePollToExperience({
+      pinnedPollId: null,
+      payloadPollId: "q1",
+    }),
+    true,
   );
 });
 

@@ -74,6 +74,8 @@ const {
   evaluateSetSelfServiceOpenPolls,
   buildSelfServiceCatalog,
   isSelfServiceCatalogType,
+  isSelfServicePublicPollStatus,
+  normalizeSelfServiceSelectedPollIds,
 } = require("./lib/consultationMode");
 const {
   normalizeDiscoverCity,
@@ -1107,6 +1109,10 @@ async function loadPublicPollByIdForEventSlug(slug, pollId) {
     },
   });
   if (!poll) return null;
+  // Défense : hors ACTIVE/CLOSED (ex. DRAFT jamais publié) → pas de lecture publique.
+  if (!isSelfServicePublicPollStatus(poll.status)) {
+    return null;
+  }
   const aggregates = await fetchPollVoteAggregates(prisma, poll.id);
   return attachVoteAggregatesToPoll(poll, aggregates);
 }
@@ -1380,7 +1386,12 @@ async function loadEventLiveUpdatedBundle(eventId) {
   await repairStaleVotingLiveState(event);
 
   let pollJson = null;
-  if (event.activePollId) {
+  // Libre-service : ne pas imbriquer le poll `activePollId` (antenne Live) —
+  // les participants multi-questions resteraient sinon écrasés. Axes + régie OK.
+  const ssLive =
+    normalizeConsultationMode(event.consultationMode) ===
+    CONSULTATION_MODE.SELF_SERVICE;
+  if (event.activePollId && !ssLive) {
     const poll = await loadPollFull(event.activePollId);
     if (poll && shouldIncludePollInEventLivePayload(event, poll)) {
       pollJson = pollToJson(poll);
@@ -6454,6 +6465,7 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
       screenDisplayState: true,
       consultationMode: true,
       selfServiceOpen: true,
+      selfServiceSelectedPollIds: true,
     },
   });
   if (eventMode?.isLocked) {
@@ -6524,6 +6536,10 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
         ? `${questionBrute.slice(0, 117)}…`
         : questionBrute;
 
+    // Libre-service : DRAFT = jamais publié (hors catalogue / URL publique).
+    // Live : CLOSED (historique) jusqu’à activation antenne.
+    const initialPollStatus = eventIsSelfService ? "DRAFT" : "CLOSED";
+
     let created = await prisma.poll.create({
       data: {
         eventId,
@@ -6539,7 +6555,7 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
           formDefinition: body.formDefinition,
           formTemplateKey: body.formTemplateKey,
         }),
-        status: "CLOSED",
+        status: initialPollStatus,
         order: nextOrder,
         options: {
           create: labels.map((label, order) => ({
@@ -6575,6 +6591,17 @@ app.post("/events/:eventId/polls/live", requireAuth, async (req, res) => {
         await prisma.poll.update({
           where: { id: created.id },
           data: { status: "ACTIVE" },
+        });
+        const prevSelected = normalizeSelfServiceSelectedPollIds(
+          eventMode?.selfServiceSelectedPollIds,
+        );
+        await prisma.event.update({
+          where: { id: eventId },
+          data: {
+            selfServiceSelectedPollIds: [
+              ...new Set([...prevSelected, created.id]),
+            ],
+          },
         });
       } else {
         await prisma.poll.updateMany({
