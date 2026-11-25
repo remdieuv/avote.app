@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-
 /**
  * Catalogue libre-service dans `/join`.
  * @param {{
@@ -15,7 +13,7 @@ import Link from "next/link";
  *     votable?: boolean;
  *   }>;
  *   votedPollIds: Set<string> | Record<string, boolean>;
- *   slug: string;
+ *   slug?: string;
  *   accent?: string;
  *   onSelectPoll?: (pollId: string) => void;
  *   selectedPollId?: string | null;
@@ -26,7 +24,7 @@ export function SelfServiceJoinCatalog({
   consultationOpen,
   catalogPolls,
   votedPollIds,
-  slug,
+  slug: _slug,
   accent = "#2563eb",
   onSelectPoll,
   selectedPollId = null,
@@ -156,18 +154,6 @@ export function SelfServiceJoinCatalog({
                     {done ? "Répondu" : "À répondre"}
                   </span>
                 </button>
-                <div style={{ marginTop: "0.35rem", paddingLeft: "0.15rem" }}>
-                  <Link
-                    href={`/p/${encodeURIComponent(slug)}?poll=${encodeURIComponent(p.id)}`}
-                    style={{
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      color: "#64748b",
-                    }}
-                  >
-                    Ouvrir en page dédiée →
-                  </Link>
-                </div>
               </li>
             );
           })}
@@ -202,10 +188,13 @@ export function SelfServiceJoinCatalog({
           <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
             {closedPolls.map((p) => (
               <li key={p.id} style={{ marginBottom: "0.45rem" }}>
-                <Link
-                  href={`/p/${encodeURIComponent(slug)}?poll=${encodeURIComponent(p.id)}`}
+                <button
+                  type="button"
+                  onClick={() => onSelectPoll?.(p.id)}
                   style={{
                     display: "block",
+                    width: "100%",
+                    textAlign: "left",
                     padding: "0.7rem 0.85rem",
                     borderRadius: "10px",
                     border: "1px solid #e2e8f0",
@@ -213,7 +202,7 @@ export function SelfServiceJoinCatalog({
                     color: "#334155",
                     fontWeight: 600,
                     fontSize: "0.9rem",
-                    textDecoration: "none",
+                    cursor: "pointer",
                   }}
                 >
                   {p.label}
@@ -228,7 +217,7 @@ export function SelfServiceJoinCatalog({
                   >
                     {votedSet.has(p.id) ? "Répondu · résultats" : "Résultats"}
                   </span>
-                </Link>
+                </button>
               </li>
             ))}
           </ul>

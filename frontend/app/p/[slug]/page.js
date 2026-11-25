@@ -38,6 +38,7 @@ function PublicPollBody({ slug }) {
       retourLabel="← Retour à la salle"
       slugPublic={slug}
       archiveLookup={archiveLookup}
+      pinnedPollId={pollParam || null}
     />
   );
 }

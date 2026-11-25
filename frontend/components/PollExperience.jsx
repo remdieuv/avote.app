@@ -59,6 +59,7 @@ import {
   isParticipantVoteSessionOpen,
   mergePollJsonPreservingQuizReveal,
   resolveParticipantTopStripLabel,
+  shouldApplyEventLivePollToExperience,
   shouldClearPollLoadingAfterFetch,
   shouldPollApplyParentPollSnapshot,
   shouldPollFetchEventMetaBranding,
@@ -302,6 +303,7 @@ function CarteVoteTermineAttenteResultats({
  *   parentLiveRevision?: number — bump Join à chaque event_live / reconnect
  *   parentPollSnapshot?: object | null — poll_updated relayé par le socket Join
  *   parentPollRevision?: number — bump quand un snapshot peer arrive
+ *   pinnedPollId?: string | null — id attendu (SS / `/p?poll=`) ; refuse snapshots étrangers
  *   parentEventId?: string | null;
  *   parentLiveState?: string | null;
  *   parentVoteState?: string | null;
@@ -320,6 +322,7 @@ export function PollExperience({
   slugPublic = null,
   embedded = false,
   archiveLookup = false,
+  pinnedPollId = null,
   parentSocketOnline = null,
   parentLiveRevision = 0,
   parentPollSnapshot = null,
@@ -827,19 +830,21 @@ export function PollExperience({
    * totaux peers en direct sans second socket ni attendre event_live.
    */
   useEffect(() => {
-    if (
-      !shouldPollApplyParentPollSnapshot({
-        embedded,
-        parentPollRevision,
-      })
-    ) {
-      return;
-    }
     if (!parentPollSnapshot || typeof parentPollSnapshot !== "object") return;
     const snap = normalizePollJson(
       /** @type {Record<string, unknown>} */ (parentPollSnapshot),
     );
     if (!snap?.id) return;
+    if (
+      !shouldPollApplyParentPollSnapshot({
+        embedded,
+        parentPollRevision,
+        snapshotPollId: snap.id,
+        expectedPollId: pinnedPollId,
+      })
+    ) {
+      return;
+    }
     // Snapshot socket = source plus fraîche que les GET silent en vol.
     loadPollGenerationRef.current += 1;
     loadPollAbortRef.current?.abort();
@@ -876,7 +881,7 @@ export function PollExperience({
         isLocked: axes.isLocked != null ? axes.isLocked : prev.isLocked,
       }));
     }
-  }, [embedded, parentPollRevision, parentPollSnapshot]);
+  }, [embedded, parentPollRevision, parentPollSnapshot, pinnedPollId]);
 
   useEffect(() => {
     return () => {
@@ -1010,6 +1015,19 @@ export function PollExperience({
 
       if (payload.poll) {
         const pollNorm = normalizePollJson(payload.poll);
+        const pinned =
+          typeof pinnedPollId === "string" && pinnedPollId.trim()
+            ? pinnedPollId.trim()
+            : pollId;
+        if (
+          !shouldApplyEventLivePollToExperience({
+            pinnedPollId: pinned,
+            payloadPollId: pollNorm?.id,
+          })
+        ) {
+          // Axes événement déjà appliqués ; ne pas écraser le poll épinglé.
+          return;
+        }
         const pollAxes = normalizeLiveAxes(pollNorm);
         loadPollGenerationRef.current += 1;
         loadPollAbortRef.current?.abort();
@@ -1137,6 +1155,7 @@ export function PollExperience({
     parentSocketOnline,
     eventId,
     pollId,
+    pinnedPollId,
     slugPublic,
     loadPoll,
     loadEventMetaForBranding,
@@ -1801,7 +1820,9 @@ export function PollExperience({
    * et qu’on n’affiche pas déjà le bloc barres (continuité votant VOTING→CLOSED).
    * Lead CRM : jamais (pas de mention de résultats à venir).
    */
+      /** Libre-service : jamais le message Live « Vote fermé — résultats bientôt ». */
   const attenteProjectionResultats =
+    !selfServiceModePoll &&
     voteFerme &&
     !affichageResultatsPublic &&
     !showBlocResultatsEnDirect &&
@@ -1903,8 +1924,15 @@ export function PollExperience({
         leadSubmitted: leadSuccess,
       })
     : null;
-  const participantStateTitle =
-    pollUxPres.ux === LIVE_UX_STATE.CLOSED && isLeadCrm
+  const participantStateTitle = selfServiceModePoll
+    ? pollUxPres.ux === LIVE_UX_STATE.CLOSED
+      ? hasVotedLocal
+        ? voteTakenLabel
+        : consultationPausedSs
+          ? "Consultation en pause"
+          : null
+      : pollUxPres.title
+    : pollUxPres.ux === LIVE_UX_STATE.CLOSED && isLeadCrm
       ? leadSuccess
         ? LEAD_SUBMIT_SUCCESS_MESSAGE
         : showLeadForm

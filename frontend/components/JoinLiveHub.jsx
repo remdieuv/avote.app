@@ -30,7 +30,9 @@ import {
   resolveJoinFinishedCardContent,
   resolveJoinHistoriqueQuestions,
   resolveJoinSocketOnlineTransition,
+  resolveJoinPollRoomAfterEventLive,
   shouldEmbedPollSurfaceInRoom,
+  shouldJoinApplyEventLivePollSnapshot,
   shouldJoinApplySocketLiveAxesImmediately,
   shouldJoinSocketJoinActivePoll,
   shouldShowJoinOfflineBanner,
@@ -194,6 +196,7 @@ export function JoinLiveHub({ slug }) {
   const activePollIdRef = useRef(/** @type {string | null} */ (null));
   const joinedPollIdRef = useRef(/** @type {string | null} */ (null));
   const selectedSelfServicePollIdRef = useRef(/** @type {string | null} */ (null));
+  const consultationModeRef = useRef(/** @type {string} */ ("live"));
   /** Personnalisation salle (/admin/.../customization) */
   const [roomDescription, setRoomDescription] = useState(null);
   const [logoUrl, setLogoUrl] = useState(null);
@@ -215,6 +218,7 @@ export function JoinLiveHub({ slug }) {
   const [landingEnabled, setLandingEnabled] = useState(false);
   /** live | self_service */
   const [consultationMode, setConsultationMode] = useState("live");
+  consultationModeRef.current = consultationMode;
   const [selfServiceOpen, setSelfServiceOpen] = useState(false);
   /** @type {Array<{ id: string; label: string; type?: string; open?: boolean; votable?: boolean }>} */
   const [catalogPolls, setCatalogPolls] = useState([]);
@@ -687,7 +691,14 @@ export function JoinLiveHub({ slug }) {
               : null;
           setActivePollId(ap);
           activePollIdRef.current = ap;
-          syncPollRoom(ap);
+          const modeNow =
+            payload?.consultationMode ?? consultationModeRef.current;
+          const roomPollId = resolveJoinPollRoomAfterEventLive({
+            consultationMode: modeNow,
+            selectedSelfServicePollId: selectedSelfServicePollIdRef.current,
+            activePollId: ap,
+          });
+          syncPollRoom(roomPollId);
         }
         if (typeof payload?.autoRevealShowResultsAt === "string") {
           setAutoRevealShowResultsAt(payload.autoRevealShowResultsAt);
@@ -703,14 +714,28 @@ export function JoinLiveHub({ slug }) {
           if (typeof st === "string" && st.trim()) {
             setActivePollStatus(String(st).trim().toUpperCase());
           }
-          setEmbeddedPollSnapshot(pollNorm);
-          setEmbeddedPollRevision((n) => n + 1);
+          const modeNow =
+            payload?.consultationMode ?? consultationModeRef.current;
+          const applyEmbedPoll = shouldJoinApplyEventLivePollSnapshot({
+            consultationMode: modeNow,
+            selectedSelfServicePollId: selectedSelfServicePollIdRef.current,
+            payloadPollId: pollNorm?.id,
+          });
+          if (applyEmbedPoll) {
+            setEmbeddedPollSnapshot(pollNorm);
+            setEmbeddedPollRevision((n) => n + 1);
+          }
         } else if (
           String(axes.displayState || "").toLowerCase() === "waiting" &&
           String(axes.voteState || "").toLowerCase() === "closed" &&
-          payload?.activePollId
+          payload?.activePollId &&
+          !isSelfServiceMode({
+            consultationMode:
+              payload?.consultationMode ?? consultationModeRef.current,
+          })
         ) {
           // LOT-5 — Suivante sans poll nested : éviter CLOSED stale → faux embed.
+          // Libre-service : ne pas vider le snapshot de la question choisie.
           setActivePollStatus("ACTIVE");
           setEmbeddedPollSnapshot(null);
         }
@@ -1690,6 +1715,7 @@ export function JoinLiveHub({ slug }) {
                     titrePage={eventTitle || "Libre-service"}
                     slugPublic={slug}
                     embedded
+                    pinnedPollId={selectedSelfServicePollId}
                     parentSocketOnline={socketOnline}
                     parentLiveRevision={liveSyncRevision}
                     parentPollSnapshot={embeddedPollSnapshot}

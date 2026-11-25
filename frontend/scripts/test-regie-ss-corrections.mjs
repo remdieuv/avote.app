@@ -70,6 +70,9 @@ test("participant SS : progression + pause + résultats actuels", () => {
   );
   assert.match(joinSrc, /répondue/);
   assert.match(joinSrc, /selfServiceHub/);
+  assert.match(joinSrc, /shouldJoinApplyEventLivePollSnapshot/);
+  assert.match(joinSrc, /resolveJoinPollRoomAfterEventLive/);
+  assert.match(joinSrc, /pinnedPollId=\{selectedSelfServicePollId\}/);
 
   const catalog = readFileSync(
     join(root, "components/SelfServiceJoinCatalog.jsx"),
@@ -77,8 +80,17 @@ test("participant SS : progression + pause + résultats actuels", () => {
   );
   assert.match(catalog, /Consultation en pause/);
   assert.match(catalog, /Répondu/);
+  assert.doesNotMatch(catalog, /Ouvrir en page dédiée/);
   assert.doesNotMatch(catalog, /modifier si autorisé/);
   assert.doesNotMatch(catalog, /Ça va bientôt commencer/);
+
+  const pollSrc = readFileSync(
+    join(root, "components/PollExperience.jsx"),
+    "utf8",
+  );
+  assert.match(pollSrc, /shouldApplyEventLivePollToExperience/);
+  assert.match(pollSrc, /!selfServiceModePoll/);
+  assert.match(pollSrc, /pinnedPollId/);
 
   assert.equal(
     getParticipantResultsBlockTitle({ consultationPaused: true }),
@@ -86,11 +98,25 @@ test("participant SS : progression + pause + résultats actuels", () => {
   );
 });
 
-test("vote SS émet event_live_updated (sync régie)", () => {
+test("vote SS émet event_live_updated (sync régie) sans poll antenne", () => {
   const src = readFileSync(join(backendRoot, "server.js"), "utf8");
   assert.match(
     src,
     /SELF_SERVICE[\s\S]{0,200}emitEventLiveUpdated/,
+  );
+  assert.match(src, /ssLive/);
+  assert.match(src, /initialPollStatus = eventIsSelfService \? "DRAFT"/);
+  assert.match(src, /isSelfServicePublicPollStatus/);
+});
+
+test("régie SS : pas de télécommande Vote fermé", () => {
+  const page = readFileSync(
+    join(root, "app/admin/event/[eventId]/page.jsx"),
+    "utf8",
+  );
+  assert.match(
+    page,
+    /useTelecommandeChrome =\s*\n?\s*!isSelfServiceRegie &&/,
   );
 });
 

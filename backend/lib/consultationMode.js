@@ -518,6 +518,17 @@ function evaluateSetSelfServiceOpenPolls(input = {}) {
  *   selfServiceOpen?: unknown;
  * }} input
  */
+/**
+ * Statuts exposés au catalogue / URL publique Libre-service.
+ * DRAFT = jamais publié → invisible participant.
+ * ACTIVE = ouvert (si consultation ouverte).
+ * CLOSED = publié puis désactivé → résultats, plus de vote.
+ */
+function isSelfServicePublicPollStatus(status) {
+  const s = String(status || "").toUpperCase();
+  return s === "ACTIVE" || s === "CLOSED";
+}
+
 function buildSelfServiceCatalog(input = {}) {
   const open = Boolean(input.selfServiceOpen);
   const polls = Array.isArray(input.polls) ? input.polls : [];
@@ -526,7 +537,11 @@ function buildSelfServiceCatalog(input = {}) {
       const id = typeof p?.id === "string" ? p.id.trim() : "";
       const type = String(p?.type || "").toUpperCase();
       const status = String(p?.status || "").toUpperCase();
-      if (!id || !isSelfServiceCatalogType(type) || status === "ARCHIVED") {
+      if (
+        !id ||
+        !isSelfServiceCatalogType(type) ||
+        !isSelfServicePublicPollStatus(status)
+      ) {
         return null;
       }
       const label =
@@ -564,6 +579,7 @@ module.exports = {
   snapshotSelfServiceSelectedPollIds,
   buildRestoreSelfServicePollsPlan,
   isSelfServiceCatalogType,
+  isSelfServicePublicPollStatus,
   canAcceptSelfServiceVote,
   evaluateSetSelfServiceOpenPolls,
   buildSelfServiceCatalog,
