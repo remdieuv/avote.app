@@ -993,6 +993,12 @@ export function JoinLiveHub({ slug }) {
   }, []);
 
   const progressionLigne = useMemo(() => {
+    if (selfServiceHub) {
+      const total = Array.isArray(catalogPolls) ? catalogPolls.length : 0;
+      if (total < 1) return null;
+      const answered = Math.min(total, votedPollIds.size);
+      return `${answered} question${answered !== 1 ? "s" : ""} répondue${answered !== 1 ? "s" : ""} sur ${total}`;
+    }
     if (!pollsProgress) return null;
     const { current, total } = pollsProgress;
     const rest = total - current;
@@ -1000,7 +1006,7 @@ export function JoinLiveHub({ slug }) {
       return `Question ${current} sur ${total} · ${rest} restante${rest > 1 ? "s" : ""}`;
     }
     return `Question ${current} sur ${total}`;
-  }, [pollsProgress]);
+  }, [selfServiceHub, catalogPolls, votedPollIds, pollsProgress]);
   /** pastPolls API uniquement — pas de préfixe de la question active (isolation copie). */
   const historiqueQuestions = useMemo(
     () => resolveJoinHistoriqueQuestions(pastPolls),

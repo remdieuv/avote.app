@@ -68,6 +68,8 @@ const {
   evaluateOpenSelfServiceConsultation,
   evaluateCloseSelfServiceConsultation,
   buildNormalizeLivePollsPlan,
+  snapshotSelfServiceSelectedPollIds,
+  buildRestoreSelfServicePollsPlan,
   canAcceptSelfServiceVote,
   evaluateSetSelfServiceOpenPolls,
   buildSelfServiceCatalog,
@@ -6827,12 +6829,13 @@ app.patch("/events/:eventId/consultation-mode", requireAuth, async (req, res) =>
         slug: true,
         consultationMode: true,
         selfServiceOpen: true,
+        selfServiceSelectedPollIds: true,
         isLocked: true,
         liveState: true,
         voteState: true,
         activePollId: true,
         polls: {
-          select: { id: true, status: true, order: true },
+          select: { id: true, status: true, type: true, order: true },
           orderBy: { order: "asc" },
         },
       },
@@ -6871,6 +6874,13 @@ app.patch("/events/:eventId/consultation-mode", requireAuth, async (req, res) =>
       let nextActive = event.activePollId ?? null;
 
       if (decision.normalizeLivePolls) {
+        // Persiste la sélection SS avant de réduire à 1 ACTIVE (Live).
+        const snapshot = snapshotSelfServiceSelectedPollIds({
+          polls: event.polls,
+        });
+        if (snapshot.length > 0) {
+          data.selfServiceSelectedPollIds = snapshot;
+        }
         const plan = buildNormalizeLivePollsPlan({
           polls: event.polls,
           activePollId: event.activePollId,
@@ -6884,6 +6894,28 @@ app.patch("/events/:eventId/consultation-mode", requireAuth, async (req, res) =>
           });
         }
         // Ne force pas DRAFT→ACTIVE : la régie ouvre le vote ; on pose seulement le pointeur.
+      } else if (
+        String(decision.eventData.consultationMode || "").toUpperCase() ===
+        "SELF_SERVICE"
+      ) {
+        // Retour Libre-service : restaure la sélection indépendamment du Live.
+        const restore = buildRestoreSelfServicePollsPlan({
+          polls: event.polls,
+          savedPollIds: event.selfServiceSelectedPollIds,
+        });
+        if (restore.pollIdsToDeactivate.length > 0) {
+          await tx.poll.updateMany({
+            where: { id: { in: restore.pollIdsToDeactivate } },
+            data: { status: "CLOSED" },
+          });
+        }
+        if (restore.pollIdsToActivate.length > 0) {
+          await tx.poll.updateMany({
+            where: { id: { in: restore.pollIdsToActivate } },
+            data: { status: "ACTIVE" },
+          });
+        }
+        data.selfServiceSelectedPollIds = restore.selectedPollIds;
       }
 
       const row = await tx.event.update({
@@ -7125,6 +7157,11 @@ app.put("/events/:eventId/consultation/polls", requireAuth, async (req, res) => 
           data: { status: "ACTIVE" },
         });
       }
+      // Persiste la sélection SS (indépendante du status après un passage Live).
+      await tx.event.update({
+        where: { id: eventId },
+        data: { selfServiceSelectedPollIds: decision.pollIdsToActivate },
+      });
     });
 
     const pollsAfter = await prisma.poll.findMany({
@@ -8862,7 +8899,10 @@ app.post(
   try {
     const pollEvt = await prisma.poll.findUnique({
       where: { id: pollId },
-      select: { eventId: true },
+      select: {
+        eventId: true,
+        event: { select: { consultationMode: true } },
+      },
     });
     if (pollEvt?.eventId) {
       await fermerVoteSiChronoEpuise(io, pollEvt.eventId);
@@ -8879,6 +8919,14 @@ app.post(
       res.json(pollToJson(poll));
       // Fan-out room coalescé ; réponse HTTP déjà à jour pour le votant.
       schedulePollUpdatedAfterVote(io, pollId);
+      // Libre-service : polls ≠ activePollId — event_live_updated pour la régie (sans F5).
+      if (
+        pollEvt?.eventId &&
+        normalizeConsultationMode(pollEvt.event?.consultationMode) ===
+          CONSULTATION_MODE.SELF_SERVICE
+      ) {
+        void emitEventLiveUpdated(io, pollEvt.eventId);
+      }
       return;
     }
 

@@ -106,12 +106,15 @@ test("workspace SS : consultation + questions + salle", () => {
   assert.match(src, /Ajouter une question/);
   assert.match(src, /Ouvrir la salle/);
   assert.match(src, /Résultats/);
+  assert.match(src, /SelfServiceResultsModal/);
   assert.match(src, /\/consultation\/\$\{path\}/);
   assert.match(src, /\/consultation\/polls/);
   // Pas de pilotage live dans ce composant
   assert.doesNotMatch(src, /Pilotage du Live/);
   assert.doesNotMatch(src, /Chrono scène/);
   assert.doesNotMatch(src, /Ouvrir le vote/);
+  // Résultats en modal régie, pas de lien public /p/
+  assert.doesNotMatch(src, /href=\{`\/p\//);
 });
 
 if (failed > 0) {
