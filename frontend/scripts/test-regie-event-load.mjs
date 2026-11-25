@@ -8,7 +8,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   assertRegieUsableAfterStartReal,
+  mergeRegieLiveScopeEvent,
+  REGIE_LIVE_REFETCH_DEBOUNCE_MS,
+  resolveRegieSocketPollIdsKey,
   shouldClearRegieEventLoadingAfterFetch,
+  shouldRefetchRegieAfterPollUpdated,
   shouldRenderRegieEventBody,
 } from "../lib/regieEventLoad.js";
 
@@ -108,6 +112,53 @@ test("page.jsx source : génération + render body sans gate !loading", () => {
     false,
     "ne plus conditionner le corps à !loading",
   );
+});
+
+test("P2 : pas de refetch après poll_updated ; debounce event_live", () => {
+  assert.equal(shouldRefetchRegieAfterPollUpdated(), false);
+  assert.ok(REGIE_LIVE_REFETCH_DEBOUNCE_MS >= 500);
+  assert.equal(
+    resolveRegieSocketPollIdsKey({
+      consultationMode: "self_service",
+      activePollId: "q1",
+      polls: [{ id: "b" }, { id: "a" }],
+    }),
+    "a,b",
+  );
+  assert.equal(
+    resolveRegieSocketPollIdsKey({
+      consultationMode: "live",
+      activePollId: "q1",
+      polls: [{ id: "a" }, { id: "b" }],
+    }),
+    "q1",
+  );
+  const merged = mergeRegieLiveScopeEvent(
+    {
+      id: "e1",
+      participantsUsed: 1,
+      landingPhotos: [{ id: "ph1" }],
+      polls: [],
+    },
+    {
+      id: "e1",
+      participantsUsed: 3,
+      landingPhotos: [],
+      polls: [{ id: "p1" }],
+    },
+  );
+  assert.equal(merged.participantsUsed, 3);
+  assert.equal(merged.landingPhotos[0].id, "ph1");
+  assert.equal(merged.polls[0].id, "p1");
+
+  const pageSrc = readFileSync(
+    join(here, "../app/admin/event/[eventId]/page.jsx"),
+    "utf8",
+  );
+  assert.match(pageSrc, /shouldRefetchRegieAfterPollUpdated/);
+  assert.match(pageSrc, /REGIE_LIVE_REFETCH_DEBOUNCE_MS/);
+  assert.match(pageSrc, /scope=live/);
+  assert.match(pageSrc, /joinedPollRoomsRef/);
 });
 
 if (failed > 0) {

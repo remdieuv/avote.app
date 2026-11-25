@@ -201,6 +201,8 @@ const {
   countDistinctParticipantsForEvent,
   fetchPollVoteAggregates,
   fetchEventOptionVoteCounts,
+  fetchAnalyticsParticipantsByPoll,
+  fetchAnalyticsVoteTimelineMinutes,
   fetchEventVoteParticipantCounts,
   attachVoteAggregatesToPoll,
   resolveVoteCountsFromPoll,
@@ -3944,25 +3946,65 @@ app.get("/events/slug/:slug", async (req, res) => {
       return res.status(400).json({ error: "Slug invalide." });
     }
 
-    const event = await prisma.event.findUnique({
+    // Une seule lecture événement + polls (évite findUnique ×2 + findMany séparé).
+    let eventApres = await prisma.event.findUnique({
       where: { slug },
+      include: {
+        polls: {
+          orderBy: { order: "asc" },
+          select: {
+            id: true,
+            question: true,
+            title: true,
+            type: true,
+            leadEnabled: true,
+            status: true,
+            order: true,
+          },
+        },
+      },
     });
-    if (!event) {
+    if (!eventApres) {
       return res.status(404).json({ error: "Événement introuvable." });
     }
 
-    await fermerVoteSiChronoEpuise(io, event.id);
-    const eventApres = await prisma.event.findUnique({ where: { id: event.id } });
-    if (eventApres) await repairStaleVotingLiveState(eventApres);
+    // Chrono : ne requêter à nouveau que si un vote ouvert avec timer est plausible.
+    const timerMaybeActive =
+      eventApres.questionTimerTotalSec != null &&
+      String(eventApres.voteState || "").toUpperCase() === "OPEN";
+    if (timerMaybeActive) {
+      const closed = await fermerVoteSiChronoEpuise(io, eventApres.id);
+      if (closed) {
+        eventApres = await prisma.event.findUnique({
+          where: { id: eventApres.id },
+          include: {
+            polls: {
+              orderBy: { order: "asc" },
+              select: {
+                id: true,
+                question: true,
+                title: true,
+                type: true,
+                leadEnabled: true,
+                status: true,
+                order: true,
+              },
+            },
+          },
+        });
+        if (!eventApres) {
+          return res.status(404).json({ error: "Événement introuvable." });
+        }
+      }
+    }
+    await repairStaleVotingLiveState(eventApres);
 
+    const pollsOrdered = Array.isArray(eventApres.polls) ? eventApres.polls : [];
     let activePollQuestion = null;
     /** Statut du poll pointé (Join : distinguer attente jamais lancée vs vote fermé). */
     let activePollStatus = null;
     if (eventApres.activePollId) {
-      const p = await prisma.poll.findFirst({
-        where: { id: eventApres.activePollId, eventId: eventApres.id },
-        select: { question: true, title: true, status: true },
-      });
+      const p = pollsOrdered.find((x) => x.id === eventApres.activePollId);
       if (p) {
         const q = (p.question && p.question.trim()) || "";
         const t = (p.title && p.title.trim()) || "";
@@ -3974,19 +4016,6 @@ app.get("/events/slug/:slug", async (req, res) => {
       }
     }
 
-    const pollsOrdered = await prisma.poll.findMany({
-      where: { eventId: eventApres.id },
-      orderBy: { order: "asc" },
-      select: {
-        id: true,
-        question: true,
-        title: true,
-        type: true,
-        leadEnabled: true,
-        status: true,
-        order: true,
-      },
-    });
     const pollsTotal = pollsOrdered.length;
     const consultationFields = consultationModeApiFields(eventApres);
     const catalogPolls =
@@ -4364,42 +4393,62 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
     if (!owned.ok) {
       return res.status(owned.status).json({ error: "Événement introuvable." });
     }
-    await fermerVoteSiChronoEpuise(io, eventId);
+    // scope=live : régie silent / socket — polls + axes, sans landing (payload + I/O).
+    const scopeLive =
+      String(req.query.scope || "").trim().toLowerCase() === "live";
 
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
-      include: {
-        polls: {
-          orderBy: { order: "asc" },
-          include: {
-            options: { orderBy: { order: "asc" } },
-            _count: { select: { votes: true, contestWinners: true } },
-          },
-        },
-        landingPhotos: {
-          orderBy: { createdAt: "desc" },
-        },
-        landingShowcasePhotos: {
-          orderBy: { createdAt: "asc" },
-        },
-        landingProgramItems: {
-          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    const eventInclude = {
+      polls: {
+        orderBy: { order: "asc" },
+        include: {
+          options: { orderBy: { order: "asc" } },
+          _count: { select: { votes: true, contestWinners: true } },
         },
       },
+      ...(scopeLive
+        ? {}
+        : {
+            landingPhotos: {
+              orderBy: { createdAt: "desc" },
+            },
+            landingShowcasePhotos: {
+              orderBy: { createdAt: "asc" },
+            },
+            landingProgramItems: {
+              orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+            },
+          }),
+    };
+
+    let event = await prisma.event.findUnique({
+      where: { id: eventId },
+      include: eventInclude,
     });
     if (!event) {
       return res.status(404).json({ error: "Événement introuvable." });
     }
+    // Chrono : uniquement si vote ouvert + timer configuré (évite findUnique superflu).
+    if (
+      event.questionTimerTotalSec != null &&
+      String(event.voteState || "").toUpperCase() === "OPEN"
+    ) {
+      const closed = await fermerVoteSiChronoEpuise(io, eventId);
+      if (closed) {
+        event = await prisma.event.findUnique({
+          where: { id: eventId },
+          include: eventInclude,
+        });
+        if (!event) {
+          return res.status(404).json({ error: "Événement introuvable." });
+        }
+      }
+    }
     await repairStaleVotingLiveState(event);
-    const participantsUsed = await countDistinctParticipantsForEvent(
-      prisma,
-      event.id,
-    );
-    /** Régie « Réponses en direct » : totaux bruts par option (pas de mask TEST). */
-    const optionVoteCounts = await fetchEventOptionVoteCounts(
-      prisma,
-      event.id,
-    );
+    /** Régie : totaux option + participants en parallèle. */
+    const [participantsUsed, optionVoteCounts] = await Promise.all([
+      countDistinctParticipantsForEvent(prisma, event.id),
+      fetchEventOptionVoteCounts(prisma, event.id),
+    ]);
     return res.json({
       id: event.id,
       title: event.title,
@@ -4463,27 +4512,33 @@ app.get("/events/:eventId", requireAuth, async (req, res) => {
           return base;
         }),
       })),
-      landingPhotos: (event.landingPhotos || []).map((ph) => ({
-        id: ph.id,
-        url: absolutizeStoredAssetUrl(ph.url),
-        caption:
-          typeof ph.caption === "string" && ph.caption.trim()
-            ? ph.caption.trim()
-            : null,
-        createdAt: ph.createdAt.toISOString(),
-      })),
-      landingShowcasePhotos: (event.landingShowcasePhotos || []).map((ph) =>
-        mapShowcasePhotoJson(ph),
-      ),
-      landingProgramItems: sortLandingProgramItems(
-        event.landingProgramItems || [],
-      ).map((step) => ({
-        id: step.id,
-        timeLabel: step.timeLabel,
-        title: step.title,
-        sortOrder: step.sortOrder,
-        createdAt: step.createdAt.toISOString(),
-      })),
+      landingPhotos: scopeLive
+        ? []
+        : (event.landingPhotos || []).map((ph) => ({
+            id: ph.id,
+            url: absolutizeStoredAssetUrl(ph.url),
+            caption:
+              typeof ph.caption === "string" && ph.caption.trim()
+                ? ph.caption.trim()
+                : null,
+            createdAt: ph.createdAt.toISOString(),
+          })),
+      landingShowcasePhotos: scopeLive
+        ? []
+        : (event.landingShowcasePhotos || []).map((ph) =>
+            mapShowcasePhotoJson(ph),
+          ),
+      landingProgramItems: scopeLive
+        ? []
+        : sortLandingProgramItems(event.landingProgramItems || []).map(
+            (step) => ({
+              id: step.id,
+              timeLabel: step.timeLabel,
+              title: step.title,
+              sortOrder: step.sortOrder,
+              createdAt: step.createdAt.toISOString(),
+            }),
+          ),
     });
   } catch (e) {
     console.error(e);
@@ -9955,33 +10010,13 @@ app.get("/events/:eventId/analytics", requireAuth, async (req, res) => {
     }
 
     const pollIds = Array.isArray(event.polls) ? event.polls.map((p) => p.id) : [];
-    let participantsUnique = 0;
-    /** @type {Map<string, number>} */
-    const participantsByPoll = new Map();
-
-    if (pollIds.length > 0) {
-      const eventVotes = await prisma.vote.findMany({
-        where: { pollId: { in: pollIds } },
-        select: { pollId: true, voterSessionId: true },
-      });
-      const sessionsEvent = new Set();
-      /** @type {Map<string, Set<string>>} */
-      const sessionsPoll = new Map();
-      for (const pid of pollIds) sessionsPoll.set(pid, new Set());
-      for (const v of eventVotes) {
-        sessionsEvent.add(v.voterSessionId);
-        const set = sessionsPoll.get(v.pollId);
-        if (set) set.add(v.voterSessionId);
-      }
-      participantsUnique = sessionsEvent.size;
-      for (const [pid, set] of sessionsPoll.entries()) {
-        participantsByPoll.set(pid, set.size);
-      }
-    }
+    const { participantsUnique, byPoll: participantsByPollAgg } =
+      await fetchAnalyticsParticipantsByPoll(prisma, pollIds);
 
     const questions = event.polls.map((p, i) => {
       const totalVotes = p._count?.votes ?? 0;
-      const participantsQuestion = participantsByPoll.get(p.id) ?? 0;
+      const participantsQuestion =
+        participantsByPollAgg.get(p.id)?.participants ?? 0;
       const responseRatePct =
         participantsUnique > 0
           ? Math.round((participantsQuestion / participantsUnique) * 1000) / 10
@@ -10174,44 +10209,24 @@ app.get("/events/:eventId/analytics/v2", requireAuth, async (req, res) => {
       });
     }
 
-    const voteWhere = {
-      pollId: { in: filteredPollIds },
-      ...(from || to
-        ? {
-            createdAt: {
-              ...(from ? { gte: from } : {}),
-              ...(to ? { lte: to } : {}),
-            },
-          }
-        : {}),
-    };
-    const votes = await prisma.vote.findMany({
-      where: voteWhere,
-      select: { pollId: true, voterSessionId: true, createdAt: true },
-      orderBy: { createdAt: "asc" },
-    });
+    const range = { from, to };
+    const [{ participantsUnique, byPoll: pollAgg }, minuteBuckets] =
+      await Promise.all([
+        fetchAnalyticsParticipantsByPoll(prisma, filteredPollIds, range),
+        fetchAnalyticsVoteTimelineMinutes(prisma, filteredPollIds, range),
+      ]);
 
-    /** @type {Map<string, Set<string>>} */
-    const sessionsByPoll = new Map();
-    for (const p of filteredPolls) sessionsByPoll.set(p.id, new Set());
-    const sessionsAll = new Set();
-    for (const v of votes) {
-      sessionsAll.add(v.voterSessionId);
-      const set = sessionsByPoll.get(v.pollId);
-      if (set) set.add(v.voterSessionId);
-    }
-    const participantsUnique = sessionsAll.size;
-    /** @type {Map<string, number>} */
-    const voteCountByPoll = new Map();
-    for (const v of votes) {
-      voteCountByPoll.set(v.pollId, (voteCountByPoll.get(v.pollId) || 0) + 1);
-    }
-
-    const firstVoteAt = votes[0]?.createdAt ? new Date(votes[0].createdAt) : null;
-    const lastVoteAt = votes[votes.length - 1]?.createdAt ? new Date(votes[votes.length - 1].createdAt) : null;
+    const firstVoteAt = minuteBuckets[0]?.bucketStart ?? null;
+    const lastVoteAt =
+      minuteBuckets.length > 0
+        ? minuteBuckets[minuteBuckets.length - 1].bucketStart
+        : null;
     let bucketMin = 1;
     if (firstVoteAt && lastVoteAt) {
-      const mins = Math.max(1, Math.ceil((lastVoteAt.getTime() - firstVoteAt.getTime()) / 60000));
+      const mins = Math.max(
+        1,
+        Math.ceil((lastVoteAt.getTime() - firstVoteAt.getTime()) / 60000),
+      );
       if (mins > 180) bucketMin = 5;
       if (mins > 600) bucketMin = 15;
     }
@@ -10225,9 +10240,9 @@ app.get("/events/:eventId/analytics/v2", requireAuth, async (req, res) => {
       d.setMinutes(Math.floor(m / bucketMin) * bucketMin);
       return d.toISOString();
     };
-    for (const v of votes) {
-      const k = bucketStartIso(v.createdAt);
-      timelineMap.set(k, (timelineMap.get(k) || 0) + 1);
+    for (const row of minuteBuckets) {
+      const k = bucketStartIso(row.bucketStart);
+      timelineMap.set(k, (timelineMap.get(k) || 0) + row.voteCount);
     }
     const timeline = [...timelineMap.entries()]
       .sort((a, b) => a[0].localeCompare(b[0]))
@@ -10238,7 +10253,8 @@ app.get("/events/:eventId/analytics/v2", requireAuth, async (req, res) => {
         (typeof p.question === "string" && p.question.trim()) ||
         (typeof p.title === "string" && p.title.trim()) ||
         `Question ${i + 1}`;
-      const participants = sessionsByPoll.get(p.id)?.size ?? 0;
+      const agg = pollAgg.get(p.id);
+      const participants = agg?.participants ?? 0;
       const responseRatePct =
         participantsUnique > 0 ? Math.round((participants / participantsUnique) * 1000) / 10 : 0;
       return {
@@ -10247,7 +10263,7 @@ app.get("/events/:eventId/analytics/v2", requireAuth, async (req, res) => {
         label,
         type: normalizeQuestionType(p),
         status: String(p.status || "").toUpperCase(),
-        voteCount: voteCountByPoll.get(p.id) || 0,
+        voteCount: agg?.voteCount || 0,
         participants,
         responseRatePct,
       };
@@ -10415,38 +10431,11 @@ app.get("/events/:eventId/analytics/v2/export.csv", requireAuth, async (req, res
       return true;
     });
     const pollIds = polls.map((p) => p.id);
-    const votes = pollIds.length
-      ? await prisma.vote.findMany({
-          where: {
-            pollId: { in: pollIds },
-            ...(from || to
-              ? {
-                  createdAt: {
-                    ...(from ? { gte: from } : {}),
-                    ...(to ? { lte: to } : {}),
-                  },
-                }
-              : {}),
-          },
-          select: { pollId: true, voterSessionId: true, createdAt: true },
-          orderBy: { createdAt: "asc" },
-        })
-      : [];
-    /** @type {Map<string, Set<string>>} */
-    const sessionsByPoll = new Map();
-    for (const p of polls) sessionsByPoll.set(p.id, new Set());
-    const sessionsAll = new Set();
-    /** @type {Map<string, number>} */
-    const voteCountByPoll = new Map();
-    for (const v of votes) {
-      sessionsAll.add(v.voterSessionId);
-      voteCountByPoll.set(v.pollId, (voteCountByPoll.get(v.pollId) || 0) + 1);
-      const set = sessionsByPoll.get(v.pollId);
-      if (set) set.add(v.voterSessionId);
-    }
-    const participantsUnique = sessionsAll.size;
+    const { participantsUnique, byPoll: pollAgg } =
+      await fetchAnalyticsParticipantsByPoll(prisma, pollIds, { from, to });
     const rowsByQuestion = polls.map((p, i) => {
-      const participants = sessionsByPoll.get(p.id)?.size ?? 0;
+      const agg = pollAgg.get(p.id);
+      const participants = agg?.participants ?? 0;
       const responseRatePct =
         participantsUnique > 0 ? Math.round((participants / participantsUnique) * 1000) / 10 : 0;
       return {
@@ -10458,7 +10447,7 @@ app.get("/events/:eventId/analytics/v2/export.csv", requireAuth, async (req, res
           `Question ${i + 1}`,
         type: normalizeQuestionType(p),
         status: String(p.status || "").toUpperCase(),
-        voteCount: voteCountByPoll.get(p.id) || 0,
+        voteCount: agg?.voteCount || 0,
         participants,
         responseRatePct,
       };

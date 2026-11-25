@@ -33,7 +33,11 @@ import {
   parseParticipantPackSize,
 } from "@/lib/participantPacks";
 import {
+  mergeRegieLiveScopeEvent,
+  REGIE_LIVE_REFETCH_DEBOUNCE_MS,
+  resolveRegieSocketPollIdsKey,
   shouldClearRegieEventLoadingAfterFetch,
+  shouldRefetchRegieAfterPollUpdated,
   shouldRenderRegieEventBody,
 } from "@/lib/regieEventLoad";
 import {
@@ -5123,10 +5127,20 @@ export default function RegieEventPage() {
   );
   /** Ids des questions de l’événement (pour ignorer poll_updated d’un autre event) */
   const eventPollIdsRef = useRef(new Set());
+  /** Rooms poll actuellement jointes (socket stable — pas de reconnect). */
+  const joinedPollRoomsRef = useRef(/** @type {string[]} */ ([]));
+  const liveRefetchTimerRef = useRef(/** @type {ReturnType<typeof setTimeout> | null} */ (null));
+  const fetchEventRef = useRef(
+    /** @type {(opts?: { silent?: boolean; liveScope?: boolean }) => Promise<void>} */ (
+      async () => {}
+    ),
+  );
   const quickLandingPhotoInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
 
   const fetchEvent = useCallback(async (opts = {}) => {
     const silent = opts.silent === true;
+    /** Socket / réconciliation live : payload allégé (sans landing). */
+    const liveScope = opts.liveScope === true;
     if (!eventId) return;
     const generation = ++fetchEventGenerationRef.current;
     const ac = new AbortController();
@@ -5138,10 +5152,14 @@ export default function RegieEventPage() {
       setLoading(true);
     }
     try {
-      const res = await adminFetch(`${apiBaseBrowser()}/events/${eventId}`, {
-        cache: "no-store",
-        signal: ac.signal,
-      });
+      const qs = liveScope ? "?scope=live" : "";
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/events/${eventId}${qs}`,
+        {
+          cache: "no-store",
+          signal: ac.signal,
+        },
+      );
       if (
         ac.signal.aborted ||
         generation !== fetchEventGenerationRef.current
@@ -5161,7 +5179,13 @@ export default function RegieEventPage() {
       ) {
         return;
       }
-      setEventData(data);
+      if (liveScope) {
+        setEventData((prev) =>
+          /** @type {any} */ (mergeRegieLiveScopeEvent(prev, data)),
+        );
+      } else {
+        setEventData(data);
+      }
     } catch (e) {
       if (e?.name === "AbortError") return;
       if (generation !== fetchEventGenerationRef.current) return;
@@ -5180,6 +5204,7 @@ export default function RegieEventPage() {
       }
     }
   }, [eventId]);
+  fetchEventRef.current = fetchEvent;
 
   const fetchMeCredits = useCallback(async () => {
     try {
@@ -5610,22 +5635,13 @@ export default function RegieEventPage() {
   useEffect(() => {
     if (!eventId) return;
 
-    const activePollId = eventData?.activePollId ?? null;
-    const selfServiceSocket = isSelfServiceMode(eventData);
-    const pollIdsToJoin = selfServiceSocket
-      ? (Array.isArray(eventData?.polls) ? eventData.polls : [])
-          .map((p) => (p?.id != null ? String(p.id) : ""))
-          .filter(Boolean)
-      : activePollId
-        ? [String(activePollId)]
-        : [];
-
     const socket = io(SOCKET, { transports: ["websocket", "polling"] });
     socketRef.current = socket;
+    joinedPollRoomsRef.current = [];
 
     function joinSalles() {
       socket.emit("join_event", eventId);
-      for (const pid of pollIdsToJoin) {
+      for (const pid of joinedPollRoomsRef.current) {
         socket.emit("join_poll", pid);
       }
       socket.emit("screen:auto_rotate", {
@@ -5781,14 +5797,20 @@ export default function RegieEventPage() {
       );
       // Force clear spinner si un GET initial était encore « loading ».
       setLoading(false);
-      void fetchEvent({ silent: true });
+      // Debounce : un vote SS peut émettre event_live — ne pas GET ×N.
+      if (liveRefetchTimerRef.current) {
+        clearTimeout(liveRefetchTimerRef.current);
+      }
+      liveRefetchTimerRef.current = setTimeout(() => {
+        liveRefetchTimerRef.current = null;
+        void fetchEventRef.current({ silent: true, liveScope: true });
+      }, REGIE_LIVE_REFETCH_DEBOUNCE_MS);
     }
 
     function onPollUpdated(data) {
       if (!data?.id) return;
       if (!eventPollIdsRef.current.has(String(data.id))) return;
-      loadPollAbortRef.current?.abort();
-      // Merge immédiat pour « Réponses en direct » ; refetch réconcilie (totaux bruts régie).
+      // Merge immédiat pour « Réponses en direct » — pas de GET complet.
       // En TEST+RESULTS, pollToJson peut masker : ne pas écraser les totaux régie.
       setEventData((prev) => {
         if (!prev?.polls) return prev;
@@ -5817,7 +5839,9 @@ export default function RegieEventPage() {
           }),
         };
       });
-      void fetchEvent({ silent: true });
+      if (shouldRefetchRegieAfterPollUpdated()) {
+        void fetchEventRef.current({ silent: true, liveScope: true });
+      }
     }
 
     function onSocketConnect() {
@@ -5854,11 +5878,16 @@ export default function RegieEventPage() {
     socket.on("screen:update", onScreenUpdate);
 
     return () => {
+      if (liveRefetchTimerRef.current) {
+        clearTimeout(liveRefetchTimerRef.current);
+        liveRefetchTimerRef.current = null;
+      }
       socketRef.current = null;
       socket.emit("leave_event", eventId);
-      for (const pid of pollIdsToJoin) {
+      for (const pid of joinedPollRoomsRef.current) {
         socket.emit("leave_poll", pid);
       }
+      joinedPollRoomsRef.current = [];
       socket.off("connect", onSocketConnect);
       socket.off("disconnect", onSocketDisconnect);
       socket.off("connect_error", onSocketConnectError);
@@ -5869,12 +5898,32 @@ export default function RegieEventPage() {
       socket.off("screen:update", onScreenUpdate);
       socket.disconnect();
     };
+  }, [eventId]);
+
+  /** Rejoindre / quitter les rooms poll sans recréer le socket. */
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket?.connected || !eventId) return;
+    const key = resolveRegieSocketPollIdsKey({
+      consultationMode: eventData?.consultationMode,
+      activePollId: eventData?.activePollId ?? null,
+      polls: eventData?.polls,
+    });
+    const nextIds = key ? key.split(",").filter(Boolean) : [];
+    const prevIds = joinedPollRoomsRef.current;
+    const prevSet = new Set(prevIds);
+    const nextSet = new Set(nextIds);
+    for (const pid of prevIds) {
+      if (!nextSet.has(pid)) socket.emit("leave_poll", pid);
+    }
+    for (const pid of nextIds) {
+      if (!prevSet.has(pid)) socket.emit("join_poll", pid);
+    }
+    joinedPollRoomsRef.current = nextIds;
   }, [
     eventId,
-    fetchEvent,
     eventData?.activePollId,
     eventData?.consultationMode,
-    // Rejoindre les rooms poll quand la playlist change (Libre-service multi).
     Array.isArray(eventData?.polls)
       ? eventData.polls.map((p) => p?.id).filter(Boolean).join(",")
       : "",
