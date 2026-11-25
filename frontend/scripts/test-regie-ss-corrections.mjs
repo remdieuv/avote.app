@@ -48,7 +48,7 @@ test("régie : join multi-polls + modal résultats", () => {
     join(root, "app/admin/event/[eventId]/page.jsx"),
     "utf8",
   );
-  assert.match(page, /pollIdsToJoin/);
+  assert.match(page, /joinedPollRoomsRef|resolveRegieSocketPollIdsKey/);
   assert.match(page, /isSelfServiceMode\(eventData\)/);
 
   const ws = readFileSync(

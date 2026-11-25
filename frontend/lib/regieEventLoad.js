@@ -15,6 +15,72 @@ export function shouldClearRegieEventLoadingAfterFetch(input = {}) {
 }
 
 /**
+ * `poll_updated` : le merge local des options / voteCount suffit.
+ * Un GET /events/:id complet après chaque vote surcharge la régie (~3 s).
+ * @returns {boolean}
+ */
+export function shouldRefetchRegieAfterPollUpdated() {
+  return false;
+}
+
+/**
+ * Debounce (ms) du silent refetch après `event_live_updated`
+ * (réconciliation axes / participantsUsed sans saturer).
+ */
+export const REGIE_LIVE_REFETCH_DEBOUNCE_MS = 1200;
+
+/**
+ * Clé stable des rooms poll à rejoindre (évite reconnect io à chaque tick).
+ * @param {{
+ *   consultationMode?: unknown;
+ *   activePollId?: string | null;
+ *   polls?: Array<{ id?: unknown }> | null;
+ * }} input
+ */
+export function resolveRegieSocketPollIdsKey(input = {}) {
+  const mode = String(input.consultationMode || "")
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, "_");
+  const isSs = mode === "self_service" || mode === "selfservice";
+  if (isSs) {
+    const ids = (Array.isArray(input.polls) ? input.polls : [])
+      .map((p) => (p?.id != null ? String(p.id) : ""))
+      .filter(Boolean)
+      .sort();
+    return ids.join(",");
+  }
+  const ap =
+    typeof input.activePollId === "string" && input.activePollId.trim()
+      ? input.activePollId.trim()
+      : "";
+  return ap;
+}
+
+/**
+ * Merge silent `scope=live` : ne pas écraser les blocs landing déjà en mémoire.
+ * @param {Record<string, unknown> | null | undefined} prev
+ * @param {Record<string, unknown> | null | undefined} next
+ */
+export function mergeRegieLiveScopeEvent(prev, next) {
+  if (!next || typeof next !== "object") return prev ?? null;
+  if (!prev || typeof prev !== "object") return next;
+  return {
+    ...prev,
+    ...next,
+    landingPhotos: Array.isArray(prev.landingPhotos)
+      ? prev.landingPhotos
+      : next.landingPhotos,
+    landingShowcasePhotos: Array.isArray(prev.landingShowcasePhotos)
+      ? prev.landingShowcasePhotos
+      : next.landingShowcasePhotos,
+    landingProgramItems: Array.isArray(prev.landingProgramItems)
+      ? prev.landingProgramItems
+      : next.landingProgramItems,
+  };
+}
+
+/**
  * Afficher le corps régie dès qu’on a des données — ne pas exiger `!loading`
  * (évite blank si spinner reste coincé après abort).
  * @param {{ eventData?: unknown; loading?: boolean }} input

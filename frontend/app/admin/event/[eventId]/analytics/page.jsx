@@ -92,25 +92,6 @@ export default function EventAnalyticsPage() {
   const [topThresholdPct, setTopThresholdPct] = useState("60");
 
   useEffect(() => {
-    if (!eventId) return;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await adminFetch(`${apiBaseBrowser()}/events/${eventId}/analytics`);
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(mapApiError(body, res.status));
-        setData(body);
-      } catch (e) {
-        setData(null);
-        setError(e.message || "Chargement impossible.");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [eventId]);
-
-  useEffect(() => {
     if (typeof window === "undefined") return;
     const m = window.matchMedia("(max-width: 920px)");
     const apply = () => setIsMobile(m.matches);
@@ -119,6 +100,50 @@ export default function EventAnalyticsPage() {
     return () => m.removeEventListener("change", apply);
   }, []);
 
+  /** Mount : V1 + V2 en parallèle (1 round-trip parallèle, plus de double séquentiel). */
+  useEffect(() => {
+    if (!eventId) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setV2Loading(true);
+      setError(null);
+      setV2Error(null);
+      try {
+        const [res1, res2] = await Promise.all([
+          adminFetch(`${apiBaseBrowser()}/events/${eventId}/analytics`),
+          adminFetch(`${apiBaseBrowser()}/events/${eventId}/analytics/v2`),
+        ]);
+        const [body1, body2] = await Promise.all([
+          res1.json().catch(() => ({})),
+          res2.json().catch(() => ({})),
+        ]);
+        if (cancelled) return;
+        if (!res1.ok) throw new Error(mapApiError(body1, res1.status));
+        setData(body1);
+        if (!res2.ok) {
+          setV2Data(null);
+          setV2Error(mapApiError(body2, res2.status));
+        } else {
+          setV2Data(body2);
+        }
+      } catch (e) {
+        if (cancelled) return;
+        setData(null);
+        setError(e.message || "Chargement impossible.");
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+          setV2Loading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId]);
+
+  /** Filtres : uniquement V2, debounce pour éviter rafales API. */
   useEffect(() => {
     if (!eventId) return;
     const params = new URLSearchParams();
@@ -131,23 +156,44 @@ export default function EventAnalyticsPage() {
     if (underThresholdPct) params.set("underThresholdPct", underThresholdPct);
     if (topThresholdPct) params.set("topThresholdPct", topThresholdPct);
     const qs = params.toString();
-    (async () => {
-      setV2Loading(true);
-      setV2Error(null);
-      try {
-        const res = await adminFetch(
-          `${apiBaseBrowser()}/events/${eventId}/analytics/v2${qs ? `?${qs}` : ""}`,
-        );
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(mapApiError(body, res.status));
-        setV2Data(body);
-      } catch (e) {
-        setV2Data(null);
-        setV2Error(e.message || "Chargement V2 impossible.");
-      } finally {
-        setV2Loading(false);
-      }
-    })();
+    // Skip le refetch V2 initial (déjà chargé au mount sans filtres).
+    const filtersIdle =
+      !filterFrom &&
+      !filterTo &&
+      (!filterPollId || filterPollId === "ALL") &&
+      (!filterType || filterType === "ALL") &&
+      (!filterStatus || filterStatus === "ALL") &&
+      (!filterLiveState || filterLiveState === "ALL") &&
+      (underThresholdPct === "30" || underThresholdPct === "") &&
+      (topThresholdPct === "60" || topThresholdPct === "");
+    if (filtersIdle) return undefined;
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      (async () => {
+        setV2Loading(true);
+        setV2Error(null);
+        try {
+          const res = await adminFetch(
+            `${apiBaseBrowser()}/events/${eventId}/analytics/v2${qs ? `?${qs}` : ""}`,
+          );
+          const body = await res.json().catch(() => ({}));
+          if (cancelled) return;
+          if (!res.ok) throw new Error(mapApiError(body, res.status));
+          setV2Data(body);
+        } catch (e) {
+          if (cancelled) return;
+          setV2Data(null);
+          setV2Error(e.message || "Chargement V2 impossible.");
+        } finally {
+          if (!cancelled) setV2Loading(false);
+        }
+      })();
+    }, 280);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [eventId, filterFrom, filterLiveState, filterPollId, filterStatus, filterTo, filterType, topThresholdPct, underThresholdPct]);
 
   const summary = data?.summary ?? {};

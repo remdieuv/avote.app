@@ -77,6 +77,37 @@ test("loadPollFull n’inclut plus votes: true", () => {
   assert.equal(body.includes("votes: true"), false);
 });
 
+test("analytics : agrégats SQL sans findMany votes", () => {
+  const aggSrc = readFileSync(join(here, "../lib/voteAggregates.js"), "utf8");
+  assert.match(aggSrc, /fetchAnalyticsParticipantsByPoll/);
+  assert.match(aggSrc, /fetchAnalyticsVoteTimelineMinutes/);
+  assert.match(aggSrc, /date_trunc\('minute'/);
+  const serverSrc = readFileSync(join(here, "../server.js"), "utf8");
+  assert.match(serverSrc, /fetchAnalyticsParticipantsByPoll/);
+  assert.match(serverSrc, /fetchAnalyticsVoteTimelineMinutes/);
+  assert.match(serverSrc, /scopeLive|scope=live|scope === \"live\"/);
+  // analytics v1 ne doit plus charger toutes les lignes Vote
+  const a1 = serverSrc.indexOf('app.get("/events/:eventId/analytics"');
+  const a2 = serverSrc.indexOf('app.get("/events/:eventId/analytics/v2"');
+  const block = serverSrc.slice(a1, a2 > a1 ? a2 : a1 + 2500);
+  assert.equal(
+    /vote\.findMany/.test(block),
+    false,
+    "analytics v1 : pas de vote.findMany",
+  );
+});
+
+test("GET /events/:id parallélise agrégats + scope live", () => {
+  const serverSrc = readFileSync(join(here, "../server.js"), "utf8");
+  const start = serverSrc.indexOf('app.get("/events/:eventId", requireAuth');
+  const end = serverSrc.indexOf("app.get(\"/events/:eventId/analytics\"");
+  const block = serverSrc.slice(start, end > start ? end : start + 8000);
+  assert.match(block, /Promise\.all/);
+  assert.match(block, /countDistinctParticipantsForEvent/);
+  assert.match(block, /fetchEventOptionVoteCounts/);
+  assert.match(block, /scopeLive/);
+});
+
 test("helpers exportés", () => {
   assert.equal(typeof countDistinctParticipantsForEvent, "function");
   assert.equal(typeof fetchPollVoteAggregates, "function");

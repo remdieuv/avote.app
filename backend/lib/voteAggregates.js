@@ -93,6 +93,119 @@ async function fetchEventOptionVoteCounts(db, eventId) {
 }
 
 /**
+ * Participants distincts + votes par poll (analytics) — sans charger toutes les lignes.
+ * @param {{ $queryRaw: Function }} db
+ * @param {string[]} pollIds
+ * @param {{ from?: Date | null; to?: Date | null }} [range]
+ * @returns {Promise<{
+ *   participantsUnique: number;
+ *   byPoll: Map<string, { participants: number; voteCount: number }>;
+ * }>}
+ */
+async function fetchAnalyticsParticipantsByPoll(db, pollIds, range = {}) {
+  /** @type {Map<string, { participants: number; voteCount: number }>} */
+  const byPoll = new Map();
+  const ids = [
+    ...new Set(
+      (Array.isArray(pollIds) ? pollIds : [])
+        .map((x) => String(x || "").trim())
+        .filter(Boolean),
+    ),
+  ];
+  for (const id of ids) {
+    byPoll.set(id, { participants: 0, voteCount: 0 });
+  }
+  if (ids.length === 0) {
+    return { participantsUnique: 0, byPoll };
+  }
+
+  const { Prisma } = require("@prisma/client");
+  const from = range.from instanceof Date && !Number.isNaN(range.from.getTime())
+    ? range.from
+    : null;
+  const to = range.to instanceof Date && !Number.isNaN(range.to.getTime())
+    ? range.to
+    : null;
+
+  const [byPollRows, uniqueRows] = await Promise.all([
+    db.$queryRaw`
+      SELECT v."pollId" AS "pollId",
+             COUNT(DISTINCT v."voterSessionId")::int AS "participants",
+             COUNT(*)::int AS "voteCount"
+      FROM "Vote" v
+      WHERE v."pollId" IN (${Prisma.join(ids)})
+        AND (${from}::timestamptz IS NULL OR v."createdAt" >= ${from})
+        AND (${to}::timestamptz IS NULL OR v."createdAt" <= ${to})
+      GROUP BY v."pollId"
+    `,
+    db.$queryRaw`
+      SELECT COUNT(DISTINCT v."voterSessionId")::int AS "participantsUnique"
+      FROM "Vote" v
+      WHERE v."pollId" IN (${Prisma.join(ids)})
+        AND (${from}::timestamptz IS NULL OR v."createdAt" >= ${from})
+        AND (${to}::timestamptz IS NULL OR v."createdAt" <= ${to})
+    `,
+  ]);
+
+  if (Array.isArray(byPollRows)) {
+    for (const row of byPollRows) {
+      const pid = row?.pollId != null ? String(row.pollId) : "";
+      if (!pid || !byPoll.has(pid)) continue;
+      byPoll.set(pid, {
+        participants: Number(row.participants) || 0,
+        voteCount: Number(row.voteCount) || 0,
+      });
+    }
+  }
+  const participantsUnique = Number(uniqueRows?.[0]?.participantsUnique) || 0;
+  return { participantsUnique, byPoll };
+}
+
+/**
+ * Timeline votes agrégée à la minute (rebucket côté JS si besoin).
+ * @param {{ $queryRaw: Function }} db
+ * @param {string[]} pollIds
+ * @param {{ from?: Date | null; to?: Date | null }} [range]
+ * @returns {Promise<Array<{ bucketStart: Date; voteCount: number }>>}
+ */
+async function fetchAnalyticsVoteTimelineMinutes(db, pollIds, range = {}) {
+  const ids = [
+    ...new Set(
+      (Array.isArray(pollIds) ? pollIds : [])
+        .map((x) => String(x || "").trim())
+        .filter(Boolean),
+    ),
+  ];
+  if (ids.length === 0) return [];
+
+  const { Prisma } = require("@prisma/client");
+  const from = range.from instanceof Date && !Number.isNaN(range.from.getTime())
+    ? range.from
+    : null;
+  const to = range.to instanceof Date && !Number.isNaN(range.to.getTime())
+    ? range.to
+    : null;
+
+  const rows = await db.$queryRaw`
+    SELECT date_trunc('minute', v."createdAt") AS "bucketStart",
+           COUNT(*)::int AS "voteCount"
+    FROM "Vote" v
+    WHERE v."pollId" IN (${Prisma.join(ids)})
+      AND (${from}::timestamptz IS NULL OR v."createdAt" >= ${from})
+      AND (${to}::timestamptz IS NULL OR v."createdAt" <= ${to})
+    GROUP BY 1
+    ORDER BY 1 ASC
+  `;
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((row) => ({
+      bucketStart: row?.bucketStart ? new Date(row.bucketStart) : null,
+      voteCount: Number(row?.voteCount) || 0,
+    }))
+    .filter((r) => r.bucketStart instanceof Date && !Number.isNaN(r.bucketStart.getTime()));
+}
+
+/**
  * Compteurs vote / participants par événement (liste admin).
  * @param {{ $queryRaw: Function }} db
  * @param {string[]} eventIds
@@ -190,6 +303,8 @@ module.exports = {
   countDistinctParticipantsForEvent,
   fetchPollVoteAggregates,
   fetchEventOptionVoteCounts,
+  fetchAnalyticsParticipantsByPoll,
+  fetchAnalyticsVoteTimelineMinutes,
   fetchEventVoteParticipantCounts,
   attachVoteAggregatesToPoll,
   resolveVoteCountsFromPoll,
