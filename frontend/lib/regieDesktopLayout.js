@@ -415,6 +415,20 @@ export function getRegieOpenVoteButtonCopy(input = {}) {
   };
 }
 
+/**
+ * Badge playlist régie en Libre-service (pas d’antenne Live).
+ * @param {{ pollStatus?: string | null }} input
+ * @returns {"Publiée"|"Non publiée"|"Résultats"|"Terminée"|"Prête"}
+ */
+export function getRegieSelfServicePlaylistBadge(input = {}) {
+  const ps = String(input.pollStatus ?? "").toUpperCase();
+  if (ps === "ARCHIVED") return "Terminée";
+  if (ps === "ACTIVE") return "Publiée";
+  if (ps === "CLOSED") return "Résultats";
+  if (ps === "DRAFT" || ps === "SCHEDULED") return "Non publiée";
+  return "Prête";
+}
+
 /** Zones desktop LOT-3. */
 export const REGIE_ZONE_QUESTIONS = "Questions";
 export const REGIE_ZONE_PILOTAGE = "Pilotage du direct";

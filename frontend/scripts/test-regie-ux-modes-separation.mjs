@@ -56,6 +56,7 @@ test("compteur mode réel : conserve used / limit", () => {
 test("fichiers UX mode présents", () => {
   for (const rel of [
     "components/admin/RegieModeSelector.jsx",
+    "components/admin/RegieTopBar.jsx",
     "components/admin/SelfServiceRegieWorkspace.jsx",
     "lib/regieParticipantsDisplay.js",
   ]) {
@@ -63,22 +64,51 @@ test("fichiers UX mode présents", () => {
   }
 });
 
-test("régie : sélecteur unique + workspace SS + live masqué", () => {
+test("régie : bandeau commun + workspace SS + live masqué", () => {
   const regieSrc = readFileSync(
     join(root, "app/admin/event/[eventId]/page.jsx"),
     "utf8",
   );
-  assert.match(regieSrc, /RegieModeSelector/);
+  assert.match(regieSrc, /RegieTopBar/);
   assert.match(regieSrc, /SelfServiceRegieWorkspace/);
   assert.match(regieSrc, /regie-live-only/);
+  assert.match(regieSrc, /regie-live-context-strip/);
   assert.match(regieSrc, /isSelfServiceRegie/);
   assert.match(regieSrc, /resolveRegieParticipantsCounterDisplay/);
+  assert.match(regieSrc, /regie-diffusion-avancee/);
+  assert.match(regieSrc, /Offre gratuite/);
+  assert.doesNotMatch(regieSrc, /Live gratuit/);
+  assert.doesNotMatch(regieSrc, /Console live/);
   // Plus de panneau mode dupliqué dans la colonne latérale
   assert.doesNotMatch(regieSrc, /ConsultationModePanel/);
+  // Sélecteur de mode : une seule instance via RegieTopBar
+  assert.equal(
+    (regieSrc.match(/<RegieTopBar/g) || []).length,
+    1,
+    "un seul bandeau régie commun",
+  );
   assert.equal(
     (regieSrc.match(/<RegieModeSelector/g) || []).length,
+    0,
+    "sélecteur hors page (dans RegieTopBar)",
+  );
+});
+
+test("bandeau : libellé Régie stable + statut mode", () => {
+  const top = readFileSync(
+    join(root, "components/admin/RegieTopBar.jsx"),
+    "utf8",
+  );
+  assert.match(top, /regie-top-bar/);
+  assert.match(top, /aria-label="Régie"/);
+  assert.match(top, /^\s+Régie\s*$/m);
+  assert.match(top, /gridTemplateColumns/);
+  assert.match(top, /RegieModeSelector/);
+  assert.match(top, /modeStatus/);
+  assert.equal(
+    (top.match(/<RegieModeSelector/g) || []).length,
     1,
-    "un seul sélecteur de mode dans la régie",
+    "un seul sélecteur dans le bandeau",
   );
 });
 

@@ -117,6 +117,7 @@ import {
   getRegiePrimaryLiveActionLabel,
   getRegieQuestionNumberLabel,
   getRegieConsultBannerState,
+  getRegieSelfServicePlaylistBadge,
   isRegieConsultSelectionOnly,
   sortPollsByPlaylistOrder,
 } from "@/lib/regieDesktopLayout";
@@ -129,6 +130,7 @@ import {
   getRegieToolGlossary,
 } from "@/lib/regieLiveFlowSteps";
 import { RegieLiveFlowStepper } from "@/components/admin/RegieLiveFlowStepper";
+import { RegieTopBar } from "@/components/admin/RegieTopBar";
 import {
   getProjectionAdvancedScreensLabel,
   resolveConnectedScreensPresence,
@@ -176,7 +178,6 @@ import {
   shouldUseTelecommandeChrome,
 } from "@/lib/regieTelecommande";
 import { RegieTelecommande } from "@/components/admin/RegieTelecommande";
-import { RegieModeSelector } from "@/components/admin/RegieModeSelector";
 import { SelfServiceRegieWorkspace } from "@/components/admin/SelfServiceRegieWorkspace";
 import {
   TelecommandeIcon,
@@ -503,17 +504,22 @@ function PollCard({
   onMoveUp = null,
   onMoveDown = null,
   onDelete = null,
+  /** "live" | "self_service" — badges antenne vs publication publique. */
+  playlistVariant = "live",
 }) {
-  const statusLabel = getRegiePollStatusLabel({
-    pollStatus: poll.status,
-    isActive,
-    voteState: isActive ? voteState : null,
-    displayState: isActive ? displayState : null,
-    pollType: poll.type,
-    leadEnabled: poll.leadEnabled,
-  });
+  const isSsPlaylist = playlistVariant === "self_service";
+  const statusLabel = isSsPlaylist
+    ? getRegieSelfServicePlaylistBadge({ pollStatus: poll.status })
+    : getRegiePollStatusLabel({
+        pollStatus: poll.status,
+        isActive,
+        voteState: isActive ? voteState : null,
+        displayState: isActive ? displayState : null,
+        pollType: poll.type,
+        leadEnabled: poll.leadEnabled,
+      });
   const badge = badgeStyle(
-    statusLabel === "En cours"
+    statusLabel === "En cours" || statusLabel === "Publiée"
       ? "ACTIVE"
       : statusLabel === "Résultats" || statusLabel === "Tirage"
         ? "SCHEDULED"
@@ -754,7 +760,7 @@ function PollCard({
         marginBottom: desktop ? "0.45rem" : "0.55rem",
       }}
     >
-      {isActive ? (
+      {!isSsPlaylist && isActive ? (
         <span
           title="Question actuellement reliée à l’événement (affiches & commandes). Peut être ouverte ou fermée au vote."
           style={{
@@ -771,7 +777,7 @@ function PollCard({
           Antenne
         </span>
       ) : null}
-      {isSelected && !isActive ? (
+      {!isSsPlaylist && isSelected && !isActive ? (
         <span
           title="Question consultée dans la régie (sans effet sur l’antenne)."
           style={{
@@ -950,7 +956,7 @@ function PollCard({
           >
             {questionNumberLabel || `Ordre ${poll.order}`}
           </span>
-          {isActive ? (
+          {!isSsPlaylist && isActive ? (
             <span
               title="Question à l’antenne (pilotage live). Distinct de la consultation."
               style={{
@@ -967,7 +973,7 @@ function PollCard({
               Antenne
             </span>
           ) : null}
-          {isSelected && !isActive ? (
+          {!isSsPlaylist && isSelected && !isActive ? (
             <span
               title="Consultation régie — aucun effet sur la salle / Screen / Overlay."
               style={{
@@ -1183,7 +1189,7 @@ function PollCard({
       ) : (
         <>
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-            {isActive ? (
+            {!isSsPlaylist && isActive ? (
               <span
                 title="Question actuellement reliée à l’événement (affiches & commandes). Peut être ouverte ou fermée au vote."
                 style={{
@@ -3276,7 +3282,13 @@ function BlocOverlayStreamPresets({ slug, onCopied }) {
 }
 
 /** Liens participant / vote — version compacte pour colonne partage */
-function LiensDiffusionCompact({ slug }) {
+function LiensDiffusionCompact({
+  slug,
+  /** Inclure Screen + Overlay (Live) ; en Libre-service → section Diffusion avancée. */
+  showScreenOverlay = true,
+  /** N’afficher que Screen + Overlay (contenu de « Diffusion avancée »). */
+  onlyScreenOverlay = false,
+}) {
   const [clientPret, setClientPret] = useState(false);
   const [copied, setCopied] = useState(
     /** @type {null | "join" | "vote" | "screen" | "overlay"} */ (null),
@@ -3380,6 +3392,9 @@ function LiensDiffusionCompact({ slug }) {
     );
   }
 
+  const showParticipant = !onlyScreenOverlay;
+  const showAdvanced = onlyScreenOverlay || showScreenOverlay;
+
   return (
     <div
       aria-label="Liens utiles"
@@ -3390,36 +3405,44 @@ function LiensDiffusionCompact({ slug }) {
       }}
       className="liens-partage-grid"
     >
-      {cell({
-        titre: "Lien participant",
-        path: pathJoin,
-        k: "join",
-        hint: pathJoin,
-        openLabel: "Ouvrir",
-        copyLabel: "Copier",
-      })}
-      {cell({
-        titre: "Screen (salle)",
-        path: pathScreen,
-        k: "screen",
-        hint: pathScreen,
-        openLabel: "Ouvrir",
-        copyLabel: "Copier",
-      })}
-      {cell({
-        titre: "Overlay OBS",
-        path: pathOverlay,
-        k: "overlay",
-        hint: pathOverlay,
-        openLabel: "Ouvrir",
-        copyLabel: "Copier",
-      })}
-      {cell({
-        titre: "Vote /p (deep-link)",
-        path: pathVote,
-        k: "vote",
-        hint: pathVote,
-      })}
+      {showParticipant
+        ? cell({
+            titre: "Lien participant",
+            path: pathJoin,
+            k: "join",
+            hint: pathJoin,
+            openLabel: "Ouvrir",
+            copyLabel: "Copier",
+          })
+        : null}
+      {showAdvanced
+        ? cell({
+            titre: "Screen (salle)",
+            path: pathScreen,
+            k: "screen",
+            hint: pathScreen,
+            openLabel: "Ouvrir",
+            copyLabel: "Copier",
+          })
+        : null}
+      {showAdvanced
+        ? cell({
+            titre: "Overlay OBS",
+            path: pathOverlay,
+            k: "overlay",
+            hint: pathOverlay,
+            openLabel: "Ouvrir",
+            copyLabel: "Copier",
+          })
+        : null}
+      {showParticipant
+        ? cell({
+            titre: "Vote /p (deep-link)",
+            path: pathVote,
+            k: "vote",
+            hint: pathVote,
+          })
+        : null}
       <style>{`
         @media (min-width: 260px) {
           .liens-partage-grid {
@@ -3616,6 +3639,8 @@ function SidebarPartageDroit({
   landingPhotosCount = 0,
   landingEnabled = false,
   eventId = null,
+  /** Libre-service : pas de mention télécommande ; Screen/Overlay en Diffusion avancée. */
+  isSelfService = false,
 }) {
   return (
     <aside
@@ -3645,7 +3670,9 @@ function SidebarPartageDroit({
             Partage & accès
           </h2>
           <p style={{ margin: 0, fontSize: "0.66rem", color: "#64748b", lineHeight: 1.35 }}>
-            QR participants · écran /screen · télécommande · Overlay OBS
+            {isSelfService
+              ? "QR participants · liens salle · page événement"
+              : "QR participants · écran /screen · télécommande · Overlay OBS"}
           </p>
         </div>
       ) : null}
@@ -3655,7 +3682,7 @@ function SidebarPartageDroit({
         stateLabel={stateLabel}
         variant={qrVariant}
         embedded
-        sceneBadge={sceneBadge}
+        sceneBadge={isSelfService ? null : sceneBadge}
       />
       <div
         style={{
@@ -3672,10 +3699,52 @@ function SidebarPartageDroit({
             color: "#64748b",
           }}
         >
-          Liens participant · Screen · Overlay
+          {isSelfService
+            ? "Liens participants"
+            : "Liens participant · Screen · Overlay"}
         </p>
-        <LiensDiffusionCompact slug={slug} />
+        <LiensDiffusionCompact
+          slug={slug}
+          showScreenOverlay={!isSelfService}
+        />
       </div>
+      {isSelfService ? (
+        <details
+          data-testid="regie-diffusion-avancee"
+          style={{
+            border: PREMIUM_BORDER,
+            borderRadius: "14px",
+            background: "rgba(255,255,255,0.78)",
+            padding: "0.65rem 0.75rem",
+          }}
+        >
+          <summary
+            style={{
+              cursor: "pointer",
+              fontWeight: 800,
+              fontSize: "0.76rem",
+              color: "#0f172a",
+              listStyle: "none",
+            }}
+          >
+            Diffusion avancée
+          </summary>
+          <div style={{ marginTop: "0.65rem", display: "grid", gap: "0.65rem" }}>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "0.68rem",
+                color: "#64748b",
+                lineHeight: 1.35,
+              }}
+            >
+              Screen salle et Overlay OBS — optionnels en Libre-service.
+            </p>
+            <LiensDiffusionCompact slug={slug} onlyScreenOverlay />
+            <BlocOverlayStreamPresets slug={slug} onCopied={onOverlayCopied} />
+          </div>
+        </details>
+      ) : null}
       <details
         style={{
           border: PREMIUM_BORDER,
@@ -3696,7 +3765,9 @@ function SidebarPartageDroit({
           Options avancées
         </summary>
         <div style={{ marginTop: "0.65rem", display: "grid", gap: "0.65rem" }}>
-          <BlocOverlayStreamPresets slug={slug} onCopied={onOverlayCopied} />
+          {!isSelfService ? (
+            <BlocOverlayStreamPresets slug={slug} onCopied={onOverlayCopied} />
+          ) : null}
           <section
             style={{
               border: PREMIUM_BORDER,
@@ -7970,7 +8041,7 @@ export default function RegieEventPage() {
           color: "#64748b",
         }}
       >
-        Questions
+        {isSelfServiceRegie ? "Gestion des questions" : "Questions"}
       </p>
       <button
         type="button"
@@ -8010,9 +8081,20 @@ export default function RegieEventPage() {
             poll={poll}
             compact
             liveActions={false}
-            isActive={poll.id === eventData?.activePollId}
-            isSelected={String(poll.id) === String(selectedPollId || "")}
-            onSelect={handleSelectPlaylistPoll}
+            playlistVariant={isSelfServiceRegie ? "self_service" : "live"}
+            isActive={
+              isSelfServiceRegie
+                ? false
+                : poll.id === eventData?.activePollId
+            }
+            isSelected={
+              isSelfServiceRegie
+                ? false
+                : String(poll.id) === String(selectedPollId || "")
+            }
+            onSelect={
+              isSelfServiceRegie ? null : handleSelectPlaylistPoll
+            }
             questionNumberLabel={getRegieQuestionNumberLabel(
               index,
               pollsOrdonnes.length,
@@ -9795,7 +9877,7 @@ export default function RegieEventPage() {
                   }}
                   newLeadCount={newLeadCount}
                 />
-                {mobileFullRegie ? (
+                {mobileFullRegie && !isSelfServiceRegie ? (
                   <div
                     style={{
                       ...CARD,
@@ -9894,7 +9976,7 @@ export default function RegieEventPage() {
                       minWidth: 0,
                     }}
                   >
-                    Pilotage
+                    {isSelfServiceRegie ? "Libre-service" : "Pilotage"}
                   </span>
                   <Link
                     href="/admin/events"
@@ -9915,572 +9997,295 @@ export default function RegieEventPage() {
               </>
             ) : null}
 
-            <section
-              style={{
-                ...CARD,
-                padding: desktop ? "1.05rem 1.15rem" : "0.9rem 0.95rem",
-                borderColor: "rgba(124, 58, 237, 0.22)",
-                background:
-                  "linear-gradient(135deg, #0f172a 0%, #1e1b4b 42%, #312e81 100%)",
-                boxShadow: "0 22px 46px rgba(30, 27, 75, 0.24)",
-                minWidth: 0,
+            <RegieTopBar
+              title={eventData.title}
+              desktop={desktop}
+              consultationMode={eventData?.consultationMode}
+              modeDisabled={busy || eventLocked}
+              onSelectMode={(mode) => {
+                void setConsultationModeUi(mode);
               }}
-              aria-label={
+              modeStatus={
                 isSelfServiceRegie
-                  ? "Régie — mode Libre-service"
-                  : "Régie — mode Live animé"
+                  ? {
+                      label: eventData?.selfServiceOpen
+                        ? "Consultation ouverte"
+                        : "Consultation en pause",
+                      color: eventData?.selfServiceOpen ? "#166534" : "#9a3412",
+                      bg: eventData?.selfServiceOpen ? "#dcfce7" : "#ffedd5",
+                      border: eventData?.selfServiceOpen ? "#86efac" : "#fdba74",
+                    }
+                  : {
+                      label: voteLabel,
+                      color: voteIsOpen ? "#166534" : "#334155",
+                      bg: voteIsOpen ? "#dcfce7" : "rgba(255,255,255,0.74)",
+                      border: voteIsOpen ? "#86efac" : "#cbd5e1",
+                    }
               }
-            >
-              <div style={{ display: "grid", gap: "0.78rem" }}>
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    alignItems: "flex-end",
-                    justifyContent: "space-between",
-                    gap: "0.55rem 0.85rem",
-                  }}
-                >
-                  <div style={{ display: "grid", gap: "0.18rem", minWidth: 0 }}>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "0.65rem",
-                        fontWeight: 700,
-                        letterSpacing: "0.08em",
-                        textTransform: "uppercase",
-                        color: "rgba(224, 231, 255, 0.72)",
-                      }}
-                    >
-                      {isSelfServiceRegie ? "Régie" : "Console live"}
-                    </p>
-                    <h2
-                      style={{
-                        margin: 0,
-                        fontSize: desktop ? "1.34rem" : "1.06rem",
-                        fontWeight: 800,
-                        letterSpacing: "-0.03em",
-                        color: "#ffffff",
-                        lineHeight: 1.15,
-                      }}
-                      title={eventData.title}
-                    >
-                      {eventData.title}
-                    </h2>
-                  </div>
-                  <RegieModeSelector
-                    consultationMode={eventData?.consultationMode}
-                    disabled={busy || eventLocked}
-                    onSelect={(mode) => {
-                      void setConsultationModeUi(mode);
-                    }}
-                    compact={!desktop}
-                  />
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      alignItems: "center",
-                      justifyContent: "flex-end",
-                      gap: "0.42rem 0.55rem",
-                      flexShrink: 0,
-                    }}
-                  >
-                  {desktop && !isSelfServiceRegie ? (
-                    <button
-                      type="button"
-                      onClick={() => setTelecommandeAccessQrOpen(true)}
-                      aria-label={TELECOMMANDE_QR_COPY.triggerAria}
-                      data-testid="regie-telecommande-qr-btn"
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "0.4rem",
-                        padding: "0.48rem 0.88rem",
-                        borderRadius: "999px",
-                        border: "1px solid rgba(45, 212, 191, 0.45)",
-                        background:
-                          "linear-gradient(180deg, rgba(20, 184, 166, 0.22) 0%, rgba(13, 148, 136, 0.28) 100%)",
-                        color: "#ccfbf1",
-                        fontSize: "0.76rem",
-                        fontWeight: 800,
-                        letterSpacing: "0.01em",
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                        boxShadow: "0 10px 22px rgba(13, 148, 136, 0.18)",
-                      }}
-                    >
-                      <TelecommandeIcon size={15} stroke="#ccfbf1" />
-                      {TELECOMMANDE_QR_COPY.triggerButton}
-                    </button>
-                  ) : null}
-                  {inTestMode && !eventLocked ? (
-                    <>
-                      {!activationsLoaded ? (
+              statusPills={[
+                {
+                  label: participantsCounterLabel,
+                  color: participantsCounterStyle.valueColor,
+                  bg: participantsCounterStyle.background,
+                  border: participantsCounterStyle.borderColor || "#cbd5e1",
+                },
+                {
+                  label: socketStatusLabel,
+                  color: socketStatusColor,
+                  bg: socketStatusBg,
+                  border: "#cbd5e1",
+                },
+                {
+                  label: modeBadge.label,
+                  color: modeBadge.color,
+                  bg: modeBadge.bg,
+                  border: modeBadge.border,
+                },
+                ...(inTestMode
+                  ? [
+                      {
+                        label: `Offre gratuite : ${FREE_PARTICIPANTS_LIMIT}`,
+                        color: "#166534",
+                        bg: "#dcfce7",
+                        border: "#86efac",
+                      },
+                    ]
+                  : []),
+                ...(!inTestMode && hasParticipantsLimit
+                  ? [
+                      {
+                        label: isFreePlan
+                          ? `${FREE_OFFER_LABEL} + recharges`
+                          : eventPackSize
+                            ? `Pack ${eventPackSize} + recharges`
+                            : `Capacité ${participantsLimitValue}`,
+                        color: isFreePlan ? "#166534" : "#5b21b6",
+                        bg: isFreePlan ? "#dcfce7" : "#ede9fe",
+                        border: isFreePlan ? "#86efac" : "#c4b5fd",
+                      },
+                      {
+                        label: `Capacité ${effectiveParticipantsUsed} / ${participantsLimitValue}`,
+                        color: participantsCounterStyle.valueColor,
+                        bg: "rgba(255,255,255,0.74)",
+                        border:
+                          participantsCounterStyle.borderColor || "#cbd5e1",
+                      },
+                    ]
+                  : []),
+                ...(!isSelfServiceRegie && hasDisplayGap
+                  ? [
+                      {
+                        label: "Écart global / écran B",
+                        color: "#9a3412",
+                        bg: "rgba(255, 247, 237, 0.9)",
+                        border: "rgba(251, 191, 36, 0.24)",
+                      },
+                    ]
+                  : []),
+              ]}
+              actions={
+                inTestMode && !eventLocked ? (
+                  <>
+                    {!activationsLoaded ? (
+                      <span
+                        style={{
+                          fontSize: "0.68rem",
+                          fontWeight: 700,
+                          color: "rgba(224, 231, 255, 0.65)",
+                        }}
+                      >
+                        Chargement des activations…
+                      </span>
+                    ) : (
+                      <>
                         <span
                           style={{
-                            fontSize: "0.68rem",
-                            fontWeight: 700,
-                            color: "rgba(224, 231, 255, 0.65)",
+                            display: "inline-flex",
+                            flexDirection: "column",
+                            alignItems: desktop ? "flex-end" : "flex-start",
+                            gap: "0.1rem",
+                            maxWidth: "16rem",
+                            textAlign: desktop ? "right" : "left",
                           }}
                         >
-                          Chargement des activations…
-                        </span>
-                      ) : (
-                        <>
                           <span
                             style={{
-                              display: "inline-flex",
-                              flexDirection: "column",
-                              alignItems: "flex-end",
-                              gap: "0.1rem",
-                              maxWidth: "16rem",
-                              textAlign: "right",
+                              fontSize: "0.72rem",
+                              fontWeight: 700,
+                              color: "rgba(204, 251, 241, 0.92)",
                             }}
                           >
-                            <span
-                              style={{
-                                fontSize: "0.72rem",
-                                fontWeight: 700,
-                                color: "rgba(204, 251, 241, 0.92)",
-                              }}
-                            >
-                              {REGIE_NO_ACTIVATION_STATUS}
-                            </span>
-                            <span
-                              style={{
-                                fontSize: "0.64rem",
-                                fontWeight: 600,
-                                color: "rgba(224, 231, 255, 0.68)",
-                                lineHeight: 1.35,
-                              }}
-                            >
-                              {REGIE_NO_ACTIVATION_HINT}
-                            </span>
+                            {REGIE_NO_ACTIVATION_STATUS}
                           </span>
+                          <span
+                            style={{
+                              fontSize: "0.64rem",
+                              fontWeight: 600,
+                              color: "rgba(224, 231, 255, 0.68)",
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            {REGIE_NO_ACTIVATION_HINT}
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          disabled={startRealDisabled}
+                          onClick={() => void startRealLiveFree()}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            padding: "0.5rem 0.95rem",
+                            borderRadius: "999px",
+                            border: "1px solid #86efac",
+                            background:
+                              "linear-gradient(180deg, #22c55e 0%, #16a34a 100%)",
+                            color: "#ffffff",
+                            fontSize: "0.76rem",
+                            fontWeight: 800,
+                            letterSpacing: "0.01em",
+                            cursor: startRealDisabled
+                              ? "not-allowed"
+                              : "pointer",
+                            opacity: startRealDisabled ? 0.55 : 1,
+                            whiteSpace: "nowrap",
+                            boxShadow: "0 12px 26px rgba(34, 197, 94, 0.32)",
+                          }}
+                        >
+                          {REGIE_START_REAL_FREE_CTA_LABEL}
+                        </button>
+                        {canStartRealWithActivation ? (
                           <button
                             type="button"
-                            disabled={startRealDisabled}
-                            onClick={() => void startRealLiveFree()}
+                            disabled={busy}
+                            onClick={handleStartRealClick}
                             style={{
                               display: "inline-flex",
                               alignItems: "center",
                               justifyContent: "center",
-                              padding: "0.5rem 0.95rem",
+                              padding: "0.48rem 0.88rem",
                               borderRadius: "999px",
-                              border: "1px solid #86efac",
-                              background:
-                                "linear-gradient(180deg, #22c55e 0%, #16a34a 100%)",
-                              color: "#ffffff",
+                              border: "1px solid rgba(196, 181, 253, 0.7)",
+                              background: "rgba(255, 255, 255, 0.12)",
+                              color: "#ede9fe",
                               fontSize: "0.76rem",
                               fontWeight: 800,
-                              letterSpacing: "0.01em",
-                              cursor: startRealDisabled
-                                ? "not-allowed"
-                                : "pointer",
-                              opacity: startRealDisabled ? 0.55 : 1,
+                              cursor: busy ? "not-allowed" : "pointer",
                               whiteSpace: "nowrap",
-                              boxShadow: "0 12px 26px rgba(34, 197, 94, 0.32)",
                             }}
                           >
-                            {REGIE_START_REAL_FREE_CTA_LABEL}
+                            {REGIE_START_REAL_CTA_LABEL}
                           </button>
-                          {canStartRealWithActivation ? (
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={handleStartRealClick}
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                padding: "0.48rem 0.88rem",
-                                borderRadius: "999px",
-                                border: "1px solid rgba(196, 181, 253, 0.7)",
-                                background: "rgba(255, 255, 255, 0.12)",
-                                color: "#ede9fe",
-                                fontSize: "0.76rem",
-                                fontWeight: 800,
-                                cursor: busy ? "not-allowed" : "pointer",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {REGIE_START_REAL_CTA_LABEL}
-                            </button>
-                          ) : (
-                            <Link
-                              href="/pricing"
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                padding: "0.48rem 0.88rem",
-                                borderRadius: "999px",
-                                border: "1px solid rgba(148, 163, 184, 0.45)",
-                                background: "rgba(255, 255, 255, 0.1)",
-                                color: "#e2e8f0",
-                                fontSize: "0.76rem",
-                                fontWeight: 800,
-                                textDecoration: "none",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {REGIE_PRICING_CTA_LABEL}
-                            </Link>
-                          )}
-                        </>
-                      )}
-                      {activationsLoaded ? (
-                        <div
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "flex-end",
-                            gap: "0.12rem",
-                            fontSize: "0.68rem",
-                            fontWeight: 700,
-                            color: "rgba(224, 231, 255, 0.65)",
-                          }}
-                        >
-                          {PARTICIPANT_PACK_SIZES.map((size) => {
-                            const n = Number(activationBalance.byPack?.[String(size)] || 0);
-                            if (n <= 0) return null;
-                            return (
-                              <span key={size}>
-                                {PARTICIPANT_PACKS[size].label} : {n}
-                              </span>
-                            );
-                          })}
-                          {totalAvailable != null ? (
-                            <span>Total packs : {totalAvailable}</span>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </>
-                  ) : null}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                    gap: "0.42rem 0.5rem",
-                  }}
-                >
-                  {[
-                    ...(isSelfServiceRegie
-                      ? [
-                          {
-                            label: eventData?.selfServiceOpen
-                              ? "Consultation ouverte"
-                              : "Consultation en pause",
-                            color: eventData?.selfServiceOpen ? "#166534" : "#9a3412",
-                            bg: eventData?.selfServiceOpen ? "#dcfce7" : "#ffedd5",
-                            border: eventData?.selfServiceOpen ? "#86efac" : "#fdba74",
-                          },
-                        ]
-                      : [
-                          {
-                            label: pilotageTag,
-                            color: statePanel.pillColor,
-                            bg: "rgba(255,255,255,0.74)",
-                            border: `${statePanel.accent}22`,
-                          },
-                          {
-                            label: voteLabel,
-                            color: voteIsOpen ? "#166534" : "#334155",
-                            bg: voteIsOpen ? "#dcfce7" : "rgba(255,255,255,0.74)",
-                            border: voteIsOpen ? "#86efac" : "#cbd5e1",
-                          },
-                        ]),
-                    { label: participantsCounterLabel, color: participantsCounterStyle.valueColor, bg: participantsCounterStyle.background, border: participantsCounterStyle.borderColor || "#cbd5e1" },
-                    { label: socketStatusLabel, color: socketStatusColor, bg: socketStatusBg, border: "#cbd5e1" },
-                    { label: modeBadge.label, color: modeBadge.color, bg: modeBadge.bg, border: modeBadge.border },
-                    ...(inTestMode
-                      ? [
-                          {
-                            label: isSelfServiceRegie
-                              ? `Offre gratuite : ${FREE_PARTICIPANTS_LIMIT}`
-                              : `Live gratuit : ${FREE_PARTICIPANTS_LIMIT}`,
-                            color: "#166534",
-                            bg: "#dcfce7",
-                            border: "#86efac",
-                          },
-                        ]
-                      : []),
-                    ...(!inTestMode && hasParticipantsLimit
-                      ? [
-                          {
-                            label: isFreePlan
-                              ? `${FREE_OFFER_LABEL} + recharges`
-                              : eventPackSize
-                                ? `Pack ${eventPackSize} + recharges`
-                                : `Capacité ${participantsLimitValue}`,
-                            color: isFreePlan ? "#166534" : "#5b21b6",
-                            bg: isFreePlan ? "#dcfce7" : "#ede9fe",
-                            border: isFreePlan ? "#86efac" : "#c4b5fd",
-                          },
-                          {
-                            label: `Capacité ${effectiveParticipantsUsed} / ${participantsLimitValue}`,
-                            color: participantsCounterStyle.valueColor,
-                            bg: "rgba(255,255,255,0.74)",
-                            border: participantsCounterStyle.borderColor || "#cbd5e1",
-                          },
-                        ]
-                      : []),
-                  ].map((item) => (
-                    <span
-                      key={item.label}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        borderRadius: "999px",
-                        padding: "0.22rem 0.58rem",
-                        fontSize: "0.72rem",
-                        fontWeight: 800,
-                        background: item.bg,
-                        color: item.color,
-                        border: `1px solid ${item.border}`,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {item.label}
-                    </span>
-                  ))}
-                  {!isSelfServiceRegie && hasDisplayGap ? (
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        borderRadius: "999px",
-                        padding: "0.22rem 0.58rem",
-                        fontSize: "0.72rem",
-                        fontWeight: 800,
-                        border: "1px solid rgba(251, 191, 36, 0.24)",
-                        background: "rgba(255, 247, 237, 0.9)",
-                        color: "#9a3412",
-                      }}
-                    >
-                      Écart global / écran B
-                    </span>
-                  ) : null}
-                </div>
-                {canTopupCapacity ? (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      alignItems: "center",
-                      gap: "0.55rem",
-                      marginTop: "0.35rem",
-                    }}
-                  >
-                    <button
-                      type="button"
-                      data-testid="regie-add-participants"
-                      disabled={busy || topupBusyPack != null}
-                      onClick={() => setTopupModalOpen(true)}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        padding: "0.42rem 0.85rem",
-                        borderRadius: "999px",
-                        border: "1px solid #c4b5fd",
-                        background: "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)",
-                        color: "#fff",
-                        fontSize: "0.76rem",
-                        fontWeight: 800,
-                        cursor: busy || topupBusyPack != null ? "not-allowed" : "pointer",
-                        opacity: busy || topupBusyPack != null ? 0.6 : 1,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      Ajouter des participants
-                    </button>
-                    {participantsStatus.message ? (
-                      <span
+                        ) : (
+                          <Link
+                            href="/pricing"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              padding: "0.48rem 0.88rem",
+                              borderRadius: "999px",
+                              border: "1px solid rgba(148, 163, 184, 0.45)",
+                              background: "rgba(255, 255, 255, 0.1)",
+                              color: "#e2e8f0",
+                              fontSize: "0.76rem",
+                              fontWeight: 800,
+                              textDecoration: "none",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {REGIE_PRICING_CTA_LABEL}
+                          </Link>
+                        )}
+                      </>
+                    )}
+                    {activationsLoaded ? (
+                      <div
                         style={{
-                          fontSize: "0.72rem",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: desktop ? "flex-end" : "flex-start",
+                          gap: "0.12rem",
+                          fontSize: "0.68rem",
                           fontWeight: 700,
-                          color: participantsCounterStyle.hintColor || "#64748b",
+                          color: "rgba(224, 231, 255, 0.65)",
                         }}
                       >
-                        {participantsStatus.message}
-                      </span>
+                        {PARTICIPANT_PACK_SIZES.map((size) => {
+                          const n = Number(
+                            activationBalance.byPack?.[String(size)] || 0,
+                          );
+                          if (n <= 0) return null;
+                          return (
+                            <span key={size}>
+                              {PARTICIPANT_PACKS[size].label} : {n}
+                            </span>
+                          );
+                        })}
+                        {totalAvailable != null ? (
+                          <span>Total packs : {totalAvailable}</span>
+                        ) : null}
+                      </div>
                     ) : null}
-                  </div>
-                ) : null}
-                {inTestMode && !eventLocked && !isSelfServiceRegie ? (
-                  <p
-                    data-testid="regie-test-mode-help"
-                    style={{
-                      margin: "0.35rem 0 0",
-                      fontSize: "0.72rem",
-                      fontWeight: 600,
-                      color: "rgba(226, 232, 240, 0.78)",
-                      lineHeight: 1.4,
-                      maxWidth: "46rem",
-                    }}
-                  >
-                    {getRegieTestModeHelpLine()}
-                  </p>
-                ) : null}
-
-                {!isSelfServiceRegie ? (
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    alignItems: "flex-start",
-                    justifyContent: "space-between",
-                    gap: "0.85rem 1rem",
-                  }}
-                >
-                  <div
-                    style={{
-                      flex: "1 1 420px",
-                      minWidth: 0,
-                      display: "grid",
-                      gap: "0.22rem",
-                    }}
-                  >
-                    <p
+                  </>
+                ) : null
+              }
+              footer={
+                <>
+                  {canTopupCapacity ? (
+                    <div
                       style={{
-                        margin: 0,
-                        fontSize: "0.74rem",
-                        fontWeight: 700,
-                        color: "rgba(224, 231, 255, 0.78)",
+                        display: "flex",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                        gap: "0.55rem",
                       }}
                     >
-                      {selectedIsConsultOnly
-                        ? `${selectedQuestionNumberLabel || "Consultation"} · ${selectedTypeLabel} · ${selectedStatusLabel}`
-                        : `${stateLabel} · ${questionProgressSummary}`}
-                    </p>
-                    <h3
-                      style={{
-                        margin: 0,
-                        fontSize: desktop ? "1.42rem" : "1.08rem",
-                        fontWeight: 800,
-                        letterSpacing: "-0.03em",
-                        color: "#ffffff",
-                        lineHeight: 1.18,
-                      }}
-                    >
-                      {selectedIsConsultOnly ? selectedTitle : activeQuestionTitle}
-                    </h3>
-                    <p
-                      style={{
-                        margin: "0.1rem 0 0 0",
-                        fontSize: compactTopPanel ? "0.82rem" : "0.88rem",
-                        color: "rgba(226, 232, 240, 0.86)",
-                        lineHeight: 1.45,
-                      }}
-                    >
-                      {selectedIsConsultOnly ? (
-                        <>
-                          Consultation régie — sans effet sur la salle / Screen / Overlay.
-                          {" · "}
-                          Antenne :{" "}
-                          <strong style={{ color: "#ffffff" }}>
-                            {activePoll?.question || activePoll?.title || "aucune"}
-                          </strong>
-                          {" · "}
-                          {antennaStatusLabel}
-                        </>
-                      ) : (
-                        <>
-                          À l’écran :{" "}
-                          <strong style={{ color: "#ffffff" }}>{displayLabelGlobal}</strong>
-                          {" · "}
-                          {screenBConnected
-                            ? `Écran B : ${displayLabelScreenB}`
-                            : "Écran B non connecté"}
-                          {" · "}
-                          {antennaStatusLabel}
-                        </>
-                      )}
-                    </p>
-                  </div>
-
-                  <div
-                    style={{
-                      flexShrink: 0,
-                      minWidth: desktop ? "124px" : "100%",
-                      display: "grid",
-                      gap: "0.16rem",
-                      justifyItems: desktop ? "end" : "start",
-                      textAlign: desktop ? "right" : "left",
-                      opacity: chronoEnabled ? 1 : 0.55,
-                    }}
-                  >
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "0.62rem",
-                        fontWeight: 700,
-                        letterSpacing: "0.08em",
-                        textTransform: "uppercase",
-                        color: "rgba(224, 231, 255, 0.62)",
-                      }}
-                    >
-                      Chrono scène
-                    </p>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: desktop ? "1.85rem" : "1.28rem",
-                        fontWeight: 800,
-                        lineHeight: 1.02,
-                        color: chronoEnabled
-                          ? "#f5f3ff"
-                          : "rgba(226, 232, 240, 0.42)",
-                        fontFamily: "ui-monospace, monospace",
-                        fontVariantNumeric: "tabular-nums",
-                        letterSpacing: "-0.03em",
-                      }}
-                    >
-                      {chronoEtatLiveTexte}
-                    </p>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "0.7rem",
-                        fontWeight: 700,
-                        color: chronoEnabled
-                          ? "rgba(224, 231, 255, 0.78)"
-                          : "rgba(226, 232, 240, 0.45)",
-                      }}
-                    >
-                      {chronoEnabledLabel}
-                      {chronoEnabled && chronoRunningHint
-                        ? ` · ${chronoRunningHint}`
-                        : ""}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={scrollToChronoPanel}
-                      style={{
-                        ...btnGhost,
-                        marginTop: "0.12rem",
-                        width: "fit-content",
-                        padding: "0.24rem 0.56rem",
-                        fontSize: "0.68rem",
-                        fontWeight: 700,
-                        borderColor: "rgba(196, 181, 253, 0.35)",
-                        background: "rgba(255,255,255,0.08)",
-                        color: "#ede9fe",
-                      }}
-                    >
-                      Chrono
-                    </button>
-                  </div>
-                </div>
-                ) : null}
-              </div>
-            </section>
+                      <button
+                        type="button"
+                        data-testid="regie-add-participants"
+                        disabled={busy || topupBusyPack != null}
+                        onClick={() => setTopupModalOpen(true)}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: "0.42rem 0.85rem",
+                          borderRadius: "999px",
+                          border: "1px solid #c4b5fd",
+                          background:
+                            "linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%)",
+                          color: "#fff",
+                          fontSize: "0.76rem",
+                          fontWeight: 800,
+                          cursor:
+                            busy || topupBusyPack != null
+                              ? "not-allowed"
+                              : "pointer",
+                          opacity: busy || topupBusyPack != null ? 0.6 : 1,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        Ajouter des participants
+                      </button>
+                      {participantsStatus.message ? (
+                        <span
+                          style={{
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            color:
+                              participantsCounterStyle.hintColor || "#64748b",
+                          }}
+                        >
+                          {participantsStatus.message}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </>
+              }
+            />
 
             {isSelfServiceRegie ? (
               <SelfServiceRegieWorkspace
@@ -10579,9 +10384,206 @@ export default function RegieEventPage() {
                       options avancées plus bas
                     </p>
                   </div>
-                  <p style={{ margin: 0, fontSize: "0.76rem", color: "#64748b" }}>
-                    Pilotage = antenne · Clic playlist = consultation seule
-                  </p>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      gap: "0.45rem",
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: "0.76rem", color: "#64748b" }}>
+                      Pilotage = antenne · Clic playlist = consultation seule
+                    </p>
+                    {desktop ? (
+                      <button
+                        type="button"
+                        onClick={() => setTelecommandeAccessQrOpen(true)}
+                        aria-label={TELECOMMANDE_QR_COPY.triggerAria}
+                        data-testid="regie-telecommande-qr-btn"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "0.35rem",
+                          padding: "0.42rem 0.75rem",
+                          borderRadius: "999px",
+                          border: "1px solid rgba(45, 212, 191, 0.45)",
+                          background:
+                            "linear-gradient(180deg, rgba(20, 184, 166, 0.14) 0%, rgba(13, 148, 136, 0.18) 100%)",
+                          color: "#0f766e",
+                          fontSize: "0.74rem",
+                          fontWeight: 800,
+                          cursor: "pointer",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        <TelecommandeIcon size={14} stroke="#0f766e" />
+                        {TELECOMMANDE_QR_COPY.triggerButton}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div
+                  data-testid="regie-live-context-strip"
+                  style={{
+                    marginTop: "0.85rem",
+                    display: "grid",
+                    gridTemplateColumns: desktop
+                      ? "minmax(0, 1fr) auto"
+                      : "1fr",
+                    gap: "0.75rem 1rem",
+                    alignItems: "start",
+                    padding: "0.85rem 0.95rem",
+                    borderRadius: "16px",
+                    border: "1px solid rgba(148, 163, 184, 0.22)",
+                    background:
+                      "linear-gradient(180deg, rgba(248,250,252,0.98) 0%, #ffffff 100%)",
+                  }}
+                >
+                  <div style={{ display: "grid", gap: "0.22rem", minWidth: 0 }}>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "0.74rem",
+                        fontWeight: 700,
+                        color: "#64748b",
+                      }}
+                    >
+                      {selectedIsConsultOnly
+                        ? `${selectedQuestionNumberLabel || "Consultation"} · ${selectedTypeLabel} · ${selectedStatusLabel}`
+                        : `${stateLabel} · ${questionProgressSummary}`}
+                    </p>
+                    <h4
+                      style={{
+                        margin: 0,
+                        fontSize: desktop ? "1.18rem" : "1.02rem",
+                        fontWeight: 800,
+                        letterSpacing: "-0.02em",
+                        color: "#0f172a",
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      {selectedIsConsultOnly ? selectedTitle : activeQuestionTitle}
+                    </h4>
+                    <p
+                      style={{
+                        margin: "0.1rem 0 0 0",
+                        fontSize: "0.8rem",
+                        color: "#475569",
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {selectedIsConsultOnly ? (
+                        <>
+                          Consultation régie — sans effet sur la salle / Screen /
+                          Overlay.
+                          {" · "}
+                          Antenne :{" "}
+                          <strong style={{ color: "#0f172a" }}>
+                            {activePoll?.question ||
+                              activePoll?.title ||
+                              "aucune"}
+                          </strong>
+                          {" · "}
+                          {antennaStatusLabel}
+                        </>
+                      ) : (
+                        <>
+                          À l’écran :{" "}
+                          <strong style={{ color: "#0f172a" }}>
+                            {displayLabelGlobal}
+                          </strong>
+                          {" · "}
+                          {screenBConnected
+                            ? `Écran B : ${displayLabelScreenB}`
+                            : "Écran B non connecté"}
+                          {" · "}
+                          {antennaStatusLabel}
+                        </>
+                      )}
+                    </p>
+                    {inTestMode && !eventLocked ? (
+                      <p
+                        data-testid="regie-test-mode-help"
+                        style={{
+                          margin: "0.35rem 0 0",
+                          fontSize: "0.72rem",
+                          fontWeight: 600,
+                          color: "#64748b",
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {getRegieTestModeHelpLine()}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div
+                    style={{
+                      flexShrink: 0,
+                      minWidth: desktop ? "118px" : "100%",
+                      display: "grid",
+                      gap: "0.12rem",
+                      justifyItems: desktop ? "end" : "start",
+                      textAlign: desktop ? "right" : "left",
+                      opacity: chronoEnabled ? 1 : 0.55,
+                    }}
+                  >
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "0.62rem",
+                        fontWeight: 700,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "#64748b",
+                      }}
+                    >
+                      Chrono scène
+                    </p>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: desktop ? "1.55rem" : "1.2rem",
+                        fontWeight: 800,
+                        lineHeight: 1.02,
+                        color: chronoEnabled ? "#0f172a" : "#94a3b8",
+                        fontFamily: "ui-monospace, monospace",
+                        fontVariantNumeric: "tabular-nums",
+                        letterSpacing: "-0.03em",
+                      }}
+                    >
+                      {chronoEtatLiveTexte}
+                    </p>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "0.7rem",
+                        fontWeight: 700,
+                        color: chronoEnabled ? "#475569" : "#94a3b8",
+                      }}
+                    >
+                      {chronoEnabledLabel}
+                      {chronoEnabled && chronoRunningHint
+                        ? ` · ${chronoRunningHint}`
+                        : ""}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={scrollToChronoPanel}
+                      style={{
+                        ...btnGhost,
+                        marginTop: "0.12rem",
+                        width: "fit-content",
+                        padding: "0.24rem 0.56rem",
+                        fontSize: "0.68rem",
+                        fontWeight: 700,
+                      }}
+                    >
+                      Chrono
+                    </button>
+                  </div>
                 </div>
 
                 <div style={{ marginTop: "0.85rem" }}>
@@ -12016,6 +12018,7 @@ export default function RegieEventPage() {
                   showHeader={false}
                   noSticky
                   qrVariant="mobile"
+                  isSelfService={isSelfServiceRegie}
                   onQuickLandingPhoto={() => quickLandingPhotoInputRef.current?.click()}
                   landingPhotoUploading={landingPhotoUploading}
                   landingPhotoUploadLabel={landingPhotoUploadLabel}
@@ -12038,6 +12041,7 @@ export default function RegieEventPage() {
                 liveState={liveState}
                 stateLabel={stateLabel}
                 sceneBadge={sceneBadge}
+                isSelfService={isSelfServiceRegie}
                 onQuickLandingPhoto={() => quickLandingPhotoInputRef.current?.click()}
                 landingPhotoUploading={landingPhotoUploading}
                 landingPhotoUploadLabel={landingPhotoUploadLabel}
