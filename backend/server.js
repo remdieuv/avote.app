@@ -113,6 +113,7 @@ const { buildLandingFeedItems } = require("./lib/landingFeed");
 const {
   PUBLIC_POLL_SURFACE,
   filterPollsForPublicSurface,
+  landingFeedResultPollsWhere,
 } = require("./lib/publicPollVisibility");
 const {
   CAPTION_MAX,
@@ -4282,8 +4283,10 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       }
     }
 
-    const closedPollsRaw = await prisma.poll.findMany({
-      where: { eventId: event.id, status: "CLOSED" },
+    // Lot 0b — Live : CLOSED only ; Libre-service : ACTIVE|CLOSED des IDs sélectionnés
+    // (#95), y compris consultation en pause (selfServiceOpen non requis).
+    const resultPollsRaw = await prisma.poll.findMany({
+      where: landingFeedResultPollsWhere(event),
       include: {
         options: { orderBy: { order: "asc" } },
         votes: { select: { optionId: true, voterSessionId: true } },
@@ -4297,11 +4300,10 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       orderBy: { updatedAt: "desc" },
     });
 
-    // Lot 0 — ne transmettre / agréger que les résultats publiquement exposables
-    // (PR #95 selfServiceSelectedPollIds + landingResultHidden + lead CRM + Live).
+    // Défense : landingResultHidden, Lead CRM, types exclus, sélection #95.
     const closedPolls = filterPollsForPublicSurface({
       event,
-      polls: closedPollsRaw,
+      polls: resultPollsRaw,
       surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
     });
 
