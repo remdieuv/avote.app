@@ -1,5 +1,5 @@
 /**
- * Lot 0 — visibilité publique centralisée (landing / mini-site).
+ * Lot 0 / 0b — visibilité publique centralisée (landing / mini-site).
  * Exécution : node backend/scripts/test-public-poll-visibility.mjs
  */
 import assert from "node:assert/strict";
@@ -14,6 +14,7 @@ const {
   isPublicLeadCrmExcluded,
   isPollPubliclyExposable,
   filterPollsForPublicSurface,
+  landingFeedResultPollsWhere,
 } = require("../lib/publicPollVisibility.js");
 const { buildLandingFeedItems } = require("../lib/landingFeed.js");
 
@@ -37,7 +38,7 @@ function test(name, fn) {
   }
 }
 
-function baseClosedPoll(overrides = {}) {
+function basePoll(overrides = {}) {
   return {
     id: "poll-1",
     status: "CLOSED",
@@ -61,48 +62,64 @@ function baseClosedPoll(overrides = {}) {
   };
 }
 
+const ssEvent = (selected, extra = {}) => ({
+  consultationMode: "SELF_SERVICE",
+  selfServiceSelectedPollIds: selected,
+  selfServiceOpen: false,
+  landingKeepResultsAfter: true,
+  ...extra,
+});
+
 test("module exporte surfaces et helpers", () => {
   assert.equal(PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT, "landing_feed_result");
-  assert.equal(PUBLIC_POLL_SURFACE.MINISITE_RESULTS, "minisite_results");
-  assert.equal(PUBLIC_POLL_SURFACE.JOURNAL_AUTO_RESULT, "journal_auto_result");
-  assert.equal(PUBLIC_POLL_SURFACE.SHARE_RESULT, "share_result");
-  assert.equal(PUBLIC_POLL_SURFACE.PUBLIC_COUNTERS, "public_counters");
-  assert.equal(typeof isPollPubliclyExposable, "function");
-  assert.equal(typeof filterPollsForPublicSurface, "function");
+  assert.equal(typeof landingFeedResultPollsWhere, "function");
 });
 
-test("SS : CLOSED sélectionnée → visible landing", () => {
-  const ok = isPollPubliclyExposable({
-    event: {
-      consultationMode: "SELF_SERVICE",
-      selfServiceSelectedPollIds: ["poll-1", "other"],
-    },
-    poll: baseClosedPoll(),
-    surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
-  });
-  assert.equal(ok, true);
+test("SS : ACTIVE sélectionnée → visible (consultation ouverte ou pause)", () => {
+  const poll = basePoll({ status: "ACTIVE", id: "sel" });
+  for (const selfServiceOpen of [true, false]) {
+    assert.equal(
+      isPollPubliclyExposable({
+        event: ssEvent(["sel"], { selfServiceOpen }),
+        poll,
+        surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
+      }),
+      true,
+      `selfServiceOpen=${selfServiceOpen}`,
+    );
+  }
 });
 
-test("SS : CLOSED masquée (hors sélection) → invisible malgré votes", () => {
-  const ok = isPollPubliclyExposable({
-    event: {
-      consultationMode: "SELF_SERVICE",
-      selfServiceSelectedPollIds: ["other-only"],
-    },
-    poll: baseClosedPoll({ id: "poll-hidden" }),
-    surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
-  });
-  assert.equal(ok, false);
-});
-
-test("SS : précédemment visible puis masquée → invisible", () => {
-  const poll = baseClosedPoll({ id: "was-visible" });
+test("SS : CLOSED sélectionnée → visible", () => {
   assert.equal(
     isPollPubliclyExposable({
-      event: {
-        consultationMode: "self_service",
-        selfServiceSelectedPollIds: ["was-visible"],
-      },
+      event: ssEvent(["poll-1"]),
+      poll: basePoll({ status: "CLOSED" }),
+      surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
+    }),
+    true,
+  );
+});
+
+test("SS : non sélectionnée (ACTIVE ou CLOSED) → invisible", () => {
+  for (const status of ["ACTIVE", "CLOSED"]) {
+    assert.equal(
+      isPollPubliclyExposable({
+        event: ssEvent(["other"]),
+        poll: basePoll({ id: "hidden", status }),
+        surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
+      }),
+      false,
+      status,
+    );
+  }
+});
+
+test("SS : masquage puis réactivation avec votes", () => {
+  const poll = basePoll({ id: "voted", status: "ACTIVE" });
+  assert.equal(
+    isPollPubliclyExposable({
+      event: ssEvent(["voted"]),
       poll,
       surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
     }),
@@ -110,35 +127,78 @@ test("SS : précédemment visible puis masquée → invisible", () => {
   );
   assert.equal(
     isPollPubliclyExposable({
-      event: {
-        consultationMode: "self_service",
-        selfServiceSelectedPollIds: [],
-      },
+      event: ssEvent([]),
       poll,
+      surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
+    }),
+    false,
+  );
+  assert.equal(
+    isPollPubliclyExposable({
+      event: ssEvent(["voted"]),
+      poll,
+      surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
+    }),
+    true,
+  );
+});
+
+test("landingResultHidden → invisible (Live et SS ACTIVE)", () => {
+  assert.equal(
+    isPollPubliclyExposable({
+      event: { consultationMode: "LIVE" },
+      poll: basePoll({ landingResultHidden: true }),
+      surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
+    }),
+    false,
+  );
+  assert.equal(
+    isPollPubliclyExposable({
+      event: ssEvent(["poll-1"]),
+      poll: basePoll({ status: "ACTIVE", landingResultHidden: true }),
       surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
     }),
     false,
   );
 });
 
-test("landingResultHidden → invisible (Live et SS)", () => {
-  const poll = baseClosedPoll({ landingResultHidden: true });
+test("Lead CRM exclu ; Concours autorisé", () => {
+  assert.equal(
+    isPublicLeadCrmExcluded({ type: "SINGLE_CHOICE", leadEnabled: true }),
+    true,
+  );
   assert.equal(
     isPollPubliclyExposable({
-      event: { consultationMode: "LIVE" },
-      poll,
+      event: ssEvent(["poll-1"]),
+      poll: basePoll({ status: "ACTIVE", leadEnabled: true }),
       surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
     }),
     false,
   );
   assert.equal(
     isPollPubliclyExposable({
-      event: {
-        consultationMode: "SELF_SERVICE",
-        selfServiceSelectedPollIds: ["poll-1"],
-      },
-      poll,
-      surface: PUBLIC_POLL_SURFACE.MINISITE_RESULTS,
+      event: { consultationMode: "LIVE" },
+      poll: basePoll({ type: "CONTEST_ENTRY", leadEnabled: true }),
+      surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
+    }),
+    true,
+  );
+});
+
+test("Live : CLOSED autorisée ; ACTIVE exclue du fil", () => {
+  assert.equal(
+    isPollPubliclyExposable({
+      event: { consultationMode: "LIVE" },
+      poll: basePoll({ status: "CLOSED" }),
+      surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
+    }),
+    true,
+  );
+  assert.equal(
+    isPollPubliclyExposable({
+      event: { consultationMode: "LIVE" },
+      poll: basePoll({ status: "ACTIVE" }),
+      surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
     }),
     false,
   );
@@ -148,8 +208,8 @@ test("DRAFT / SCHEDULED / ARCHIVED → jamais exposables", () => {
   for (const status of ["DRAFT", "SCHEDULED", "ARCHIVED"]) {
     assert.equal(
       isPollPubliclyExposable({
-        event: { consultationMode: "LIVE" },
-        poll: baseClosedPoll({ status }),
+        event: ssEvent(["poll-1"]),
+        poll: basePoll({ status }),
         surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
       }),
       false,
@@ -158,90 +218,57 @@ test("DRAFT / SCHEDULED / ARCHIVED → jamais exposables", () => {
   }
 });
 
-test("Live : CLOSED non hidden → résultat autorisé", () => {
-  assert.equal(
-    isPollPubliclyExposable({
-      event: { consultationMode: "LIVE" },
-      poll: baseClosedPoll(),
-      surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
-    }),
-    true,
-  );
-});
-
-test("Lead CRM exclu ; Concours non exclu par leadEnabled seul", () => {
-  assert.equal(
-    isPublicLeadCrmExcluded({
-      type: "SINGLE_CHOICE",
-      leadEnabled: true,
-    }),
-    true,
-  );
-  assert.equal(
-    isPollPubliclyExposable({
-      event: { consultationMode: "LIVE" },
-      poll: baseClosedPoll({ leadEnabled: true, type: "SINGLE_CHOICE" }),
-      surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
-    }),
-    false,
-  );
-  assert.equal(
-    isPollPubliclyExposable({
-      event: { consultationMode: "LIVE" },
-      poll: baseClosedPoll({
-        type: "CONTEST_ENTRY",
-        leadEnabled: true,
-      }),
-      surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
-    }),
-    true,
-  );
-});
-
-test("filterPollsForPublicSurface retire les interdits", () => {
-  const event = {
-    consultationMode: "SELF_SERVICE",
-    selfServiceSelectedPollIds: ["keep"],
-  };
-  const filtered = filterPollsForPublicSurface({
-    event,
-    surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
-    polls: [
-      baseClosedPoll({ id: "keep" }),
-      baseClosedPoll({ id: "drop-ss" }),
-      baseClosedPoll({ id: "drop-hidden", landingResultHidden: true }),
-      baseClosedPoll({ id: "drop-draft", status: "DRAFT" }),
-    ],
-  });
+test("landingFeedResultPollsWhere : Live CLOSED ; SS sélection ACTIVE|CLOSED", () => {
   assert.deepEqual(
-    filtered.map((p) => p.id),
-    ["keep"],
+    landingFeedResultPollsWhere({
+      id: "evt1",
+      consultationMode: "LIVE",
+    }),
+    { eventId: "evt1", status: "CLOSED" },
   );
+  assert.deepEqual(
+    landingFeedResultPollsWhere({
+      id: "evt1",
+      consultationMode: "SELF_SERVICE",
+      selfServiceSelectedPollIds: ["a", "b"],
+    }),
+    {
+      eventId: "evt1",
+      status: { in: ["CLOSED", "ACTIVE"] },
+      id: { in: ["a", "b"] },
+    },
+  );
+  const empty = landingFeedResultPollsWhere({
+    id: "evt1",
+    consultationMode: "SELF_SERVICE",
+    selfServiceSelectedPollIds: [],
+  });
+  assert.deepEqual(empty.id, { in: [] });
 });
 
-test("buildLandingFeedItems : SS masquée absente du JSON fil", () => {
-  const event = {
-    consultationMode: "SELF_SERVICE",
-    selfServiceSelectedPollIds: ["visible"],
+test("buildLandingFeedItems : SS ACTIVE sélectionnée présente ; masquée absente", () => {
+  const event = ssEvent(["visible"], {
     landingKeepPhotosAfter: true,
-    landingKeepResultsAfter: true,
     landingKeepMessagesAfter: true,
-  };
+  });
   const items = buildLandingFeedItems({
     event,
     photos: [],
     messages: [],
     closedPolls: [
-      baseClosedPoll({ id: "visible", question: "OK" }),
-      baseClosedPoll({
+      basePoll({ id: "visible", status: "ACTIVE", question: "OK-ACTIVE" }),
+      basePoll({
         id: "masked",
+        status: "CLOSED",
         question: "SECRET",
         votes: [{ optionId: "o1", voterSessionId: "leak" }],
       }),
+      basePoll({ id: "live-style", status: "ACTIVE", question: "Also-sel" }),
     ],
     winnersByPollId: {},
     afterLive: false,
   });
+  // live-style not in selected → excluded; only "visible"
   const results = items.filter((i) => i.type === "result");
   assert.equal(results.length, 1);
   assert.equal(results[0].result.pollId, "visible");
@@ -252,7 +279,7 @@ test("buildLandingFeedItems : SS masquée absente du JSON fil", () => {
   assert.equal(blob.includes("voterSessionId"), false);
 });
 
-test("buildLandingFeedItems : Live conserve résultat autorisé", () => {
+test("buildLandingFeedItems : Live ACTIVE absente ; CLOSED présente", () => {
   const items = buildLandingFeedItems({
     event: {
       consultationMode: "LIVE",
@@ -260,26 +287,106 @@ test("buildLandingFeedItems : Live conserve résultat autorisé", () => {
     },
     photos: [],
     messages: [],
-    closedPolls: [baseClosedPoll({ id: "live-closed", question: "Live Q" })],
+    closedPolls: [
+      basePoll({ id: "active-live", status: "ACTIVE", question: "Antenne" }),
+      basePoll({ id: "closed-live", status: "CLOSED", question: "Fermée" }),
+    ],
     afterLive: false,
   });
   assert.equal(items.length, 1);
-  assert.equal(items[0].type, "result");
-  assert.equal(items[0].result.pollId, "live-closed");
-  assert.equal(items[0].result.votersCount, 2);
+  assert.equal(items[0].result.pollId, "closed-live");
 });
 
-test("surfaces futures minisite/journal/share/counters branchées", () => {
-  const event = {
-    consultationMode: "SELF_SERVICE",
-    selfServiceSelectedPollIds: ["poll-1"],
-  };
-  const poll = baseClosedPoll();
+test("Bascule sémantique Live → SS → Live (filtre)", () => {
+  const pollClosed = basePoll({ id: "q1", status: "CLOSED" });
+  const pollActive = basePoll({ id: "q1", status: "ACTIVE" });
+  // Live : CLOSED OK
+  assert.equal(
+    isPollPubliclyExposable({
+      event: { consultationMode: "LIVE" },
+      poll: pollClosed,
+      surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
+    }),
+    true,
+  );
+  // SS sélectionnée ACTIVE (après bascule) OK
+  assert.equal(
+    isPollPubliclyExposable({
+      event: ssEvent(["q1"]),
+      poll: pollActive,
+      surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
+    }),
+    true,
+  );
+  // Retour Live avec ACTIVE (antenne) → hors fil
+  assert.equal(
+    isPollPubliclyExposable({
+      event: { consultationMode: "LIVE" },
+      poll: pollActive,
+      surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
+    }),
+    false,
+  );
+  // Retour Live CLOSED → OK
+  assert.equal(
+    isPollPubliclyExposable({
+      event: { consultationMode: "LIVE" },
+      poll: pollClosed,
+      surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
+    }),
+    true,
+  );
+});
+
+test("filterPollsForPublicSurface SS mixte", () => {
+  const filtered = filterPollsForPublicSurface({
+    event: ssEvent(["keep-a", "keep-c"]),
+    surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
+    polls: [
+      basePoll({ id: "keep-a", status: "ACTIVE" }),
+      basePoll({ id: "drop", status: "CLOSED" }),
+      basePoll({ id: "keep-c", status: "CLOSED" }),
+      basePoll({ id: "hidden-manual", status: "ACTIVE", landingResultHidden: true }),
+    ],
+  });
+  assert.deepEqual(
+    filtered.map((p) => p.id).sort(),
+    ["keep-a", "keep-c"],
+  );
+});
+
+test("API landing : where dynamique + soft-refresh ; pas selfServiceOpen dans filtre", () => {
+  const server = readFileSync(serverJs, "utf8");
+  assert.match(server, /landingFeedResultPollsWhere/);
+  assert.match(server, /resultPollsRaw/);
+  assert.match(server, /filterPollsForPublicSurface/);
+
+  const visSrc = readFileSync(visibilityJs, "utf8");
+  assert.match(visSrc, /SELF_SERVICE/);
+  assert.match(visSrc, /status !== "CLOSED" && status !== "ACTIVE"/);
+  assert.match(visSrc, /normalizeSelfServiceSelectedPollIds/);
+  assert.doesNotMatch(
+    visSrc,
+    /event\.selfServiceOpen|Boolean\(\s*event\?\.selfServiceOpen/,
+    "selfServiceOpen ne doit pas gouverner l’exposition des résultats",
+  );
+
+  const feedSrc = readFileSync(landingFeedJs, "utf8");
+  assert.match(feedSrc, /isPollPubliclyExposable/);
+  assert.doesNotMatch(feedSrc, /status !== "CLOSED"/);
+
+  const page = readFileSync(pageLanding, "utf8");
+  assert.match(page, /SOFT_MS/);
+  assert.match(page, /\/events\/slug\/.*\/landing/);
+});
+
+test("surfaces futures minisite/journal/share branchées SS ACTIVE", () => {
+  const event = ssEvent(["poll-1"]);
+  const poll = basePoll({ status: "ACTIVE" });
   for (const surface of [
     PUBLIC_POLL_SURFACE.MINISITE_RESULTS,
     PUBLIC_POLL_SURFACE.JOURNAL_AUTO_RESULT,
     PUBLIC_POLL_SURFACE.SHARE_RESULT,
-    PUBLIC_POLL_SURFACE.PUBLIC_COUNTERS,
   ]) {
     assert.equal(
       isPollPubliclyExposable({ event, poll, surface }),
@@ -287,44 +394,6 @@ test("surfaces futures minisite/journal/share/counters branchées", () => {
       surface,
     );
   }
-  assert.equal(
-    isPollPubliclyExposable({
-      event: { ...event, selfServiceSelectedPollIds: [] },
-      poll,
-      surface: PUBLIC_POLL_SURFACE.SHARE_RESULT,
-    }),
-    false,
-  );
-});
-
-test("API landing : filtre avant feed + soft-refresh inchangé", () => {
-  const server = readFileSync(serverJs, "utf8");
-  assert.match(server, /filterPollsForPublicSurface/);
-  assert.match(server, /PUBLIC_POLL_SURFACE\.LANDING_FEED_RESULT/);
-  assert.match(server, /closedPollsRaw/);
-  assert.match(server, /publicPollVisibility/);
-
-  const feedSrc = readFileSync(landingFeedJs, "utf8");
-  assert.match(feedSrc, /isPollPubliclyExposable/);
-  assert.match(feedSrc, /LANDING_FEED_RESULT/);
-
-  const visSrc = readFileSync(visibilityJs, "utf8");
-  assert.match(visSrc, /isSelfServicePubliclyVisiblePoll/);
-  assert.match(visSrc, /landingResultHidden/);
-
-  const page = readFileSync(pageLanding, "utf8");
-  assert.match(page, /SOFT_MS/);
-  assert.match(page, /\/events\/slug\/.*\/landing/);
-  assert.match(page, /feed: Array\.isArray\(data\.feed\)/);
-});
-
-test("pas de touche régie dans le lot (fichiers absents du diff logique)", () => {
-  const server = readFileSync(serverJs, "utf8");
-  // Le correctif landing reste sur la route slug/landing uniquement pour le filtre.
-  const landingIdx = server.indexOf('app.get("/events/slug/:slug/landing"');
-  assert.ok(landingIdx > 0);
-  const snippet = server.slice(landingIdx, landingIdx + 8000);
-  assert.match(snippet, /filterPollsForPublicSurface/);
 });
 
 if (failed > 0) {

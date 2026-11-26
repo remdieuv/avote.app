@@ -3,6 +3,10 @@
  * Pure : pas d’I/O. Réutilise les helpers Libre-service (PR #95) sans les dupliquer.
  *
  * Les données non autorisées ne doivent jamais être sérialisées vers un client public.
+ *
+ * Libre-service (résultats landing) : ACTIVE | CLOSED si sélectionnées (#95),
+ * y compris lorsque selfServiceOpen est false (consultation en pause).
+ * Live : CLOSED uniquement pour le fil / résultats publiés.
  */
 
 const {
@@ -10,6 +14,7 @@ const {
   normalizeConsultationMode,
   isSelfServicePubliclyVisiblePoll,
   isSelfServicePublicPollStatus,
+  normalizeSelfServiceSelectedPollIds,
 } = require("./consultationMode");
 
 /** Surfaces publiques réutilisables (Lot 0 + lots mini-site suivants). */
@@ -31,8 +36,11 @@ const RESULT_SURFACES = new Set([
   PUBLIC_POLL_SURFACE.PUBLIC_COUNTERS,
 ]);
 
-/** Surfaces où seuls les sondages CLOSED sont exposés (fil / résultats publiés). */
-const CLOSED_ONLY_RESULT_SURFACES = new Set([
+/**
+ * Surfaces de résultats « publiés » (fil / journal / mini-site / partage).
+ * Live → CLOSED only ; Libre-service → ACTIVE | CLOSED (+ sélection #95).
+ */
+const PUBLISHED_RESULT_SURFACES = new Set([
   PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
   PUBLIC_POLL_SURFACE.JOURNAL_AUTO_RESULT,
   PUBLIC_POLL_SURFACE.MINISITE_RESULTS,
@@ -62,7 +70,45 @@ function normalizePublicPollSurface(surface) {
 }
 
 /**
+ * Clause Prisma `where` pour les polls du fil résultats landing.
+ * SS : ACTIVE|CLOSED restreints aux IDs sélectionnés (#95).
+ * Live : CLOSED uniquement.
+ * @param {{
+ *   id?: unknown;
+ *   consultationMode?: unknown;
+ *   selfServiceSelectedPollIds?: unknown;
+ * } | null | undefined} event
+ * @returns {Record<string, unknown>}
+ */
+function landingFeedResultPollsWhere(event) {
+  const eventId =
+    typeof event?.id === "string" ? event.id.trim() : String(event?.id || "").trim();
+  const mode = normalizeConsultationMode(event?.consultationMode);
+
+  if (mode === CONSULTATION_MODE.SELF_SERVICE) {
+    const selected = normalizeSelfServiceSelectedPollIds(
+      event?.selfServiceSelectedPollIds,
+    );
+    if (!eventId || selected.length === 0) {
+      // Aucune sélection → aucun résultat public (évite un scan ACTIVE inutile).
+      return { eventId: eventId || "__none__", id: { in: [] } };
+    }
+    return {
+      eventId,
+      status: { in: ["CLOSED", "ACTIVE"] },
+      id: { in: selected },
+    };
+  }
+
+  return {
+    eventId: eventId || "__none__",
+    status: "CLOSED",
+  };
+}
+
+/**
  * Décide si un poll peut être exposé sur une surface publique.
+ * Ne lit pas `selfServiceOpen` : la pause n’empêche pas la restitution des résultats.
  * @param {{
  *   event?: {
  *     consultationMode?: unknown;
@@ -83,6 +129,7 @@ function isPollPubliclyExposable(input = {}) {
   const event = input.event && typeof input.event === "object" ? input.event : {};
   const poll = input.poll && typeof input.poll === "object" ? input.poll : {};
   const surface = normalizePublicPollSurface(input.surface);
+  const mode = normalizeConsultationMode(event.consultationMode);
 
   const pollId =
     typeof poll.id === "string" ? poll.id.trim() : String(poll.id || "").trim();
@@ -94,24 +141,27 @@ function isPollPubliclyExposable(input = {}) {
   }
 
   if (RESULT_SURFACES.has(surface)) {
-    if (CLOSED_ONLY_RESULT_SURFACES.has(surface) && status !== "CLOSED") {
-      return false;
-    }
-    if (
-      surface === PUBLIC_POLL_SURFACE.PUBLIC_COUNTERS &&
-      status !== "CLOSED" &&
-      status !== "ACTIVE"
-    ) {
-      return false;
+    if (PUBLISHED_RESULT_SURFACES.has(surface)) {
+      if (mode === CONSULTATION_MODE.SELF_SERVICE) {
+        // SS : questions sélectionnées restent ACTIVE même en pause.
+        if (status !== "CLOSED" && status !== "ACTIVE") return false;
+      } else if (status !== "CLOSED") {
+        // Live : fil = résultats des questions fermées uniquement.
+        return false;
+      }
+    } else if (surface === PUBLIC_POLL_SURFACE.PUBLIC_COUNTERS) {
+      if (status !== "CLOSED" && status !== "ACTIVE") return false;
+      // Live : compteurs publics futurs = même règle CLOSED-only que le fil.
+      if (mode !== CONSULTATION_MODE.SELF_SERVICE && status !== "CLOSED") {
+        return false;
+      }
     }
     if (isPublicLeadCrmExcluded(poll)) return false;
     if (poll.landingResultHidden === true) return false;
   }
 
-  const mode = normalizeConsultationMode(event.consultationMode);
-
   if (mode === CONSULTATION_MODE.SELF_SERVICE) {
-    // Source de vérité PR #95 : sélection persistante.
+    // Source de vérité PR #95 : sélection persistante (indépendant de selfServiceOpen).
     return isSelfServicePubliclyVisiblePoll({
       pollId,
       pollType: poll.type,
@@ -154,6 +204,7 @@ module.exports = {
   PUBLIC_POLL_SURFACE,
   isPublicLeadCrmExcluded,
   normalizePublicPollSurface,
+  landingFeedResultPollsWhere,
   isPollPubliclyExposable,
   filterPollsForPublicSurface,
 };
