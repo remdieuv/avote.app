@@ -3,15 +3,18 @@
  * sans dupliquer votes ni URLs (références + agrégats à la lecture).
  */
 
+const {
+  PUBLIC_POLL_SURFACE,
+  isPublicLeadCrmExcluded,
+  isPollPubliclyExposable,
+} = require("./publicPollVisibility");
+
 /**
  * Lead CRM pur : exclu du fil (Concours peut apparaître).
  * @param {{ type?: string | null; leadEnabled?: boolean | null } | null | undefined} poll
  */
 function isLandingFeedLeadCrm(poll) {
-  if (!poll) return false;
-  const type = String(poll.type || "").toUpperCase();
-  if (type === "CONTEST_ENTRY") return false;
-  return poll.leadEnabled === true;
+  return isPublicLeadCrmExcluded(poll);
 }
 
 /**
@@ -69,12 +72,12 @@ function landingResultCardFromPoll(poll, contestWinners) {
 
 /**
  * @param {object} args
- * @param {object} args.event — Event prisma (+ axes live)
+ * @param {object} args.event — Event prisma (+ axes live / consultation)
  * @param {object[]} args.photos — EventLandingPhoto[]
  * @param {Record<string, number>} args.likeCounts — photoId → count
  * @param {Set<string>} args.likedPhotoIds — photos likées par le visiteur
  * @param {object[]} args.messages — EventLandingMessage[] (déjà filtrés hidden si public)
- * @param {object[]} args.closedPolls — Poll CLOSED avec options+votes+event
+ * @param {object[]} args.closedPolls — Poll CLOSED (idéalement déjà filtrés côté API)
  * @param {Record<string, { displayName: string }[]>} args.winnersByPollId
  * @param {boolean} args.afterLive — phase after
  */
@@ -143,8 +146,16 @@ function buildLandingFeedItems(args) {
 
   if (keepResults) {
     for (const poll of closedPolls) {
-      if (isLandingFeedLeadCrm(poll)) continue;
-      if (poll.landingResultHidden === true) continue;
+      // Défense en profondeur : même si l’API a déjà filtré.
+      if (
+        !isPollPubliclyExposable({
+          event,
+          poll,
+          surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
+        })
+      ) {
+        continue;
+      }
       const winners = winnersByPollId[poll.id];
       items.push({
         type: "result",
