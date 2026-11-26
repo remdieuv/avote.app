@@ -233,15 +233,22 @@ export function SelfServiceRegieWorkspace({
           style={{
             display: "flex",
             flexWrap: "wrap",
-            alignItems: "center",
+            alignItems: "flex-start",
             justifyContent: "space-between",
             gap: "0.55rem",
             marginBottom: "0.75rem",
           }}
         >
-          <h3 style={titleStyle}>
-            Questions proposées au public ({eligiblePolls.length})
-          </h3>
+          <div style={{ display: "grid", gap: "0.28rem", minWidth: 0, flex: "1 1 16rem" }}>
+            <h3 style={titleStyle}>
+              Questions proposées au public ({openIds.size}/{eligiblePolls.length}{" "}
+              visibles)
+            </h3>
+            <p style={{ ...mutedStyle, margin: 0 }}>
+              Décochez une question pour la masquer aux participants. Les votes et
+              résultats sont conservés.
+            </p>
+          </div>
           <button
             type="button"
             disabled={disabled}
@@ -367,7 +374,7 @@ export function SelfServiceRegieWorkspace({
                       color: selected ? "#166534" : "#475569",
                     }}
                   >
-                    {selected ? "Sélectionnée" : "Masquée"}
+                    {selected ? "Visible" : "Masquée"}
                   </span>
                   <button
                     type="button"

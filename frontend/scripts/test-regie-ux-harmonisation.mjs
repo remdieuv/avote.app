@@ -30,15 +30,22 @@ function test(name, fn) {
 test("badges playlist Libre-service", () => {
   assert.equal(
     getRegieSelfServicePlaylistBadge({ pollStatus: "ACTIVE" }),
-    "Publiée",
+    "Visible",
   );
   assert.equal(
     getRegieSelfServicePlaylistBadge({ pollStatus: "DRAFT" }),
-    "Non publiée",
+    "Masquée",
   );
   assert.equal(
     getRegieSelfServicePlaylistBadge({ pollStatus: "CLOSED" }),
-    "Résultats",
+    "Masquée",
+  );
+  assert.equal(
+    getRegieSelfServicePlaylistBadge({
+      pollStatus: "CLOSED",
+      selected: true,
+    }),
+    "Visible",
   );
   assert.equal(
     getRegieSelfServicePlaylistBadge({ pollStatus: "ARCHIVED" }),

@@ -377,6 +377,8 @@ function isSelfServiceCatalogType(pollType) {
  *   isLocked?: unknown;
  *   pollStatus?: unknown;
  *   pollType?: unknown;
+ *   pollId?: unknown;
+ *   selectedPollIds?: unknown;
  * }} input
  * @returns {{ ok: true } | { ok: false; code: string; message: string }}
  */
@@ -414,6 +416,23 @@ function canAcceptSelfServiceVote(input = {}) {
       ok: false,
       code: "POLL_TYPE_EXCLUDED",
       message: "Ce type de question n’est pas disponible en libre-service.",
+    };
+  }
+  const pollId =
+    typeof input.pollId === "string" ? input.pollId.trim() : String(input.pollId || "").trim();
+  if (
+    pollId &&
+    !isSelfServicePubliclyVisiblePoll({
+      pollId,
+      pollType: input.pollType,
+      pollStatus: input.pollStatus,
+      selectedPollIds: input.selectedPollIds,
+    })
+  ) {
+    return {
+      ok: false,
+      code: "POLL_HIDDEN",
+      message: "Cette question n’est pas visible pour les participants.",
     };
   }
   return { ok: true };
@@ -504,7 +523,41 @@ function evaluateSetSelfServiceOpenPolls(input = {}) {
 }
 
 /**
- * Entrées catalogue public (questions éligibles).
+ * Statuts historiquement exposés (ACTIVE / CLOSED). Conservé pour Live
+ * et lectures hors sélection SS ; la visibilité Libre-service repose sur
+ * `selfServiceSelectedPollIds`.
+ * @param {unknown} status
+ * @returns {boolean}
+ */
+function isSelfServicePublicPollStatus(status) {
+  const s = String(status || "").toUpperCase();
+  return s === "ACTIVE" || s === "CLOSED";
+}
+
+/**
+ * Visibilité publique Libre-service : sélection persistante uniquement.
+ * @param {{
+ *   pollId?: unknown;
+ *   pollType?: unknown;
+ *   pollStatus?: unknown;
+ *   selectedPollIds?: unknown;
+ * }} input
+ * @returns {boolean}
+ */
+function isSelfServicePubliclyVisiblePoll(input = {}) {
+  const id =
+    typeof input.pollId === "string"
+      ? input.pollId.trim()
+      : String(input.pollId || "").trim();
+  if (!id) return false;
+  if (!isSelfServiceCatalogType(input.pollType)) return false;
+  if (String(input.pollStatus || "").toUpperCase() === "ARCHIVED") return false;
+  const selected = normalizeSelfServiceSelectedPollIds(input.selectedPollIds);
+  return selected.includes(id);
+}
+
+/**
+ * Entrées catalogue public (questions visibles = sélectionnées).
  * @param {{
  *   polls?: Array<{
  *     id?: unknown;
@@ -516,21 +569,14 @@ function evaluateSetSelfServiceOpenPolls(input = {}) {
  *     leadEnabled?: unknown;
  *   }> | null;
  *   selfServiceOpen?: unknown;
+ *   selectedPollIds?: unknown;
  * }} input
  */
-/**
- * Statuts exposés au catalogue / URL publique Libre-service.
- * DRAFT = jamais publié → invisible participant.
- * ACTIVE = ouvert (si consultation ouverte).
- * CLOSED = publié puis désactivé → résultats, plus de vote.
- */
-function isSelfServicePublicPollStatus(status) {
-  const s = String(status || "").toUpperCase();
-  return s === "ACTIVE" || s === "CLOSED";
-}
-
 function buildSelfServiceCatalog(input = {}) {
   const open = Boolean(input.selfServiceOpen);
+  const selected = new Set(
+    normalizeSelfServiceSelectedPollIds(input.selectedPollIds),
+  );
   const polls = Array.isArray(input.polls) ? input.polls : [];
   return polls
     .map((p, i) => {
@@ -539,8 +585,12 @@ function buildSelfServiceCatalog(input = {}) {
       const status = String(p?.status || "").toUpperCase();
       if (
         !id ||
-        !isSelfServiceCatalogType(type) ||
-        !isSelfServicePublicPollStatus(status)
+        !isSelfServicePubliclyVisiblePoll({
+          pollId: id,
+          pollType: type,
+          pollStatus: status,
+          selectedPollIds: [...selected],
+        })
       ) {
         return null;
       }
@@ -580,6 +630,7 @@ module.exports = {
   buildRestoreSelfServicePollsPlan,
   isSelfServiceCatalogType,
   isSelfServicePublicPollStatus,
+  isSelfServicePubliclyVisiblePoll,
   canAcceptSelfServiceVote,
   evaluateSetSelfServiceOpenPolls,
   buildSelfServiceCatalog,

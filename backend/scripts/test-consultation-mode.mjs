@@ -22,6 +22,7 @@ const {
   snapshotSelfServiceSelectedPollIds,
   buildRestoreSelfServicePollsPlan,
   isSelfServiceCatalogType,
+  isSelfServicePubliclyVisiblePoll,
   canAcceptSelfServiceVote,
   evaluateSetSelfServiceOpenPolls,
   buildSelfServiceCatalog,
@@ -229,6 +230,8 @@ test("Routes API branchées dans server.js (auth orga)", () => {
   assert.match(src, /canAcceptSelfServiceVote/);
   assert.match(src, /buildSelfServiceCatalog/);
   assert.match(src, /isSelfServicePublicPollStatus/);
+  assert.match(src, /isSelfServicePubliclyVisiblePoll/);
+  assert.match(src, /selfServiceSelectedPollIds/);
   assert.match(src, /initialPollStatus = eventIsSelfService \? "DRAFT"/);
   assert.match(src, /ssLive/);
   assert.match(src, /votesPreserved:\s*true/);
@@ -252,6 +255,7 @@ test("Catalogue V1 : types exclus + multi ACTIVE", () => {
 
   const catalog = buildSelfServiceCatalog({
     selfServiceOpen: true,
+    selectedPollIds: ["a", "d"],
     polls: [
       { id: "a", type: "SINGLE_CHOICE", status: "ACTIVE", question: "Q1", order: 0 },
       { id: "b", type: "CONTEST_ENTRY", status: "ACTIVE", question: "Concours", order: 1 },
@@ -260,25 +264,37 @@ test("Catalogue V1 : types exclus + multi ACTIVE", () => {
       { id: "e", type: "SINGLE_CHOICE", status: "CLOSED", question: "Q3", order: 4 },
     ],
   });
-  // DRAFT jamais publié exclu ; CLOSED publié conservé pour résultats.
-  assert.equal(catalog.length, 3);
+  // Visibilité = sélection ; CLOSED décochée invisible ; type exclu invisible.
+  assert.equal(catalog.length, 2);
   assert.deepEqual(
     catalog.map((x) => x.id),
-    ["a", "d", "e"],
+    ["a", "d"],
   );
   assert.equal(catalog.find((x) => x.id === "a").votable, true);
   assert.equal(catalog.find((x) => x.id === "d").votable, true);
-  assert.equal(catalog.find((x) => x.id === "e").votable, false);
+  assert.equal(catalog.find((x) => x.id === "e"), undefined);
   assert.equal(catalog.find((x) => x.id === "c"), undefined);
+
+  const catalogClosedSelected = buildSelfServiceCatalog({
+    selfServiceOpen: false,
+    selectedPollIds: ["e"],
+    polls: [
+      { id: "e", type: "SINGLE_CHOICE", status: "CLOSED", question: "Q3", order: 0 },
+    ],
+  });
+  assert.equal(catalogClosedSelected.length, 1);
+  assert.equal(catalogClosedSelected[0].votable, false);
 });
 
-test("canAcceptSelfServiceVote : open / fermé / type exclu", () => {
+test("canAcceptSelfServiceVote : open / fermé / type exclu / masquée", () => {
   assert.equal(
     canAcceptSelfServiceVote({
       mode: "SELF_SERVICE",
       selfServiceOpen: true,
       pollStatus: "ACTIVE",
       pollType: "SINGLE_CHOICE",
+      pollId: "a",
+      selectedPollIds: ["a"],
     }).ok,
     true,
   );
@@ -288,6 +304,8 @@ test("canAcceptSelfServiceVote : open / fermé / type exclu", () => {
       selfServiceOpen: false,
       pollStatus: "ACTIVE",
       pollType: "SINGLE_CHOICE",
+      pollId: "a",
+      selectedPollIds: ["a"],
     }).code,
     "CONSULTATION_CLOSED",
   );
@@ -308,6 +326,35 @@ test("canAcceptSelfServiceVote : open / fermé / type exclu", () => {
       pollType: "RANKING",
     }).code,
     "POLL_TYPE_EXCLUDED",
+  );
+  assert.equal(
+    canAcceptSelfServiceVote({
+      mode: "SELF_SERVICE",
+      selfServiceOpen: true,
+      pollStatus: "ACTIVE",
+      pollType: "SINGLE_CHOICE",
+      pollId: "hidden",
+      selectedPollIds: ["a"],
+    }).code,
+    "POLL_HIDDEN",
+  );
+  assert.equal(
+    isSelfServicePubliclyVisiblePoll({
+      pollId: "a",
+      pollType: "SINGLE_CHOICE",
+      pollStatus: "CLOSED",
+      selectedPollIds: ["a"],
+    }),
+    true,
+  );
+  assert.equal(
+    isSelfServicePubliclyVisiblePoll({
+      pollId: "a",
+      pollType: "SINGLE_CHOICE",
+      pollStatus: "CLOSED",
+      selectedPollIds: [],
+    }),
+    false,
   );
 });
 

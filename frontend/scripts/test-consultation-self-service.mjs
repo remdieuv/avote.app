@@ -84,9 +84,14 @@ test("composants / pages branchés", () => {
     join(root, "app/admin/event/[eventId]/page.jsx"),
     "utf8",
   );
-  assert.match(regieSrc, /RegieModeSelector/);
+  assert.match(regieSrc, /RegieTopBar/);
   assert.match(regieSrc, /SelfServiceRegieWorkspace/);
   assert.doesNotMatch(regieSrc, /ConsultationModePanel/);
+  const topBar = readFileSync(
+    join(root, "components/admin/RegieTopBar.jsx"),
+    "utf8",
+  );
+  assert.match(topBar, /RegieModeSelector/);
 });
 
 if (failed > 0) {

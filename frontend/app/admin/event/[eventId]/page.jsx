@@ -509,7 +509,10 @@ function PollCard({
 }) {
   const isSsPlaylist = playlistVariant === "self_service";
   const statusLabel = isSsPlaylist
-    ? getRegieSelfServicePlaylistBadge({ pollStatus: poll.status })
+    ? getRegieSelfServicePlaylistBadge({
+        pollStatus: poll.status,
+        selected: String(poll.status || "").toUpperCase() === "ACTIVE",
+      })
     : getRegiePollStatusLabel({
         pollStatus: poll.status,
         isActive,
@@ -519,11 +522,15 @@ function PollCard({
         leadEnabled: poll.leadEnabled,
       });
   const badge = badgeStyle(
-    statusLabel === "En cours" || statusLabel === "Publiée"
+    statusLabel === "En cours" ||
+      statusLabel === "Publiée" ||
+      statusLabel === "Visible"
       ? "ACTIVE"
       : statusLabel === "Résultats" || statusLabel === "Tirage"
         ? "SCHEDULED"
-        : statusLabel === "Fermée" || statusLabel === "Terminée"
+        : statusLabel === "Fermée" ||
+            statusLabel === "Terminée" ||
+            statusLabel === "Masquée"
           ? "CLOSED"
           : statusLabel === "En attente d'ouverture"
             ? "SCHEDULED"
