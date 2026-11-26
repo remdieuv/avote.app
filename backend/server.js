@@ -75,6 +75,7 @@ const {
   buildSelfServiceCatalog,
   isSelfServiceCatalogType,
   isSelfServicePublicPollStatus,
+  isSelfServicePubliclyVisiblePoll,
   normalizeSelfServiceSelectedPollIds,
 } = require("./lib/consultationMode");
 const {
@@ -953,6 +954,8 @@ function pollToJson(poll) {
       isLocked: poll.event?.isLocked,
       pollStatus: poll.status,
       pollType: poll.type,
+      pollId: poll.id,
+      selectedPollIds: poll.event?.selfServiceSelectedPollIds,
     }).ok,
     autoReveal: Boolean(poll.event?.autoReveal),
     autoRevealDelaySec: poll.event?.autoRevealDelaySec ?? 5,
@@ -1063,6 +1066,22 @@ async function loadPublicPollPourSlug(slug) {
   });
   if (!poll) return null;
 
+  if (
+    normalizeConsultationMode(event.consultationMode) ===
+    CONSULTATION_MODE.SELF_SERVICE
+  ) {
+    if (
+      !isSelfServicePubliclyVisiblePoll({
+        pollId: poll.id,
+        pollType: poll.type,
+        pollStatus: poll.status,
+        selectedPollIds: event.selfServiceSelectedPollIds,
+      })
+    ) {
+      return null;
+    }
+  }
+
   const voteOuvert = String(event.voteState).toUpperCase() === "OPEN";
 
   if (voteOuvert) {
@@ -1115,6 +1134,22 @@ async function loadPublicPollByIdForEventSlug(slug, pollId) {
   if (!isSelfServicePublicPollStatus(poll.status)) {
     return null;
   }
+  // Libre-service : la sélection persistante gouverne la visibilité publique.
+  if (
+    normalizeConsultationMode(event.consultationMode) ===
+    CONSULTATION_MODE.SELF_SERVICE
+  ) {
+    if (
+      !isSelfServicePubliclyVisiblePoll({
+        pollId: poll.id,
+        pollType: poll.type,
+        pollStatus: poll.status,
+        selectedPollIds: event.selfServiceSelectedPollIds,
+      })
+    ) {
+      return null;
+    }
+  }
   const aggregates = await fetchPollVoteAggregates(prisma, poll.id);
   return attachVoteAggregatesToPoll(poll, aggregates);
 }
@@ -1134,6 +1169,7 @@ async function submitVote(input) {
             voteState: true,
             consultationMode: true,
             selfServiceOpen: true,
+            selfServiceSelectedPollIds: true,
           },
         },
       },
@@ -1168,6 +1204,8 @@ async function submitVote(input) {
         isLocked: event.isLocked,
         pollStatus: poll.status,
         pollType: poll.type,
+        pollId: poll.id,
+        selectedPollIds: event.selfServiceSelectedPollIds,
       });
       if (!ss.ok) {
         return {
@@ -4023,6 +4061,7 @@ app.get("/events/slug/:slug", async (req, res) => {
         ? buildSelfServiceCatalog({
             polls: pollsOrdered,
             selfServiceOpen: eventApres.selfServiceOpen,
+            selectedPollIds: eventApres.selfServiceSelectedPollIds,
           })
         : [];
 
@@ -7270,6 +7309,7 @@ app.put("/events/:eventId/consultation/polls", requireAuth, async (req, res) => 
       catalogPolls: buildSelfServiceCatalog({
         polls: pollsAfter,
         selfServiceOpen: event.selfServiceOpen,
+        selectedPollIds: decision.pollIdsToActivate,
       }),
       votesPreserved: true,
     });

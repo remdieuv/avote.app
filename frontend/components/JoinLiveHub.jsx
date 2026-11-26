@@ -1017,6 +1017,27 @@ export function JoinLiveHub({ slug }) {
     setVotedPollIdsTick((n) => n + 1);
   }, []);
 
+  /** Question consultée masquée côté régie → retour catalogue (sans F5). */
+  useEffect(() => {
+    if (!selfServiceHub) return;
+    const current =
+      typeof selectedSelfServicePollId === "string"
+        ? selectedSelfServicePollId.trim()
+        : "";
+    if (!current) return;
+    const stillVisible = (catalogPolls || []).some(
+      (p) => p && String(p.id) === current,
+    );
+    if (!stillVisible) {
+      handleBackToSelfServiceCatalog();
+    }
+  }, [
+    selfServiceHub,
+    selectedSelfServicePollId,
+    catalogPolls,
+    handleBackToSelfServiceCatalog,
+  ]);
+
   const progressionLigne = useMemo(() => {
     if (selfServiceHub) {
       const total = Array.isArray(catalogPolls) ? catalogPolls.length : 0;

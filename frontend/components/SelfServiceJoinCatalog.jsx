@@ -99,7 +99,35 @@ export function SelfServiceJoinCatalog({
         </p>
       )}
 
-      {openPolls.length > 0 ? (
+      {(catalogPolls || []).length === 0 ? (
+        <div
+          role="status"
+          data-testid="self-service-no-visible-questions"
+          style={{
+            margin: "1rem 0",
+            padding: "1.1rem 1.15rem",
+            borderRadius: "14px",
+            border: "1px solid #e2e8f0",
+            background: "#f8fafc",
+            textAlign: "center",
+          }}
+        >
+          <p style={{ margin: 0, fontWeight: 700, color: "#0f172a" }}>
+            Aucune question visible
+          </p>
+          <p
+            style={{
+              margin: "0.45rem 0 0",
+              fontSize: "0.92rem",
+              color: "#64748b",
+              lineHeight: 1.45,
+            }}
+          >
+            L’organisateur n’a pas encore proposé de question. Revenez dans un
+            instant.
+          </p>
+        </div>
+      ) : openPolls.length > 0 ? (
         <ul
           style={{
             listStyle: "none",

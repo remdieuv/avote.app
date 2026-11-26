@@ -416,17 +416,18 @@ export function getRegieOpenVoteButtonCopy(input = {}) {
 }
 
 /**
- * Badge playlist régie en Libre-service (pas d’antenne Live).
- * @param {{ pollStatus?: string | null }} input
- * @returns {"Publiée"|"Non publiée"|"Résultats"|"Terminée"|"Prête"}
+ * Badge playlist régie en Libre-service — visibilité publique (sélection).
+ * ACTIVE = cochée / visible ; sinon masquée (votes conservés).
+ * @param {{ pollStatus?: string | null; selected?: boolean | null }} input
+ * @returns {"Visible"|"Masquée"|"Terminée"}
  */
 export function getRegieSelfServicePlaylistBadge(input = {}) {
   const ps = String(input.pollStatus ?? "").toUpperCase();
   if (ps === "ARCHIVED") return "Terminée";
-  if (ps === "ACTIVE") return "Publiée";
-  if (ps === "CLOSED") return "Résultats";
-  if (ps === "DRAFT" || ps === "SCHEDULED") return "Non publiée";
-  return "Prête";
+  if (typeof input.selected === "boolean") {
+    return input.selected ? "Visible" : "Masquée";
+  }
+  return ps === "ACTIVE" ? "Visible" : "Masquée";
 }
 
 /** Zones desktop LOT-3. */
