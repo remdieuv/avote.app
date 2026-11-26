@@ -101,6 +101,7 @@ test("buildLandingFeedItems : chrono desc + keep after + hide", () => {
     landingKeepPhotosAfter: true,
     landingKeepResultsAfter: true,
     landingKeepMessagesAfter: true,
+    consultationMode: "LIVE",
   };
   const items = buildLandingFeedItems({
     event,
@@ -130,6 +131,7 @@ test("buildLandingFeedItems : chrono desc + keep after + hide", () => {
     closedPolls: [
       {
         id: "q1",
+        status: "CLOSED",
         question: "Q1",
         type: "STANDARD",
         leadEnabled: false,
@@ -143,6 +145,7 @@ test("buildLandingFeedItems : chrono desc + keep after + hide", () => {
       },
       {
         id: "q2",
+        status: "CLOSED",
         question: "Lead",
         type: "STANDARD",
         leadEnabled: true,
@@ -155,6 +158,7 @@ test("buildLandingFeedItems : chrono desc + keep after + hide", () => {
       },
       {
         id: "q3",
+        status: "CLOSED",
         question: "Hidden",
         type: "STANDARD",
         leadEnabled: false,

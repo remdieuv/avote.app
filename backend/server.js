@@ -109,10 +109,11 @@ const {
   mapFavoriteEventCard,
   mapFollowingOrganizerCard,
 } = require("./lib/favoritesFollows");
+const { buildLandingFeedItems } = require("./lib/landingFeed");
 const {
-  isLandingFeedLeadCrm,
-  buildLandingFeedItems,
-} = require("./lib/landingFeed");
+  PUBLIC_POLL_SURFACE,
+  filterPollsForPublicSurface,
+} = require("./lib/publicPollVisibility");
 const {
   CAPTION_MAX,
   PROGRAM_TITLE_MAX,
@@ -4281,7 +4282,7 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       }
     }
 
-    const closedPolls = await prisma.poll.findMany({
+    const closedPollsRaw = await prisma.poll.findMany({
       where: { eventId: event.id, status: "CLOSED" },
       include: {
         options: { orderBy: { order: "asc" } },
@@ -4296,13 +4297,16 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       orderBy: { updatedAt: "desc" },
     });
 
+    // Lot 0 — ne transmettre / agréger que les résultats publiquement exposables
+    // (PR #95 selfServiceSelectedPollIds + landingResultHidden + lead CRM + Live).
+    const closedPolls = filterPollsForPublicSurface({
+      event,
+      polls: closedPollsRaw,
+      surface: PUBLIC_POLL_SURFACE.LANDING_FEED_RESULT,
+    });
+
     const contestPollIds = closedPolls
-      .filter(
-        (p) =>
-          String(p.type || "").toUpperCase() === "CONTEST_ENTRY" &&
-          !p.landingResultHidden &&
-          !isLandingFeedLeadCrm(p),
-      )
+      .filter((p) => String(p.type || "").toUpperCase() === "CONTEST_ENTRY")
       .map((p) => p.id);
     /** @type {Record<string, { displayName: string }[]>} */
     const winnersByPollId = {};
