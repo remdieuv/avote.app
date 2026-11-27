@@ -87,8 +87,8 @@ test("détail : tableau, historique, partage, cumulé vs période", () => {
   assert.match(charts, /pas le suivi individuel|non le suivi individuel|disclaimer/i);
 });
 
-test("pas de graphique historique trompeur (hasHistory)", () => {
-  assert.match(detail, /hasHistory/);
+test("pas de graphique historique trompeur (données vides)", () => {
+  assert.match(detail, /historyPoints|hasHistory/);
   assert.match(detail, /Pas encore assez de données/);
 });
 

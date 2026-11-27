@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 import {
+  formatFrenchDisplayText,
   minisiteResultTypeLabel,
   resolveMiniSiteAccent,
 } from "@/lib/miniSiteUi";
@@ -102,11 +103,16 @@ export function MiniSiteResultDetail({ slug, pollId, landingPayload }) {
         ? result.sharePath
         : "";
 
+  const historyPoints = Array.isArray(history?.volume) ? history.volume : [];
   const showHistory =
-    history &&
-    history.hasHistory === true &&
-    Array.isArray(history.volume) &&
-    history.volume.length >= 2;
+    Boolean(history) &&
+    historyPoints.length >= 1 &&
+    historyPoints.some(
+      (p) =>
+        (Number(p.cumulativeAnswers) || 0) > 0 ||
+        (Number(p.cumulativeRespondents) || 0) > 0,
+    );
+  const showHistorySeries = historyPoints.length >= 1;
 
   return (
     <div
@@ -133,7 +139,7 @@ export function MiniSiteResultDetail({ slug, pollId, landingPayload }) {
         <>
           <header className="ms-rd-header">
             <p className="ms-r-type">{minisiteResultTypeLabel(result.type)}</p>
-            <h1>{result.question}</h1>
+            <h1>{formatFrenchDisplayText(result.question)}</h1>
             {isTestMode ? (
               <p className="ms-r-test-badge" role="status">
                 Mode test — ces résultats ne sont pas définitifs
@@ -148,7 +154,7 @@ export function MiniSiteResultDetail({ slug, pollId, landingPayload }) {
                       ? `${window.location.origin}${result.sharePath || ""}`
                       : result.sharePath || ""
                 }
-                title={result.question}
+                title={formatFrenchDisplayText(result.question)}
                 accent={accent}
               />
             </div>
@@ -217,7 +223,7 @@ export function MiniSiteResultDetail({ slug, pollId, landingPayload }) {
             ) : null}
           </section>
 
-          {showHistory ? (
+          {showHistory && showHistorySeries ? (
             <>
               <section className="ms-rd-section">
                 <div className="ms-rd-section-head">
@@ -244,10 +250,16 @@ export function MiniSiteResultDetail({ slug, pollId, landingPayload }) {
                   </div>
                 </div>
                 <p className="ms-r-note">
-                  Granularité :{" "}
+                  Granularité&nbsp;:{" "}
                   {history.granularity === "day" ? "quotidienne" : "horaire"}
-                  . Les courbes « cumulé » et « par période » sont distinctes.
+                  . Les courbes «&nbsp;cumulé&nbsp;» et «&nbsp;par période&nbsp;» sont
+                  distinctes.
                 </p>
+                {historyPoints.length === 1 ? (
+                  <p className="ms-r-note">
+                    Une seule période disponible pour l’instant.
+                  </p>
+                ) : null}
                 <VolumeHistoryChart
                   volume={history.volume}
                   accent={accent}
@@ -299,6 +311,7 @@ function DetailStyles({ accent }) {
         margin: 0 0 0.5rem;
         font-size: clamp(1.45rem, 3vw, 1.9rem);
         font-weight: 780; letter-spacing: -0.03em; color: #0f172a; line-height: 1.25;
+        overflow-wrap: anywhere; word-break: break-word;
       }
       .ms-rd-actions { margin-top: 0.85rem; }
       .ms-r-type {
@@ -320,7 +333,8 @@ function DetailStyles({ accent }) {
         font-variant-numeric: tabular-nums; color: #0f172a;
       }
       .ms-r-kpis span { font-size: 0.8rem; color: #64748b; }
-      .ms-rd-section { margin-top: 2rem; }
+      .ms-result-detail { overflow-x: clip; }
+      .ms-rd-section { margin-top: 2rem; overflow-x: clip; }
       .ms-rd-section h2 {
         margin: 0 0 0.75rem; font-size: 1.05rem; font-weight: 750; color: #0f172a;
       }
@@ -341,7 +355,7 @@ function DetailStyles({ accent }) {
       .ms-rd-toggle button.is-active {
         background: ${accent}; color: #fff;
       }
-      .ms-rd-table-wrap { overflow-x: auto; }
+      .ms-rd-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
       .ms-rd-table {
         width: 100%; border-collapse: collapse; font-size: 0.92rem;
       }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 import {
+  formatFrenchDisplayText,
   minisiteResultTypeLabel,
   resolveMiniSiteAccent,
 } from "@/lib/miniSiteUi";
@@ -120,7 +121,7 @@ export function MiniSiteResultsList({ slug, landingPayload }) {
             <div className="ms-r-item-head">
               <div>
                 <p className="ms-r-type">{minisiteResultTypeLabel(r.type)}</p>
-                <h2>{r.question}</h2>
+                <h2>{formatFrenchDisplayText(r.question)}</h2>
               </div>
               <Link
                 href={`/e/${encodeURIComponent(slug)}/resultats/${encodeURIComponent(r.pollId)}`}
@@ -193,7 +194,9 @@ function ResultsStyles({ accent }) {
         margin: 0; font-size: 1.15rem; font-weight: 750;
         letter-spacing: -0.02em; color: #0f172a; line-height: 1.3;
         max-width: 40rem;
+        overflow-wrap: anywhere; word-break: break-word;
       }
+      .ms-results { overflow-x: clip; }
       .ms-r-link {
         flex: 0 0 auto;
         color: ${accent};
