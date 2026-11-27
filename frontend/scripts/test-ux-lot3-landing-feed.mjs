@@ -94,15 +94,13 @@ test("visibilité bloc Fil + distinction L'événement", () => {
 
 test("page /e branche la lib (routes/API non touchées)", () => {
   const page = read("app/e/[slug]/page.jsx");
+  const hook = read("lib/useMiniSiteLanding.js");
   assert.match(page, /landingFeedCopy/);
-  assert.match(page, /getLandingFeedEmptyHint/);
-  assert.match(page, /getLandingFeedShareCopy/);
   assert.match(page, /shouldShowLandingFeedBlock/);
   assert.match(page, /getLandingEvenementLead/);
   assert.doesNotMatch(page, /lancer le journal/);
-  assert.match(page, /\/landing\/photos|landing\/photos/);
-  assert.match(page, /canUploadLandingPhoto/);
-  assert.match(page, /INVITE_REQUIRED|inviteEnabled/);
+  assert.match(page, /MiniSiteShell|MiniSiteHome/);
+  assert.match(hook, /INVITE_REQUIRED|inviteEnabled/);
 
   const feed = read("components/event/LandingHybridFeed.jsx");
   assert.match(feed, /subtitle/);

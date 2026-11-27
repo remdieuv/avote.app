@@ -121,7 +121,7 @@ test("Pas de changement API / schéma dans ce lot", () => {
 
 test("React #310 : showcaseLightboxPhotos useMemo avant if (loading)", () => {
   const start = page.indexOf("export default function EventLandingPage");
-  assert.ok(start >= 0);
+  assert.ok(start >= 0, "EventLandingPage introuvable");
   const body = page.slice(start);
   const memoIdx = body.search(/showcaseLightboxPhotos\s*=\s*useMemo/);
   const loadingIdx = body.search(/\n  if \(loading\) \{/);

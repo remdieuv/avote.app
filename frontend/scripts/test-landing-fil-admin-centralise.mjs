@@ -71,12 +71,11 @@ test("ancien panel régie retiré", () => {
   );
 });
 
-test("public inchangé : feed + likes + Partager + rétention soft-refresh", () => {
+test("public : feed hybride conservé en transition mini-site", () => {
   assert.match(publicPage, /LandingHybridFeed/);
-  assert.match(publicPage, /Partager une photo/);
-  assert.match(publicPage, /handleTogglePhotoLike/);
-  assert.match(publicPage, /landingKeepPhotosAfter/);
-  assert.match(publicPage, /CameraIcon/);
+  assert.match(publicPage, /MiniSiteShell|MiniSiteHome/);
+  assert.match(publicPage, /shouldShowLandingFeedBlock|showFeedBlock/);
+  assert.match(publicPage, /setInterval\(softRefresh/);
 });
 
 if (failed > 0) {

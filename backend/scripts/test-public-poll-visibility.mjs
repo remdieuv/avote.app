@@ -376,7 +376,8 @@ test("API landing : where dynamique + soft-refresh ; pas selfServiceOpen dans fi
   assert.doesNotMatch(feedSrc, /status !== "CLOSED"/);
 
   const page = readFileSync(pageLanding, "utf8");
-  assert.match(page, /SOFT_MS/);
+  assert.match(page, /SOFT_MS|30_000/);
+  assert.match(page, /setInterval\(softRefresh/);
   assert.match(page, /\/events\/slug\/.*\/landing/);
 });
 

@@ -99,9 +99,10 @@ test("reload aperçu après save / photos", () => {
   assert.match(page, /key=\{`\$\{mode\}-\$\{slug \?\? "preview"\}-\$\{previewNonce\}`\}/);
 });
 
-test("lien logo/couleur → Salle live", () => {
-  assert.match(page, /Logo et couleur/);
-  assert.match(page, /\/live/);
+test("logo / couleur / chiffres clés gérés sur le mini-site", () => {
+  assert.match(page, /Couleur principale/);
+  assert.match(page, /Envoyer un logo/);
+  assert.match(page, /miniSiteShowKeyStats|Afficher les chiffres clés/);
 });
 
 test("layout desktop sticky + mobile tabs CSS", () => {

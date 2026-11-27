@@ -196,12 +196,10 @@ test("buildLandingFeedItems : chrono desc + keep after + hide", () => {
   assert.equal(afterHiddenPhotos.length, 0);
 });
 
-test("UI publique : LandingHybridFeed + Partager une photo + CameraIcon", () => {
+test("UI publique : LandingHybridFeed conservé en transition mini-site", () => {
   assert.match(page, /LandingHybridFeed/);
-  assert.match(page, /Partager une photo|getLandingFeedShareCopy|feedShare/);
-  assert.match(page, /CameraIcon/);
-  assert.match(page, /handleTogglePhotoLike/);
   assert.match(page, /showFeedBlock|shouldShowLandingFeedBlock/);
+  assert.match(page, /MiniSiteHome|MiniSiteShell/);
   assert.doesNotMatch(page, /Ajouter un moment live/);
   assert.doesNotMatch(page, /momentsEyebrow/);
   assert.match(feedUi, /Fil de l&apos;événement|Fil de l'événement/);
@@ -211,8 +209,8 @@ test("UI publique : LandingHybridFeed + Partager une photo + CameraIcon", () => 
 
 test("soft-refresh feed pendant et après", () => {
   assert.match(page, /phase !== "during" && phase !== "after"/);
-  assert.match(page, /feed: Array\.isArray\(data\.feed\)/);
-  assert.match(page, /landingKeepPhotosAfter/);
+  assert.match(page, /setInterval\(softRefresh/);
+  assert.match(page, /landingKeepPhotosAfter|LandingHybridFeed/);
 });
 
 test("fil admin centralisé (pas régie messages / hide)", () => {

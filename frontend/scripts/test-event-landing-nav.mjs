@@ -44,13 +44,14 @@ test("HeaderAuthCta : Se connecter / Mon compte", () => {
   assert.doesNotMatch(src, /Créer un événement/);
 });
 
-test("Landing /e/[slug] monte EventLandingNav hors hero", () => {
-  const src = read("app/e/[slug]/page.jsx");
-  assert.match(src, /EventLandingNav/);
-  const navIdx = src.lastIndexOf("<EventLandingNav");
-  const heroIdx = src.indexOf('className="ev-landing-hero"');
-  assert.ok(navIdx > 0, "EventLandingNav présent");
-  assert.ok(heroIdx > navIdx, "nav avant le hero (pas overlay)");
+test("Landing /e/[slug] monte EventLandingNav via MiniSiteShell", () => {
+  const page = read("app/e/[slug]/page.jsx");
+  const shell = read("components/minisite/MiniSiteShell.jsx");
+  assert.match(page, /MiniSiteShell/);
+  assert.match(shell, /EventLandingNav/);
+  const navIdx = shell.lastIndexOf("<EventLandingNav");
+  assert.ok(navIdx > 0, "EventLandingNav présent dans le shell");
+  assert.match(shell, /ms-tabs|Navigation du mini-site/);
 });
 
 test("Landing demo monte aussi EventLandingNav", () => {
