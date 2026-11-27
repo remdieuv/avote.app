@@ -284,6 +284,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
   const [toast, setToast] = useState(null);
   const [landingEnabled, setLandingEnabled] = useState(true);
   const [miniSiteShowKeyStats, setMiniSiteShowKeyStats] = useState(true);
+  const [miniSiteTabResults, setMiniSiteTabResults] = useState(false);
   const [landingCoverUrl, setLandingCoverUrl] = useState("");
   const [landingTitle, setLandingTitle] = useState("");
   const [landingDescription, setLandingDescription] = useState("");
@@ -447,6 +448,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
       return (
         landingEnabled !== baseline.landingEnabled ||
         miniSiteShowKeyStats !== baseline.miniSiteShowKeyStats ||
+        miniSiteTabResults !== baseline.miniSiteTabResults ||
         logoUrl !== baseline.logoUrl ||
         primaryColor !== baseline.primaryColor ||
         landingCoverUrl !== baseline.landingCoverUrl ||
@@ -503,6 +505,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
     infoShowOnFinished,
     landingEnabled,
     miniSiteShowKeyStats,
+    miniSiteTabResults,
     landingCoverUrl,
     landingTitle,
     landingDescription,
@@ -594,6 +597,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
       const isof = data.infoShowOnFinished;
       const landEn = Boolean(data.landingEnabled);
       const showKeyStats = data.miniSiteShowKeyStats !== false;
+      const tabResults = data.miniSiteTabResults === true;
       const lcov = data.landingCoverUrl;
       const ltit = data.landingTitle;
       const ldesc = data.landingDescription;
@@ -662,6 +666,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
 
       setLandingEnabled(landEn);
       setMiniSiteShowKeyStats(showKeyStats);
+      setMiniSiteTabResults(tabResults);
       setLandingCoverUrl(
         typeof lcov === "string" ? resolveApiAssetUrl(lcov) : "",
       );
@@ -785,6 +790,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
         infoShowOnFinished: typeof isof === "boolean" ? isof : true,
         landingEnabled: landEn,
         miniSiteShowKeyStats: showKeyStats,
+        miniSiteTabResults: tabResults,
         landingCoverUrl:
           typeof lcov === "string" ? resolveApiAssetUrl(lcov) : "",
         landingTitle: typeof ltit === "string" ? ltit : "",
@@ -901,6 +907,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
         infoShowOnFinished: Boolean(infoShowOnFinished),
         landingEnabled: Boolean(landingEnabled),
         miniSiteShowKeyStats: Boolean(miniSiteShowKeyStats),
+        miniSiteTabResults: Boolean(miniSiteTabResults),
         landingCoverUrl:
           landingCoverUrl.trim() === "" ? null : landingCoverUrl.trim(),
         landingTitle:
@@ -998,6 +1005,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
         infoShowOnFinished: Boolean(infoShowOnFinished),
         landingEnabled: Boolean(landingEnabled),
         miniSiteShowKeyStats: Boolean(miniSiteShowKeyStats),
+        miniSiteTabResults: Boolean(miniSiteTabResults),
         landingCoverUrl: landingCoverUrl.trim(),
         landingTitle: landingTitle.trim(),
         landingDescription: landingDescription.trim(),
@@ -1943,10 +1951,29 @@ export function EventCustomizationEditor({ mode = "live" }) {
                     >
                       Navigation du mini-site
                     </h2>
-                    <p style={{ ...fieldHintStyle, margin: 0 }}>
-                      Pages publiées pour vos visiteurs : Accueil et Participer.
-                      Aucune autre page n’est affichée pour le moment.
+                    <p style={{ ...fieldHintStyle, margin: "0 0 0.85rem" }}>
+                      Accueil et Participer sont toujours disponibles. Activez
+                      l’onglet Résultats pour publier la restitution dédiée.
                     </p>
+                    <label
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                        fontSize: "0.85rem",
+                        color: "#334155",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={miniSiteTabResults}
+                        onChange={(e) =>
+                          setMiniSiteTabResults(e.target.checked)
+                        }
+                      />
+                      Afficher l’onglet Résultats
+                    </label>
                   </section>
 
                   {eventId ? (

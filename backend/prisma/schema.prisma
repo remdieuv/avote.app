@@ -592,6 +592,8 @@ model Vote {
   @@index([pollId])
   @@index([optionId])
   @@index([pollId, voterSessionId])
+  /** Lot 2 — historique résultats mini-site (date_trunc / bornes par poll). */
+  @@index([pollId, createdAt])
 }
 
 model LeadCapture {
