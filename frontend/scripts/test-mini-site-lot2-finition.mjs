@@ -83,11 +83,15 @@ test("graphiques : axes, grille, points, tooltip, mobile", () => {
   assert.match(charts, /ms-r-tooltip/);
   assert.match(charts, /onPointerMove|onPointerDown/);
   assert.match(charts, /buildYTicks|yTickFormat/);
-  assert.match(charts, /max-height:\s*min\(280px/);
+  assert.match(charts, /ms-r-tooltip--start|ms-r-tooltip--end/);
+  assert.match(charts, /tooltipAlign/);
+  assert.match(charts, /max-width:\s*calc\(100% - 16px\)/);
   assert.match(charts, /strokeDasharray|#e2e8f0/);
   assert.match(charts, /<circle/);
   assert.match(charts, /offsetIdenticalSeries|se superposent/);
   assert.match(charts, /yMax.*100|rawMax > 100/);
+  assert.match(charts, /matchMedia|narrow/);
+  assert.doesNotMatch(charts, /max-height:\s*min\(280px/);
 });
 
 test("détail : un seul point d’historique géré ; modes cumulé/période conservés", () => {

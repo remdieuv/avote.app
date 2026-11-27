@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useId, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 /**
  * Graphiques SVG Lot 2 — axes, grille, points, infobulles (desktop + mobile).
@@ -217,11 +224,28 @@ function HistoryLineChart({
   const [active, setActive] = useState(
     /** @type {number | null} */ (null),
   );
+  const [narrow, setNarrow] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return undefined;
+    const mq = window.matchMedia("(max-width: 640px)");
+    const apply = () => setNarrow(Boolean(mq.matches));
+    apply();
+    if (typeof mq.addEventListener === "function") {
+      mq.addEventListener("change", apply);
+      return () => mq.removeEventListener("change", apply);
+    }
+    mq.addListener(apply);
+    return () => mq.removeListener(apply);
+  }, []);
 
   const n = buckets.length;
-  const w = 640;
-  const h = 248;
-  const pad = { t: 18, r: 14, b: 44, l: 46 };
+  /** ViewBox large : width 100% + height auto → pleine largeur du conteneur. */
+  const w = 720;
+  const h = narrow ? 380 : 300;
+  const pad = narrow
+    ? { t: 18, r: 14, b: 58, l: 52 }
+    : { t: 16, r: 12, b: 52, l: 48 };
   const innerW = w - pad.l - pad.r;
   const innerH = h - pad.t - pad.b;
   const yTicks = buildYTicks(yMax);
@@ -275,6 +299,11 @@ function HistoryLineChart({
   };
 
   const activeX = active != null ? xAt(active) : null;
+  const activePct =
+    activeX != null ? (activeX / w) * 100 : 50;
+  /** Alignement auto : évite la troncature à gauche/droite (surtout mobile). */
+  const tooltipAlign =
+    activePct <= 32 ? "start" : activePct >= 68 ? "end" : "center";
 
   return (
     <div className="ms-r-chart" aria-label={title}>
@@ -422,10 +451,12 @@ function HistoryLineChart({
 
         {active != null && buckets[active] ? (
           <div
-            className="ms-r-tooltip"
-            style={{
-              left: `${Math.min(88, Math.max(12, (xAt(active) / w) * 100))}%`,
-            }}
+            className={`ms-r-tooltip ms-r-tooltip--${tooltipAlign}`}
+            style={
+              tooltipAlign === "center"
+                ? { left: `${activePct}%` }
+                : undefined
+            }
           >
             <p className="ms-r-tooltip-date">
               {formatBucketTooltip(buckets[active])}
@@ -470,54 +501,72 @@ function HistoryLineChart({
       {footNote ? <p className="ms-r-note">{footNote}</p> : null}
 
       <style>{`
+        .ms-r-chart {
+          width: 100%;
+        }
         .ms-r-chart-frame {
           position: relative;
           touch-action: pan-y;
           cursor: crosshair;
           margin-top: 0.35rem;
+          width: 100%;
+          overflow: visible;
         }
         .ms-r-svg {
           width: 100%;
           height: auto;
           display: block;
-          max-height: min(280px, 52vw);
           background: #fff;
           border-radius: 10px;
           border: 1px solid #e2e8f0;
         }
-        @media (min-width: 720px) {
-          .ms-r-svg { max-height: 300px; }
-        }
         .ms-r-tick {
-          font-size: 11px;
+          font-size: 13px;
           fill: #64748b;
           font-family: "Segoe UI", "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
         }
-        .ms-r-tick-x { font-size: 10px; }
-        @media (max-width: 480px) {
-          .ms-r-tick { font-size: 10px; }
-          .ms-r-tick-x { font-size: 9px; }
+        .ms-r-tick-x { font-size: 12.5px; }
+        @media (max-width: 640px) {
+          .ms-r-tick { font-size: 16px; }
+          .ms-r-tick-x { font-size: 15px; }
+          .ms-r-tooltip { font-size: 0.88rem; }
         }
         .ms-r-tooltip {
           position: absolute;
           top: 8px;
-          transform: translateX(-50%);
           z-index: 2;
-          min-width: 9.5rem;
-          max-width: min(16rem, 78vw);
-          padding: 0.55rem 0.7rem;
+          box-sizing: border-box;
+          width: max-content;
+          max-width: calc(100% - 16px);
+          padding: 0.6rem 0.75rem;
           border-radius: 10px;
-          background: rgba(15, 23, 42, 0.94);
+          background: rgba(15, 23, 42, 0.95);
           color: #f8fafc;
           box-shadow: 0 8px 24px rgba(15, 23, 42, 0.22);
           pointer-events: none;
-          font-size: 0.78rem;
-          line-height: 1.35;
+          font-size: 0.82rem;
+          line-height: 1.4;
+          white-space: normal;
+          overflow-wrap: anywhere;
+        }
+        .ms-r-tooltip--center {
+          transform: translateX(-50%);
+        }
+        .ms-r-tooltip--start {
+          left: 8px !important;
+          right: auto;
+          transform: none;
+        }
+        .ms-r-tooltip--end {
+          right: 8px;
+          left: auto !important;
+          transform: none;
         }
         .ms-r-tooltip-date {
-          margin: 0 0 0.35rem;
+          margin: 0 0 0.4rem;
           font-weight: 700;
           color: #e2e8f0;
+          white-space: normal;
         }
         .ms-r-tooltip ul {
           list-style: none;
@@ -525,23 +574,29 @@ function HistoryLineChart({
           padding: 0;
           display: flex;
           flex-direction: column;
-          gap: 0.28rem;
+          gap: 0.3rem;
         }
         .ms-r-tooltip li {
           display: grid;
-          grid-template-columns: 10px 1fr auto;
-          gap: 0.4rem;
-          align-items: center;
+          grid-template-columns: 10px minmax(0, 1fr) auto;
+          gap: 0.45rem;
+          align-items: start;
         }
         .ms-r-tooltip-swatch {
           width: 8px;
           height: 8px;
           border-radius: 2px;
+          margin-top: 0.3rem;
         }
-        .ms-r-tooltip-label { color: #cbd5e1; }
+        .ms-r-tooltip-label {
+          color: #cbd5e1;
+          min-width: 0;
+          overflow-wrap: anywhere;
+        }
         .ms-r-tooltip strong {
           font-variant-numeric: tabular-nums;
           font-weight: 700;
+          white-space: nowrap;
         }
         .ms-r-sr-only {
           position: absolute;
