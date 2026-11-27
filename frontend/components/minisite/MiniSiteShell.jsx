@@ -10,7 +10,8 @@ import {
 import { marketingContentMaxWidth } from "@/lib/marketingLayout";
 
 /**
- * Shell commun du mini-site (Lot 1) — nav onglets Accueil / Participer.
+ * Shell commun du mini-site (Lot 1) — nav Accueil / Participer uniquement.
+ * Pas d’onglets futurs (Résultats, Journal, Galerie, À propos), même grisés.
  * @param {{
  *   slug: string;
  *   activeTab: "accueil" | "participer";

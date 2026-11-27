@@ -11,9 +11,13 @@ export const MINI_SITE_TAB_LABELS = Object.freeze({
   "a-propos": "À propos",
 });
 
+/** Onglets Lot 1 exposés dans la navigation publique (ordre fixe). */
+export const MINI_SITE_PUBLIC_TAB_IDS = Object.freeze(["accueil", "participer"]);
+
 /**
  * Onglets visibles Lot 1 : Accueil + Participer uniquement.
- * Les flags API `tabs[].enabled` pour les autres restent false.
+ * Ne jamais inclure Résultats / Journal / Galerie / À propos
+ * (même désactivés ou « Bientôt ») — architecture conservée via flags API.
  * @param {Array<{ id?: string; path?: string; enabled?: boolean; required?: boolean }> | null | undefined} apiTabs
  */
 export function resolveVisibleMiniSiteTabs(apiTabs) {
@@ -25,8 +29,10 @@ export function resolveVisibleMiniSiteTabs(apiTabs) {
   );
   /** @type {{ id: string; path: string; label: string; hrefSuffix: string }[]} */
   const out = [];
-  for (const id of ["accueil", "participer"]) {
+  for (const id of MINI_SITE_PUBLIC_TAB_IDS) {
     const row = byId.get(id);
+    // Défense : ignorer toute entrée non requise / disabled venue de l’API.
+    if (row && row.enabled === false && row.required !== true) continue;
     const path = id === "accueil" ? "" : "participer";
     out.push({
       id,

@@ -1929,7 +1929,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
                     </div>
                   </section>
 
-                  {/* 1c. Onglets du mini-site */}
+                  {/* 1c. Périmètre Lot 1 — pas d’onglets futurs en navigation */}
                   <section style={card}>
                     <h2
                       style={{
@@ -1941,79 +1941,15 @@ export function EventCustomizationEditor({ mode = "live" }) {
                         color: "#64748b",
                       }}
                     >
-                      Onglets du mini-site
+                      Navigation du mini-site
                     </h2>
-                    <p style={{ ...fieldHintStyle, margin: "0 0 0.85rem" }}>
-                      Accueil et Participer sont toujours disponibles. Les
-                      autres onglets arriveront dans les lots suivants — non
-                      activables ici.
+                    <p style={{ ...fieldHintStyle, margin: 0 }}>
+                      Lot 1 : seules les pages Accueil et Participer sont
+                      publiées. Aucun onglet supplémentaire n’est affiché au
+                      public (ni grisé, ni « bientôt »). L’architecture des
+                      onglets futurs reste préparée côté serveur pour les lots
+                      suivants.
                     </p>
-                    <ul
-                      style={{
-                        margin: 0,
-                        padding: 0,
-                        listStyle: "none",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "0.45rem",
-                      }}
-                    >
-                      {[
-                        { id: "accueil", label: "Accueil", state: "Actif" },
-                        {
-                          id: "participer",
-                          label: "Participer",
-                          state: "Actif",
-                        },
-                        {
-                          id: "resultats",
-                          label: "Résultats",
-                          state: "Bientôt",
-                        },
-                        { id: "journal", label: "Journal", state: "Bientôt" },
-                        { id: "galerie", label: "Galerie", state: "Bientôt" },
-                        {
-                          id: "a-propos",
-                          label: "À propos",
-                          state: "Bientôt",
-                        },
-                      ].map((tab) => (
-                        <li
-                          key={tab.id}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: "0.75rem",
-                            padding: "0.55rem 0.7rem",
-                            borderRadius: "10px",
-                            border: "1px solid #e2e8f0",
-                            background: tab.state === "Actif" ? "#fff" : "#f8fafc",
-                            opacity: tab.state === "Actif" ? 1 : 0.78,
-                          }}
-                        >
-                          <span
-                            style={{
-                              fontSize: "0.88rem",
-                              fontWeight: 650,
-                              color: "#334155",
-                            }}
-                          >
-                            {tab.label}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: "0.72rem",
-                              fontWeight: 700,
-                              color:
-                                tab.state === "Actif" ? "#15803d" : "#94a3b8",
-                            }}
-                          >
-                            {tab.state}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
                   </section>
 
                   {eventId ? (

@@ -68,7 +68,7 @@ test("onglets fixes dans l’ordre Accueil → À propos", () => {
   assert.equal(MINI_SITE_TABS[1].required, true);
 });
 
-test("API publique : seuls Accueil/Participer enabled", () => {
+test("API publique : seuls Accueil/Participer dans tabs[] (pas de Bientôt)", () => {
   const fields = miniSiteApiFields(
     {
       miniSiteShowKeyStats: true,
@@ -79,13 +79,13 @@ test("API publique : seuls Accueil/Participer enabled", () => {
     },
     { allowOptionalTabs: false },
   );
-  const byId = Object.fromEntries(fields.tabs.map((t) => [t.id, t]));
-  assert.equal(byId.accueil.enabled, true);
-  assert.equal(byId.participer.enabled, true);
-  assert.equal(byId.resultats.enabled, false);
-  assert.equal(byId.journal.enabled, false);
-  assert.equal(byId.galerie.enabled, false);
-  assert.equal(byId["a-propos"].enabled, false);
+  assert.deepEqual(
+    fields.tabs.map((t) => t.id),
+    ["accueil", "participer"],
+  );
+  assert.equal(fields.tabs.every((t) => t.enabled === true), true);
+  // Flags persistés pour Lots 2–5, hors navigation publique
+  assert.equal(fields.miniSiteTabResults, true);
   assert.equal(fields.miniSiteShowKeyStats, true);
 });
 

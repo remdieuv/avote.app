@@ -56,18 +56,25 @@ function miniSiteApiFields(event, opts = {}) {
     return {
       id: t.id,
       path: t.path,
+      // Lot 1 public : jamais enabled (pages non développées).
       enabled: allowOptional ? flagOn : false,
       required: false,
       available: false,
     };
   });
+  // Navigation publique Lot 1 : uniquement les onglets réellement accessibles
+  // (pas d’entrées grisées / « Bientôt »). Les flags miniSiteTab* restent
+  // exposés pour préparer les Lots 2–5.
+  const publicTabs = allowOptional
+    ? tabs
+    : tabs.filter((t) => t.enabled === true);
   return {
     miniSiteShowKeyStats: showKeyStats,
     miniSiteTabResults: flags.results,
     miniSiteTabJournal: flags.journal,
     miniSiteTabGallery: flags.gallery,
     miniSiteTabAbout: flags.about,
-    tabs,
+    tabs: publicTabs,
   };
 }
 
