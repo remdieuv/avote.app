@@ -127,12 +127,35 @@ test("admin landing : QR distincts + keyStats ; pas d’onglets Bientôt", () =>
   assert.match(admin, /Navigation du mini-site/);
   assert.match(admin, /Accueil et Participer/);
   assert.doesNotMatch(admin, /Bientôt/);
+  assert.doesNotMatch(admin, /Lot\s*1|lots suivants/i);
   assert.doesNotMatch(
     admin,
     /id:\s*["']resultats["']|id:\s*["']journal["']|id:\s*["']galerie["']/,
   );
   assert.match(admin, /\/join/);
   assert.match(admin, /\/e\//);
+});
+
+test("Accueil : bouton Partager lisible sur hero sombre", () => {
+  assert.match(home, /variant=["']onDark["']/);
+  assert.match(
+    read("components/minisite/MiniSiteShare.jsx"),
+    /variant === ["']onDark["']|onDark/,
+  );
+  assert.match(
+    read("components/minisite/MiniSiteShare.jsx"),
+    /Partager/,
+  );
+  assert.doesNotMatch(
+    home,
+    /MiniSiteShare[^>]*accent=["']#fff["']/,
+  );
+});
+
+test("Participer : textes publics sans jargon technique", () => {
+  assert.doesNotMatch(part, /Aucun nouveau moteur de vote/);
+  assert.doesNotMatch(part, /participation directe restent inchangés/);
+  assert.doesNotMatch(part, /consultation existante/);
 });
 
 test("libellés mini-site (pas de constructeur)", () => {

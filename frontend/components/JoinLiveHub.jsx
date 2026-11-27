@@ -1488,8 +1488,12 @@ export function JoinLiveHub({ slug }) {
                 WebkitBackdropFilter: "blur(6px)",
               }}
             >
-              <span className="join-landing-link-label-long">📸 Voir les photos & infos</span>
-              <span className="join-landing-link-label-short">📸 Photos & infos</span>
+              <span className="join-landing-link-label-long">
+                Mini-site de l&apos;événement
+              </span>
+              <span className="join-landing-link-label-short">
+                Mini-site de l&apos;événement
+              </span>
             </Link>
           </div>
         ) : null}

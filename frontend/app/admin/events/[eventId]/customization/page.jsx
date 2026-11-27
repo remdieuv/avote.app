@@ -1929,7 +1929,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
                     </div>
                   </section>
 
-                  {/* 1c. Périmètre Lot 1 — pas d’onglets futurs en navigation */}
+                  {/* Navigation publique du mini-site */}
                   <section style={card}>
                     <h2
                       style={{
@@ -1944,11 +1944,8 @@ export function EventCustomizationEditor({ mode = "live" }) {
                       Navigation du mini-site
                     </h2>
                     <p style={{ ...fieldHintStyle, margin: 0 }}>
-                      Lot 1 : seules les pages Accueil et Participer sont
-                      publiées. Aucun onglet supplémentaire n’est affiché au
-                      public (ni grisé, ni « bientôt »). L’architecture des
-                      onglets futurs reste préparée côté serveur pour les lots
-                      suivants.
+                      Pages publiées pour vos visiteurs : Accueil et Participer.
+                      Aucune autre page n’est affichée pour le moment.
                     </p>
                   </section>
 
