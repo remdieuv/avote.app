@@ -24,11 +24,19 @@ const MINI_SITE_TABS = Object.freeze([
 ]);
 
 /**
+ * Onglets facultatifs déjà développés (activables côté public si flag orga).
+ * Lots 3–5 restent non disponibles.
+ */
+const MINI_SITE_AVAILABLE_OPTIONAL_FLAGS = Object.freeze(
+  new Set(["miniSiteTabResults"]),
+);
+
+/**
  * Champs API stables pour le mini-site (lecture publique / admin).
- * Lot 1 : onglets facultatifs toujours `enabled: false` côté public
- * (flags persistés pour Lots 2–5, non activables tant que non développés).
  * @param {object | null | undefined} event
  * @param {{ allowOptionalTabs?: boolean }} [opts]
+ *   allowOptionalTabs=true : admin — expose tous les flags (y compris non dispo).
+ *   false/absent : public — seuls Accueil/Participer + onglets disponibles activés.
  */
 function miniSiteApiFields(event, opts = {}) {
   const allowOptional = opts.allowOptionalTabs === true;
@@ -44,7 +52,13 @@ function miniSiteApiFields(event, opts = {}) {
   };
   const tabs = MINI_SITE_TABS.map((t) => {
     if (t.required) {
-      return { id: t.id, path: t.path, enabled: true, required: true };
+      return {
+        id: t.id,
+        path: t.path,
+        enabled: true,
+        required: true,
+        available: true,
+      };
     }
     const flagOn = t.flag === "miniSiteTabResults"
       ? flags.results
@@ -53,18 +67,17 @@ function miniSiteApiFields(event, opts = {}) {
         : t.flag === "miniSiteTabGallery"
           ? flags.gallery
           : flags.about;
+    const available = MINI_SITE_AVAILABLE_OPTIONAL_FLAGS.has(t.flag);
+    const enabled = available && flagOn;
     return {
       id: t.id,
       path: t.path,
-      // Lot 1 public : jamais enabled (pages non développées).
-      enabled: allowOptional ? flagOn : false,
+      enabled: allowOptional ? flagOn : enabled,
       required: false,
-      available: false,
+      available,
     };
   });
-  // Navigation publique Lot 1 : uniquement les onglets réellement accessibles
-  // (pas d’entrées grisées / « Bientôt »). Les flags miniSiteTab* restent
-  // exposés pour préparer les Lots 2–5.
+  // Navigation publique : uniquement les onglets réellement accessibles.
   const publicTabs = allowOptional
     ? tabs
     : tabs.filter((t) => t.enabled === true);
@@ -300,6 +313,7 @@ function pickLatestPublicNews(messages) {
 
 module.exports = {
   MINI_SITE_TABS,
+  MINI_SITE_AVAILABLE_OPTIONAL_FLAGS,
   miniSiteApiFields,
   resolveMiniSitePublicStatus,
   fetchMiniSitePublicStats,

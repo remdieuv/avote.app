@@ -10,11 +10,11 @@ import {
 import { marketingContentMaxWidth } from "@/lib/marketingLayout";
 
 /**
- * Shell commun du mini-site (Lot 1) — nav Accueil / Participer uniquement.
- * Pas d’onglets futurs (Résultats, Journal, Galerie, À propos), même grisés.
+ * Shell commun du mini-site — Accueil / Participer + Résultats si activé (Lot 2).
+ * Pas d’onglets Lots 3–5 (Journal, Galerie, À propos), même grisés.
  * @param {{
  *   slug: string;
- *   activeTab: "accueil" | "participer";
+ *   activeTab: "accueil" | "participer" | "resultats";
  *   primaryColor?: string | null;
  *   tabs?: unknown;
  *   children: import("react").ReactNode;

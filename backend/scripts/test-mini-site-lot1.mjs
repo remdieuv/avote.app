@@ -68,7 +68,7 @@ test("onglets fixes dans l’ordre Accueil → À propos", () => {
   assert.equal(MINI_SITE_TABS[1].required, true);
 });
 
-test("API publique : seuls Accueil/Participer dans tabs[] (pas de Bientôt)", () => {
+test("API publique : Accueil/Participer + Résultats si activé (pas de Lots 3–5)", () => {
   const fields = miniSiteApiFields(
     {
       miniSiteShowKeyStats: true,
@@ -81,12 +81,19 @@ test("API publique : seuls Accueil/Participer dans tabs[] (pas de Bientôt)", ()
   );
   assert.deepEqual(
     fields.tabs.map((t) => t.id),
-    ["accueil", "participer"],
+    ["accueil", "participer", "resultats"],
   );
   assert.equal(fields.tabs.every((t) => t.enabled === true), true);
-  // Flags persistés pour Lots 2–5, hors navigation publique
   assert.equal(fields.miniSiteTabResults, true);
   assert.equal(fields.miniSiteShowKeyStats, true);
+  const off = miniSiteApiFields(
+    { miniSiteTabResults: false, miniSiteTabJournal: true },
+    { allowOptionalTabs: false },
+  );
+  assert.deepEqual(
+    off.tabs.map((t) => t.id),
+    ["accueil", "participer"],
+  );
 });
 
 test("admin peut lire les flags persistés sans les activer au public", () => {

@@ -43,15 +43,25 @@ const landingEntry = read("app/admin/events/[eventId]/landing/page.jsx");
 const hook = read("lib/useMiniSiteLanding.js");
 const labels = read("lib/eventPageLabels.js");
 
-test("onglets visibles Lot 1 = Accueil + Participer uniquement", () => {
-  const tabs = resolveVisibleMiniSiteTabs([
+test("onglets visibles : Accueil + Participer + Résultats si enabled", () => {
+  const withResults = resolveVisibleMiniSiteTabs([
     { id: "accueil", enabled: true },
     { id: "participer", enabled: true },
     { id: "resultats", enabled: true },
     { id: "journal", enabled: true },
   ]);
   assert.deepEqual(
-    tabs.map((t) => t.id),
+    withResults.map((t) => t.id),
+    ["accueil", "participer", "resultats"],
+  );
+  const without = resolveVisibleMiniSiteTabs([
+    { id: "accueil", enabled: true },
+    { id: "participer", enabled: true },
+    { id: "resultats", enabled: false },
+    { id: "journal", enabled: true },
+  ]);
+  assert.deepEqual(
+    without.map((t) => t.id),
     ["accueil", "participer"],
   );
   assert.equal(MINI_SITE_TAB_LABELS.resultats, "Résultats");
@@ -81,16 +91,16 @@ test("Participer : route /e/[slug]/participer sans iframe ni moteur dupliqué", 
   assert.doesNotMatch(part, /submitVote|POST.*\/votes/);
 });
 
-test("Shell : pas d’onglets indisponibles (ni Bientôt)", () => {
+test("Shell : pas d’onglets Lots 3–5 (ni Bientôt)", () => {
   assert.match(shell, /resolveVisibleMiniSiteTabs/);
   assert.match(shell, /EventLandingNav/);
   assert.match(shell, /AVOTE/);
-  assert.doesNotMatch(shell, /resultats|journal|galerie|a-propos/);
   assert.doesNotMatch(shell, /Bientôt/);
+  assert.doesNotMatch(shell, /journal|galerie|a-propos/);
   const tabs = resolveVisibleMiniSiteTabs([
     { id: "accueil", enabled: true },
     { id: "participer", enabled: true },
-    { id: "resultats", enabled: true },
+    { id: "resultats", enabled: false },
     { id: "journal", enabled: false },
     { id: "galerie", enabled: true },
     { id: "a-propos", enabled: true },
@@ -117,7 +127,7 @@ test("hook : invite / SEO / landing off préservés", () => {
   assert.match(hook, /meta\[name="robots"\]/);
 });
 
-test("admin landing : QR distincts + keyStats ; pas d’onglets Bientôt", () => {
+test("admin landing : QR distincts + keyStats + toggle Résultats", () => {
   assert.match(landingEntry, /mode=["']landing["']/);
   assert.match(admin, /QRCodeSVG/);
   assert.match(admin, /QR participation directe/);
@@ -125,12 +135,13 @@ test("admin landing : QR distincts + keyStats ; pas d’onglets Bientôt", () =>
   assert.match(admin, /miniSiteShowKeyStats/);
   assert.match(admin, /Afficher les chiffres clés/);
   assert.match(admin, /Navigation du mini-site/);
-  assert.match(admin, /Accueil et Participer/);
+  assert.match(admin, /Afficher l’onglet Résultats/);
+  assert.match(admin, /miniSiteTabResults/);
   assert.doesNotMatch(admin, /Bientôt/);
   assert.doesNotMatch(admin, /Lot\s*1|lots suivants/i);
   assert.doesNotMatch(
     admin,
-    /id:\s*["']resultats["']|id:\s*["']journal["']|id:\s*["']galerie["']/,
+    /id:\s*["']journal["']|id:\s*["']galerie["']/,
   );
   assert.match(admin, /\/join/);
   assert.match(admin, /\/e\//);

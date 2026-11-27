@@ -117,10 +117,15 @@ const {
 } = require("./lib/publicPollVisibility");
 const {
   miniSiteApiFields,
+  MINI_SITE_AVAILABLE_OPTIONAL_FLAGS,
   resolveMiniSitePublicStatus,
   fetchMiniSitePublicStats,
   pickLatestPublicNews,
 } = require("./lib/miniSite");
+const {
+  buildMinisiteResultsList,
+  buildMinisiteResultDetail,
+} = require("./lib/miniSiteResults");
 const {
   CAPTION_MAX,
   PROGRAM_TITLE_MAX,
@@ -577,6 +582,15 @@ const landingLikeLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Trop de likes. Réessayez plus tard." },
+});
+
+/** Soft refresh résultats mini-site — plafond large pour salles jusqu’à ~1000. */
+const minisiteResultsLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Trop de requêtes. Réessayez plus tard." },
 });
 
 const CUSTOM_THEME_MODES = new Set(["dark", "light", "auto"]);
@@ -4452,6 +4466,182 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
   }
 });
 
+/**
+ * Lot 2 — charge l’événement landing + invite + flag onglet Résultats.
+ * @returns {Promise<{ ok: true; event: object } | { ok: false; status: number; body: object }>}
+ */
+async function resolveMinisiteResultsAccess(req, slug) {
+  const event = await prisma.event.findUnique({
+    where: { slug },
+    select: {
+      id: true,
+      slug: true,
+      userId: true,
+      landingEnabled: true,
+      inviteEnabled: true,
+      miniSiteTabResults: true,
+      isLiveConsumed: true,
+      consultationMode: true,
+      selfServiceSelectedPollIds: true,
+      selfServiceOpen: true,
+      visibility: true,
+    },
+  });
+  if (!event) {
+    return {
+      ok: false,
+      status: 404,
+      body: { error: "Événement introuvable." },
+    };
+  }
+  if (!event.landingEnabled) {
+    return {
+      ok: false,
+      status: 404,
+      body: { error: "Landing introuvable.", enabled: false, slug: event.slug },
+    };
+  }
+  const access = await resolveLandingSouvenirAccess(event, req);
+  if (!access.allowed) {
+    return {
+      ok: false,
+      status: 401,
+      body: {
+        error: "Souvenirs protégés — connexion et invitation requises.",
+        code: "INVITE_REQUIRED",
+        enabled: true,
+        slug: event.slug,
+        inviteEnabled: true,
+        invitePath: `/invite/${event.slug}`,
+        joinPath: `/join/${event.slug}`,
+      },
+    };
+  }
+  if (!event.miniSiteTabResults) {
+    return {
+      ok: false,
+      status: 404,
+      body: {
+        error: "Onglet Résultats désactivé.",
+        code: "MINISITE_RESULTS_DISABLED",
+        enabled: false,
+        slug: event.slug,
+      },
+    };
+  }
+  return { ok: true, event };
+}
+
+/** Lot 2 — liste des résultats publics du mini-site. */
+app.get(
+  "/events/slug/:slug/landing/results",
+  minisiteResultsLimiter,
+  async (req, res) => {
+    try {
+      res.setHeader("Cache-Control", "no-store");
+      const slug =
+        typeof req.params.slug === "string" ? req.params.slug.trim() : "";
+      if (!slug) {
+        return res.status(400).json({ error: "Slug invalide." });
+      }
+      const gate = await resolveMinisiteResultsAccess(req, slug);
+      if (!gate.ok) {
+        return res.status(gate.status).json(gate.body);
+      }
+      const payload = await buildMinisiteResultsList(prisma, gate.event, {
+        slug: gate.event.slug,
+      });
+      return res.json(payload);
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: "Erreur serveur." });
+    }
+  },
+);
+
+/** Lot 2 — détail d’un résultat (+ historique optionnel ?history=1). */
+app.get(
+  "/events/slug/:slug/landing/results/:pollId",
+  minisiteResultsLimiter,
+  async (req, res) => {
+    try {
+      res.setHeader("Cache-Control", "no-store");
+      const slug =
+        typeof req.params.slug === "string" ? req.params.slug.trim() : "";
+      const pollId =
+        typeof req.params.pollId === "string" ? req.params.pollId.trim() : "";
+      if (!slug || !pollId) {
+        return res.status(400).json({ error: "Paramètres invalides." });
+      }
+      const gate = await resolveMinisiteResultsAccess(req, slug);
+      if (!gate.ok) {
+        return res.status(gate.status).json(gate.body);
+      }
+      const includeHistory =
+        req.query.history === "1" ||
+        req.query.history === "true" ||
+        req.query.includeHistory === "1";
+      const built = await buildMinisiteResultDetail(
+        prisma,
+        gate.event,
+        pollId,
+        { slug: gate.event.slug, includeHistory },
+      );
+      if (!built.ok) {
+        return res.status(built.status || 404).json({
+          error: "Résultat introuvable.",
+        });
+      }
+      return res.json(built.payload);
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: "Erreur serveur." });
+    }
+  },
+);
+
+/** Lot 2 — historique seul (évite de recalculer à chaque soft refresh). */
+app.get(
+  "/events/slug/:slug/landing/results/:pollId/history",
+  minisiteResultsLimiter,
+  async (req, res) => {
+    try {
+      res.setHeader("Cache-Control", "no-store");
+      const slug =
+        typeof req.params.slug === "string" ? req.params.slug.trim() : "";
+      const pollId =
+        typeof req.params.pollId === "string" ? req.params.pollId.trim() : "";
+      if (!slug || !pollId) {
+        return res.status(400).json({ error: "Paramètres invalides." });
+      }
+      const gate = await resolveMinisiteResultsAccess(req, slug);
+      if (!gate.ok) {
+        return res.status(gate.status).json(gate.body);
+      }
+      const built = await buildMinisiteResultDetail(
+        prisma,
+        gate.event,
+        pollId,
+        { slug: gate.event.slug, includeHistory: true },
+      );
+      if (!built.ok) {
+        return res.status(built.status || 404).json({
+          error: "Résultat introuvable.",
+        });
+      }
+      return res.json({
+        enabled: true,
+        slug: gate.event.slug,
+        pollId,
+        history: built.payload.history,
+      });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: "Erreur serveur." });
+    }
+  },
+);
+
 /** Détail événement + sondages triés (régie admin) */
 app.get("/events/:eventId", requireAuth, async (req, res) => {
   try {
@@ -5232,7 +5422,7 @@ app.patch("/events/:eventId/customization", requireAuth, async (req, res) => {
       data.miniSiteShowKeyStats = body.miniSiteShowKeyStats;
     }
 
-    // Lot 1 : onglets facultatifs persistés mais non activables (Lots 2–5).
+    // Lot 2 : Résultats activable ; Lots 3–5 toujours non disponibles.
     for (const tabKey of [
       "miniSiteTabResults",
       "miniSiteTabJournal",
@@ -5244,13 +5434,16 @@ app.patch("/events/:eventId/customization", requireAuth, async (req, res) => {
       if (typeof v !== "boolean") {
         return res.status(400).json({ error: `${tabKey} invalide.` });
       }
-      if (v === true) {
+      if (
+        v === true &&
+        !MINI_SITE_AVAILABLE_OPTIONAL_FLAGS.has(tabKey)
+      ) {
         return res.status(400).json({
           error: `${tabKey} : onglet non disponible dans cette version.`,
           code: "MINISITE_TAB_NOT_AVAILABLE",
         });
       }
-      data[tabKey] = false;
+      data[tabKey] = v === true && MINI_SITE_AVAILABLE_OPTIONAL_FLAGS.has(tabKey);
     }
 
     for (const keepKey of [
