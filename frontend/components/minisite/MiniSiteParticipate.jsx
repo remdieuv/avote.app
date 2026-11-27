@@ -195,8 +195,8 @@ export function MiniSiteParticipate({ slug, landingPayload }) {
             }}
           >
             {ssMode
-              ? "Répondez à votre rythme aux questions proposées. Vous serez redirigé vers la consultation existante."
-              : "Rejoignez la salle interactive pour voter en direct. Aucun nouveau moteur de vote."}
+              ? "Répondez à votre rythme aux questions proposées."
+              : "Rejoignez la salle interactive pour voter en direct."}
           </p>
         )}
       </header>
@@ -327,8 +327,7 @@ export function MiniSiteParticipate({ slug, landingPayload }) {
             lineHeight: 1.5,
           }}
         >
-          En mode Live animé, les questions sont pilotées depuis la salle. Le
-          QR et le lien de participation directe restent inchangés.
+          Les questions sont présentées en direct depuis la salle.
         </p>
       ) : null}
     </div>

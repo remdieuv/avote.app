@@ -142,10 +142,10 @@ export default function InviteAccessPage() {
               {title}
             </h1>
             <p style={{ margin: "0 0 1.25rem", color: "#475569", lineHeight: 1.55 }}>
-              Les souvenirs de cet événement sont protégés. Connectez-vous avec un
-              compte AVOTE gratuit, puis saisissez le code fourni par
-              l’organisateur. Le live et le vote restent accessibles sans code via
-              la salle.
+              Les souvenirs de cet événement sont protégés. Pour saisir votre
+              code d’accès, connectez-vous ou créez d’abord un compte AVOTE
+              gratuit. Le live et le vote restent accessibles sans code via la
+              salle.
             </p>
 
             {!meta.inviteEnabled ? (
@@ -173,15 +173,34 @@ export default function InviteAccessPage() {
                 {!isAuthed ? (
                   <div
                     style={{
-                      marginBottom: "1rem",
-                      padding: "0.9rem 1rem",
+                      padding: "1rem 1.05rem",
                       borderRadius: 12,
                       border: "1px solid #bfdbfe",
                       background: "#eff6ff",
                     }}
                   >
-                    <p style={{ margin: "0 0 0.65rem", fontWeight: 700 }}>
-                      Étape 1 — Compte AVOTE
+                    <p
+                      style={{
+                        margin: "0 0 0.45rem",
+                        fontWeight: 800,
+                        fontSize: "0.95rem",
+                        color: "#1e3a8a",
+                      }}
+                    >
+                      Connexion requise
+                    </p>
+                    <p
+                      style={{
+                        margin: "0 0 0.9rem",
+                        color: "#334155",
+                        lineHeight: 1.5,
+                        fontSize: "0.92rem",
+                      }}
+                    >
+                      Avant de pouvoir saisir le code d’accès fourni par
+                      l’organisateur, connectez-vous ou créez un compte AVOTE
+                      gratuit. Vous reviendrez ensuite automatiquement sur cette
+                      page.
                     </p>
                     <Link
                       href={`/login?next=${encodeURIComponent(`/invite/${slug}`)}`}
@@ -191,47 +210,66 @@ export default function InviteAccessPage() {
                     </Link>
                   </div>
                 ) : (
-                  <p
-                    style={{
-                      margin: "0 0 0.85rem",
-                      fontSize: "0.86rem",
-                      fontWeight: 700,
-                      color: "#15803d",
-                    }}
-                  >
-                    Compte connecté — saisissez le code d’accès.
-                  </p>
-                )}
-
-                <form onSubmit={(ev) => void redeem(ev)} style={{ display: "grid", gap: "0.65rem" }}>
-                  <label style={{ display: "grid", gap: "0.3rem", fontWeight: 800, fontSize: "0.8rem", color: "#475569" }}>
-                    Code d’accès
-                    <input
-                      value={code}
-                      onChange={(ev) => setCode(ev.target.value)}
-                      autoComplete="one-time-code"
-                      placeholder="Code fourni par l’organisateur"
-                      disabled={!isAuthed || busy}
+                  <>
+                    <p
                       style={{
-                        minHeight: 44,
-                        padding: "0.55rem 0.7rem",
-                        borderRadius: 10,
-                        border: "1px solid #cbd5e1",
-                        fontSize: "1rem",
-                        letterSpacing: "0.08em",
-                        textTransform: "uppercase",
+                        margin: "0 0 0.85rem",
+                        fontSize: "0.86rem",
+                        fontWeight: 700,
+                        color: "#15803d",
                       }}
-                    />
-                  </label>
-                  {error ? (
-                    <p role="alert" style={{ margin: 0, color: "#b91c1c", fontWeight: 700 }}>
-                      {error}
+                    >
+                      Compte connecté — saisissez le code d’accès.
                     </p>
-                  ) : null}
-                  <button type="submit" disabled={!isAuthed || busy || !code.trim()} style={btnPrimary}>
-                    {busy ? "Vérification…" : "Accéder aux souvenirs"}
-                  </button>
-                </form>
+                    <form
+                      onSubmit={(ev) => void redeem(ev)}
+                      style={{ display: "grid", gap: "0.65rem" }}
+                    >
+                      <label
+                        style={{
+                          display: "grid",
+                          gap: "0.3rem",
+                          fontWeight: 800,
+                          fontSize: "0.8rem",
+                          color: "#475569",
+                        }}
+                      >
+                        Code d’accès
+                        <input
+                          value={code}
+                          onChange={(ev) => setCode(ev.target.value)}
+                          autoComplete="one-time-code"
+                          placeholder="Code fourni par l’organisateur"
+                          disabled={busy}
+                          style={{
+                            minHeight: 44,
+                            padding: "0.55rem 0.7rem",
+                            borderRadius: 10,
+                            border: "1px solid #cbd5e1",
+                            fontSize: "1rem",
+                            letterSpacing: "0.08em",
+                            textTransform: "uppercase",
+                          }}
+                        />
+                      </label>
+                      {error ? (
+                        <p
+                          role="alert"
+                          style={{ margin: 0, color: "#b91c1c", fontWeight: 700 }}
+                        >
+                          {error}
+                        </p>
+                      ) : null}
+                      <button
+                        type="submit"
+                        disabled={busy || !code.trim()}
+                        style={btnPrimary}
+                      >
+                        {busy ? "Vérification…" : "Accéder aux souvenirs"}
+                      </button>
+                    </form>
+                  </>
+                )}
               </>
             ) : null}
 

@@ -21,4 +21,4 @@ export const EVENT_PAGE_STRUCTURED_HINT =
   "Infos structurées pour « Les événements » (annuaire). Distinctes des textes libres du mini-site.";
 
 export const EVENT_PAGE_ROLE_HINT =
-  "Mini-site public (Accueil / Participer) : identité de l’événement, accès à la participation et souvenirs. Activé automatiquement — le vote par QR /join reste inchangé.";
+  "Mini-site public (Accueil / Participer) : présentation de l’événement, accès à la participation et souvenirs. Activé automatiquement pour chaque événement.";

@@ -8,10 +8,17 @@ import { useCallback, useState } from "react";
  *   url: string;
  *   title?: string;
  *   accent?: string;
+ *   variant?: "default" | "onDark";
  * }} props
  */
-export function MiniSiteShare({ url, title, accent = "#0f766e" }) {
+export function MiniSiteShare({
+  url,
+  title,
+  accent = "#0f766e",
+  variant = "default",
+}) {
   const [copied, setCopied] = useState(false);
+  const onDark = variant === "onDark";
 
   const onShare = useCallback(async () => {
     const shareTitle = title || "Événement AVOTE";
@@ -36,18 +43,22 @@ export function MiniSiteShare({ url, title, accent = "#0f766e" }) {
     <button
       type="button"
       onClick={() => void onShare()}
+      aria-label={copied ? "Lien copié" : "Partager le mini-site"}
       style={{
         display: "inline-flex",
         alignItems: "center",
         gap: "0.45rem",
         padding: "0.65rem 1.05rem",
         borderRadius: "999px",
-        border: `1px solid color-mix(in srgb, ${accent} 28%, #e2e8f0)`,
-        background: "#fff",
-        color: accent,
+        border: onDark
+          ? "1px solid rgba(255,255,255,0.55)"
+          : `1px solid color-mix(in srgb, ${accent} 28%, #e2e8f0)`,
+        background: onDark ? "rgba(255,255,255,0.14)" : "#fff",
+        color: onDark ? "#fff" : accent,
         fontWeight: 650,
         fontSize: "0.9rem",
         cursor: "pointer",
+        textShadow: onDark ? "0 1px 2px rgba(15,23,42,0.35)" : undefined,
       }}
     >
       {copied ? "Lien copié" : "Partager"}

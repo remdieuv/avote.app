@@ -242,7 +242,11 @@ export function MiniSiteHome({ slug, payload }) {
             >
               Comment participer
             </Link>
-            <MiniSiteShare url={shareUrl} title={title} accent="#fff" />
+            <MiniSiteShare
+              url={shareUrl}
+              title={title}
+              variant="onDark"
+            />
           </div>
         </div>
       </section>

@@ -26,6 +26,14 @@ test("page /invite/[slug]", () => {
   assert.match(src, /\/invite\/\$\{encodeURIComponent\(slug\)\}\/redeem/);
   assert.match(src, /aucun code requis pour voter/i);
   assert.match(src, /login\?next=/);
+  assert.match(src, /Connexion requise/);
+  assert.match(
+    src,
+    /Avant de pouvoir saisir le code d’accès|connectez-vous ou créez/i,
+  );
+  // Pas de formulaire code affiché tant que non connecté
+  assert.match(src, /!isAuthed\s*\?\s*\(/);
+  assert.match(src, /Compte connecté — saisissez le code/);
 });
 
 test("EventInvitesPanel : avertissement + rotate", () => {
