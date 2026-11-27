@@ -79,6 +79,7 @@ export default function MiniSiteResultDetailPage() {
         typeof payload.primaryColor === "string" ? payload.primaryColor : null
       }
       tabs={payload.tabs}
+      landingPayload={payload}
     >
       <MiniSiteResultDetail
         slug={slug}

@@ -87,6 +87,7 @@ export default function MiniSiteResultsPage() {
         typeof payload.primaryColor === "string" ? payload.primaryColor : null
       }
       tabs={payload.tabs}
+      landingPayload={payload}
     >
       <MiniSiteResultsList slug={slug} landingPayload={payload} />
     </MiniSiteShell>

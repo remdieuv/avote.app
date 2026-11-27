@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { EventLandingNav } from "@/components/event/EventLandingNav";
+import { MiniSiteCompactBanner } from "@/components/minisite/MiniSiteCompactBanner";
 import {
   miniSiteTabHref,
   resolveMiniSiteAccent,
@@ -11,12 +12,14 @@ import { marketingContentMaxWidth } from "@/lib/marketingLayout";
 
 /**
  * Shell commun du mini-site — Accueil / Participer + Résultats si activé (Lot 2).
+ * Bandeau compact sous la nav sur toutes les pages hors Accueil (prépare Lots 3–5).
  * Pas d’onglets Lots 3–5 (Journal, Galerie, À propos), même grisés.
  * @param {{
  *   slug: string;
- *   activeTab: "accueil" | "participer" | "resultats";
+ *   activeTab: "accueil" | "participer" | "resultats" | string;
  *   primaryColor?: string | null;
  *   tabs?: unknown;
+ *   landingPayload?: Record<string, unknown> | null;
  *   children: import("react").ReactNode;
  * }} props
  */
@@ -25,12 +28,14 @@ export function MiniSiteShell({
   activeTab,
   primaryColor,
   tabs,
+  landingPayload = null,
   children,
 }) {
   const accent = resolveMiniSiteAccent(primaryColor);
   const visibleTabs = resolveVisibleMiniSiteTabs(
     /** @type {any} */ (tabs),
   );
+  const showCompactBanner = activeTab !== "accueil";
 
   return (
     <main
@@ -122,6 +127,10 @@ export function MiniSiteShell({
           })}
         </div>
       </nav>
+
+      {showCompactBanner ? (
+        <MiniSiteCompactBanner payload={landingPayload} />
+      ) : null}
 
       {children}
 
