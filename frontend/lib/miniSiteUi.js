@@ -115,3 +115,30 @@ export function minisiteResultTypeLabel(type) {
       return "Question";
   }
 }
+
+/** Espace fine insécable (avant ? ! : ;). */
+const NNBSP = "\u202F";
+/** Espace insécable. */
+const NBSP = "\u00A0";
+
+/**
+ * Typographie française d’affichage uniquement (ne pas persister en base).
+ * Empêche ?, !, :, ; et % de se retrouver seuls en début de ligne.
+ * @param {unknown} text
+ * @returns {string}
+ */
+export function formatFrenchDisplayText(text) {
+  if (typeof text !== "string") return "";
+  let s = text.normalize("NFC");
+  // Espaces existants (y compris NNBSP/NBSP) avant ponctuation haute → NNBSP
+  s = s.replace(/[\s\u00A0\u202F]*([?!:;])/g, `${NNBSP}$1`);
+  // % : NBSP avant
+  s = s.replace(/[\s\u00A0\u202F]*(%)/g, `${NBSP}$1`);
+  // Guillemets français
+  s = s.replace(/«\s*/g, `«${NBSP}`);
+  s = s.replace(/\s*»/g, `${NBSP}»`);
+  // Ponctuation haute collée au mot précédent sans espace → NNBSP
+  s = s.replace(/([^\s\u00A0\u202F])([?!:;])/g, `$1${NNBSP}$2`);
+  s = s.replace(/([^\s\u00A0\u202F])(%)/g, `$1${NBSP}$2`);
+  return s;
+}

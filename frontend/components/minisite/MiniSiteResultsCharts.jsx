@@ -1,8 +1,9 @@
 "use client";
 
+import { useCallback, useId, useMemo, useRef, useState } from "react";
+
 /**
- * Graphiques SVG légers pour la restitution résultats (Lot 2).
- * Pas de dépendance chart — performance et contrôle des libellés.
+ * Graphiques SVG Lot 2 — axes, grille, points, infobulles (desktop + mobile).
  */
 
 /**
@@ -73,44 +74,37 @@ export function ResultBarsChart({ options, accent, percentMayExceed100 }) {
  */
 export function VolumeHistoryChart({ volume, accent, mode = "cumulative" }) {
   const points = Array.isArray(volume) ? volume : [];
-  if (points.length < 2) return null;
 
-  const w = 640;
-  const h = 200;
-  const pad = { t: 16, r: 16, b: 28, l: 40 };
-  const innerW = w - pad.l - pad.r;
-  const innerH = h - pad.t - pad.b;
+  const series = useMemo(() => {
+    const respKey =
+      mode === "period" ? "periodRespondents" : "cumulativeRespondents";
+    const ansKey = mode === "period" ? "periodAnswers" : "cumulativeAnswers";
+    return [
+      {
+        id: "respondents",
+        label: mode === "period" ? "Répondants (période)" : "Répondants (cumulé)",
+        color: accent,
+        dash: null,
+        values: points.map((p) => Number(p[respKey]) || 0),
+      },
+      {
+        id: "answers",
+        label: mode === "period" ? "Réponses (période)" : "Réponses (cumulé)",
+        color: "#475569",
+        dash: "5 4",
+        values: points.map((p) => Number(p[ansKey]) || 0),
+      },
+    ];
+  }, [points, mode, accent]);
 
-  const ys = points.map((p) =>
-    mode === "period"
-      ? Math.max(
-          Number(p.periodRespondents) || 0,
-          Number(p.periodAnswers) || 0,
-        )
-      : Math.max(
-          Number(p.cumulativeRespondents) || 0,
-          Number(p.cumulativeAnswers) || 0,
-        ),
+  if (points.length === 0) return null;
+
+  const yMax = niceCeil(
+    Math.max(1, ...series.flatMap((s) => s.values)),
   );
-  const yMax = Math.max(1, ...ys);
-
-  const xAt = (i) =>
-    pad.l + (points.length === 1 ? innerW / 2 : (i / (points.length - 1)) * innerW);
-  const yAt = (v) => pad.t + innerH - (v / yMax) * innerH;
-
-  const pathFor = (key) =>
-    points
-      .map((p, i) => {
-        const v =
-          mode === "period"
-            ? Number(p[key === "resp" ? "periodRespondents" : "periodAnswers"]) ||
-              0
-            : Number(
-                p[key === "resp" ? "cumulativeRespondents" : "cumulativeAnswers"],
-              ) || 0;
-        return `${i === 0 ? "M" : "L"} ${xAt(i).toFixed(1)} ${yAt(v).toFixed(1)}`;
-      })
-      .join(" ");
+  const overlapIdentical =
+    series[0].values.length > 0 &&
+    series[0].values.every((v, i) => v === series[1].values[i]);
 
   const title =
     mode === "period"
@@ -118,63 +112,20 @@ export function VolumeHistoryChart({ volume, accent, mode = "cumulative" }) {
       : "Évolution cumulée des répondants et réponses";
 
   return (
-    <div className="ms-r-chart" aria-label={title}>
-      <p className="ms-r-chart-title">{title}</p>
-      <svg viewBox={`0 0 ${w} ${h}`} role="img" className="ms-r-svg">
-        <line
-          x1={pad.l}
-          y1={pad.t + innerH}
-          x2={pad.l + innerW}
-          y2={pad.t + innerH}
-          stroke="#cbd5e1"
-          strokeWidth="1"
-        />
-        <path
-          d={pathFor("resp")}
-          fill="none"
-          stroke={accent}
-          strokeWidth="2.5"
-          strokeLinejoin="round"
-        />
-        <path
-          d={pathFor("ans")}
-          fill="none"
-          stroke="#64748b"
-          strokeWidth="2"
-          strokeDasharray="5 4"
-          strokeLinejoin="round"
-        />
-        <text x={pad.l} y={h - 6} fontSize="11" fill="#94a3b8">
-          {formatBucketShort(points[0]?.bucketStart)}
-        </text>
-        <text
-          x={pad.l + innerW}
-          y={h - 6}
-          fontSize="11"
-          fill="#94a3b8"
-          textAnchor="end"
-        >
-          {formatBucketShort(points[points.length - 1]?.bucketStart)}
-        </text>
-      </svg>
-      <ul className="ms-r-legend">
-        <li>
-          <span style={{ background: accent }} /> Répondants
-          {mode === "period" ? " (période)" : " (cumulé)"}
-        </li>
-        <li>
-          <span
-            style={{
-              background: "#64748b",
-              backgroundImage:
-                "repeating-linear-gradient(90deg,#64748b 0 4px,transparent 4px 8px)",
-            }}
-          />{" "}
-          Réponses
-          {mode === "period" ? " (période)" : " (cumulé)"}
-        </li>
-      </ul>
-    </div>
+    <HistoryLineChart
+      title={title}
+      buckets={points.map((p) => p.bucketStart)}
+      series={series}
+      yMax={yMax}
+      yTickFormat={(v) => String(v)}
+      unitLabel=""
+      overlapNote={
+        overlapIdentical
+          ? "Les courbes se superposent : répondants et réponses sont identiques à chaque date."
+          : null
+      }
+      offsetIdenticalSeries
+    />
   );
 }
 
@@ -197,108 +148,500 @@ export function ProportionsHistoryChart({
 }) {
   const points = Array.isArray(series) ? series : [];
   const opts = Array.isArray(options) ? options : [];
-  if (points.length < 2 || opts.length === 0) return null;
+  if (points.length === 0 || opts.length === 0) return null;
 
   const palette = buildPalette(accent, opts.length);
-  const w = 640;
-  const h = 220;
-  const pad = { t: 16, r: 16, b: 28, l: 40 };
-  const innerW = w - pad.l - pad.r;
-  const innerH = h - pad.t - pad.b;
-  const yMax = percentMayExceed100
-    ? Math.max(
-        100,
-        ...points.flatMap((p) =>
-          (p.options || []).map((o) => Number(o.cumulativePercent) || 0),
-        ),
-      )
-    : 100;
+  const lineSeries = opts.map((opt, oi) => ({
+    id: String(opt.id),
+    label: String(opt.label || "Choix"),
+    color: palette[oi],
+    dash: null,
+    values: points.map((p) => {
+      const row = (p.options || []).find(
+        (o) => String(o.optionId) === String(opt.id),
+      );
+      return Number(row?.cumulativePercent) || 0;
+    }),
+  }));
 
-  const xAt = (i) =>
-    pad.l + (points.length === 1 ? innerW / 2 : (i / (points.length - 1)) * innerW);
-  const yAt = (v) => pad.t + innerH - (Math.min(v, yMax) / yMax) * innerH;
+  const rawMax = Math.max(0, ...lineSeries.flatMap((s) => s.values));
+  // Axe 0–100 % ; étendu uniquement si des valeurs dépassent (choix multiple).
+  const yMax = rawMax > 100 ? niceCeil(rawMax) : 100;
 
   return (
-    <div
-      className="ms-r-chart"
-      aria-label="Évolution des proportions cumulées par choix"
-    >
-      <p className="ms-r-chart-title">
-        Évolution des proportions cumulées par choix
-      </p>
-      {disclaimer ? <p className="ms-r-note">{disclaimer}</p> : null}
-      <svg viewBox={`0 0 ${w} ${h}`} role="img" className="ms-r-svg">
-        <line
-          x1={pad.l}
-          y1={pad.t + innerH}
-          x2={pad.l + innerW}
-          y2={pad.t + innerH}
-          stroke="#cbd5e1"
-          strokeWidth="1"
-        />
-        {opts.map((opt, oi) => {
-          const d = points
-            .map((p, i) => {
-              const row = (p.options || []).find(
-                (o) => String(o.optionId) === String(opt.id),
-              );
-              const pct = Number(row?.cumulativePercent) || 0;
-              return `${i === 0 ? "M" : "L"} ${xAt(i).toFixed(1)} ${yAt(pct).toFixed(1)}`;
-            })
-            .join(" ");
-          return (
-            <path
-              key={opt.id}
-              d={d}
-              fill="none"
-              stroke={palette[oi]}
-              strokeWidth="2.2"
-              strokeLinejoin="round"
+    <HistoryLineChart
+      title="Évolution des proportions cumulées par choix"
+      buckets={points.map((p) => p.bucketStart)}
+      series={lineSeries}
+      yMax={yMax}
+      yTickFormat={(v) => `${v}\u00A0%`}
+      unitLabel="%"
+      leadNote={disclaimer || null}
+      footNote={
+        percentMayExceed100
+          ? "Choix multiple : les pourcentages sont relatifs aux répondants et peuvent dépasser 100\u00A0% au total."
+          : null
+      }
+    />
+  );
+}
+
+/**
+ * @param {{
+ *   title: string;
+ *   buckets: string[];
+ *   series: { id: string; label: string; color: string; dash?: string | null; values: number[] }[];
+ *   yMax: number;
+ *   yTickFormat: (v: number) => string;
+ *   unitLabel?: string;
+ *   leadNote?: string | null;
+ *   footNote?: string | null;
+ *   overlapNote?: string | null;
+ *   offsetIdenticalSeries?: boolean;
+ * }} props
+ */
+function HistoryLineChart({
+  title,
+  buckets,
+  series,
+  yMax,
+  yTickFormat,
+  unitLabel = "",
+  leadNote = null,
+  footNote = null,
+  overlapNote = null,
+  offsetIdenticalSeries = false,
+}) {
+  const uid = useId();
+  const wrapRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const [active, setActive] = useState(
+    /** @type {number | null} */ (null),
+  );
+
+  const n = buckets.length;
+  const w = 640;
+  const h = 248;
+  const pad = { t: 18, r: 14, b: 44, l: 46 };
+  const innerW = w - pad.l - pad.r;
+  const innerH = h - pad.t - pad.b;
+  const yTicks = buildYTicks(yMax);
+  const xTickIdx = pickXTickIndexes(n);
+
+  const xAt = useCallback(
+    (i) =>
+      pad.l +
+      (n <= 1 ? innerW / 2 : (i / Math.max(1, n - 1)) * innerW),
+    [n, innerW, pad.l],
+  );
+  const yAt = useCallback(
+    (v) => pad.t + innerH - (Math.max(0, Math.min(v, yMax)) / yMax) * innerH,
+    [pad.t, innerH, yMax],
+  );
+
+  /** Décalage vertical léger si deux séries sont égales (évite superposition totale). */
+  const seriesOffset = (si, i) => {
+    if (!offsetIdenticalSeries || series.length < 2) return 0;
+    const a = series[0].values[i];
+    const b = series[1].values[i];
+    if (a !== b) return 0;
+    if (si === 0) return -3;
+    if (si === 1) return 3;
+    return 0;
+  };
+
+  const pickIndexFromClientX = useCallback(
+    (clientX) => {
+      const el = wrapRef.current;
+      if (!el || n === 0) return null;
+      const rect = el.getBoundingClientRect();
+      const svgX = ((clientX - rect.left) / Math.max(1, rect.width)) * w;
+      let best = 0;
+      let bestDist = Infinity;
+      for (let i = 0; i < n; i += 1) {
+        const d = Math.abs(xAt(i) - svgX);
+        if (d < bestDist) {
+          bestDist = d;
+          best = i;
+        }
+      }
+      return best;
+    },
+    [n, w, xAt],
+  );
+
+  const onPointer = (e) => {
+    const idx = pickIndexFromClientX(e.clientX);
+    if (idx != null) setActive(idx);
+  };
+
+  const activeX = active != null ? xAt(active) : null;
+
+  return (
+    <div className="ms-r-chart" aria-label={title}>
+      <p className="ms-r-chart-title">{title}</p>
+      {leadNote ? <p className="ms-r-note">{leadNote}</p> : null}
+      {overlapNote ? <p className="ms-r-note">{overlapNote}</p> : null}
+
+      <div
+        ref={wrapRef}
+        className="ms-r-chart-frame"
+        onPointerMove={onPointer}
+        onPointerDown={onPointer}
+        onPointerLeave={() => setActive(null)}
+        role="img"
+        aria-describedby={`${uid}-desc`}
+      >
+        <svg
+          viewBox={`0 0 ${w} ${h}`}
+          className="ms-r-svg"
+          preserveAspectRatio="xMidYMid meet"
+        >
+          {/* Grille + axe Y */}
+          {yTicks.map((tick) => {
+            const y = yAt(tick);
+            return (
+              <g key={`y-${tick}`}>
+                <line
+                  x1={pad.l}
+                  y1={y}
+                  x2={pad.l + innerW}
+                  y2={y}
+                  stroke="#e2e8f0"
+                  strokeWidth="1"
+                />
+                <text
+                  x={pad.l - 8}
+                  y={y + 3.5}
+                  textAnchor="end"
+                  className="ms-r-tick"
+                >
+                  {yTickFormat(tick)}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Axe X */}
+          <line
+            x1={pad.l}
+            y1={pad.t + innerH}
+            x2={pad.l + innerW}
+            y2={pad.t + innerH}
+            stroke="#cbd5e1"
+            strokeWidth="1.25"
+          />
+          <line
+            x1={pad.l}
+            y1={pad.t}
+            x2={pad.l}
+            y2={pad.t + innerH}
+            stroke="#cbd5e1"
+            strokeWidth="1.25"
+          />
+
+          {xTickIdx.map((i) => {
+            const x = xAt(i);
+            const label = formatBucketAxis(buckets[i]);
+            const anchor =
+              i === 0 ? "start" : i === n - 1 ? "end" : "middle";
+            return (
+              <g key={`x-${i}`}>
+                <line
+                  x1={x}
+                  y1={pad.t + innerH}
+                  x2={x}
+                  y2={pad.t + innerH + 5}
+                  stroke="#94a3b8"
+                  strokeWidth="1"
+                />
+                <text
+                  x={x}
+                  y={h - 12}
+                  textAnchor={anchor}
+                  className="ms-r-tick ms-r-tick-x"
+                >
+                  {label}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Guide actif */}
+          {activeX != null ? (
+            <line
+              x1={activeX}
+              y1={pad.t}
+              x2={activeX}
+              y2={pad.t + innerH}
+              stroke="#94a3b8"
+              strokeWidth="1"
+              strokeDasharray="3 3"
             />
-          );
-        })}
-      </svg>
+          ) : null}
+
+          {/* Courbes + points */}
+          {series.map((s, si) => {
+            const d = s.values
+              .map((v, i) => {
+                const x = xAt(i);
+                const y = yAt(v) + seriesOffset(si, i);
+                return `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
+              })
+              .join(" ");
+            return (
+              <g key={s.id}>
+                <path
+                  d={d}
+                  fill="none"
+                  stroke={s.color}
+                  strokeWidth="2.4"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                  strokeDasharray={s.dash || undefined}
+                />
+                {s.values.map((v, i) => {
+                  const x = xAt(i);
+                  const y = yAt(v) + seriesOffset(si, i);
+                  const isActive = active === i;
+                  return (
+                    <circle
+                      key={`${s.id}-${i}`}
+                      cx={x}
+                      cy={y}
+                      r={isActive ? 5 : n === 1 ? 5 : 3.2}
+                      fill={si === 1 && offsetIdenticalSeries ? "#fff" : s.color}
+                      stroke={s.color}
+                      strokeWidth={si === 1 && offsetIdenticalSeries ? 2 : 0}
+                    />
+                  );
+                })}
+              </g>
+            );
+          })}
+        </svg>
+
+        {active != null && buckets[active] ? (
+          <div
+            className="ms-r-tooltip"
+            style={{
+              left: `${Math.min(88, Math.max(12, (xAt(active) / w) * 100))}%`,
+            }}
+          >
+            <p className="ms-r-tooltip-date">
+              {formatBucketTooltip(buckets[active])}
+            </p>
+            <ul>
+              {series.map((s) => (
+                <li key={s.id}>
+                  <span
+                    className="ms-r-tooltip-swatch"
+                    style={{ background: s.color }}
+                  />
+                  <span className="ms-r-tooltip-label">{s.label}</span>
+                  <strong>
+                    {formatValue(s.values[active], unitLabel)}
+                  </strong>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+
+      <p id={`${uid}-desc`} className="ms-r-sr-only">
+        Touchez ou survolez le graphique pour afficher la date et les valeurs.
+      </p>
+
       <ul className="ms-r-legend">
-        {opts.map((opt, oi) => (
-          <li key={opt.id}>
-            <span style={{ background: palette[oi] }} /> {opt.label}
+        {series.map((s) => (
+          <li key={s.id}>
+            <span
+              style={{
+                background: s.color,
+                backgroundImage: s.dash
+                  ? `repeating-linear-gradient(90deg,${s.color} 0 4px,transparent 4px 8px)`
+                  : undefined,
+              }}
+            />{" "}
+            {s.label}
           </li>
         ))}
       </ul>
-      {percentMayExceed100 ? (
-        <p className="ms-r-note">
-          Choix multiple : les pourcentages sont relatifs aux répondants et
-          peuvent dépasser 100&nbsp;% au total.
-        </p>
-      ) : null}
+      {footNote ? <p className="ms-r-note">{footNote}</p> : null}
+
+      <style>{`
+        .ms-r-chart-frame {
+          position: relative;
+          touch-action: pan-y;
+          cursor: crosshair;
+          margin-top: 0.35rem;
+        }
+        .ms-r-svg {
+          width: 100%;
+          height: auto;
+          display: block;
+          max-height: min(280px, 52vw);
+          background: #fff;
+          border-radius: 10px;
+          border: 1px solid #e2e8f0;
+        }
+        @media (min-width: 720px) {
+          .ms-r-svg { max-height: 300px; }
+        }
+        .ms-r-tick {
+          font-size: 11px;
+          fill: #64748b;
+          font-family: "Segoe UI", "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+        }
+        .ms-r-tick-x { font-size: 10px; }
+        @media (max-width: 480px) {
+          .ms-r-tick { font-size: 10px; }
+          .ms-r-tick-x { font-size: 9px; }
+        }
+        .ms-r-tooltip {
+          position: absolute;
+          top: 8px;
+          transform: translateX(-50%);
+          z-index: 2;
+          min-width: 9.5rem;
+          max-width: min(16rem, 78vw);
+          padding: 0.55rem 0.7rem;
+          border-radius: 10px;
+          background: rgba(15, 23, 42, 0.94);
+          color: #f8fafc;
+          box-shadow: 0 8px 24px rgba(15, 23, 42, 0.22);
+          pointer-events: none;
+          font-size: 0.78rem;
+          line-height: 1.35;
+        }
+        .ms-r-tooltip-date {
+          margin: 0 0 0.35rem;
+          font-weight: 700;
+          color: #e2e8f0;
+        }
+        .ms-r-tooltip ul {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 0.28rem;
+        }
+        .ms-r-tooltip li {
+          display: grid;
+          grid-template-columns: 10px 1fr auto;
+          gap: 0.4rem;
+          align-items: center;
+        }
+        .ms-r-tooltip-swatch {
+          width: 8px;
+          height: 8px;
+          border-radius: 2px;
+        }
+        .ms-r-tooltip-label { color: #cbd5e1; }
+        .ms-r-tooltip strong {
+          font-variant-numeric: tabular-nums;
+          font-weight: 700;
+        }
+        .ms-r-sr-only {
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          padding: 0;
+          margin: -1px;
+          overflow: hidden;
+          clip: rect(0,0,0,0);
+          border: 0;
+        }
+      `}</style>
     </div>
   );
 }
 
+/** @param {number} max */
+function niceCeil(max) {
+  if (!Number.isFinite(max) || max <= 0) return 1;
+  if (max <= 5) return 5;
+  if (max <= 10) return 10;
+  const pow = 10 ** Math.floor(Math.log10(max));
+  const n = Math.ceil(max / pow);
+  if (n <= 2) return 2 * pow;
+  if (n <= 5) return 5 * pow;
+  return 10 * pow;
+}
+
+/** @param {number} yMax */
+function buildYTicks(yMax) {
+  const steps = 4;
+  /** @type {number[]} */
+  const ticks = [];
+  for (let i = 0; i <= steps; i += 1) {
+    ticks.push(Math.round((yMax * i) / steps));
+  }
+  return [...new Set(ticks)];
+}
+
+/** @param {number} n */
+function pickXTickIndexes(n) {
+  if (n <= 0) return [];
+  if (n === 1) return [0];
+  if (n === 2) return [0, 1];
+  if (n <= 5) return Array.from({ length: n }, (_, i) => i);
+  const mid = Math.floor((n - 1) / 2);
+  const q1 = Math.floor((n - 1) / 4);
+  const q3 = Math.floor((3 * (n - 1)) / 4);
+  return [...new Set([0, q1, mid, q3, n - 1])].sort((a, b) => a - b);
+}
+
 /** @param {string | null | undefined} iso */
-function formatBucketShort(iso) {
+function formatBucketAxis(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const day = d.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "short",
+  });
+  const time = d.toLocaleTimeString("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return `${day}\n${time}`.replace("\n", " · ");
+}
+
+/** @param {string | null | undefined} iso */
+function formatBucketTooltip(iso) {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleString("fr-FR", {
+    weekday: "short",
     day: "2-digit",
     month: "short",
+    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+/** @param {number} v @param {string} unit */
+function formatValue(v, unit) {
+  const n = Number(v) || 0;
+  const s = n.toLocaleString("fr-FR", { maximumFractionDigits: 1 });
+  return unit ? `${s}\u00A0${unit}` : s;
 }
 
 /** @param {string} accent @param {number} n */
 function buildPalette(accent, n) {
   const base = [
     accent,
-    "#0ea5e9",
-    "#f59e0b",
-    "#64748b",
-    "#14b8a6",
-    "#e11d48",
-    "#8b5cf6",
-    "#84cc16",
+    "#0284c7",
+    "#d97706",
+    "#be123c",
+    "#0f766e",
+    "#7c3aed",
+    "#4d7c0f",
+    "#0e7490",
   ];
   const out = [];
   for (let i = 0; i < n; i += 1) out.push(base[i % base.length]);
