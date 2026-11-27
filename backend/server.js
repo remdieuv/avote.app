@@ -116,6 +116,12 @@ const {
   landingFeedResultPollsWhere,
 } = require("./lib/publicPollVisibility");
 const {
+  miniSiteApiFields,
+  resolveMiniSitePublicStatus,
+  fetchMiniSitePublicStats,
+  pickLatestPublicNews,
+} = require("./lib/miniSite");
+const {
   CAPTION_MAX,
   PROGRAM_TITLE_MAX,
   PROGRAM_TIME_MAX,
@@ -309,6 +315,7 @@ function eventCustomizationJson(event) {
       landingKeepPhotosAfter: true,
       landingKeepResultsAfter: true,
       landingKeepMessagesAfter: true,
+      ...miniSiteApiFields(null, { allowOptionalTabs: true }),
     };
   }
   return {
@@ -347,6 +354,7 @@ function eventCustomizationJson(event) {
     landingKeepPhotosAfter: event.landingKeepPhotosAfter !== false,
     landingKeepResultsAfter: event.landingKeepResultsAfter !== false,
     landingKeepMessagesAfter: event.landingKeepMessagesAfter !== false,
+    ...miniSiteApiFields(event, { allowOptionalTabs: true }),
   };
 }
 
@@ -3544,7 +3552,13 @@ app.post("/events/:eventId/duplicate", requireAuth, async (req, res) => {
             typeof source.infoShowOnFinished === "boolean"
               ? source.infoShowOnFinished
               : true,
-          landingEnabled: Boolean(source.landingEnabled),
+          landingEnabled: true,
+          miniSiteShowKeyStats: source.miniSiteShowKeyStats !== false,
+          /** Onglets facultatifs : off jusqu’aux Lots 2–5. */
+          miniSiteTabResults: false,
+          miniSiteTabJournal: false,
+          miniSiteTabGallery: false,
+          miniSiteTabAbout: false,
           landingCoverUrl: source.landingCoverUrl ?? null,
           landingTitle: source.landingTitle ?? null,
           landingDescription: source.landingDescription ?? null,
@@ -4408,6 +4422,7 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       landingKeepResultsAfter: info.landingKeepResultsAfter !== false,
       landingKeepMessagesAfter: info.landingKeepMessagesAfter !== false,
       joinPath: `/join/${event.slug}`,
+      participatePath: `/e/${event.slug}/participer`,
       inviteEnabled: isInviteProtectionEnabled(event),
       mediaProtectionEnabled: isMediaProtectionEnabled(event),
       hasInviteAccess: true,
@@ -4416,6 +4431,13 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       voteState: String(event.voteState || "").toLowerCase(),
       displayState: String(event.displayState || "").toLowerCase(),
       isLocked: Boolean(event.isLocked),
+      participantsLimit: Number(event.participantsLimit || 0),
+      participantsUsed: Number(event.participantsUsed || 0),
+      ...consultationModeApiFields(event),
+      ...miniSiteApiFields(event, { allowOptionalTabs: false }),
+      publicStatus: resolveMiniSitePublicStatus(event),
+      publicStats: await fetchMiniSitePublicStats(prisma, event),
+      latestNews: pickLatestPublicNews(event.landingMessages || []),
       ...visibilityFields,
       seo: {
         robots: isInviteProtectionEnabled(event)
@@ -5201,6 +5223,34 @@ app.patch("/events/:eventId/customization", requireAuth, async (req, res) => {
         return res.status(400).json({ error: "landingEnabled invalide." });
       }
       data.landingEnabled = body.landingEnabled;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, "miniSiteShowKeyStats")) {
+      if (typeof body.miniSiteShowKeyStats !== "boolean") {
+        return res.status(400).json({ error: "miniSiteShowKeyStats invalide." });
+      }
+      data.miniSiteShowKeyStats = body.miniSiteShowKeyStats;
+    }
+
+    // Lot 1 : onglets facultatifs persistés mais non activables (Lots 2–5).
+    for (const tabKey of [
+      "miniSiteTabResults",
+      "miniSiteTabJournal",
+      "miniSiteTabGallery",
+      "miniSiteTabAbout",
+    ]) {
+      if (!Object.prototype.hasOwnProperty.call(body, tabKey)) continue;
+      const v = body[tabKey];
+      if (typeof v !== "boolean") {
+        return res.status(400).json({ error: `${tabKey} invalide.` });
+      }
+      if (v === true) {
+        return res.status(400).json({
+          error: `${tabKey} : onglet non disponible dans cette version.`,
+          code: "MINISITE_TAB_NOT_AVAILABLE",
+        });
+      }
+      data[tabKey] = false;
     }
 
     for (const keepKey of [
@@ -8328,6 +8378,8 @@ app.post("/polls", requireAuth, async (req, res) => {
             description: descriptionInit,
             status: "PUBLISHED",
             visibility: EVENT_VISIBILITY.PRIVATE,
+            /** Mini-site auto (Lot 1) — n’ouvre pas Discover / PUBLIC. */
+            landingEnabled: true,
             /** Régie : premier sondage sélectionné, vote fermé jusqu’à « Lancer le vote » */
             liveState: "WAITING",
             voteState: "CLOSED",
@@ -8473,6 +8525,8 @@ app.post("/polls", requireAuth, async (req, res) => {
           description: descriptionInit,
           status: "PUBLISHED",
           visibility: EVENT_VISIBILITY.PRIVATE,
+          /** Mini-site auto (Lot 1) — n’ouvre pas Discover / PUBLIC. */
+          landingEnabled: true,
           /** Régie : sondage actif affichable, vote fermé jusqu’à POST /polls/:id/open */
           liveState: "WAITING",
           voteState: "CLOSED",

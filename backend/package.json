@@ -37,6 +37,8 @@
     "test:free-offer": "node scripts/test-free-offer.mjs",
     "test:user-role-migration": "node scripts/test-user-role-migration.mjs",
     "test:consultation-mode": "node scripts/test-consultation-mode.mjs",
+    "test:mini-site-lot1": "node scripts/test-mini-site-lot1.mjs",
+    "test:public-poll-visibility": "node scripts/test-public-poll-visibility.mjs",
     "test:load-harness": "node scripts/test-load-harness.mjs",
     "load:plan": "node scripts/load-harness.mjs plan",
     "load:guard": "node scripts/load-harness.mjs guard",

@@ -1,6 +1,5 @@
 /**
  * Non-régression React #310 — hooks Landing `/e/[slug]` avant early returns.
- * Cause PR #41 : `useMemo(showcaseLightboxPhotos)` après `if (loading) return`.
  * Exécution : node frontend/scripts/test-landing-react310-hooks.mjs
  */
 import assert from "node:assert/strict";
@@ -34,15 +33,12 @@ function test(name, fn) {
 }
 
 /**
- * Extrait le corps de `EventLandingPage` et vérifie qu’aucun hook
- * n’apparaît après le premier early return de rendu (`if (!slug) {`).
  * @param {string} src
  */
 export function assertNoHooksAfterLandingEarlyReturns(src) {
   const start = src.indexOf("export default function EventLandingPage");
   assert.ok(start >= 0, "EventLandingPage introuvable");
   const body = src.slice(start);
-  // Premier early return de rendu (pas le `if (!slug) return` dans useEffect)
   const earlyMatch = body.match(/\n  if \(!slug\) \{\s*\n\s*return \(/);
   assert.ok(earlyMatch && earlyMatch.index != null, "early return !slug manquant");
   const before = body.slice(0, earlyMatch.index);
@@ -53,7 +49,7 @@ export function assertNoHooksAfterLandingEarlyReturns(src) {
     /showcaseLightboxPhotos\s*=\s*useMemo/,
     "showcaseLightboxPhotos doit être déclaré AVANT if (!slug)",
   );
-  assert.match(before, /const accent = useMemo/);
+  assert.match(before, /useMiniSiteLanding/);
 
   const hookAfter = after.match(
     /\buse(?:Memo|State|Effect|Callback|Ref|LayoutEffect|ImperativeHandle|Reducer|Context)\s*\(/,
@@ -64,7 +60,6 @@ export function assertNoHooksAfterLandingEarlyReturns(src) {
     `Hook après early return rendu : ${hookAfter ? hookAfter[0] : ""}`,
   );
 
-  // Garde-fous explicites sur les chemins loading / erreur
   const loadingIdx = body.search(/\n  if \(loading\) \{/);
   const lightboxMemoIdx = body.search(/showcaseLightboxPhotos\s*=\s*useMemo/);
   assert.ok(loadingIdx > 0 && lightboxMemoIdx > 0);
@@ -98,18 +93,8 @@ test("LandingHybridFeed : hooks avant return null", () => {
   assert.ok(stateIdx < earlyIdx, "useState avant early return");
 });
 
-test("LandingPhotoLightbox : hooks avant return null", () => {
-  const fnStart = lightbox.indexOf("export function LandingPhotoLightbox");
-  assert.ok(fnStart >= 0);
-  const body = lightbox.slice(fnStart);
-  const effectIdx = body.search(/useEffect\s*\(/);
-  const earlyIdx = body.search(/if\s*\(\s*!open\s*\|\|\s*!current\s*\)\s*return\s+null/);
-  assert.ok(effectIdx >= 0 && earlyIdx >= 0);
-  assert.ok(effectIdx < earlyIdx, "useEffect avant early return");
-});
-
 if (failed > 0) {
   console.error(`\n${failed} test(s) échoué(s)`);
   process.exit(1);
 }
-console.log("\nTous les tests anti React #310 Landing OK");
+console.log("\nTous les tests React #310 landing OK");

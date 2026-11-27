@@ -55,7 +55,7 @@ test("Mes événements → Invitations branché sur /me/invitations", () => {
 });
 
 test("Landing /e redirige vers /invite si INVITE_REQUIRED", () => {
-  const src = readFileSync(join(root, "app/e/[slug]/page.jsx"), "utf8");
+  const src = readFileSync(join(root, "lib/useMiniSiteLanding.js"), "utf8");
   assert.match(src, /INVITE_REQUIRED/);
   assert.match(src, /\/invite\//);
 });

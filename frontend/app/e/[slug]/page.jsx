@@ -1,182 +1,50 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { resolveApiAssetUrlNullable } from "@/lib/assetUrl";
-import { adminFetch, apiBaseBrowser } from "@/lib/config";
-import {
-  LANDING_PHOTO_TOO_HEAVY_MESSAGE,
-  prepareLandingPhotoForUpload,
-} from "@/lib/compressLandingPhoto";
+import { useParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { EventLandingDemoPage } from "@/components/event/EventLandingDemoPage";
-import { EventLandingNav } from "@/components/event/EventLandingNav";
 import { LandingEvenementPresentation } from "@/components/event/LandingEvenementPresentation";
-import {
-  CameraIcon,
-  LandingHybridFeed,
-} from "@/components/event/LandingHybridFeed";
+import { LandingHybridFeed } from "@/components/event/LandingHybridFeed";
 import {
   LandingPhotoLightbox,
   normalizeLightboxPhotos,
 } from "@/components/event/LandingPhotoLightbox";
+import { MiniSiteHome } from "@/components/minisite/MiniSiteHome";
+import { MiniSiteShell } from "@/components/minisite/MiniSiteShell";
+import { adminFetch, apiBaseBrowser } from "@/lib/config";
 import {
   getLandingEvenementLead,
-  getLandingFeedEmptyHint,
-  getLandingFeedShareCopy,
   getLandingFeedSubtitle,
   shouldShowLandingFeedBlock,
 } from "@/lib/landingFeedCopy";
 import {
-  hasLandingComplementaryInfo,
   shouldShowLandingEvenementSection,
   sortLandingProgramItems,
 } from "@/lib/landingEventPresentation";
-import { getOrCreateVoterSessionId } from "@/lib/votes/voter-session";
 import { marketingContentMaxWidth } from "@/lib/marketingLayout";
 import { resolveEventLandingPhase } from "@/lib/participantLiveFlow";
-
-function mapApiError(body, status) {
-  const code = String(body?.error || "").trim();
-  const message = typeof body?.message === "string" ? body.message.trim() : "";
-  return message || code || `Erreur ${status}`;
-}
+import { getOrCreateVoterSessionId } from "@/lib/votes/voter-session";
+import { useMiniSiteLanding } from "@/lib/useMiniSiteLanding";
 
 /**
- * Landing événement publique — vitrine + galerie + lien vers la salle live.
+ * Mini-site — Accueil (Lot 1).
+ * Conserve le fil hybride existant en transition vers les onglets futurs.
  */
 export default function EventLandingPage() {
   const params = useParams();
-  const router = useRouter();
   const slugParam = params?.slug;
   const slug =
     typeof slugParam === "string" ? slugParam : slugParam?.[0] ?? null;
   const isDemoSlug = slug === "demo";
 
-  const [loading, setLoading] = useState(!isDemoSlug);
-  const [error, setError] = useState(null);
-  /** @type {null | Record<string, unknown>} */
-  const [payload, setPayload] = useState(null);
-  const [toastNotif, setToastNotif] = useState(null);
-  const [uploadPhase, setUploadPhase] = useState(
-    /** @type {null | "optimizing" | "uploading"} */ (null),
-  );
-  const uploadBusy = uploadPhase != null;
-  const [uploadError, setUploadError] = useState(null);
-  const [deletingPhotoId, setDeletingPhotoId] = useState(null);
-  const [exitingPhotoId, setExitingPhotoId] = useState(null);
-  const fileInputRef = useRef(null);
+  const { loading, error, payload, setPayload } = useMiniSiteLanding(slug, {
+    isDemo: isDemoSlug,
+  });
+
   const [showcaseLightboxIndex, setShowcaseLightboxIndex] = useState(
     /** @type {number | null} */ (null),
   );
-  const [visitorKey, setVisitorKey] = useState("");
-  const [likeBusyId, setLikeBusyId] = useState(/** @type {string | null} */ (null));
-
-  useEffect(() => {
-    setVisitorKey(getOrCreateVoterSessionId());
-  }, []);
-
-  /** Lot A — robots meta selon visibility (pas de gate d’accès). */
-  useEffect(() => {
-    if (typeof document === "undefined") return undefined;
-    const seoRobots =
-      payload &&
-      typeof payload === "object" &&
-      payload.seo &&
-      typeof payload.seo === "object" &&
-      typeof payload.seo.robots === "string"
-        ? payload.seo.robots
-        : null;
-    const visibility =
-      payload && typeof payload.visibility === "string"
-        ? payload.visibility.toLowerCase()
-        : "private";
-    const content =
-      seoRobots ||
-      (visibility === "public" ? "index,follow" : "noindex,nofollow");
-
-    let meta = document.querySelector('meta[name="robots"]');
-    if (!meta) {
-      meta = document.createElement("meta");
-      meta.setAttribute("name", "robots");
-      document.head.appendChild(meta);
-    }
-    meta.setAttribute("content", content);
-
-    const pageTitle =
-      payload &&
-      typeof payload.title === "string" &&
-      payload.title.trim()
-        ? `${payload.title.trim()} · AVOTE`
-        : null;
-    const prevTitle = document.title;
-    if (pageTitle) document.title = pageTitle;
-
-    return () => {
-      if (pageTitle) document.title = prevTitle;
-    };
-  }, [payload]);
-
-  useEffect(() => {
-    if (!slug) return undefined;
-    if (isDemoSlug) {
-      setLoading(false);
-      setError(null);
-      setPayload(null);
-      return undefined;
-    }
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      let redirected = false;
-      try {
-        const vk = getOrCreateVoterSessionId();
-        const qs = vk
-          ? `?visitorKey=${encodeURIComponent(vk)}`
-          : "";
-        const res = await adminFetch(
-          `${apiBaseBrowser()}/events/slug/${encodeURIComponent(slug)}/landing${qs}`,
-          { cache: "no-store" },
-        );
-        if (res.status === 404) {
-          if (!cancelled) {
-            setError("Événement introuvable.");
-            setPayload(null);
-          }
-          return;
-        }
-        const data = await res.json().catch(() => ({}));
-        if (
-          res.status === 401 &&
-          (data?.code === "INVITE_REQUIRED" || data?.inviteEnabled)
-        ) {
-          redirected = true;
-          router.replace(
-            data?.invitePath || `/invite/${encodeURIComponent(slug)}`,
-          );
-          return;
-        }
-        if (!res.ok) {
-          if (!cancelled) setError(data?.error || `Erreur ${res.status}`);
-          return;
-        }
-        if (!cancelled && data?.enabled === false) {
-          redirected = true;
-          router.replace(`/join/${encodeURIComponent(slug)}`);
-          return;
-        }
-        if (!cancelled) setPayload(data);
-      } catch {
-        if (!cancelled) setError("Impossible de charger la page.");
-      } finally {
-        if (!cancelled && !redirected) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [slug, router, isDemoSlug]);
 
   const softRefreshLiveState =
     typeof payload?.liveState === "string" ? payload.liveState : null;
@@ -186,7 +54,6 @@ export default function EventLandingPage() {
     typeof payload?.displayState === "string" ? payload.displayState : null;
   const softRefreshReady = Boolean(payload) && !isDemoSlug && Boolean(slug);
 
-  /** Soft-refresh fil (GET landing) ~30s pendant / après le live — pas de reload page. */
   useEffect(() => {
     if (!softRefreshReady || !slug) return undefined;
     const phase = resolveEventLandingPhase({
@@ -196,525 +63,116 @@ export default function EventLandingPage() {
     });
     if (phase !== "during" && phase !== "after") return undefined;
     let cancelled = false;
-    const SOFT_MS = 30_000;
     const softRefresh = async () => {
       try {
-        const vk = visitorKey || getOrCreateVoterSessionId();
+        const vk = getOrCreateVoterSessionId();
         const qs = vk ? `?visitorKey=${encodeURIComponent(vk)}` : "";
         const res = await adminFetch(
           `${apiBaseBrowser()}/events/slug/${encodeURIComponent(slug)}/landing${qs}`,
           { cache: "no-store" },
         );
-        if (cancelled || !res.ok) return;
-        const data = await res.json();
-        if (cancelled || !data || data.enabled === false) return;
-        setPayload((prev) => {
-          if (!prev || typeof prev !== "object") return prev;
-          return {
-            ...prev,
-            photos: Array.isArray(data.photos) ? data.photos : prev.photos,
-            showcasePhotos: Array.isArray(data.showcasePhotos)
-              ? data.showcasePhotos
-              : prev.showcasePhotos,
-            programItems: Array.isArray(data.programItems)
-              ? data.programItems
-              : prev.programItems,
-            feed: Array.isArray(data.feed) ? data.feed : prev.feed,
-            landingEventDate:
-              data.landingEventDate !== undefined
-                ? data.landingEventDate
-                : prev.landingEventDate,
-            landingVenue:
-              data.landingVenue !== undefined
-                ? data.landingVenue
-                : prev.landingVenue,
-            landingHours:
-              data.landingHours !== undefined
-                ? data.landingHours
-                : prev.landingHours,
-            landingIntroTitle:
-              data.landingIntroTitle !== undefined
-                ? data.landingIntroTitle
-                : prev.landingIntroTitle,
-            landingIntroBody:
-              data.landingIntroBody !== undefined
-                ? data.landingIntroBody
-                : prev.landingIntroBody,
-            landingIntroPhotos: Array.isArray(data.landingIntroPhotos)
-              ? data.landingIntroPhotos
-              : prev.landingIntroPhotos,
-            landingThanksTitle:
-              data.landingThanksTitle !== undefined
-                ? data.landingThanksTitle
-                : prev.landingThanksTitle,
-            landingThanksBody:
-              data.landingThanksBody !== undefined
-                ? data.landingThanksBody
-                : prev.landingThanksBody,
-            landingThanksPhotos: Array.isArray(data.landingThanksPhotos)
-              ? data.landingThanksPhotos
-              : prev.landingThanksPhotos,
-            liveState:
-              typeof data.liveState === "string"
-                ? data.liveState
-                : prev.liveState,
-            voteState:
-              typeof data.voteState === "string"
-                ? data.voteState
-                : prev.voteState,
-            displayState:
-              typeof data.displayState === "string"
-                ? data.displayState
-                : prev.displayState,
-            infoShowOnFinished:
-              typeof data.infoShowOnFinished === "boolean"
-                ? data.infoShowOnFinished
-                : prev.infoShowOnFinished,
-            landingKeepPhotosAfter:
-              typeof data.landingKeepPhotosAfter === "boolean"
-                ? data.landingKeepPhotosAfter
-                : prev.landingKeepPhotosAfter,
-            landingKeepResultsAfter:
-              typeof data.landingKeepResultsAfter === "boolean"
-                ? data.landingKeepResultsAfter
-                : prev.landingKeepResultsAfter,
-            landingKeepMessagesAfter:
-              typeof data.landingKeepMessagesAfter === "boolean"
-                ? data.landingKeepMessagesAfter
-                : prev.landingKeepMessagesAfter,
-          };
-        });
+        if (!res.ok || cancelled) return;
+        const data = await res.json().catch(() => null);
+        if (!cancelled && data && data.enabled !== false) setPayload(data);
       } catch {
-        /* soft-refresh silencieux */
+        /* ignore soft refresh errors */
       }
     };
-    const id = window.setInterval(softRefresh, SOFT_MS);
+    const id = window.setInterval(softRefresh, 30_000);
     return () => {
       cancelled = true;
       window.clearInterval(id);
     };
   }, [
-    slug,
     softRefreshReady,
+    slug,
     softRefreshLiveState,
     softRefreshVoteState,
     softRefreshDisplayState,
-    visitorKey,
+    setPayload,
   ]);
 
-  const triggerLandingPhotoPicker = useCallback(() => {
-    setUploadError(null);
-    fileInputRef.current?.click();
-  }, []);
-
-  const onLandingPhotoSelected = useCallback(
-    async (e) => {
-      const file = e.target.files?.[0];
-      e.target.value = "";
-      if (!file || !payload) return;
-      const can =
-        payload.canUploadLandingPhoto === true &&
-        typeof payload.landingPhotoUploadEventId === "string" &&
-        String(payload.landingPhotoUploadEventId).trim() !== "";
-      const eventId = can
-        ? String(payload.landingPhotoUploadEventId).trim()
-        : "";
-      if (!can || !eventId) return;
-      setUploadPhase("optimizing");
-      setUploadError(null);
-      try {
-        const prepared = await prepareLandingPhotoForUpload(file, {
-          onOptimizing: () => setUploadPhase("optimizing"),
-        });
-        setUploadPhase("uploading");
-        const fd = new FormData();
-        fd.append("file", prepared);
-        const res = await adminFetch(
-          `${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/landing/photos`,
-          { method: "POST", body: fd },
-        );
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(mapApiError(body, res.status));
-        const id = typeof body?.id === "string" ? body.id : null;
-        const url = typeof body?.url === "string" ? body.url : null;
-        const createdAt =
-          typeof body?.createdAt === "string" ? body.createdAt : null;
-        if (id && url && createdAt) {
-          setPayload((prev) => {
-            if (!prev || typeof prev !== "object") return prev;
-            const prevPhotos = Array.isArray(prev.photos) ? prev.photos : [];
-            const prevFeed = Array.isArray(prev.feed) ? prev.feed : [];
-            const feedItem = {
-              type: "photo",
-              id: `photo:${id}`,
-              occurredAt: createdAt,
-              photo: {
-                id,
-                url,
-                createdAt,
-                likeCount: 0,
-                likedByMe: false,
-              },
-            };
-            return {
-              ...prev,
-              photos: [{ id, url, createdAt }, ...prevPhotos],
-              feed: [
-                feedItem,
-                ...prevFeed.filter((x) => String(x?.id) !== `photo:${id}`),
-              ],
-            };
-          });
-        }
-        setToastNotif("✅ Photo publiée sur la landing");
-        window.setTimeout(() => setToastNotif(null), 2600);
-      } catch (err) {
-        const msg = err?.message || "Upload impossible.";
-        setUploadError(
-          msg === LANDING_PHOTO_TOO_HEAVY_MESSAGE
-            ? msg
-            : msg.includes("trop volumineux")
-              ? LANDING_PHOTO_TOO_HEAVY_MESSAGE
-              : msg,
-        );
-      } finally {
-        setUploadPhase(null);
-      }
-    },
-    [payload],
-  );
-
-  const handleDeleteLandingPhoto = useCallback(
-    async (photoId) => {
-      if (!payload || typeof payload !== "object") return;
-      const can =
-        payload.canUploadLandingPhoto === true &&
-        typeof payload.landingPhotoUploadEventId === "string" &&
-        String(payload.landingPhotoUploadEventId).trim() !== "";
-      const eventId = can
-        ? String(payload.landingPhotoUploadEventId).trim()
-        : "";
-      const pid = String(photoId || "").trim();
-      if (!can || !eventId || !pid) return;
-      if (!window.confirm("Supprimer cette photo ?")) return;
-      setDeletingPhotoId(pid);
-      setUploadError(null);
-      try {
-        const res = await adminFetch(
-          `${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/landing/photos/${encodeURIComponent(pid)}`,
-          { method: "DELETE" },
-        );
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(mapApiError(body, res.status));
-        setDeletingPhotoId(null);
-        const reduceMotion =
-          typeof window !== "undefined" &&
-          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-        const removePhotoFromPayload = (prev) => {
-          if (!prev || typeof prev !== "object") return prev;
-          const ph = Array.isArray(prev.photos) ? prev.photos : [];
-          const feed = Array.isArray(prev.feed) ? prev.feed : [];
-          return {
-            ...prev,
-            photos: ph.filter((x) => String(x?.id) !== pid),
-            feed: feed.filter(
-              (x) =>
-                !(
-                  x?.type === "photo" &&
-                  String(x?.photo?.id || "") === pid
-                ),
-            ),
-          };
-        };
-        if (reduceMotion) {
-          setPayload(removePhotoFromPayload);
-          setToastNotif("🗑 Photo supprimée");
-          window.setTimeout(() => setToastNotif(null), 2600);
-          return;
-        }
-        setExitingPhotoId(pid);
-        window.setTimeout(() => {
-          setPayload(removePhotoFromPayload);
-          setExitingPhotoId(null);
-          setToastNotif("🗑 Photo supprimée");
-          window.setTimeout(() => setToastNotif(null), 2600);
-        }, 320);
-      } catch (err) {
-        setUploadError(err?.message || "Suppression impossible.");
-        setDeletingPhotoId(null);
-      }
-    },
-    [payload],
-  );
-
-  const handleTogglePhotoLike = useCallback(
-    async (photoId, currentlyLiked) => {
-      if (!slug || !photoId) return;
-      const vk = visitorKey || getOrCreateVoterSessionId();
-      if (!vk) return;
-      setLikeBusyId(photoId);
-      try {
-        const url = `${apiBaseBrowser()}/events/slug/${encodeURIComponent(slug)}/landing/photos/${encodeURIComponent(photoId)}/like`;
-        const res = currentlyLiked
-          ? await fetch(url, {
-              method: "DELETE",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ visitorKey: vk }),
-            })
-          : await fetch(url, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ visitorKey: vk }),
-            });
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(mapApiError(body, res.status));
-        const likeCount = Number(body?.likeCount || 0);
-        const liked = Boolean(body?.liked);
-        setPayload((prev) => {
-          if (!prev || typeof prev !== "object") return prev;
-          const feed = Array.isArray(prev.feed) ? prev.feed : [];
-          return {
-            ...prev,
-            feed: feed.map((item) => {
-              if (
-                item?.type === "photo" &&
-                item?.photo &&
-                String(item.photo.id) === String(photoId)
-              ) {
-                return {
-                  ...item,
-                  photo: {
-                    ...item.photo,
-                    likeCount,
-                    likedByMe: liked,
-                  },
-                };
-              }
-              return item;
-            }),
-          };
-        });
-      } catch {
-        /* ignore like errors soft */
-      } finally {
-        setLikeBusyId(null);
-      }
-    },
-    [slug, visitorKey],
-  );
-
-  const accent = useMemo(() => {
-    const c = payload?.primaryColor;
-    return typeof c === "string" && /^#[0-9A-Fa-f]{6}$/.test(c.trim())
-      ? c.trim()
-      : "#2563eb";
-  }, [payload]);
-
-  /**
-   * Hooks AVANT tout early return (loading / erreur / demo).
-   * Sinon : React #310 « Rendered more hooks than during the previous render »
-   * au passage Chargement → contenu (régression PR #41).
-   */
   const showcaseLightboxPhotos = useMemo(() => {
-    if (!payload || typeof payload !== "object") return [];
-    const lists = [
+    if (!payload) return [];
+    return normalizeLightboxPhotos(
       Array.isArray(payload.showcasePhotos) ? payload.showcasePhotos : [],
-      Array.isArray(payload.landingIntroPhotos)
-        ? payload.landingIntroPhotos
-        : [],
-      Array.isArray(payload.landingThanksPhotos)
-        ? payload.landingThanksPhotos
-        : [],
-    ];
-    const raw = [];
-    const seen = new Set();
-    for (const list of lists) {
-      for (const p of list) {
-        const u =
-          typeof p?.url === "string"
-            ? resolveApiAssetUrlNullable(p.url.trim())
-            : null;
-        if (!u) continue;
-        const id = String(p.id ?? u);
-        if (seen.has(id)) continue;
-        seen.add(id);
-        const caption =
-          typeof p?.caption === "string" && p.caption.trim()
-            ? p.caption.trim()
-            : null;
-        raw.push({ id, url: u, caption });
-      }
-    }
-    return normalizeLightboxPhotos(raw);
-  }, [payload]);
-
-  if (!slug) {
-    return (
-      <main style={{ padding: "2rem", fontFamily: "system-ui" }}>
-        <p>Lien invalide.</p>
-      </main>
     );
-  }
+  }, [payload]);
 
   if (isDemoSlug) {
     return <EventLandingDemoPage />;
   }
 
+  if (!slug) {
+    return (
+      <main style={{ padding: "2rem", fontFamily: "system-ui, sans-serif" }}>
+        <p style={{ color: "#b91c1c" }}>Lien invalide.</p>
+      </main>
+    );
+  }
+
   if (loading) {
     return (
       <main
-        className="ev-landing-shell"
         style={{
-          minHeight: "100vh",
+          minHeight: "40vh",
+          display: "grid",
+          placeItems: "center",
           fontFamily: "system-ui, sans-serif",
           color: "#64748b",
-          background: "#0f172a",
         }}
       >
-        <EventLandingNav />
-        <div style={{ display: "grid", placeItems: "center", minHeight: "70vh" }}>
-          <p className="ev-landing-fade-in" style={{ color: "#94a3b8" }}>
-            Chargement…
-          </p>
-        </div>
+        Chargement du mini-site…
       </main>
     );
   }
 
   if (error || !payload) {
     return (
-      <main
-        className="ev-landing-shell"
-        style={{
-          minHeight: "100vh",
-          fontFamily: "system-ui, sans-serif",
-          background: "#f8fafc",
-        }}
-      >
-        <EventLandingNav />
-        <div style={{ padding: "2rem" }}>
-          <p style={{ color: "#b91c1c" }}>{error || "Indisponible."}</p>
-          <p style={{ marginTop: "1rem" }}>
-            <Link href="/" style={{ color: "#2563eb", fontWeight: 600 }}>
-              Accueil
-            </Link>
-          </p>
-        </div>
+      <main style={{ padding: "2rem", fontFamily: "system-ui, sans-serif" }}>
+        <p style={{ color: "#b91c1c" }}>{error || "Mini-site indisponible."}</p>
+        <p>
+          <Link href={`/join/${encodeURIComponent(slug)}`}>
+            Accéder à la salle
+          </Link>
+        </p>
       </main>
     );
   }
 
-  const title =
-    typeof payload.title === "string" && payload.title.trim()
-      ? payload.title.trim()
-      : "Événement";
-  const description =
-    typeof payload.description === "string" && payload.description.trim()
-      ? payload.description.trim()
-      : null;
-  const cover =
-    typeof payload.coverUrl === "string"
-      ? resolveApiAssetUrlNullable(payload.coverUrl.trim())
-      : null;
-  const logo =
-    typeof payload.logoUrl === "string"
-      ? resolveApiAssetUrlNullable(payload.logoUrl.trim())
-      : null;
-  const showcasePhotosList = Array.isArray(payload.showcasePhotos)
-    ? payload.showcasePhotos
-    : [];
-  const joinHref =
-    typeof payload.joinPath === "string" && payload.joinPath.startsWith("/")
-      ? payload.joinPath
-      : `/join/${encodeURIComponent(slug)}`;
-
   const landingPhase = resolveEventLandingPhase({
-    liveState:
-      typeof payload.liveState === "string" ? payload.liveState : null,
-    voteState:
-      typeof payload.voteState === "string" ? payload.voteState : null,
+    liveState: typeof payload.liveState === "string" ? payload.liveState : null,
+    voteState: typeof payload.voteState === "string" ? payload.voteState : null,
     displayState:
       typeof payload.displayState === "string" ? payload.displayState : null,
   });
-  const livePriority = landingPhase === "during";
   const afterLive = landingPhase === "after";
-
-  const infoTitle =
-    typeof payload.infoSectionTitle === "string"
-      ? payload.infoSectionTitle.trim()
-      : "";
-  const infoText =
-    typeof payload.infoSectionText === "string"
-      ? payload.infoSectionText.trim()
-      : "";
-  const ipL =
-    typeof payload.infoPrimaryCtaLabel === "string"
-      ? payload.infoPrimaryCtaLabel.trim()
-      : "";
-  const ipU =
-    typeof payload.infoPrimaryCtaUrl === "string"
-      ? payload.infoPrimaryCtaUrl.trim()
-      : "";
-  const isL =
-    typeof payload.infoSecondaryCtaLabel === "string"
-      ? payload.infoSecondaryCtaLabel.trim()
-      : "";
-  const isU =
-    typeof payload.infoSecondaryCtaUrl === "string"
-      ? payload.infoSecondaryCtaUrl.trim()
-      : "";
-  const infoShowOnFinished = payload.infoShowOnFinished !== false;
-  const hasInfoContent = hasLandingComplementaryInfo({
-    infoSectionTitle: infoTitle,
-    infoSectionText: infoText,
-    infoPrimaryCtaLabel: ipL,
-    infoPrimaryCtaUrl: ipU,
-    infoSecondaryCtaLabel: isL,
-    infoSecondaryCtaUrl: isU,
-  });
-  const showInfo =
-    hasInfoContent && !(afterLive && !infoShowOnFinished);
 
   const landingEventDate =
     typeof payload.landingEventDate === "string"
       ? payload.landingEventDate.trim()
       : "";
   const landingVenue =
-    typeof payload.landingVenue === "string"
-      ? payload.landingVenue.trim()
-      : "";
+    typeof payload.landingVenue === "string" ? payload.landingVenue.trim() : "";
   const landingHours =
-    typeof payload.landingHours === "string"
-      ? payload.landingHours.trim()
-      : "";
+    typeof payload.landingHours === "string" ? payload.landingHours.trim() : "";
   const programItemsList = sortLandingProgramItems(
     Array.isArray(payload.programItems) ? payload.programItems : [],
   ).filter(
     (step) =>
       String(step?.timeLabel || "").trim() && String(step?.title || "").trim(),
   );
-  const landingIntroTitle =
-    typeof payload.landingIntroTitle === "string"
-      ? payload.landingIntroTitle.trim()
-      : "";
+  const showcasePhotosList = Array.isArray(payload.showcasePhotos)
+    ? payload.showcasePhotos
+    : [];
   const landingIntroBody =
     typeof payload.landingIntroBody === "string"
       ? payload.landingIntroBody.trim()
-      : "";
-  const landingThanksTitle =
-    typeof payload.landingThanksTitle === "string"
-      ? payload.landingThanksTitle.trim()
       : "";
   const landingThanksBody =
     typeof payload.landingThanksBody === "string"
       ? payload.landingThanksBody.trim()
       : "";
-  const landingIntroPhotos = Array.isArray(payload.landingIntroPhotos)
-    ? payload.landingIntroPhotos
-    : [];
-  const landingThanksPhotos = Array.isArray(payload.landingThanksPhotos)
-    ? payload.landingThanksPhotos
-    : [];
   const showEvenementSection = shouldShowLandingEvenementSection({
     landingEventDate,
     landingVenue,
@@ -726,710 +184,67 @@ export default function EventLandingPage() {
     afterLive,
   });
 
-  const canUploadLanding =
-    payload.canUploadLandingPhoto === true &&
-    typeof payload.landingPhotoUploadEventId === "string" &&
-    String(payload.landingPhotoUploadEventId).trim() !== "";
-  const canManageFeed = payload.canManageLandingFeed === true || canUploadLanding;
   const feedItems = Array.isArray(payload.feed) ? payload.feed : [];
   const showFeedBlock = shouldShowLandingFeedBlock({
     phase: landingPhase,
     hasItems: feedItems.length > 0,
-    canUpload: canUploadLanding,
+    canUpload: false,
   });
-  const feedSubtitle = getLandingFeedSubtitle({ phase: landingPhase });
-  const feedEmptyHint = getLandingFeedEmptyHint({
-    phase: landingPhase,
-    canUpload: canUploadLanding,
-  });
-  const feedShare = getLandingFeedShareCopy({ phase: landingPhase });
-  const feedKicker =
-    landingPhase === "after"
-      ? "Souvenirs"
-      : landingPhase === "during"
-        ? "En direct"
-        : "Journal";
-
-  const showcaseLead = getLandingEvenementLead({ phase: landingPhase });
-
-  const footerCta = {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "0.95rem 1.75rem",
-    borderRadius: "999px",
-    border: "none",
-    fontWeight: 700,
-    fontSize: "1rem",
-    letterSpacing: "0.02em",
-    cursor: "pointer",
-    textDecoration: "none",
-    color: "#0c1222",
-    background: "#f8fafc",
-    boxShadow: `0 6px 28px color-mix(in srgb, ${accent} 28%, rgba(15,23,42,0.12))`,
-    boxSizing: "border-box",
-    transition: "transform 0.2s ease, box-shadow 0.2s ease",
-  };
+  const accent =
+    typeof payload.primaryColor === "string" &&
+    /^#[0-9A-Fa-f]{6}$/.test(payload.primaryColor.trim())
+      ? payload.primaryColor.trim()
+      : "#0f766e";
 
   return (
-    <main
-      className={
-        livePriority
-          ? "ev-landing-shell ev-landing-shell--sticky-join"
-          : "ev-landing-shell"
+    <MiniSiteShell
+      slug={slug}
+      activeTab="accueil"
+      primaryColor={
+        typeof payload.primaryColor === "string" ? payload.primaryColor : null
       }
-      style={{
-        minHeight: "100vh",
-        background: "#f1f5f9",
-        fontFamily:
-          'system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif',
-        color: "#0f172a",
-      }}
+      tabs={payload.tabs}
     >
-      <style>{`
-        .ev-landing-shell { -webkit-font-smoothing: antialiased; }
-        @media (prefers-reduced-motion: no-preference) {
-          .ev-landing-fade-in {
-            animation: evLandingFade 0.5s ease-out both;
-          }
-          .ev-landing-gallery-section {
-            animation: evLandingFadeUp 0.65s ease-out 0.08s both;
-          }
-          .ev-landing-hero-content {
-            animation: evLandingFadeUp 0.75s ease-out both;
-          }
-        }
-        @keyframes evLandingFade {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes evLandingFadeUp {
-          from { opacity: 0; transform: translateY(14px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-
-        .ev-landing-hero {
-          position: relative;
-          min-height: min(72svh, 600px);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          overflow: hidden;
-        }
-        @media (min-width: 768px) {
-          .ev-landing-hero {
-            min-height: min(90svh, 860px);
-          }
-        }
-        .ev-landing-hero-bg {
-          position: absolute;
-          inset: 0;
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          transform: scale(1.02);
-        }
-        .ev-landing-hero-bg--placeholder {
-          background: linear-gradient(
-            160deg,
-            color-mix(in srgb, var(--ev-accent, #2563eb) 28%, #0f172a) 0%,
-            #0f172a 55%,
-            #020617 100%
-          );
-        }
-        .ev-landing-hero-overlay {
-          position: absolute;
-          inset: 0;
-          pointer-events: none;
-          background: linear-gradient(
-            180deg,
-            rgba(2, 6, 23, 0.5) 0%,
-            rgba(15, 23, 42, 0.25) 38%,
-            rgba(2, 6, 23, 0.88) 100%
-          );
-        }
-        .ev-landing-hero-overlay::after {
-          content: "";
-          position: absolute;
-          inset: 0;
-          background: radial-gradient(
-            ellipse 85% 55% at 50% 100%,
-            color-mix(in srgb, var(--ev-accent, #2563eb) 22%, transparent) 0%,
-            transparent 62%
-          );
-          opacity: 0.85;
-        }
-        .ev-landing-hero-content {
-          position: relative;
-          z-index: 2;
-          width: 100%;
-          max-width: 700px;
-          margin: 0 auto;
-          padding: clamp(1.5rem, 5vw, 2.75rem) clamp(1.25rem, 4vw, 2rem)
-            clamp(2rem, 6vw, 3.5rem);
-          text-align: center;
-          box-sizing: border-box;
-        }
-        @media (max-width: 767px) {
-          .ev-landing-hero-content {
-            padding-top: clamp(1rem, 3vw, 1.35rem);
-            padding-bottom: clamp(1.15rem, 3.5vw, 1.75rem);
-          }
-          .ev-landing-hero-cta {
-            margin-top: clamp(1rem, 3vw, 1.5rem);
-          }
-          .ev-landing-hero-title {
-            font-size: clamp(1.65rem, 6.2vw, 2.35rem);
-          }
-          .ev-landing-hero-desc {
-            margin-top: 0.75rem;
-          }
-        }
-        .ev-landing-hero-kicker {
-          margin: 0 0 0.75rem;
-          font-size: 0.7rem;
-          font-weight: 700;
-          letter-spacing: 0.22em;
-          text-transform: uppercase;
-          color: rgba(248, 250, 252, 0.72);
-        }
-        .ev-landing-hero-title {
-          margin: 0;
-          font-size: clamp(2rem, 7vw, 3.15rem);
-          font-weight: 800;
-          line-height: 1.08;
-          letter-spacing: -0.035em;
-          color: #f8fafc;
-          text-wrap: balance;
-          text-shadow: 0 4px 48px rgba(0, 0, 0, 0.45);
-        }
-        .ev-landing-hero-desc {
-          margin: 1.15rem auto 0;
-          max-width: 38rem;
-          font-size: clamp(1.02rem, 3.2vw, 1.2rem);
-          line-height: 1.55;
-          font-weight: 450;
-          color: rgba(226, 232, 240, 0.94);
-          text-wrap: pretty;
-        }
-        .ev-landing-hero-logo {
-          width: clamp(56px, 14vw, 72px);
-          height: clamp(56px, 14vw, 72px);
-          object-fit: contain;
-          border-radius: 18px;
-          background: rgba(255, 255, 255, 0.12);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-          padding: 10px;
-          margin: 0 auto 1.35rem;
-          box-shadow:
-            0 0 0 1px rgba(255, 255, 255, 0.18),
-            0 18px 48px rgba(0, 0, 0, 0.35);
-        }
-        .ev-landing-hero-cta {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          margin-top: clamp(1.75rem, 4vw, 2.35rem);
-          padding: 1.05rem 2.1rem;
-          border-radius: 999px;
-          font-weight: 700;
-          font-size: clamp(1.02rem, 3vw, 1.125rem);
-          letter-spacing: 0.03em;
-          text-decoration: none;
-          color: #0c1222;
-          background: #f8fafc;
-          border: none;
-          cursor: pointer;
-          box-shadow:
-            0 4px 24px rgba(0, 0, 0, 0.28),
-            0 0 0 1px rgba(255, 255, 255, 0.35) inset;
-          transition: transform 0.22s ease, box-shadow 0.22s ease;
-        }
-        .ev-landing-hero-cta:hover {
-          transform: translateY(-2px);
-          box-shadow:
-            0 12px 40px rgba(0, 0, 0, 0.32),
-            0 0 0 1px rgba(255, 255, 255, 0.45) inset;
-        }
-        .ev-landing-hero-cta:active {
-          transform: translateY(0);
-        }
-
-        .ev-landing-gallery-scroll {
-          display: flex;
-          gap: 0.75rem;
-          overflow-x: auto;
-          scroll-snap-type: x mandatory;
-          scroll-padding-inline-start: 1rem;
-          scroll-padding-inline-end: 0.75rem;
-          padding: 0.25rem 1rem 0.65rem;
-          margin-inline: -1rem;
-          -webkit-overflow-scrolling: touch;
-          scrollbar-width: none;
-        }
-        .ev-landing-gallery-scroll::-webkit-scrollbar {
-          display: none;
-        }
-        .ev-gallery-slide {
-          flex: 0 0 calc(100vw - 4.75rem);
-          max-width: min(360px, calc(100vw - 4.75rem));
-          scroll-snap-align: start;
-          scroll-snap-stop: normal;
-          transition:
-            opacity 0.32s ease,
-            transform 0.32s ease;
-        }
-        .ev-gallery-slide--exiting {
-          opacity: 0;
-          transform: scale(0.96);
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .ev-gallery-slide--exiting {
-            transition: none;
-          }
-        }
-        .ev-gallery-frame {
-          position: relative;
-          height: 100%;
-          border-radius: 22px;
-          overflow: hidden;
-          box-shadow:
-            0 22px 50px rgba(15, 23, 42, 0.14),
-            0 0 0 1px rgba(15, 23, 42, 0.06);
-        }
-        .ev-gallery-slide .ev-gallery-frame {
-          height: min(58vw, 320px);
-        }
-        .ev-gallery-slide figure {
-          margin: 0;
-          height: 100%;
-          border-radius: 0;
-          overflow: hidden;
-          box-shadow: none;
-          transition: transform 0.35s ease;
-        }
-        .ev-gallery-slide img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          display: block;
-          transition: transform 0.5s ease;
-        }
-        @media (prefers-reduced-motion: no-preference) {
-          .ev-gallery-slide .ev-gallery-frame:hover img {
-            transform: scale(1.04);
-          }
-        }
-        .ev-landing-carousel-progress {
-          display: flex;
-          flex-direction: row;
-          align-items: center;
-          justify-content: center;
-          gap: 0.7rem;
-          margin-top: 0.45rem;
-          padding: 0 1rem 0.35rem;
-        }
-        @media (min-width: 768px) {
-          .ev-landing-carousel-progress {
-            display: none;
-          }
-        }
-        .ev-landing-carousel-dots {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.32rem;
-        }
-        .ev-landing-carousel-dot {
-          width: 6px;
-          height: 6px;
-          border-radius: 999px;
-          background: #cbd5e1;
-          flex-shrink: 0;
-          transition: transform 0.2s ease, background 0.2s ease, width 0.2s ease;
-        }
-        .ev-landing-carousel-dot--active {
-          width: 7px;
-          height: 7px;
-          background: var(--ev-accent, #2563eb);
-          transform: scale(1.15);
-          box-shadow: 0 0 0 3px color-mix(in srgb, var(--ev-accent, #2563eb) 22%, transparent);
-        }
-        .ev-landing-carousel-fraction {
-          font-size: 0.72rem;
-          font-weight: 700;
-          font-variant-numeric: tabular-nums;
-          letter-spacing: 0.04em;
-          color: #94a3b8;
-          min-width: 2.5rem;
-          text-align: center;
-        }
-        .ev-landing-showcase-photo-btn {
-          display: block;
-          width: 100%;
-          height: 100%;
-          padding: 0;
-          margin: 0;
-          border: none;
-          background: transparent;
-          cursor: zoom-in;
-        }
-        .ev-landing-showcase-photo-btn img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          display: block;
-        }
-        .ev-landing-showcase-caption {
-          position: absolute;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          margin: 0;
-          padding: 1.35rem 0.75rem 0.65rem;
-          font-size: 0.82rem;
-          font-weight: 600;
-          line-height: 1.35;
-          color: #f8fafc;
-          background: linear-gradient(
-            180deg,
-            transparent 0%,
-            rgba(15, 23, 42, 0.72) 55%
-          );
-          text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
-          pointer-events: none;
-        }
-        @media (min-width: 768px) {
-          .ev-landing-gallery-scroll {
-            display: none;
-          }
-          .ev-landing-gallery-grid {
-            display: grid !important;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 1.25rem;
-          }
-        }
-        @media (min-width: 1024px) {
-          .ev-landing-gallery-grid {
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1.35rem;
-          }
-        }
-        @media (min-width: 1280px) {
-          .ev-landing-gallery-grid {
-            grid-template-columns: repeat(4, 1fr);
-          }
-        }
-        .ev-landing-gallery-grid {
-          display: none;
-        }
-        .ev-gallery-card {
-          transition:
-            opacity 0.32s ease,
-            transform 0.32s ease;
-        }
-        .ev-gallery-card--exiting {
-          opacity: 0;
-          transform: scale(0.97);
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .ev-gallery-card--exiting {
-            transition: none;
-          }
-        }
-        .ev-gallery-card .ev-gallery-frame {
-          border-radius: 20px;
-          aspect-ratio: 4 / 3;
-          box-shadow:
-            0 18px 44px rgba(15, 23, 42, 0.1),
-            0 0 0 1px rgba(15, 23, 42, 0.05);
-          transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-        .ev-gallery-card figure {
-          margin: 0;
-          height: 100%;
-          border-radius: 0;
-          overflow: hidden;
-          box-shadow: none;
-        }
-        .ev-gallery-card img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          display: block;
-          transition: transform 0.45s ease;
-        }
-        @media (prefers-reduced-motion: no-preference) {
-          .ev-gallery-card:hover .ev-gallery-frame {
-            transform: translateY(-4px);
-            box-shadow:
-              0 28px 56px rgba(15, 23, 42, 0.14),
-              0 0 0 1px rgba(15, 23, 42, 0.06);
-          }
-          .ev-gallery-card:hover img {
-            transform: scale(1.03);
-          }
-        }
-
-        .ev-gallery-delete-btn {
-          position: absolute;
-          top: 0.55rem;
-          right: 0.55rem;
-          z-index: 4;
-          width: 2.1rem;
-          height: 2.1rem;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          padding: 0;
-          border: none;
-          border-radius: 50%;
-          font-size: 0.82rem;
-          font-weight: 700;
-          line-height: 1;
-          cursor: pointer;
-          color: #f8fafc;
-          background: rgba(15, 23, 42, 0.48);
-          backdrop-filter: blur(8px);
-          -webkit-backdrop-filter: blur(8px);
-          box-shadow:
-            0 2px 12px rgba(0, 0, 0, 0.2),
-            0 0 0 1px rgba(255, 255, 255, 0.12) inset;
-          transition:
-            opacity 0.22s ease,
-            transform 0.2s ease,
-            background 0.2s ease;
-          opacity: 0.92;
-        }
-        .ev-gallery-delete-btn:hover:not(:disabled) {
-          background: rgba(185, 28, 28, 0.88);
-          transform: scale(1.05);
-        }
-        .ev-gallery-delete-btn:active:not(:disabled) {
-          transform: scale(0.96);
-        }
-        .ev-gallery-delete-btn:disabled {
-          opacity: 0.55;
-          cursor: wait;
-        }
-        @media (min-width: 768px) {
-          .ev-gallery-delete-btn {
-            opacity: 0;
-          }
-          .ev-gallery-frame:hover .ev-gallery-delete-btn {
-            opacity: 1;
-          }
-        }
-        .ev-gallery-delete-btn:focus-visible {
-          opacity: 1;
-          outline: 2px solid var(--ev-accent, #2563eb);
-          outline-offset: 2px;
-        }
-        .ev-landing-upload-fab {
-          position: fixed;
-          right: max(1rem, env(safe-area-inset-right));
-          bottom: max(1rem, env(safe-area-inset-bottom));
-          z-index: 61;
-          width: 3.5rem;
-          height: 3.5rem;
-          padding: 0;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 50%;
-          border: none;
-          font-size: 1.35rem;
-          line-height: 1;
-          cursor: pointer;
-          color: #fff;
-          box-shadow:
-            0 12px 36px rgba(15, 23, 42, 0.28),
-            0 0 0 1px rgba(255, 255, 255, 0.12) inset;
-          transition: transform 0.2s ease, box-shadow 0.2s ease, bottom 0.2s ease;
-        }
-        /* Pendant live + sticky : FAB au-dessus de la barre Participer */
-        @media (max-width: 767px) {
-          .ev-landing-upload-fab--above-sticky {
-            bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
-          }
-        }
-        .ev-landing-upload-fab:not(:disabled):hover {
-          transform: scale(1.06);
-          box-shadow:
-            0 16px 44px rgba(15, 23, 42, 0.32),
-            0 0 0 1px rgba(255, 255, 255, 0.18) inset;
-        }
-        .ev-landing-upload-fab:not(:disabled):active {
-          transform: scale(0.96);
-        }
-        .ev-landing-upload-fab:disabled {
-          opacity: 0.65;
-          cursor: wait;
-        }
-        @media (min-width: 768px) {
-          .ev-landing-upload-fab {
-            display: none;
-          }
-        }
-        .ev-landing-upload-desktop {
-          display: none;
-        }
-        @media (min-width: 768px) {
-          .ev-landing-upload-desktop {
-            display: inline-flex;
-          }
-        }
-        .ev-landing-upload-desktop {
-          align-items: center;
-          gap: 0.45rem;
-          padding: 0.55rem 1.1rem;
-          border-radius: 999px;
-          border: 1px solid rgba(15, 23, 42, 0.08);
-          font-weight: 600;
-          font-size: 0.875rem;
-          letter-spacing: 0.01em;
-          background: #fff;
-          cursor: pointer;
-          box-shadow: 0 2px 12px rgba(15, 23, 42, 0.06);
-          transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-        }
-        .ev-landing-upload-desktop:hover:not(:disabled) {
-          transform: translateY(-1px);
-          box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
-        }
-        .ev-landing-upload-desktop:disabled {
-          opacity: 0.65;
-          cursor: wait;
-        }
-
-        .ev-landing-footer-cta:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 10px 36px color-mix(in srgb, var(--ev-accent, #2563eb) 32%, rgba(15,23,42,0.15));
-        }
-        .ev-landing-footer-cta:active {
-          transform: translateY(0);
-        }
-
-        .ev-landing-sticky-join {
-          display: none;
-        }
-        /* Mobile pendant : sticky = CTA dominant ; hero CTA masqué (aligné galerie 768) */
-        @media (max-width: 767px) {
-          .ev-landing-hero-cta-during {
-            display: none;
-          }
-          .ev-landing-sticky-join {
-            display: block;
-            position: fixed;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            z-index: 60;
-            padding: 0.65rem 1rem max(0.75rem, env(safe-area-inset-bottom, 0px));
-            background: linear-gradient(180deg, transparent, rgba(241, 245, 249, 0.92) 28%, #f1f5f9);
-            pointer-events: none;
-          }
-          .ev-landing-sticky-join-btn {
-            pointer-events: auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            min-height: 52px;
-            border-radius: 14px;
-            font-weight: 800;
-            font-size: 1.05rem;
-            text-decoration: none;
-            color: #fff;
-            background: linear-gradient(180deg, var(--ev-accent, #2563eb), color-mix(in srgb, var(--ev-accent, #2563eb) 82%, #000));
-            box-shadow: 0 10px 28px color-mix(in srgb, var(--ev-accent, #2563eb) 35%, rgba(15,23,42,0.2));
-          }
-          .ev-landing-shell--sticky-join {
-            padding-bottom: 5.5rem;
-          }
-        }
-        .ev-landing-footer-link {
-          display: inline-block;
-          font-size: 0.92rem;
-          font-weight: 600;
-          color: #64748b;
-          text-decoration: underline;
-          text-underline-offset: 0.18em;
-          transition: color 0.2s ease;
-        }
-        .ev-landing-footer-link:hover {
-          color: var(--ev-accent, #2563eb);
-        }
-      `}</style>
-
-      <EventLandingNav />
-
-      <section
-        className="ev-landing-hero"
-        style={{ "--ev-accent": accent }}
-      >
-        {cover ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img className="ev-landing-hero-bg" src={cover} alt="" />
-        ) : (
-          <div
-            className="ev-landing-hero-bg ev-landing-hero-bg--placeholder"
-            aria-hidden
-          />
-        )}
-        <div className="ev-landing-hero-overlay" aria-hidden />
-        <div className="ev-landing-hero-content ev-landing-fade-in">
-          {logo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img className="ev-landing-hero-logo" src={logo} alt="" />
-          ) : null}
-          <p className="ev-landing-hero-kicker">
-            {afterLive
-              ? "Événement terminé"
-              : livePriority
-                ? "Live en cours"
-                : "Événement"}
-          </p>
-          <h1 className="ev-landing-hero-title">{title}</h1>
-          {description ? (
-            <p className="ev-landing-hero-desc">{description}</p>
-          ) : null}
-          {livePriority ? (
-            <div
-              className="ev-landing-hero-cta-during"
-              style={{ marginTop: "1.25rem" }}
-            >
-              <Link href={joinHref} className="ev-landing-hero-cta">
-                Participer au live
-              </Link>
-            </div>
-          ) : null}
-        </div>
-      </section>
+      <MiniSiteHome slug={slug} payload={payload} />
 
       <div
         style={{
           maxWidth: marketingContentMaxWidth(),
           margin: "0 auto",
-          padding: "clamp(1.5rem, 4vw, 2.5rem) clamp(1.15rem, 4vw, 2rem) 2.75rem",
+          padding: "0 clamp(1.15rem, 4vw, 2rem) 1rem",
           boxSizing: "border-box",
         }}
       >
         {showEvenementSection ? (
           <LandingEvenementPresentation
             accent={accent}
-            lead={showcaseLead}
+            lead={getLandingEvenementLead({ phase: landingPhase })}
             afterLive={afterLive}
             landingEventDate={landingEventDate}
             landingVenue={landingVenue}
             landingHours={landingHours}
-            introTitle={landingIntroTitle}
+            introTitle={
+              typeof payload.landingIntroTitle === "string"
+                ? payload.landingIntroTitle.trim()
+                : ""
+            }
             introBody={landingIntroBody}
-            introPhotos={landingIntroPhotos}
-            thanksTitle={landingThanksTitle}
+            introPhotos={
+              Array.isArray(payload.landingIntroPhotos)
+                ? payload.landingIntroPhotos
+                : []
+            }
+            thanksTitle={
+              typeof payload.landingThanksTitle === "string"
+                ? payload.landingThanksTitle.trim()
+                : ""
+            }
             thanksBody={landingThanksBody}
-            thanksPhotos={landingThanksPhotos}
+            thanksPhotos={
+              Array.isArray(payload.landingThanksPhotos)
+                ? payload.landingThanksPhotos
+                : []
+            }
             programItems={programItemsList}
             showcasePhotos={showcasePhotosList}
             onOpenPhoto={(id) => {
@@ -1442,281 +257,32 @@ export default function EventLandingPage() {
         ) : null}
 
         <LandingPhotoLightbox
-          open={showcaseLightboxIndex != null && showcaseLightboxPhotos.length > 0}
+          open={
+            showcaseLightboxIndex != null && showcaseLightboxPhotos.length > 0
+          }
           photos={showcaseLightboxPhotos}
           index={showcaseLightboxIndex ?? 0}
           onClose={() => setShowcaseLightboxIndex(null)}
           onIndexChange={setShowcaseLightboxIndex}
         />
 
-        {!livePriority && !afterLive ? (
-        <section
-          style={{
-            textAlign: "center",
-            marginBottom: "clamp(1.75rem, 5vw, 2.75rem)",
-            padding: "0.25rem 0",
-          }}
-        >
-          <Link href={joinHref} className="ev-landing-hero-cta">
-            Rejoindre la salle
-          </Link>
-          <p
-            style={{
-              margin: "0.85rem 0 0",
-              fontSize: "0.9rem",
-              color: "#64748b",
-              maxWidth: "26rem",
-              marginLeft: "auto",
-              marginRight: "auto",
-              lineHeight: 1.45,
-            }}
-          >
-            Accès à la salle interactive : votes et animations en direct.
-          </p>
-        </section>
-        ) : null}
-
-        {canUploadLanding ? (
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            style={{ display: "none" }}
-            onChange={onLandingPhotoSelected}
-          />
-        ) : null}
-        {uploadError ? (
-          <p
-            style={{
-              margin: "0 0 0.75rem",
-              fontSize: "0.88rem",
-              color: "#b91c1c",
-            }}
-          >
-            {uploadError}
-          </p>
-        ) : null}
         {showFeedBlock ? (
           <LandingHybridFeed
             accent={accent}
             items={feedItems}
-            onToggleLike={handleTogglePhotoLike}
-            likeBusyId={likeBusyId}
-            canManage={canManageFeed}
-            onDeletePhoto={
-              canManageFeed ? handleDeleteLandingPhoto : undefined
+            canManage={false}
+            kicker={
+              landingPhase === "after"
+                ? "Souvenirs"
+                : landingPhase === "during"
+                  ? "En direct"
+                  : "Journal"
             }
-            deletingPhotoId={deletingPhotoId || exitingPhotoId}
-            kicker={feedKicker}
-            subtitle={feedSubtitle}
-            emptyHint={feedItems.length === 0 ? feedEmptyHint : null}
-            headerAction={
-              canUploadLanding ? (
-                <button
-                  type="button"
-                  className="ev-landing-upload-desktop"
-                  disabled={uploadBusy}
-                  onClick={triggerLandingPhotoPicker}
-                  title={feedShare.title}
-                  aria-label={feedShare.ariaLabel}
-                  style={{ color: accent }}
-                >
-                  <CameraIcon size={16} />
-                  {uploadPhase === "optimizing"
-                    ? "Optimisation…"
-                    : uploadPhase === "uploading"
-                      ? "Envoi…"
-                      : feedShare.label}
-                </button>
-              ) : null
-            }
+            subtitle={getLandingFeedSubtitle({ phase: landingPhase })}
+            emptyHint={null}
           />
         ) : null}
-
-        {showInfo ? (
-          <section
-            style={{
-              marginBottom: "clamp(1.75rem, 4vw, 2.5rem)",
-              padding: "clamp(1.25rem, 3vw, 1.65rem)",
-              borderRadius: "22px",
-              border: "1px solid rgba(15,23,42,0.06)",
-              background: "#fff",
-              boxShadow: "0 16px 48px rgba(15,23,42,0.06)",
-            }}
-          >
-            <h2
-              style={{
-                margin: 0,
-                fontSize: "0.68rem",
-                fontWeight: 800,
-                letterSpacing: "0.18em",
-                textTransform: "uppercase",
-                color: "#94a3b8",
-              }}
-            >
-              Infos pratiques
-            </h2>
-            {infoTitle ? (
-              <p
-                style={{
-                  margin: "0.65rem 0 0",
-                  fontWeight: 700,
-                  fontSize: "clamp(1.05rem, 2.8vw, 1.2rem)",
-                  color: "#0f172a",
-                  letterSpacing: "-0.02em",
-                }}
-              >
-                {infoTitle}
-              </p>
-            ) : null}
-            {infoText ? (
-              <p
-                style={{
-                  margin: infoTitle ? "0.5rem 0 0" : "0.65rem 0 0",
-                  fontSize: "0.98rem",
-                  lineHeight: 1.6,
-                  color: "#475569",
-                  whiteSpace: "pre-wrap",
-                }}
-              >
-                {infoText}
-              </p>
-            ) : null}
-            <div
-              style={{
-                marginTop: "1rem",
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "0.65rem",
-              }}
-            >
-              {ipL && ipU ? (
-                <a
-                  href={ipU}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    ...footerCta,
-                    background: `linear-gradient(180deg, ${accent}, color-mix(in srgb, ${accent} 82%, #000))`,
-                    color: "#fff",
-                  }}
-                >
-                  ↗ {ipL}
-                </a>
-              ) : null}
-              {isL && isU ? (
-                <a
-                  href={isU}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    padding: "0.65rem 1.1rem",
-                    borderRadius: "999px",
-                    border: `1px solid color-mix(in srgb, ${accent} 35%, #e2e8f0)`,
-                    fontWeight: 600,
-                    fontSize: "0.9rem",
-                    color: accent,
-                    textDecoration: "none",
-                    background: "#f8fafc",
-                    transition: "transform 0.2s ease, background 0.2s ease",
-                  }}
-                >
-                  ↗ {isL}
-                </a>
-              ) : null}
-            </div>
-          </section>
-        ) : null}
-
-        <section
-          style={{
-            textAlign: "center",
-            padding: afterLive
-              ? "clamp(1rem, 3vw, 1.5rem) 0 2.5rem"
-              : "clamp(1.5rem, 4vw, 2.5rem) 0 2.5rem",
-            "--ev-accent": accent,
-          }}
-        >
-          {/* Après l’événement : pas de lien salle (ni Accéder / Revoir). CTA live inchangé. */}
-          {!afterLive ? (
-            <Link href={joinHref} className="ev-landing-footer-link">
-              Accéder à la salle
-            </Link>
-          ) : null}
-          <p
-            style={{
-              margin: afterLive ? "0 auto" : "1.1rem auto 0",
-              fontSize: "0.92rem",
-              color: "#64748b",
-              maxWidth: "22rem",
-              lineHeight: 1.5,
-            }}
-          >
-            {afterLive
-              ? "Souvenirs et contenus restent accessibles ici."
-              : "Accès interactif : votes et animations en direct."}
-          </p>
-        </section>
       </div>
-
-      {livePriority ? (
-        <div
-          className="ev-landing-sticky-join"
-          style={{ "--ev-accent": accent }}
-        >
-          <Link href={joinHref} className="ev-landing-sticky-join-btn">
-            Participer au live
-          </Link>
-        </div>
-      ) : null}
-
-      {canUploadLanding ? (
-        <button
-          type="button"
-          className={
-            livePriority
-              ? "ev-landing-upload-fab ev-landing-upload-fab--above-sticky"
-              : "ev-landing-upload-fab"
-          }
-          disabled={uploadBusy}
-          onClick={triggerLandingPhotoPicker}
-          aria-label={feedShare.ariaLabel}
-          title={feedShare.title}
-          style={{
-            background: `linear-gradient(160deg, ${accent}, color-mix(in srgb, ${accent} 72%, #0f172a))`,
-          }}
-        >
-          <CameraIcon size={22} />
-        </button>
-      ) : null}
-
-      {toastNotif ? (
-        <div
-          role="status"
-          className="ev-landing-fade-in"
-          style={{
-            position: "fixed",
-            left: "50%",
-            top: "max(0.85rem, env(safe-area-inset-top))",
-            transform: "translateX(-50%)",
-            zIndex: 70,
-            padding: "0.65rem 1.15rem",
-            borderRadius: "999px",
-            background: "rgba(15,23,42,0.94)",
-            color: "#f8fafc",
-            fontSize: "0.9rem",
-            fontWeight: 600,
-            boxShadow: "0 16px 40px rgba(15,23,42,0.35)",
-            maxWidth: "min(92vw, 22rem)",
-            textAlign: "center",
-            backdropFilter: "blur(8px)",
-          }}
-        >
-          {toastNotif}
-        </div>
-      ) : null}
-    </main>
+    </MiniSiteShell>
   );
 }

@@ -1,25 +1,24 @@
 /**
- * Lot 2 UX — libellés visibles « Page de l’événement »
- * (remplace le jargon « Landing » côté UI, sans toucher routes/API).
+ * Mini-site événementiel — libellés UI (routes/API inchangées : /e, landing*).
  */
 
-export const EVENT_PAGE_LABEL = "Page de l’événement";
+export const EVENT_PAGE_LABEL = "Mini-site de l’événement";
 
-export const EVENT_PAGE_LABEL_SHORT = "Page événement";
+export const EVENT_PAGE_LABEL_SHORT = "Mini-site";
 
 export const EVENT_PAGE_NAV_EMOJI = `✨ ${EVENT_PAGE_LABEL}`;
 
 export const EVENT_PAGE_NAV_SHORT_EMOJI = `✨ ${EVENT_PAGE_LABEL_SHORT}`;
 
-export const EVENT_PAGE_VIEW_CTA = "Voir la page de l’événement";
+export const EVENT_PAGE_VIEW_CTA = "Voir le mini-site";
 
-export const EVENT_PAGE_DISABLED_LABEL = "Page de l’événement désactivée";
+export const EVENT_PAGE_DISABLED_LABEL = "Mini-site désactivé";
 
 export const EVENT_PAGE_ENABLE_HINT =
-  "Activez la page de l’événement dans sa configuration";
+  "Activez le mini-site dans sa configuration";
 
 export const EVENT_PAGE_STRUCTURED_HINT =
-  "Infos structurées pour « Les événements » (annuaire). Distinctes des textes libres de la page de l’événement.";
+  "Infos structurées pour « Les événements » (annuaire). Distinctes des textes libres du mini-site.";
 
 export const EVENT_PAGE_ROLE_HINT =
-  "Page publique avant / pendant / après le live : infos, accès salle et souvenirs. Facultative — le vote par QR fonctionne sans elle.";
+  "Mini-site public (Accueil / Participer) : identité de l’événement, accès à la participation et souvenirs. Activé automatiquement — le vote par QR /join reste inchangé.";

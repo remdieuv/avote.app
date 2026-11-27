@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { LiveMicroLabel } from "@/components/admin/LiveMicroIcon";
 import { EventInvitesPanel } from "@/components/admin/EventInvitesPanel";
 import { LandingFeedAdminPanel } from "@/components/event/LandingFeedAdminPanel";
@@ -281,10 +282,12 @@ export function EventCustomizationEditor({ mode = "live" }) {
     /** @type {null | "logo" | "background" | "landing_cover"} */ (null),
   );
   const [toast, setToast] = useState(null);
-  const [landingEnabled, setLandingEnabled] = useState(false);
+  const [landingEnabled, setLandingEnabled] = useState(true);
+  const [miniSiteShowKeyStats, setMiniSiteShowKeyStats] = useState(true);
   const [landingCoverUrl, setLandingCoverUrl] = useState("");
   const [landingTitle, setLandingTitle] = useState("");
   const [landingDescription, setLandingDescription] = useState("");
+  const [joinLinkCopied, setJoinLinkCopied] = useState(false);
   const [landingEventDate, setLandingEventDate] = useState("");
   const [landingVenue, setLandingVenue] = useState("");
   const [landingHours, setLandingHours] = useState("");
@@ -443,6 +446,9 @@ export function EventCustomizationEditor({ mode = "live" }) {
     if (isLandingPage) {
       return (
         landingEnabled !== baseline.landingEnabled ||
+        miniSiteShowKeyStats !== baseline.miniSiteShowKeyStats ||
+        logoUrl !== baseline.logoUrl ||
+        primaryColor !== baseline.primaryColor ||
         landingCoverUrl !== baseline.landingCoverUrl ||
         landingTitle !== baseline.landingTitle ||
         landingDescription !== baseline.landingDescription ||
@@ -496,6 +502,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
     infoSecondaryCtaUrl,
     infoShowOnFinished,
     landingEnabled,
+    miniSiteShowKeyStats,
     landingCoverUrl,
     landingTitle,
     landingDescription,
@@ -586,6 +593,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
       const iscu = data.infoSecondaryCtaUrl;
       const isof = data.infoShowOnFinished;
       const landEn = Boolean(data.landingEnabled);
+      const showKeyStats = data.miniSiteShowKeyStats !== false;
       const lcov = data.landingCoverUrl;
       const ltit = data.landingTitle;
       const ldesc = data.landingDescription;
@@ -653,6 +661,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
       setInfoShowOnFinished(typeof isof === "boolean" ? isof : true);
 
       setLandingEnabled(landEn);
+      setMiniSiteShowKeyStats(showKeyStats);
       setLandingCoverUrl(
         typeof lcov === "string" ? resolveApiAssetUrl(lcov) : "",
       );
@@ -775,6 +784,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
         infoSecondaryCtaUrl: typeof iscu === "string" ? iscu : "",
         infoShowOnFinished: typeof isof === "boolean" ? isof : true,
         landingEnabled: landEn,
+        miniSiteShowKeyStats: showKeyStats,
         landingCoverUrl:
           typeof lcov === "string" ? resolveApiAssetUrl(lcov) : "",
         landingTitle: typeof ltit === "string" ? ltit : "",
@@ -890,6 +900,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
               : null,
         infoShowOnFinished: Boolean(infoShowOnFinished),
         landingEnabled: Boolean(landingEnabled),
+        miniSiteShowKeyStats: Boolean(miniSiteShowKeyStats),
         landingCoverUrl:
           landingCoverUrl.trim() === "" ? null : landingCoverUrl.trim(),
         landingTitle:
@@ -986,6 +997,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
             : "",
         infoShowOnFinished: Boolean(infoShowOnFinished),
         landingEnabled: Boolean(landingEnabled),
+        miniSiteShowKeyStats: Boolean(miniSiteShowKeyStats),
         landingCoverUrl: landingCoverUrl.trim(),
         landingTitle: landingTitle.trim(),
         landingDescription: landingDescription.trim(),
@@ -1457,14 +1469,22 @@ export function EventCustomizationEditor({ mode = "live" }) {
 
   const joinPath = slug ? `/join/${encodeURIComponent(slug)}` : null;
   const landingPath = slug ? `/e/${encodeURIComponent(slug)}` : null;
+  const absoluteLandingUrl =
+    typeof window !== "undefined" && landingPath
+      ? `${window.location.origin}${landingPath}`
+      : landingPath;
+  const absoluteJoinUrl =
+    typeof window !== "undefined" && joinPath
+      ? `${window.location.origin}${joinPath}`
+      : joinPath;
   const photosBusy = showcasePhotoBusy || livePhotoBusy;
   /** Aperçu iframe seulement si la landing est réellement publiée (évite /join). */
   const landingPreviewActive =
     Boolean(landingEnabled) && Boolean(baseline?.landingEnabled);
 
-  async function copyLandingPublicLink() {
-    if (!landingPath || typeof window === "undefined") return;
-    const url = `${window.location.origin}${landingPath}`;
+  async function copyPublicPath(path, kind) {
+    if (!path || typeof window === "undefined") return;
+    const url = `${window.location.origin}${path}`;
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(url);
@@ -1476,11 +1496,20 @@ export function EventCustomizationEditor({ mode = "live" }) {
         document.execCommand("copy");
         document.body.removeChild(ta);
       }
-      setLandingLinkCopied(true);
-      window.setTimeout(() => setLandingLinkCopied(false), 2200);
+      if (kind === "join") {
+        setJoinLinkCopied(true);
+        window.setTimeout(() => setJoinLinkCopied(false), 2000);
+      } else {
+        setLandingLinkCopied(true);
+        window.setTimeout(() => setLandingLinkCopied(false), 2000);
+      }
     } catch {
-      setSaveError("Impossible de copier le lien.");
+      /* ignore */
     }
+  }
+
+  async function copyLandingPublicLink() {
+    await copyPublicPath(landingPath, "landing");
   }
 
   if (!eventId) {
@@ -1662,9 +1691,11 @@ export function EventCustomizationEditor({ mode = "live" }) {
                       Publication
                     </h2>
                     <p style={{ ...fieldHintStyle, margin: "0 0 0.85rem" }}>
-                      {EVENT_PAGE_LABEL} = page publique facultative. Désactivée,
-                      le lien <code style={{ fontSize: "0.72rem" }}>/e</code>{" "}
-                      redirige vers la salle live.
+                      Le {EVENT_PAGE_LABEL.toLowerCase()} est créé
+                      automatiquement pour chaque événement. Désactivé, le lien{" "}
+                      <code style={{ fontSize: "0.72rem" }}>/e</code> redirige
+                      vers la salle. Cela n’expose jamais de données privées
+                      (visibilité, invitations, médias, Discover, SEO).
                     </p>
                     <label
                       style={{
@@ -1682,7 +1713,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
                         checked={landingEnabled}
                         onChange={(e) => setLandingEnabled(e.target.checked)}
                       />
-                      Activer la {EVENT_PAGE_LABEL.toLowerCase()}
+                      Activer le {EVENT_PAGE_LABEL.toLowerCase()}
                     </label>
                     <p
                       style={{
@@ -1693,8 +1724,8 @@ export function EventCustomizationEditor({ mode = "live" }) {
                       }}
                     >
                       {landingEnabled
-                        ? "État : activée — visible sur /e"
-                        : "État : désactivée — /e redirige vers la salle live"}
+                        ? "État : activé — visible sur /e"
+                        : "État : désactivé — /e redirige vers la salle live"}
                     </p>
                     {landingPath ? (
                       <div
@@ -1746,6 +1777,181 @@ export function EventCustomizationEditor({ mode = "live" }) {
                     )}
                   </section>
 
+                  {/* 1b. QR codes et partage */}
+                  <section style={card}>
+                    <h2
+                      style={{
+                        margin: "0 0 0.55rem",
+                        fontSize: "0.72rem",
+                        fontWeight: 800,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "#64748b",
+                      }}
+                    >
+                      QR codes et partage
+                    </h2>
+                    <p style={{ ...fieldHintStyle, margin: "0 0 1rem" }}>
+                      Deux destinations distinctes : participation directe
+                      (/join) et mini-site (/e). Les QR et liens participants
+                      existants sont conservés.
+                    </p>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fit, minmax(11.5rem, 1fr))",
+                        gap: "1rem",
+                      }}
+                    >
+                      <div
+                        style={{
+                          padding: "0.85rem",
+                          borderRadius: "12px",
+                          border: "1px solid #e2e8f0",
+                          background: "#f8fafc",
+                        }}
+                      >
+                        <p
+                          style={{
+                            margin: "0 0 0.35rem",
+                            fontSize: "0.78rem",
+                            fontWeight: 800,
+                            color: "#0f172a",
+                          }}
+                        >
+                          QR participation directe
+                        </p>
+                        <p style={{ ...fieldHintStyle, margin: "0 0 0.65rem" }}>
+                          /join — salle et vote
+                        </p>
+                        {absoluteJoinUrl ? (
+                          <>
+                            <div
+                              style={{
+                                display: "inline-block",
+                                padding: "0.5rem",
+                                background: "#fff",
+                                borderRadius: "10px",
+                                border: "1px solid #e2e8f0",
+                              }}
+                            >
+                              <QRCodeSVG
+                                value={absoluteJoinUrl}
+                                size={128}
+                                level="M"
+                                includeMargin={false}
+                              />
+                            </div>
+                            <div
+                              style={{
+                                marginTop: "0.65rem",
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: "0.4rem",
+                              }}
+                            >
+                              <button
+                                type="button"
+                                style={btnSecondary}
+                                onClick={() => void copyPublicPath(joinPath, "join")}
+                              >
+                                {joinLinkCopied ? "Lien copié" : "Copier /join"}
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <p style={fieldHintStyle}>Slug manquant.</p>
+                        )}
+                      </div>
+                      <div
+                        style={{
+                          padding: "0.85rem",
+                          borderRadius: "12px",
+                          border: "1px solid #e2e8f0",
+                          background: "#f8fafc",
+                        }}
+                      >
+                        <p
+                          style={{
+                            margin: "0 0 0.35rem",
+                            fontSize: "0.78rem",
+                            fontWeight: 800,
+                            color: "#0f172a",
+                          }}
+                        >
+                          QR mini-site événementiel
+                        </p>
+                        <p style={{ ...fieldHintStyle, margin: "0 0 0.65rem" }}>
+                          /e — Accueil du mini-site
+                        </p>
+                        {absoluteLandingUrl ? (
+                          <>
+                            <div
+                              style={{
+                                display: "inline-block",
+                                padding: "0.5rem",
+                                background: "#fff",
+                                borderRadius: "10px",
+                                border: "1px solid #e2e8f0",
+                              }}
+                            >
+                              <QRCodeSVG
+                                value={absoluteLandingUrl}
+                                size={128}
+                                level="M"
+                                includeMargin={false}
+                              />
+                            </div>
+                            <div
+                              style={{
+                                marginTop: "0.65rem",
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: "0.4rem",
+                              }}
+                            >
+                              <button
+                                type="button"
+                                style={btnSecondary}
+                                onClick={() => void copyLandingPublicLink()}
+                              >
+                                {landingLinkCopied
+                                  ? "Lien copié"
+                                  : "Copier /e"}
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <p style={fieldHintStyle}>Slug manquant.</p>
+                        )}
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* 1c. Périmètre Lot 1 — pas d’onglets futurs en navigation */}
+                  <section style={card}>
+                    <h2
+                      style={{
+                        margin: "0 0 0.55rem",
+                        fontSize: "0.72rem",
+                        fontWeight: 800,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "#64748b",
+                      }}
+                    >
+                      Navigation du mini-site
+                    </h2>
+                    <p style={{ ...fieldHintStyle, margin: 0 }}>
+                      Lot 1 : seules les pages Accueil et Participer sont
+                      publiées. Aucun onglet supplémentaire n’est affiché au
+                      public (ni grisé, ni « bientôt »). L’architecture des
+                      onglets futurs reste préparée côté serveur pour les lots
+                      suivants.
+                    </p>
+                  </section>
+
                   {eventId ? (
                     <EventInvitesPanel eventId={eventId} eventSlug={slug} />
                   ) : null}
@@ -1765,21 +1971,11 @@ export function EventCustomizationEditor({ mode = "live" }) {
                       Personnalisation
                     </h2>
                     <p style={{ ...fieldHintStyle, margin: "0 0 0.85rem" }}>
-                      Couverture, titre et accroche : à valider avec{" "}
+                      Titre, accroche, couverture, logo, couleur et chiffres
+                      clés : à valider avec{" "}
                       <strong style={{ fontWeight: 700, color: "#475569" }}>
                         Enregistrer la page
                       </strong>
-                      . Logo et couleur d’accent viennent de la{" "}
-                      {eventId ? (
-                        <Link
-                          href={`/admin/events/${encodeURIComponent(eventId)}/live`}
-                          style={{ color: "#2563eb", fontWeight: 600 }}
-                        >
-                          Salle live
-                        </Link>
-                      ) : (
-                        "Salle live"
-                      )}
                       .
                     </p>
 
@@ -1902,7 +2098,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
                       onChange={(e) => setLandingDescription(e.target.value)}
                       rows={3}
                       maxLength={1200}
-                      placeholder="Accroche sous le titre sur la landing uniquement."
+                      placeholder="Accroche sous le titre sur le mini-site."
                       style={{
                         width: "100%",
                         boxSizing: "border-box",
@@ -1915,6 +2111,155 @@ export function EventCustomizationEditor({ mode = "live" }) {
                         marginBottom: "0.85rem",
                       }}
                     />
+
+                    <p
+                      style={{
+                        margin: "0 0 0.35rem",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: "#475569",
+                      }}
+                    >
+                      Logo
+                    </p>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "0.5rem",
+                        alignItems: "center",
+                        marginBottom: "0.85rem",
+                      }}
+                    >
+                      {logoUrl ? (
+                        <img
+                          src={logoUrl}
+                          alt="Logo"
+                          style={{
+                            width: "56px",
+                            height: "56px",
+                            objectFit: "contain",
+                            borderRadius: "10px",
+                            border: "1px solid #e2e8f0",
+                            background: "#fff",
+                          }}
+                        />
+                      ) : null}
+                      <label
+                        style={{
+                          ...btnSecondary,
+                          display: "inline-block",
+                          cursor:
+                            uploadKind !== null || photosBusy
+                              ? "not-allowed"
+                              : "pointer",
+                          opacity:
+                            uploadKind !== null || photosBusy ? 0.65 : 1,
+                        }}
+                      >
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/gif"
+                          style={{ display: "none" }}
+                          disabled={uploadKind !== null || photosBusy}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            e.target.value = "";
+                            if (f) void handleUpload("logo", f);
+                          }}
+                        />
+                        {uploadKind === "logo" ? "Envoi…" : "Envoyer un logo"}
+                      </label>
+                      {logoUrl ? (
+                        <button
+                          type="button"
+                          style={btnDanger}
+                          disabled={photosBusy}
+                          onClick={clearLogo}
+                        >
+                          Retirer
+                        </button>
+                      ) : null}
+                    </div>
+
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        color: "#475569",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Couleur principale
+                    </label>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "0.5rem",
+                        alignItems: "center",
+                        marginBottom: "0.85rem",
+                      }}
+                    >
+                      <input
+                        type="text"
+                        value={primaryColor}
+                        onChange={(e) => setPrimaryColor(e.target.value)}
+                        placeholder="#2563eb"
+                        style={{
+                          width: "7rem",
+                          padding: "0.45rem 0.55rem",
+                          borderRadius: "8px",
+                          border: "1px solid #cbd5e1",
+                          fontFamily: "ui-monospace, monospace",
+                          fontSize: "0.85rem",
+                        }}
+                      />
+                      <input
+                        type="color"
+                        value={
+                          isHexColor(primaryColor)
+                            ? primaryColor.trim()
+                            : "#2563eb"
+                        }
+                        onChange={(e) => setPrimaryColor(e.target.value)}
+                        style={{
+                          width: "2.5rem",
+                          height: "2.5rem",
+                          padding: 0,
+                          border: "1px solid #cbd5e1",
+                          borderRadius: "8px",
+                          cursor: "pointer",
+                        }}
+                      />
+                    </div>
+
+                    <label
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                        fontSize: "0.85rem",
+                        color: "#334155",
+                        cursor: "pointer",
+                        marginBottom: "1rem",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={miniSiteShowKeyStats}
+                        onChange={(e) =>
+                          setMiniSiteShowKeyStats(e.target.checked)
+                        }
+                      />
+                      Afficher les chiffres clés sur l’Accueil
+                    </label>
+                    <p style={{ ...fieldHintStyle, margin: "0 0 1rem" }}>
+                      Participants, questions et réponses publiques uniquement
+                      (questions masquées exclues). Un seul réglage pour tout le
+                      bloc.
+                    </p>
 
                     <p
                       style={{

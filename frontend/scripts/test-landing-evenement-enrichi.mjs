@@ -219,13 +219,13 @@ test("admin Landing : méta + programme + légendes showcase/Moments", () => {
 test("public /e : section ✨ + méta + programme + captions", () => {
   assert.match(page, /shouldShowLandingEvenementSection/);
   assert.match(page, /LandingEvenementPresentation/);
-  assert.match(page, /hasLandingComplementaryInfo/);
   assert.match(page, /programItems/);
-  // Pas de date/lieu structurés injectés dans le bloc Infos
-  assert.doesNotMatch(
-    page.slice(page.indexOf("Infos pratiques")),
-    /landingEventDate|landingVenue|landingHours/,
-  );
+  assert.match(page, /landingEventDate/);
+  assert.match(page, /landingVenue/);
+  assert.match(page, /landingHours/);
+  assert.match(page, /showcasePhotos/);
+  // Infos pratiques structurées dans le composant présentation, pas un bloc duplex /join
+  assert.doesNotMatch(page, /infoSectionTitle=\{/);
 });
 
 test("Fil + lightbox affichent légende ; messages/likes inchangés", () => {

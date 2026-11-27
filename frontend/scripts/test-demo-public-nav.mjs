@@ -111,9 +111,12 @@ test("Route /p/demo + garde /p/[slug] restent participant (pas diffusion)", () =
 
 test("Landing /e/[slug] démo sans fetch landing API", () => {
   const page = read("app/e/[slug]/page.jsx");
+  const hook = read("lib/useMiniSiteLanding.js");
   assert.match(page, /isDemoSlug\s*=\s*slug\s*===\s*["']demo["']/);
   assert.match(page, /EventLandingDemoPage/);
-  assert.match(page, /if\s*\(\s*isDemoSlug\s*\)\s*\{[\s\S]*?return\s+undefined/);
+  assert.match(page, /useMiniSiteLanding\(slug,\s*\{\s*isDemo:\s*isDemoSlug/);
+  assert.match(hook, /isDemo/);
+  assert.match(hook, /if\s*\(!slug\s*\|\|\s*isDemo\)/);
 });
 
 test("Route /join/demo + garde join/[slug] intactes", () => {

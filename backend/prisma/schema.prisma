@@ -229,11 +229,25 @@ model Event {
   participantsUsed Int @default(0)
   /** Pack activé au passage en mode réel (P50…P1000). */
   eventPlanType ActivationPlanType?
-  /** Landing publique `/e/[slug]` (vitrine + galerie photo). */
-  landingEnabled     Boolean @default(false)
+  /**
+   * Mini-site public `/e/[slug]` (Lot 1).
+   * Défaut true : créé automatiquement à chaque nouvel événement.
+   * N’altère pas PRIVATE / Discover / invitations / médias protégés.
+   */
+  landingEnabled     Boolean @default(true)
   landingCoverUrl    String?
   landingTitle       String?
   landingDescription String?
+  /** Accueil : afficher ou masquer l’ensemble des chiffres clés publics. */
+  miniSiteShowKeyStats Boolean @default(true)
+  /**
+   * Onglets facultatifs du mini-site (Lots 2–5).
+   * Désactivés par défaut ; Lot 1 ne les expose pas encore au public.
+   */
+  miniSiteTabResults Boolean @default(false)
+  miniSiteTabJournal Boolean @default(false)
+  miniSiteTabGallery Boolean @default(false)
+  miniSiteTabAbout   Boolean @default(false)
   /** Présentation ✨ L'événement — textes libres optionnels (pas de timezone). */
   landingEventDate String?
   landingVenue     String?
