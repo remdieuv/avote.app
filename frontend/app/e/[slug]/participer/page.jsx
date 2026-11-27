@@ -72,6 +72,7 @@ export default function MiniSiteParticipatePage() {
         typeof payload.primaryColor === "string" ? payload.primaryColor : null
       }
       tabs={payload.tabs}
+      landingPayload={payload}
     >
       <MiniSiteParticipate slug={slug} landingPayload={payload} />
     </MiniSiteShell>
