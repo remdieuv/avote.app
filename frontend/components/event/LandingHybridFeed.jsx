@@ -6,6 +6,7 @@ import {
   LandingPhotoLightbox,
   normalizeLightboxPhotos,
 } from "@/components/event/LandingPhotoLightbox";
+import { formatFrenchDisplayText } from "@/lib/miniSiteUi";
 
 /**
  * Fil chronologique Landing hybride — photos Moments, résultats, messages orga.
@@ -430,24 +431,62 @@ function FeedPhotoCard({
 }
 
 function FeedMessageCard({ message, accent }) {
+  const title =
+    typeof message?.title === "string" && message.title.trim()
+      ? message.title.trim()
+      : null;
   const body = typeof message?.body === "string" ? message.body : "";
-  if (!body) return null;
+  const image =
+    typeof message?.imageUrl === "string" && message.imageUrl.trim()
+      ? resolveApiAssetUrlNullable(message.imageUrl.trim())
+      : null;
+  if (!body && !title) return null;
   return (
     <FeedCardShell eyebrow="Organisateur">
-      <div style={{ padding: "0.55rem 1rem 1rem" }}>
-        <p
+      {image ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={image}
+          alt=""
           style={{
-            margin: 0,
-            fontSize: "1.02rem",
-            lineHeight: 1.55,
-            color: "#0f172a",
-            whiteSpace: "pre-wrap",
-            borderLeft: `3px solid ${accent}`,
-            paddingLeft: "0.85rem",
+            display: "block",
+            width: "100%",
+            maxHeight: "min(48vw, 260px)",
+            objectFit: "cover",
+            background: "#e2e8f0",
           }}
-        >
-          {body}
-        </p>
+        />
+      ) : null}
+      <div style={{ padding: "0.55rem 1rem 1rem" }}>
+        {title ? (
+          <h3
+            style={{
+              margin: "0 0 0.4rem",
+              fontSize: "1.05rem",
+              fontWeight: 750,
+              letterSpacing: "-0.02em",
+              color: "#0f172a",
+              lineHeight: 1.3,
+            }}
+          >
+            {formatFrenchDisplayText(title)}
+          </h3>
+        ) : null}
+        {body ? (
+          <p
+            style={{
+              margin: 0,
+              fontSize: "1.02rem",
+              lineHeight: 1.55,
+              color: "#0f172a",
+              whiteSpace: "pre-wrap",
+              borderLeft: `3px solid ${accent}`,
+              paddingLeft: "0.85rem",
+            }}
+          >
+            {formatFrenchDisplayText(body)}
+          </p>
+        ) : null}
       </div>
     </FeedCardShell>
   );
@@ -457,10 +496,10 @@ function FeedResultCard({ result, accent }) {
   const question =
     typeof result?.question === "string" ? result.question : "Question";
   const options = Array.isArray(result?.options) ? result.options : [];
-  const maxVotes = Math.max(1, ...options.map((o) => Number(o?.votes || 0)));
   const winners = Array.isArray(result?.contestWinners)
     ? result.contestWinners
     : [];
+  const percentMayExceed100 = Boolean(result?.percentMayExceed100);
   return (
     <FeedCardShell eyebrow="Résultat">
       <div style={{ padding: "0.5rem 1rem 1.05rem" }}>
@@ -474,12 +513,14 @@ function FeedResultCard({ result, accent }) {
             lineHeight: 1.3,
           }}
         >
-          {question}
+          {formatFrenchDisplayText(question)}
         </h3>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           {options.map((opt) => {
-            const votes = Number(opt?.votes || 0);
-            const pct = Math.round((votes / maxVotes) * 100);
+            const votes = Number(opt?.answers ?? opt?.votes || 0);
+            const pctRaw = Number(opt?.percent);
+            const pct = Number.isFinite(pctRaw) ? pctRaw : 0;
+            const barWidth = Math.min(100, Math.max(0, pct));
             return (
               <div key={String(opt?.id || opt?.label)}>
                 <div
@@ -492,11 +533,14 @@ function FeedResultCard({ result, accent }) {
                   }}
                 >
                   <span style={{ fontWeight: 600, color: "#0f172a" }}>
-                    {opt?.label}
+                    {formatFrenchDisplayText(String(opt?.label || ""))}
                     {opt?.isCorrect ? " ✓" : ""}
                   </span>
                   <span style={{ color: "#64748b", fontVariantNumeric: "tabular-nums" }}>
                     {votes}
+                    {" · "}
+                    {pct.toLocaleString("fr-FR", { maximumFractionDigits: 1 })}
+                    {"\u00A0%"}
                   </span>
                 </div>
                 <div
@@ -509,7 +553,7 @@ function FeedResultCard({ result, accent }) {
                 >
                   <div
                     style={{
-                      width: `${pct}%`,
+                      width: `${barWidth}%`,
                       height: "100%",
                       borderRadius: 999,
                       background: accent,
@@ -520,6 +564,18 @@ function FeedResultCard({ result, accent }) {
             );
           })}
         </div>
+        {percentMayExceed100 ? (
+          <p
+            style={{
+              margin: "0.65rem 0 0",
+              fontSize: "0.78rem",
+              color: "#64748b",
+            }}
+          >
+            Choix multiple : le total des pourcentages peut dépasser 100&nbsp;%
+            (base = répondants).
+          </p>
+        ) : null}
         {winners.length > 0 ? (
           <p
             style={{

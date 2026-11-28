@@ -454,11 +454,15 @@ model EventLandingPhoto {
   @@index([eventId, createdAt])
 }
 
-/** Message court organisateur — fil chronologique landing. */
+/** Message / actualité organisateur — fil landing + Journal (Lot 3). */
 model EventLandingMessage {
   id              String   @id @default(cuid())
   eventId         String
+  /** Titre public (Lot 3). Nullable pour messages historiques body-only. */
+  title           String?
   body            String
+  /** Image facultative (URL livrable, y compris marqueur protected://). */
+  imageUrl        String?
   /** Masqué du fil public (conservé en base pour l’orga). */
   hidden          Boolean  @default(false)
   createdByUserId String?

@@ -5,10 +5,11 @@ import { adminFetch, apiBaseBrowser } from "@/lib/config";
 import { LANDING_CAPTION_MAX } from "@/lib/landingEventPresentation";
 
 const MESSAGE_MAX = 500;
+const TITLE_MAX = 120;
 
 /**
- * Admin Landing — Fil de l’événement (messages, Moments, résultats).
- * Réutilise les API PR #38 ; photos gérées via callbacks parent.
+ * Admin Landing — Fil de l’événement (actualités Journal, Moments, résultats).
+ * Réutilise les API messages ; photos gérées via callbacks parent.
  *
  * @param {{
  *   eventId: string;
@@ -52,9 +53,19 @@ export function LandingFeedAdminPanel({
   hintStyle,
 }) {
   const [messages, setMessages] = useState(
-    /** @type {{ id: string; body: string; hidden: boolean; createdAt: string }[]} */ ([]),
+    /** @type {{ id: string; title: string | null; body: string; imageUrl: string | null; imageUrlStored: string | null; hidden: boolean; createdAt: string }[]} */ (
+      []
+    ),
   );
+  const [draftTitle, setDraftTitle] = useState("");
   const [draft, setDraft] = useState("");
+  const [draftImageUrl, setDraftImageUrl] = useState(
+    /** @type {string | null} */ (null),
+  );
+  const [draftImagePreview, setDraftImagePreview] = useState(
+    /** @type {string | null} */ (null),
+  );
+  const [editingId, setEditingId] = useState(/** @type {string | null} */ (null));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(/** @type {string | null} */ (null));
   const [resultBusyId, setResultBusyId] = useState(
@@ -107,7 +118,19 @@ export function LandingFeedAdminPanel({
       setMessages(
         rows.map((m) => ({
           id: String(m.id),
+          title:
+            typeof m.title === "string" && m.title.trim()
+              ? m.title.trim()
+              : null,
           body: String(m.body || ""),
+          imageUrl:
+            typeof m.imageUrl === "string" && m.imageUrl.trim()
+              ? m.imageUrl.trim()
+              : null,
+          imageUrlStored:
+            typeof m.imageUrlStored === "string" && m.imageUrlStored.trim()
+              ? m.imageUrlStored.trim()
+              : null,
           hidden: Boolean(m.hidden),
           createdAt: typeof m.createdAt === "string" ? m.createdAt : "",
         })),
@@ -116,6 +139,49 @@ export function LandingFeedAdminPanel({
       /* silent */
     }
   }, [eventId]);
+
+  function resetDraft() {
+    setDraftTitle("");
+    setDraft("");
+    setDraftImageUrl(null);
+    setDraftImagePreview(null);
+    setEditingId(null);
+  }
+
+  async function uploadJournalImage(file) {
+    if (!eventId || !file || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await adminFetch(
+        `${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/landing/messages/upload-image`,
+        { method: "POST", body: fd },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          typeof data?.error === "string" ? data.error : "Upload impossible.",
+        );
+      }
+      const stored =
+        typeof data.imageUrl === "string" && data.imageUrl.trim()
+          ? data.imageUrl.trim()
+          : null;
+      const preview =
+        typeof data.url === "string" && data.url.trim()
+          ? data.url.trim()
+          : stored;
+      setDraftImageUrl(stored);
+      setDraftImagePreview(preview);
+      onToast?.("Image ajoutée");
+    } catch (e) {
+      setError(e?.message || "Upload impossible.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   useEffect(() => {
     void loadMessages();
@@ -187,18 +253,77 @@ export function LandingFeedAdminPanel({
     lineHeight: 1.45,
   };
 
+  function mapMessageFromApi(data, fallbackBody) {
+    return {
+      id: String(data.id),
+      title:
+        typeof data.title === "string" && data.title.trim()
+          ? data.title.trim()
+          : null,
+      body: String(data.body || fallbackBody || ""),
+      imageUrl:
+        typeof data.imageUrl === "string" && data.imageUrl.trim()
+          ? data.imageUrl.trim()
+          : null,
+      imageUrlStored:
+        typeof data.imageUrlStored === "string" && data.imageUrlStored.trim()
+          ? data.imageUrlStored.trim()
+          : null,
+      hidden: Boolean(data.hidden),
+      createdAt:
+        typeof data.createdAt === "string"
+          ? data.createdAt
+          : new Date().toISOString(),
+    };
+  }
+
   async function publishMessage() {
     const body = draft.trim().slice(0, MESSAGE_MAX);
     if (!body || !eventId || busy) return;
+    const title = draftTitle.trim().slice(0, TITLE_MAX);
     setBusy(true);
     setError(null);
     try {
+      if (editingId) {
+        const res = await adminFetch(
+          `${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/landing/messages/${encodeURIComponent(editingId)}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: title || null,
+              body,
+              imageUrl: draftImageUrl,
+            }),
+          },
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(
+            typeof data?.error === "string"
+              ? data.error
+              : "Mise à jour impossible.",
+          );
+        }
+        const mapped = mapMessageFromApi(data, body);
+        setMessages((prev) =>
+          prev.map((m) => (m.id === editingId ? { ...m, ...mapped } : m)),
+        );
+        resetDraft();
+        onToast?.("Actualité mise à jour");
+        onChanged?.();
+        return;
+      }
       const res = await adminFetch(
         `${apiBaseBrowser()}/events/${encodeURIComponent(eventId)}/landing/messages`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ body }),
+          body: JSON.stringify({
+            title: title || null,
+            body,
+            imageUrl: draftImageUrl,
+          }),
         },
       );
       const data = await res.json().catch(() => ({}));
@@ -207,26 +332,23 @@ export function LandingFeedAdminPanel({
           typeof data?.error === "string" ? data.error : "Publication impossible.",
         );
       }
-      setDraft("");
-      setMessages((prev) => [
-        {
-          id: String(data.id),
-          body: String(data.body || body),
-          hidden: Boolean(data.hidden),
-          createdAt:
-            typeof data.createdAt === "string"
-              ? data.createdAt
-              : new Date().toISOString(),
-        },
-        ...prev,
-      ]);
-      onToast?.("Message publié sur le fil");
+      setMessages((prev) => [mapMessageFromApi(data, body), ...prev]);
+      resetDraft();
+      onToast?.("Actualité publiée");
       onChanged?.();
     } catch (e) {
       setError(e?.message || "Publication impossible.");
     } finally {
       setBusy(false);
     }
+  }
+
+  function startEditMessage(m) {
+    setEditingId(m.id);
+    setDraftTitle(m.title || "");
+    setDraft(m.body || "");
+    setDraftImageUrl(m.imageUrlStored || null);
+    setDraftImagePreview(m.imageUrl || null);
   }
 
   async function setMessageHidden(messageId, hidden) {
@@ -415,8 +537,8 @@ export function LandingFeedAdminPanel({
         </span>
       </div>
       <p style={hint}>
-        Messages, Moments live et résultats terminés — même journal que sur /e.
-        Photos {photos.length}/{photosMax}.
+        Actualités (Journal), Moments live et résultats terminés. Photos Moments{" "}
+        {photos.length}/{photosMax}.
       </p>
 
       <div
@@ -464,11 +586,29 @@ export function LandingFeedAdminPanel({
         </div>
 
         <div>
+          <input
+            type="text"
+            value={draftTitle}
+            onChange={(e) => setDraftTitle(e.target.value.slice(0, TITLE_MAX))}
+            placeholder="Titre de l’actualité (facultatif)"
+            disabled={busy}
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              marginBottom: "0.4rem",
+              padding: "0.5rem 0.65rem",
+              borderRadius: "10px",
+              border: "1px solid #cbd5e1",
+              fontSize: "0.84rem",
+              color: "#0f172a",
+              fontFamily: "inherit",
+            }}
+          />
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value.slice(0, MESSAGE_MAX))}
             rows={3}
-            placeholder="Message court pour le fil (ex. Merci d’être venus)…"
+            placeholder="Texte de l’actualité (ex. Merci d’être venus)…"
             disabled={busy}
             style={{
               width: "100%",
@@ -489,6 +629,67 @@ export function LandingFeedAdminPanel({
               display: "flex",
               flexWrap: "wrap",
               alignItems: "center",
+              gap: "0.5rem",
+              marginTop: "0.45rem",
+            }}
+          >
+            <label
+              style={{
+                ...secondary,
+                display: "inline-block",
+                cursor: busy ? "not-allowed" : "pointer",
+                opacity: busy ? 0.65 : 1,
+              }}
+            >
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                style={{ display: "none" }}
+                disabled={busy}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (f) void uploadJournalImage(f);
+                }}
+              />
+              Image facultative
+            </label>
+            {draftImagePreview ? (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={draftImagePreview}
+                  alt=""
+                  style={{
+                    width: 48,
+                    height: 48,
+                    objectFit: "cover",
+                    borderRadius: 8,
+                    border: "1px solid #e2e8f0",
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setDraftImageUrl(null);
+                    setDraftImagePreview(null);
+                  }}
+                  style={{
+                    ...secondary,
+                    cursor: busy ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Retirer l’image
+                </button>
+              </>
+            ) : null}
+          </div>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
               justifyContent: "space-between",
               gap: "0.5rem",
               marginTop: "0.4rem",
@@ -496,20 +697,42 @@ export function LandingFeedAdminPanel({
           >
             <span style={{ fontSize: "0.65rem", color: "#94a3b8" }}>
               {draft.length}/{MESSAGE_MAX}
+              {editingId ? " · édition" : ""}
             </span>
-            <button
-              type="button"
-              disabled={busy || draft.trim().length === 0}
-              onClick={() => void publishMessage()}
-              style={{
-                ...primary,
-                opacity: busy || draft.trim().length === 0 ? 0.65 : 1,
-                cursor:
-                  busy || draft.trim().length === 0 ? "not-allowed" : "pointer",
-              }}
-            >
-              {busy ? "…" : "Publier le message"}
-            </button>
+            <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+              {editingId ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => resetDraft()}
+                  style={{
+                    ...secondary,
+                    cursor: busy ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Annuler
+                </button>
+              ) : null}
+              <button
+                type="button"
+                disabled={busy || draft.trim().length === 0}
+                onClick={() => void publishMessage()}
+                style={{
+                  ...primary,
+                  opacity: busy || draft.trim().length === 0 ? 0.65 : 1,
+                  cursor:
+                    busy || draft.trim().length === 0
+                      ? "not-allowed"
+                      : "pointer",
+                }}
+              >
+                {busy
+                  ? "…"
+                  : editingId
+                    ? "Enregistrer"
+                    : "Publier l’actualité"}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -738,8 +961,37 @@ export function LandingFeedAdminPanel({
                       color: "#94a3b8",
                     }}
                   >
-                    Message{m.hidden ? " · masqué" : ""}
+                    Actualité{m.hidden ? " · masquée" : ""}
                   </p>
+                  {m.title ? (
+                    <p
+                      style={{
+                        margin: "0.35rem 0 0",
+                        fontSize: "0.92rem",
+                        fontWeight: 700,
+                        color: "#0f172a",
+                        lineHeight: 1.35,
+                      }}
+                    >
+                      {m.title}
+                    </p>
+                  ) : null}
+                  {m.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={m.imageUrl}
+                      alt=""
+                      style={{
+                        display: "block",
+                        marginTop: "0.4rem",
+                        width: "100%",
+                        maxHeight: 120,
+                        objectFit: "cover",
+                        borderRadius: 8,
+                        background: "#f1f5f9",
+                      }}
+                    />
+                  ) : null}
                   <p
                     style={{
                       margin: "0.35rem 0 0.5rem",
@@ -758,6 +1010,17 @@ export function LandingFeedAdminPanel({
                       gap: "0.35rem",
                     }}
                   >
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => startEditMessage(m)}
+                      style={{
+                        ...secondary,
+                        cursor: busy ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      Modifier
+                    </button>
                     <button
                       type="button"
                       disabled={busy}

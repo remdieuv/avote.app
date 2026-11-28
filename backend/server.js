@@ -127,6 +127,11 @@ const {
   buildMinisiteResultDetail,
 } = require("./lib/miniSiteResults");
 const {
+  JOURNAL_TITLE_MAX,
+  JOURNAL_BODY_MAX,
+  buildMinisiteJournal,
+} = require("./lib/miniSiteJournal");
+const {
   CAPTION_MAX,
   PROGRAM_TITLE_MAX,
   PROGRAM_TIME_MAX,
@@ -4382,7 +4387,17 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       })),
       likeCounts,
       likedPhotoIds,
-      messages: event.landingMessages || [],
+      messages: (event.landingMessages || []).map((m) => ({
+        ...m,
+        imageUrl: resolveDeliverableMediaUrl(
+          m.imageUrl,
+          isProtectedUrlMarker(m.imageUrl)
+            ? String(m.imageUrl).replace(/^protected:\/\//, "")
+            : null,
+          mediaEvent,
+          absolutizeStoredAssetUrl,
+        ),
+      })),
       closedPolls,
       winnersByPollId,
       afterLive,
@@ -4452,6 +4467,23 @@ app.get("/events/slug/:slug/landing", async (req, res) => {
       publicStatus: resolveMiniSitePublicStatus(event),
       publicStats: await fetchMiniSitePublicStats(prisma, event),
       latestNews: pickLatestPublicNews(event.landingMessages || []),
+      journalPreview: event.miniSiteTabJournal
+        ? (
+            await buildMinisiteJournal(prisma, event, {
+              slug: event.slug,
+              limit: 3,
+              resolveMediaUrl: (u) =>
+                resolveDeliverableMediaUrl(
+                  u,
+                  isProtectedUrlMarker(u)
+                    ? String(u).replace(/^protected:\/\//, "")
+                    : null,
+                  mediaEvent,
+                  absolutizeStoredAssetUrl,
+                ),
+            })
+          ).items
+        : [],
       ...visibilityFields,
       seo: {
         robots: isInviteProtectionEnabled(event)
@@ -4641,6 +4673,138 @@ app.get(
     }
   },
 );
+
+/**
+ * Lot 3 — charge l’événement landing + invite + flag onglet Journal.
+ * @returns {Promise<{ ok: true; event: object } | { ok: false; status: number; body: object }>}
+ */
+async function resolveMinisiteJournalAccess(req, slug) {
+  const event = await prisma.event.findUnique({
+    where: { slug },
+    select: {
+      id: true,
+      slug: true,
+      userId: true,
+      landingEnabled: true,
+      inviteEnabled: true,
+      mediaProtectionEnabled: true,
+      miniSiteTabJournal: true,
+      isLiveConsumed: true,
+      consultationMode: true,
+      selfServiceSelectedPollIds: true,
+      selfServiceOpen: true,
+      visibility: true,
+    },
+  });
+  if (!event) {
+    return {
+      ok: false,
+      status: 404,
+      body: { error: "Événement introuvable." },
+    };
+  }
+  if (!event.landingEnabled) {
+    return {
+      ok: false,
+      status: 404,
+      body: { error: "Landing introuvable.", enabled: false, slug: event.slug },
+    };
+  }
+  const access = await resolveLandingSouvenirAccess(event, req);
+  if (!access.allowed) {
+    return {
+      ok: false,
+      status: 401,
+      body: {
+        error: "Souvenirs protégés — connexion et invitation requises.",
+        code: "INVITE_REQUIRED",
+        enabled: true,
+        slug: event.slug,
+        inviteEnabled: true,
+        invitePath: `/invite/${event.slug}`,
+        joinPath: `/join/${event.slug}`,
+      },
+    };
+  }
+  if (!event.miniSiteTabJournal) {
+    return {
+      ok: false,
+      status: 404,
+      body: {
+        error: "Onglet Journal désactivé.",
+        code: "MINISITE_JOURNAL_DISABLED",
+        enabled: false,
+        slug: event.slug,
+      },
+    };
+  }
+  return { ok: true, event };
+}
+
+/** Lot 3 — fil Journal public (actualités + auto fiables). */
+app.get(
+  "/events/slug/:slug/landing/journal",
+  minisiteResultsLimiter,
+  async (req, res) => {
+    try {
+      res.setHeader("Cache-Control", "no-store");
+      const slug =
+        typeof req.params.slug === "string" ? req.params.slug.trim() : "";
+      if (!slug) {
+        return res.status(400).json({ error: "Slug invalide." });
+      }
+      const gate = await resolveMinisiteJournalAccess(req, slug);
+      if (!gate.ok) {
+        return res.status(gate.status).json(gate.body);
+      }
+      const mediaEvent = {
+        mediaProtectionEnabled: isMediaProtectionEnabled(gate.event),
+      };
+      const payload = await buildMinisiteJournal(prisma, gate.event, {
+        slug: gate.event.slug,
+        resolveMediaUrl: (u) =>
+          resolveDeliverableMediaUrl(
+            u,
+            isProtectedUrlMarker(u)
+              ? String(u).replace(/^protected:\/\//, "")
+              : null,
+            mediaEvent,
+            absolutizeStoredAssetUrl,
+          ),
+      });
+      return res.json(payload);
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: "Erreur serveur." });
+    }
+  },
+);
+
+/**
+ * @param {unknown} raw
+ * @returns {string | null | undefined} undefined = invalide
+ */
+function normalizeJournalImageUrlInput(raw) {
+  if (raw === null) return null;
+  if (typeof raw !== "string") return undefined;
+  const t = raw.trim();
+  if (t === "") return null;
+  if (t.length > 2048) return undefined;
+  if (isProtectedUrlMarker(t)) return t;
+  return normalizeAssetUrlInput(t);
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {string | null | undefined} undefined = invalide ; null = vider
+ */
+function normalizeJournalTitleInput(raw) {
+  if (raw === null) return null;
+  if (typeof raw !== "string") return undefined;
+  const t = raw.trim();
+  if (t === "") return null;
+  return t.slice(0, JOURNAL_TITLE_MAX);
+}
 
 /** Détail événement + sondages triés (régie admin) */
 app.get("/events/:eventId", requireAuth, async (req, res) => {
@@ -5422,7 +5586,7 @@ app.patch("/events/:eventId/customization", requireAuth, async (req, res) => {
       data.miniSiteShowKeyStats = body.miniSiteShowKeyStats;
     }
 
-    // Lot 2 : Résultats activable ; Lots 3–5 toujours non disponibles.
+    // Lots 2–3 : Résultats + Journal activables ; Lots 4–5 non disponibles.
     for (const tabKey of [
       "miniSiteTabResults",
       "miniSiteTabJournal",
@@ -5769,6 +5933,30 @@ app.delete(
 );
 
 /** Messages orga — fil landing. */
+function mapLandingMessageAdminJson(m, mediaEvent) {
+  return {
+    id: m.id,
+    title:
+      typeof m.title === "string" && m.title.trim() ? m.title.trim() : null,
+    body: m.body,
+    imageUrl: resolveDeliverableMediaUrl(
+      m.imageUrl,
+      isProtectedUrlMarker(m.imageUrl)
+        ? String(m.imageUrl).replace(/^protected:\/\//, "")
+        : null,
+      mediaEvent || {},
+      absolutizeStoredAssetUrl,
+    ),
+    imageUrlStored:
+      typeof m.imageUrl === "string" && m.imageUrl.trim()
+        ? m.imageUrl.trim()
+        : null,
+    hidden: Boolean(m.hidden),
+    createdAt: m.createdAt.toISOString(),
+    updatedAt: m.updatedAt.toISOString(),
+  };
+}
+
 app.get("/events/:eventId/landing/messages", requireAuth, async (req, res) => {
   try {
     const { eventId } = req.params;
@@ -5776,25 +5964,76 @@ app.get("/events/:eventId/landing/messages", requireAuth, async (req, res) => {
     if (!owned.ok) {
       return res.status(owned.status).json({ error: "Événement introuvable." });
     }
+    const evMedia = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { mediaProtectionEnabled: true },
+    });
     const rows = await prisma.eventLandingMessage.findMany({
       where: { eventId },
       orderBy: { createdAt: "desc" },
       take: 100,
     });
     return res.json({
-      messages: rows.map((m) => ({
-        id: m.id,
-        body: m.body,
-        hidden: Boolean(m.hidden),
-        createdAt: m.createdAt.toISOString(),
-        updatedAt: m.updatedAt.toISOString(),
-      })),
+      messages: rows.map((m) => mapLandingMessageAdminJson(m, evMedia || {})),
     });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Erreur serveur." });
   }
 });
+
+/** Lot 3 — upload image facultative d’une actualité (hors Moments / galerie). */
+app.post(
+  "/events/:eventId/landing/messages/upload-image",
+  requireAuth,
+  async (req, res) => {
+    try {
+      const { eventId } = req.params;
+      const owned = await assertEventOwnedByOrPlatformAdmin(eventId, req.userId);
+      if (!owned.ok) {
+        return res.status(owned.status).json({ error: "Événement introuvable." });
+      }
+      await new Promise((resolve, reject) => {
+        uploadMiddleware(req, res, (err) => {
+          if (err) reject(err);
+          else resolve(undefined);
+        });
+      });
+      if (!req.file) {
+        return res.status(400).json({ error: "Fichier manquant (champ file)." });
+      }
+      const evMedia = await prisma.event.findUnique({
+        where: { id: eventId },
+        select: { mediaProtectionEnabled: true },
+      });
+      const uploadResult = await uploadImageBufferToCloudinary({
+        buffer: req.file.buffer,
+        eventId,
+        kind: "landing_message_photo",
+        authenticated: isMediaProtectionEnabled(evMedia || {}),
+      });
+      const stored = persistProtectedUploadFields(uploadResult, evMedia || {});
+      return res.status(201).json({
+        url: resolveDeliverableMediaUrl(
+          stored.url,
+          stored.cloudinaryPublicId,
+          evMedia || {},
+          absolutizeStoredAssetUrl,
+        ),
+        imageUrl: stored.url,
+        publicId: stored.cloudinaryPublicId,
+      });
+    } catch (e) {
+      if (e && typeof e === "object" && e.code === "LIMIT_FILE_SIZE") {
+        return res
+          .status(400)
+          .json({ error: "Fichier trop volumineux (max 5 Mo)." });
+      }
+      console.error(e);
+      return res.status(500).json({ error: e?.message || "Upload impossible." });
+    }
+  },
+);
 
 app.post("/events/:eventId/landing/messages", requireAuth, async (req, res) => {
   try {
@@ -5807,23 +6046,40 @@ app.post("/events/:eventId/landing/messages", requireAuth, async (req, res) => {
     if (typeof raw !== "string") {
       return res.status(400).json({ error: "Message invalide." });
     }
-    const body = raw.trim().slice(0, LANDING_MESSAGE_MAX_LEN);
+    const body = raw.trim().slice(0, JOURNAL_BODY_MAX);
     if (!body) {
       return res.status(400).json({ error: "Message vide." });
+    }
+    let title = null;
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, "title")) {
+      const t = normalizeJournalTitleInput(req.body.title);
+      if (t === undefined) {
+        return res.status(400).json({ error: "Titre invalide." });
+      }
+      title = t;
+    }
+    let imageUrl = null;
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, "imageUrl")) {
+      const img = normalizeJournalImageUrlInput(req.body.imageUrl);
+      if (img === undefined) {
+        return res.status(400).json({ error: "Image invalide." });
+      }
+      imageUrl = img;
     }
     const row = await prisma.eventLandingMessage.create({
       data: {
         eventId,
+        title,
         body,
+        imageUrl,
         createdByUserId: req.userId || null,
       },
     });
-    return res.status(201).json({
-      id: row.id,
-      body: row.body,
-      hidden: Boolean(row.hidden),
-      createdAt: row.createdAt.toISOString(),
+    const evMedia = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { mediaProtectionEnabled: true },
     });
+    return res.status(201).json(mapLandingMessageAdminJson(row, evMedia || {}));
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Erreur serveur." });
@@ -5862,9 +6118,23 @@ app.patch(
         if (typeof req.body.body !== "string") {
           return res.status(400).json({ error: "Message invalide." });
         }
-        const t = req.body.body.trim().slice(0, LANDING_MESSAGE_MAX_LEN);
+        const t = req.body.body.trim().slice(0, JOURNAL_BODY_MAX);
         if (!t) return res.status(400).json({ error: "Message vide." });
         data.body = t;
+      }
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, "title")) {
+        const t = normalizeJournalTitleInput(req.body.title);
+        if (t === undefined) {
+          return res.status(400).json({ error: "Titre invalide." });
+        }
+        data.title = t;
+      }
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, "imageUrl")) {
+        const img = normalizeJournalImageUrlInput(req.body.imageUrl);
+        if (img === undefined) {
+          return res.status(400).json({ error: "Image invalide." });
+        }
+        data.imageUrl = img;
       }
       if (Object.keys(data).length === 0) {
         return res.status(400).json({ error: "Rien à mettre à jour." });
@@ -5873,13 +6143,11 @@ app.patch(
         where: { id: mid },
         data,
       });
-      return res.json({
-        id: row.id,
-        body: row.body,
-        hidden: Boolean(row.hidden),
-        createdAt: row.createdAt.toISOString(),
-        updatedAt: row.updatedAt.toISOString(),
+      const evMedia = await prisma.event.findUnique({
+        where: { id: eventId },
+        select: { mediaProtectionEnabled: true },
       });
+      return res.json(mapLandingMessageAdminJson(row, evMedia || {}));
     } catch (e) {
       console.error(e);
       return res.status(500).json({ error: "Erreur serveur." });

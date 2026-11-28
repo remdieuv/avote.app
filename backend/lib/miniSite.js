@@ -25,10 +25,10 @@ const MINI_SITE_TABS = Object.freeze([
 
 /**
  * Onglets facultatifs déjà développés (activables côté public si flag orga).
- * Lots 3–5 restent non disponibles.
+ * Lots 4–5 restent non disponibles.
  */
 const MINI_SITE_AVAILABLE_OPTIONAL_FLAGS = Object.freeze(
-  new Set(["miniSiteTabResults"]),
+  new Set(["miniSiteTabResults", "miniSiteTabJournal"]),
 );
 
 /**
@@ -297,8 +297,11 @@ function pickLatestPublicNews(messages) {
     if (!body) continue;
     const id = typeof m.id === "string" ? m.id : String(m.id || "");
     if (!id) continue;
+    const title =
+      typeof m.title === "string" && m.title.trim() ? m.title.trim() : null;
     return {
       id,
+      title,
       body: body.slice(0, 500),
       createdAt:
         m.createdAt instanceof Date

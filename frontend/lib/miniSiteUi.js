@@ -20,6 +20,7 @@ export const MINI_SITE_REQUIRED_TAB_IDS = Object.freeze([
 /** Onglets facultatifs déjà développés (activables via API). */
 export const MINI_SITE_AVAILABLE_OPTIONAL_TAB_IDS = Object.freeze([
   "resultats",
+  "journal",
 ]);
 
 /** @deprecated Lot 1 — conserver pour tests historiques ; utiliser resolveVisibleMiniSiteTabs. */
@@ -29,11 +30,12 @@ const TAB_PATHS = Object.freeze({
   accueil: "",
   participer: "participer",
   resultats: "resultats",
+  journal: "journal",
 });
 
 /**
  * Onglets visibles : Accueil + Participer + facultatifs disponibles et enabled.
- * Ne jamais inclure Journal / Galerie / À propos (Lots 3–5).
+ * Ne jamais inclure Galerie / À propos (Lots 4–5).
  * @param {Array<{ id?: string; path?: string; enabled?: boolean; required?: boolean; available?: boolean }> | null | undefined} apiTabs
  */
 export function resolveVisibleMiniSiteTabs(apiTabs) {

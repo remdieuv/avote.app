@@ -221,7 +221,7 @@ test("fil admin centralisé (pas régie messages / hide)", () => {
   assert.match(feedAdmin, /landing\/messages/);
   assert.match(feedAdmin, /landing-result/);
   assert.match(feedAdmin, /Masquer du fil/);
-  assert.match(feedAdmin, /Publier le message/);
+  assert.match(feedAdmin, /Publier l’actualité|Publier le message/);
   assert.match(feedAdmin, /Fil de l&apos;événement|Fil de l'événement/);
 });
 

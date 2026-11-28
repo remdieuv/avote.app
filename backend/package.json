@@ -39,6 +39,7 @@
     "test:consultation-mode": "node scripts/test-consultation-mode.mjs",
     "test:mini-site-lot1": "node scripts/test-mini-site-lot1.mjs",
     "test:mini-site-lot2": "node scripts/test-mini-site-lot2-results.mjs",
+    "test:mini-site-lot3": "node scripts/test-mini-site-lot3-journal.mjs",
     "test:public-poll-visibility": "node scripts/test-public-poll-visibility.mjs",
     "test:load-harness": "node scripts/test-load-harness.mjs",
     "load:plan": "node scripts/load-harness.mjs plan",

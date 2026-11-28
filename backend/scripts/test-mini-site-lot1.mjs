@@ -68,7 +68,7 @@ test("onglets fixes dans l’ordre Accueil → À propos", () => {
   assert.equal(MINI_SITE_TABS[1].required, true);
 });
 
-test("API publique : Accueil/Participer + Résultats si activé (pas de Lots 3–5)", () => {
+test("API publique : Accueil/Participer + Résultats/Journal si activés (pas de Lots 4–5)", () => {
   const fields = miniSiteApiFields(
     {
       miniSiteShowKeyStats: true,
@@ -81,18 +81,27 @@ test("API publique : Accueil/Participer + Résultats si activé (pas de Lots 3�
   );
   assert.deepEqual(
     fields.tabs.map((t) => t.id),
-    ["accueil", "participer", "resultats"],
+    ["accueil", "participer", "resultats", "journal"],
   );
   assert.equal(fields.tabs.every((t) => t.enabled === true), true);
   assert.equal(fields.miniSiteTabResults, true);
+  assert.equal(fields.miniSiteTabJournal, true);
   assert.equal(fields.miniSiteShowKeyStats, true);
   const off = miniSiteApiFields(
-    { miniSiteTabResults: false, miniSiteTabJournal: true },
+    { miniSiteTabResults: false, miniSiteTabJournal: false },
     { allowOptionalTabs: false },
   );
   assert.deepEqual(
     off.tabs.map((t) => t.id),
     ["accueil", "participer"],
+  );
+  const journalOnly = miniSiteApiFields(
+    { miniSiteTabResults: false, miniSiteTabJournal: true },
+    { allowOptionalTabs: false },
+  );
+  assert.deepEqual(
+    journalOnly.tabs.map((t) => t.id),
+    ["accueil", "participer", "journal"],
   );
 });
 

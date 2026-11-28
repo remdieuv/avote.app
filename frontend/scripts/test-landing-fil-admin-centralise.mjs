@@ -42,7 +42,7 @@ test("section Fil dans admin landing", () => {
   assert.match(customization, /closedLandingPolls/);
   assert.match(feedAdmin, /data-testid="landing-feed-admin"/);
   assert.match(feedAdmin, /Publier une photo/);
-  assert.match(feedAdmin, /Publier le message/);
+  assert.match(feedAdmin, /Publier l’actualité|Publier le message/);
   assert.match(feedAdmin, /Publications \(récent/);
   assert.match(feedAdmin, /Résultats dans le fil/);
 });
