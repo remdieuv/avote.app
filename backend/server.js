@@ -130,6 +130,7 @@ const {
   JOURNAL_TITLE_MAX,
   JOURNAL_BODY_MAX,
   buildMinisiteJournal,
+  buildMinisiteJournalNewsDetail,
 } = require("./lib/miniSiteJournal");
 const {
   CAPTION_MAX,
@@ -4773,6 +4774,60 @@ app.get(
           ),
       });
       return res.json(payload);
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: "Erreur serveur." });
+    }
+  },
+);
+
+/** Lot 3 finition — détail public d’une actualité (URL individuelle). */
+app.get(
+  "/events/slug/:slug/landing/journal/:messageId",
+  minisiteResultsLimiter,
+  async (req, res) => {
+    try {
+      res.setHeader("Cache-Control", "no-store");
+      const slug =
+        typeof req.params.slug === "string" ? req.params.slug.trim() : "";
+      const messageId =
+        typeof req.params.messageId === "string"
+          ? req.params.messageId.trim()
+          : "";
+      if (!slug || !messageId) {
+        return res.status(400).json({ error: "Paramètres invalides." });
+      }
+      const gate = await resolveMinisiteJournalAccess(req, slug);
+      if (!gate.ok) {
+        return res.status(gate.status).json(gate.body);
+      }
+      const mediaEvent = {
+        mediaProtectionEnabled: isMediaProtectionEnabled(gate.event),
+      };
+      const built = await buildMinisiteJournalNewsDetail(
+        prisma,
+        gate.event,
+        messageId,
+        {
+          slug: gate.event.slug,
+          resolveMediaUrl: (u) =>
+            resolveDeliverableMediaUrl(
+              u,
+              isProtectedUrlMarker(u)
+                ? String(u).replace(/^protected:\/\//, "")
+                : null,
+              mediaEvent,
+              absolutizeStoredAssetUrl,
+            ),
+        },
+      );
+      if (!built.ok) {
+        return res.status(built.status || 404).json({
+          error: built.error || "Actualité introuvable.",
+          code: built.code || "JOURNAL_NEWS_NOT_FOUND",
+        });
+      }
+      return res.json(built.payload);
     } catch (e) {
       console.error(e);
       return res.status(500).json({ error: "Erreur serveur." });

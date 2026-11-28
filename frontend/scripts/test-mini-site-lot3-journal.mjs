@@ -82,9 +82,10 @@ test("Journal : charge API, soft refresh, pas de commentaires", () => {
   assert.match(journal, /landing\/journal/);
   assert.match(journal, /cache:\s*["']no-store["']/);
   assert.match(journal, /45_000|45000/);
-  assert.doesNotMatch(journal, /like|commentaire|catégorie/i);
+  assert.doesNotMatch(journal, /\blike\b|commentaire|catégorie/i);
   assert.match(journal, /ResultBarsChart/);
   assert.match(journal, /formatFrenchDisplayText/);
+  assert.match(journal, /MiniSiteShare|Partager/);
 });
 
 test("fil Accueil : NBSP questions + % réel (pas maxVotes)", () => {

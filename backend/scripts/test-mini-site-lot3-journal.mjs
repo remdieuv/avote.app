@@ -13,8 +13,10 @@ const {
   JOURNAL_TITLE_MAX,
   JOURNAL_BODY_MAX,
   mapPublicJournalNews,
+  journalNewsSharePath,
   loadJournalAutoItems,
   buildMinisiteJournal,
+  buildMinisiteJournalNewsDetail,
   isJournalSupportedPollType,
 } = require("../lib/miniSiteJournal.js");
 const { miniSiteApiFields, MINI_SITE_AVAILABLE_OPTIONAL_FLAGS } = require(
@@ -73,15 +75,20 @@ await test("onglet Journal disponible après Résultats", () => {
   assert.equal(JOURNAL_BODY_MAX, 500);
 });
 
-await test("mapPublicJournalNews : titre défaut + image", () => {
-  const n = mapPublicJournalNews({
-    id: "m1",
-    body: "Hello",
-    createdAt: new Date("2026-11-28T10:00:00Z"),
-  });
+await test("mapPublicJournalNews : titre défaut + image + sharePath", () => {
+  const n = mapPublicJournalNews(
+    {
+      id: "m1",
+      body: "Hello",
+      createdAt: new Date("2026-11-28T10:00:00Z"),
+    },
+    { slug: "evt" },
+  );
   assert.equal(n.title, "Actualité");
   assert.equal(n.body, "Hello");
   assert.equal(n.imageUrl, null);
+  assert.equal(n.sharePath, "/e/evt/journal/m1");
+  assert.equal(journalNewsSharePath("evt", "m1"), "/e/evt/journal/m1");
   const withTitle = mapPublicJournalNews(
     {
       id: "m2",
@@ -90,10 +97,33 @@ await test("mapPublicJournalNews : titre défaut + image", () => {
       imageUrl: "protected://abc",
       createdAt: new Date("2026-11-28T11:00:00Z"),
     },
-    { resolveMediaUrl: (u) => (u === "protected://abc" ? "https://cdn/x" : u) },
+    {
+      slug: "evt",
+      resolveMediaUrl: (u) => (u === "protected://abc" ? "https://cdn/x" : u),
+    },
   );
   assert.equal(withTitle.title, "Titre");
   assert.equal(withTitle.imageUrl, "https://cdn/x");
+});
+
+await test("détail actualité : masquée introuvable", async () => {
+  const db = {
+    eventLandingMessage: {
+      findFirst: async ({ where }) => {
+        assert.equal(where.hidden, false);
+        return null;
+      },
+    },
+  };
+  const built = await buildMinisiteJournalNewsDetail(
+    db,
+    { id: "e1", isLiveConsumed: true },
+    "gone",
+    { slug: "evt" },
+  );
+  assert.equal(built.ok, false);
+  assert.equal(built.status, 404);
+  assert.equal(built.code, "JOURNAL_NEWS_NOT_FOUND");
 });
 
 await test("auto : question publique + résultat ; pas de doublon", async () => {
@@ -231,15 +261,18 @@ await test("feed % réel (pas maxVotes)", () => {
   assert.equal(card.percentBase, "answers");
 });
 
-await test("server : route journal + messages title/imageUrl + gate", () => {
+await test("server : route journal + détail + messages title/imageUrl + gate", () => {
   assert.match(server, /\/events\/slug\/:slug\/landing\/journal/);
+  assert.match(server, /\/events\/slug\/:slug\/landing\/journal\/:messageId/);
   assert.match(server, /MINISITE_JOURNAL_DISABLED/);
   assert.match(server, /resolveMinisiteJournalAccess/);
   assert.match(server, /buildMinisiteJournal/);
+  assert.match(server, /buildMinisiteJournalNewsDetail/);
   assert.match(server, /journalPreview/);
   assert.match(server, /landing\/messages\/upload-image/);
   assert.match(server, /normalizeJournalTitleInput|JOURNAL_TITLE_MAX/);
   assert.match(server, /miniSiteTabJournal/);
+  assert.match(server, /JOURNAL_NEWS_NOT_FOUND/);
 });
 
 if (failed > 0) {

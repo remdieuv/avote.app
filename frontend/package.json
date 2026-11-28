@@ -39,6 +39,7 @@
     "test:mini-site-lot2": "node scripts/test-mini-site-lot2-results.mjs",
     "test:mini-site-lot2-finition": "node scripts/test-mini-site-lot2-finition.mjs",
     "test:mini-site-lot3": "node scripts/test-mini-site-lot3-journal.mjs",
+    "test:mini-site-lot3-finition": "node scripts/test-mini-site-lot3-journal-finition.mjs",
     "test:mini-site-bandeau-compact": "node scripts/test-mini-site-bandeau-compact.mjs",
     "test:landing-admin-ux-lot1": "node scripts/test-landing-admin-ux-lot1.mjs",
     "test:landing-admin-preview-sticky": "node scripts/test-landing-admin-preview-sticky.mjs",

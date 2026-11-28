@@ -69,12 +69,18 @@ export function MiniSiteHome({ slug, payload }) {
       Number(stats.questionsPublic) > 0 ||
       Number(stats.answersPublic) > 0);
 
+  const journalTabOn =
+    payload.miniSiteTabJournal === true ||
+    (Array.isArray(payload.tabs) &&
+      payload.tabs.some((t) => t && t.id === "journal" && t.enabled === true));
   const latestNews =
     payload.latestNews && typeof payload.latestNews === "object"
       ? /** @type {Record<string, unknown>} */ (payload.latestNews)
       : null;
   const newsBody =
-    latestNews && typeof latestNews.body === "string"
+    !journalTabOn &&
+    latestNews &&
+    typeof latestNews.body === "string"
       ? latestNews.body.trim()
       : "";
 
