@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { formatFrenchDisplayText } from "@/lib/miniSiteUi";
 
 /**
  * Graphiques SVG Lot 2 — axes, grille, points, infobulles (desktop + mobile).
@@ -15,6 +16,7 @@ import {
 
 /**
  * Barres horizontales des scores cumulés.
+ * Styles inclus ici pour réutilisation (Journal, Accueil, etc.).
  * @param {{
  *   options: { id: string; label: string; answers: number; percent: number; isCorrect?: boolean }[];
  *   accent: string;
@@ -33,20 +35,20 @@ export function ResultBarsChart({ options, accent, percentMayExceed100 }) {
       {rows.map((opt) => {
         const pct = Number(opt.percent) || 0;
         const width = Math.min(100, (pct / maxPct) * 100);
+        const pctLabel = formatFrenchDisplayText(
+          `${pct.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %`,
+        );
         return (
           <div key={opt.id} className="ms-r-bar-row">
             <div className="ms-r-bar-label">
               <span>
-                {opt.label}
+                {formatFrenchDisplayText(String(opt.label || ""))}
                 {opt.isCorrect ? " ✓" : ""}
               </span>
               <span className="ms-r-bar-meta">
                 {Number(opt.answers) || 0}
                 {" · "}
-                {pct.toLocaleString("fr-FR", {
-                  maximumFractionDigits: 1,
-                })}
-                %
+                {pctLabel}
               </span>
             </div>
             <div className="ms-r-bar-track">
@@ -67,6 +69,27 @@ export function ResultBarsChart({ options, accent, percentMayExceed100 }) {
           (base = répondants).
         </p>
       ) : null}
+      <style>{`
+        .ms-r-bars { display: flex; flex-direction: column; gap: 0.55rem; }
+        .ms-r-bar-label {
+          display: flex; justify-content: space-between; align-items: baseline;
+          gap: 0.75rem; font-size: 0.88rem; margin-bottom: 0.2rem;
+        }
+        .ms-r-bar-label > span:first-child {
+          font-weight: 600; color: #0f172a; min-width: 0; flex: 1 1 auto;
+        }
+        .ms-r-bar-meta {
+          color: #64748b; font-variant-numeric: tabular-nums;
+          white-space: nowrap; flex: 0 0 auto;
+        }
+        .ms-r-bar-track {
+          height: 10px; border-radius: 6px; background: #e2e8f0; overflow: hidden;
+        }
+        .ms-r-bar-fill {
+          height: 100%; border-radius: 6px; min-width: 0; transition: width 0.35s ease;
+        }
+        .ms-r-note { margin: 0.65rem 0 0; font-size: 0.8rem; color: #64748b; line-height: 1.4; }
+      `}</style>
     </div>
   );
 }

@@ -6,10 +6,13 @@ import { adminFetch, apiBaseBrowser } from "@/lib/config";
 import { resolveApiAssetUrlNullable } from "@/lib/assetUrl";
 import { marketingContentMaxWidth } from "@/lib/marketingLayout";
 import {
+  absoluteMiniSiteUrl,
+  excerptFrenchText,
   formatFrenchDisplayText,
   resolveMiniSiteAccent,
 } from "@/lib/miniSiteUi";
 import { ResultBarsChart } from "@/components/minisite/MiniSiteResultsCharts";
+import { MiniSiteShare } from "@/components/minisite/MiniSiteShare";
 
 /**
  * Fil Journal public (Lot 3) — actualités manuelles + auto fiables.
@@ -261,6 +264,21 @@ function JournalItemCard({ item, accent, slug, compact = false }) {
       typeof item.news.imageUrl === "string"
         ? resolveApiAssetUrlNullable(item.news.imageUrl.trim())
         : null;
+    const sharePath =
+      typeof item.news.sharePath === "string" && item.news.sharePath.startsWith("/")
+        ? item.news.sharePath
+        : item.news.id
+          ? `/e/${encodeURIComponent(slug)}/journal/${encodeURIComponent(
+              String(item.news.id),
+            )}`
+          : null;
+    const shareUrl = sharePath ? absoluteMiniSiteUrl(sharePath) : "";
+    const excerpt = compact ? excerptFrenchText(body, 160) : body;
+    const dateLabel =
+      typeof item.news.createdAt === "string"
+        ? formatJournalDate(item.news.createdAt)
+        : at;
+
     return (
       <article
         style={{
@@ -285,44 +303,101 @@ function JournalItemCard({ item, accent, slug, compact = false }) {
             }}
           />
         ) : null}
-        <div style={{ padding: compact ? "0.85rem 1rem" : "0.95rem 1.1rem 1.1rem" }}>
-          <p
-            style={{
-              margin: 0,
-              fontSize: "0.68rem",
-              fontWeight: 800,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              color: "#94a3b8",
-            }}
-          >
-            Actualité{at ? ` · ${at}` : ""}
-          </p>
-          <h3
-            style={{
-              margin: "0.35rem 0 0",
-              fontSize: compact ? "1rem" : "1.08rem",
-              fontWeight: 750,
-              letterSpacing: "-0.02em",
-              color: "#0f172a",
-              lineHeight: 1.3,
-            }}
-          >
-            {formatFrenchDisplayText(title)}
-          </h3>
-          {body ? (
+        <div
+          style={{
+            padding: compact ? "0.85rem 1rem" : "0.95rem 1.1rem 1.1rem",
+            display: compact && image ? "grid" : "block",
+            gridTemplateColumns: compact && image ? "72px minmax(0, 1fr)" : undefined,
+            gap: compact && image ? "0.75rem" : undefined,
+            alignItems: "start",
+          }}
+        >
+          {image && compact ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={image}
+              alt=""
+              style={{
+                width: 72,
+                height: 72,
+                objectFit: "cover",
+                borderRadius: 10,
+                background: "#e2e8f0",
+                display: "block",
+              }}
+            />
+          ) : null}
+          <div style={{ minWidth: 0 }}>
             <p
               style={{
-                margin: "0.45rem 0 0",
-                fontSize: "0.95rem",
-                lineHeight: 1.5,
-                color: "#334155",
-                whiteSpace: "pre-wrap",
+                margin: 0,
+                fontSize: "0.68rem",
+                fontWeight: 800,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "#94a3b8",
               }}
             >
-              {formatFrenchDisplayText(body)}
+              Actualité{dateLabel ? ` · ${dateLabel}` : ""}
             </p>
-          ) : null}
+            <h3
+              style={{
+                margin: "0.35rem 0 0",
+                fontSize: compact ? "1rem" : "1.08rem",
+                fontWeight: 750,
+                letterSpacing: "-0.02em",
+                color: "#0f172a",
+                lineHeight: 1.3,
+              }}
+            >
+              {formatFrenchDisplayText(title)}
+            </h3>
+            {excerpt ? (
+              <p
+                style={{
+                  margin: "0.45rem 0 0",
+                  fontSize: "0.95rem",
+                  lineHeight: 1.5,
+                  color: "#334155",
+                  whiteSpace: compact ? "normal" : "pre-wrap",
+                }}
+              >
+                {formatFrenchDisplayText(excerpt)}
+              </p>
+            ) : null}
+            <div
+              style={{
+                marginTop: "0.7rem",
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "0.55rem",
+                alignItems: "center",
+              }}
+            >
+              {sharePath ? (
+                <Link
+                  href={sharePath}
+                  style={{
+                    fontSize: "0.86rem",
+                    fontWeight: 700,
+                    color: accent,
+                    textDecoration: "none",
+                  }}
+                >
+                  {compact ? "Lire la suite" : "Voir l’actualité"}
+                </Link>
+              ) : null}
+              {shareUrl ? (
+                <MiniSiteShare
+                  url={shareUrl}
+                  title={title}
+                  accent={accent}
+                  size="compact"
+                  label="Partager"
+                />
+              ) : null}
+            </div>
+          </div>
         </div>
       </article>
     );

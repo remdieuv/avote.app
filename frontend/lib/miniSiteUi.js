@@ -144,3 +144,33 @@ export function formatFrenchDisplayText(text) {
   s = s.replace(/([^\s\u00A0\u202F])(%)/g, `$1${NBSP}$2`);
   return s;
 }
+
+/**
+ * Extrait court pour aperçu Journal (affichage uniquement).
+ * @param {unknown} text
+ * @param {number} [maxLen]
+ */
+export function excerptFrenchText(text, maxLen = 160) {
+  const raw = typeof text === "string" ? text.trim() : "";
+  if (!raw) return "";
+  const flat = raw.replace(/\s+/g, " ");
+  if (flat.length <= maxLen) return flat;
+  const cut = flat.slice(0, maxLen);
+  const lastSpace = cut.lastIndexOf(" ");
+  const base = lastSpace > 40 ? cut.slice(0, lastSpace) : cut;
+  return `${base.trimEnd()}…`;
+}
+
+/**
+ * URL absolue de partage à partir d’un chemin `/e/...`.
+ * @param {unknown} pathOrUrl
+ */
+export function absoluteMiniSiteUrl(pathOrUrl) {
+  const raw = typeof pathOrUrl === "string" ? pathOrUrl.trim() : "";
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return `${window.location.origin}${raw.startsWith("/") ? raw : `/${raw}`}`;
+  }
+  return raw.startsWith("/") ? raw : `/${raw}`;
+}

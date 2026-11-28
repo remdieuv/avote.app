@@ -31,10 +31,25 @@ function isJournalSupportedPollType(type) {
 }
 
 /**
+ * @param {string} slug
+ * @param {string} messageId
+ */
+function journalNewsSharePath(slug, messageId) {
+  const s = typeof slug === "string" ? slug.trim() : "";
+  const id = typeof messageId === "string" ? messageId.trim() : "";
+  if (!s || !id) return null;
+  return `/e/${encodeURIComponent(s)}/journal/${encodeURIComponent(id)}`;
+}
+
+/**
  * @param {object} message
- * @param {{ resolveMediaUrl?: (url: string | null | undefined) => string | null }} [opts]
+ * @param {{
+ *   resolveMediaUrl?: (url: string | null | undefined) => string | null;
+ *   slug?: string;
+ * }} [opts]
  */
 function mapPublicJournalNews(message, opts = {}) {
+  const id = String(message.id);
   const title =
     typeof message.title === "string" && message.title.trim()
       ? message.title.trim()
@@ -48,11 +63,13 @@ function mapPublicJournalNews(message, opts = {}) {
     rawImage && typeof opts.resolveMediaUrl === "function"
       ? opts.resolveMediaUrl(rawImage)
       : rawImage;
+  const sharePath = journalNewsSharePath(opts.slug || "", id);
   return {
-    id: String(message.id),
+    id,
     title: title || "Actualité",
     body,
     imageUrl,
+    sharePath,
     createdAt:
       message.createdAt instanceof Date
         ? message.createdAt.toISOString()
@@ -204,6 +221,7 @@ async function buildMinisiteJournal(db, event, ctx) {
   for (const m of messages) {
     const news = mapPublicJournalNews(m, {
       resolveMediaUrl: ctx.resolveMediaUrl,
+      slug: ctx.slug,
     });
     items.push({
       type: "news",
@@ -235,11 +253,67 @@ async function buildMinisiteJournal(db, event, ctx) {
   };
 }
 
+/**
+ * Détail public d’une actualité manuelle (URL individuelle partageable).
+ * @param {{
+ *   eventLandingMessage: { findFirst: Function };
+ * }} db
+ * @param {object} event
+ * @param {string} messageId
+ * @param {{
+ *   slug: string;
+ *   resolveMediaUrl?: (url: string | null | undefined) => string | null;
+ * }} ctx
+ * @returns {Promise<
+ *   | { ok: true; payload: object }
+ *   | { ok: false; status: number; code?: string; error: string }
+ * >}
+ */
+async function buildMinisiteJournalNewsDetail(db, event, messageId, ctx) {
+  const mid = typeof messageId === "string" ? messageId.trim() : "";
+  if (!mid) {
+    return { ok: false, status: 400, error: "messageId invalide." };
+  }
+  const row = await db.eventLandingMessage.findFirst({
+    where: { id: mid, eventId: event.id, hidden: false },
+    select: {
+      id: true,
+      title: true,
+      body: true,
+      imageUrl: true,
+      createdAt: true,
+    },
+  });
+  if (!row) {
+    return {
+      ok: false,
+      status: 404,
+      code: "JOURNAL_NEWS_NOT_FOUND",
+      error: "Actualité introuvable.",
+    };
+  }
+  const news = mapPublicJournalNews(row, {
+    resolveMediaUrl: ctx.resolveMediaUrl,
+    slug: ctx.slug,
+  });
+  return {
+    ok: true,
+    payload: {
+      enabled: true,
+      slug: ctx.slug,
+      isTestMode: event.isLiveConsumed === false,
+      news,
+    },
+  };
+}
+
 module.exports = {
   JOURNAL_TITLE_MAX,
   JOURNAL_BODY_MAX,
   mapPublicJournalNews,
+  journalNewsSharePath,
   loadJournalAutoItems,
   buildMinisiteJournal,
+  buildMinisiteJournalNewsDetail,
   isJournalSupportedPollType,
 };
