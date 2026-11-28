@@ -11,6 +11,7 @@ import {
   normalizeLightboxPhotos,
 } from "@/components/event/LandingPhotoLightbox";
 import { MiniSiteHome } from "@/components/minisite/MiniSiteHome";
+import { MiniSiteJournalPreview } from "@/components/minisite/MiniSiteJournal";
 import { MiniSiteShell } from "@/components/minisite/MiniSiteShell";
 import { adminFetch, apiBaseBrowser } from "@/lib/config";
 import {
@@ -28,8 +29,8 @@ import { getOrCreateVoterSessionId } from "@/lib/votes/voter-session";
 import { useMiniSiteLanding } from "@/lib/useMiniSiteLanding";
 
 /**
- * Mini-site — Accueil (Lot 1).
- * Conserve le fil hybride existant en transition vers les onglets futurs.
+ * Mini-site — Accueil (Lot 1 + Lot 3 aperçu Journal).
+ * Fil hybride conservé si Journal désactivé ; aperçu Journal sinon.
  */
 export default function EventLandingPage() {
   const params = useParams();
@@ -185,11 +186,20 @@ export default function EventLandingPage() {
   });
 
   const feedItems = Array.isArray(payload.feed) ? payload.feed : [];
-  const showFeedBlock = shouldShowLandingFeedBlock({
-    phase: landingPhase,
-    hasItems: feedItems.length > 0,
-    canUpload: false,
-  });
+  const journalTabOn =
+    payload.miniSiteTabJournal === true ||
+    (Array.isArray(payload.tabs) &&
+      payload.tabs.some((t) => t && t.id === "journal" && t.enabled === true));
+  const journalPreviewItems = Array.isArray(payload.journalPreview)
+    ? payload.journalPreview
+    : [];
+  const showFeedBlock =
+    !journalTabOn &&
+    shouldShowLandingFeedBlock({
+      phase: landingPhase,
+      hasItems: feedItems.length > 0,
+      canUpload: false,
+    });
   const accent =
     typeof payload.primaryColor === "string" &&
     /^#[0-9A-Fa-f]{6}$/.test(payload.primaryColor.trim())
@@ -265,6 +275,14 @@ export default function EventLandingPage() {
           onClose={() => setShowcaseLightboxIndex(null)}
           onIndexChange={setShowcaseLightboxIndex}
         />
+
+        {journalTabOn ? (
+          <MiniSiteJournalPreview
+            slug={slug}
+            items={journalPreviewItems}
+            accent={accent}
+          />
+        ) : null}
 
         {showFeedBlock ? (
           <LandingHybridFeed

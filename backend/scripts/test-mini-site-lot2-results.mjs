@@ -186,16 +186,17 @@ test("historique cumulatif multi-buckets + disclaimer", async () => {
   assert.match(hist.disclaimer, /pas le suivi individuel|non le suivi individuel/i);
 });
 
-test("miniSiteTabResults disponible ; autres onglets non", () => {
+test("miniSiteTabResults + Journal disponibles ; Galerie/À propos non", () => {
   assert.equal(MINI_SITE_AVAILABLE_OPTIONAL_FLAGS.has("miniSiteTabResults"), true);
-  assert.equal(MINI_SITE_AVAILABLE_OPTIONAL_FLAGS.has("miniSiteTabJournal"), false);
+  assert.equal(MINI_SITE_AVAILABLE_OPTIONAL_FLAGS.has("miniSiteTabJournal"), true);
+  assert.equal(MINI_SITE_AVAILABLE_OPTIONAL_FLAGS.has("miniSiteTabGallery"), false);
   const pub = miniSiteApiFields(
     { miniSiteTabResults: true, miniSiteTabJournal: true },
     { allowOptionalTabs: false },
   );
   assert.deepEqual(
     pub.tabs.map((t) => t.id),
-    ["accueil", "participer", "resultats"],
+    ["accueil", "participer", "resultats", "journal"],
   );
 });
 

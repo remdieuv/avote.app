@@ -46,6 +46,14 @@ function landingResultCardFromPoll(poll, contestWinners) {
   }
 
   const quizRevealed = Boolean(poll.quizRevealed);
+  const type = String(poll.type || "").toUpperCase();
+  const votersCount = uniqueVoters.size;
+  let answersTotal = 0;
+  for (const n of Object.values(voteCounts)) answersTotal += Number(n) || 0;
+  const pctBase =
+    type === "MULTIPLE_CHOICE"
+      ? votersCount || answersTotal
+      : answersTotal || votersCount;
   return {
     pollId: poll.id,
     question:
@@ -53,13 +61,23 @@ function landingResultCardFromPoll(poll, contestWinners) {
       (poll.title && String(poll.title).trim()) ||
       "Question",
     type: String(poll.type || ""),
-    votersCount: uniqueVoters.size,
+    votersCount,
+    answers: answersTotal,
+    percentBase: type === "MULTIPLE_CHOICE" ? "respondents" : "answers",
+    percentMayExceed100: type === "MULTIPLE_CHOICE",
     quizRevealed,
     options: (poll.options || []).map((opt) => {
+      const votes = voteCounts[opt.id] || 0;
+      const percent =
+        !pctBase || pctBase <= 0
+          ? 0
+          : Math.round((votes / pctBase) * 1000) / 10;
       const base = {
         id: opt.id,
         label: opt.label,
-        votes: voteCounts[opt.id] || 0,
+        votes,
+        answers: votes,
+        percent,
       };
       if (quizRevealed) {
         return { ...base, isCorrect: Boolean(opt.isCorrect) };
@@ -131,13 +149,20 @@ function buildLandingFeedItems(args) {
   if (keepMessages) {
     for (const m of messages) {
       if (m.hidden) continue;
+      const title =
+        typeof m.title === "string" && m.title.trim() ? m.title.trim() : null;
       items.push({
         type: "message",
         id: `message:${m.id}`,
         occurredAt: new Date(m.createdAt).toISOString(),
         message: {
           id: m.id,
+          title,
           body: m.body,
+          imageUrl:
+            typeof m.imageUrl === "string" && m.imageUrl.trim()
+              ? m.imageUrl.trim()
+              : null,
           createdAt: new Date(m.createdAt).toISOString(),
         },
       });

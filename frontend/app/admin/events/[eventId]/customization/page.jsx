@@ -285,6 +285,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
   const [landingEnabled, setLandingEnabled] = useState(true);
   const [miniSiteShowKeyStats, setMiniSiteShowKeyStats] = useState(true);
   const [miniSiteTabResults, setMiniSiteTabResults] = useState(false);
+  const [miniSiteTabJournal, setMiniSiteTabJournal] = useState(false);
   const [landingCoverUrl, setLandingCoverUrl] = useState("");
   const [landingTitle, setLandingTitle] = useState("");
   const [landingDescription, setLandingDescription] = useState("");
@@ -449,6 +450,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
         landingEnabled !== baseline.landingEnabled ||
         miniSiteShowKeyStats !== baseline.miniSiteShowKeyStats ||
         miniSiteTabResults !== baseline.miniSiteTabResults ||
+        miniSiteTabJournal !== baseline.miniSiteTabJournal ||
         logoUrl !== baseline.logoUrl ||
         primaryColor !== baseline.primaryColor ||
         landingCoverUrl !== baseline.landingCoverUrl ||
@@ -506,6 +508,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
     landingEnabled,
     miniSiteShowKeyStats,
     miniSiteTabResults,
+    miniSiteTabJournal,
     landingCoverUrl,
     landingTitle,
     landingDescription,
@@ -598,6 +601,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
       const landEn = Boolean(data.landingEnabled);
       const showKeyStats = data.miniSiteShowKeyStats !== false;
       const tabResults = data.miniSiteTabResults === true;
+      const tabJournal = data.miniSiteTabJournal === true;
       const lcov = data.landingCoverUrl;
       const ltit = data.landingTitle;
       const ldesc = data.landingDescription;
@@ -667,6 +671,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
       setLandingEnabled(landEn);
       setMiniSiteShowKeyStats(showKeyStats);
       setMiniSiteTabResults(tabResults);
+      setMiniSiteTabJournal(tabJournal);
       setLandingCoverUrl(
         typeof lcov === "string" ? resolveApiAssetUrl(lcov) : "",
       );
@@ -791,6 +796,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
         landingEnabled: landEn,
         miniSiteShowKeyStats: showKeyStats,
         miniSiteTabResults: tabResults,
+        miniSiteTabJournal: tabJournal,
         landingCoverUrl:
           typeof lcov === "string" ? resolveApiAssetUrl(lcov) : "",
         landingTitle: typeof ltit === "string" ? ltit : "",
@@ -908,6 +914,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
         landingEnabled: Boolean(landingEnabled),
         miniSiteShowKeyStats: Boolean(miniSiteShowKeyStats),
         miniSiteTabResults: Boolean(miniSiteTabResults),
+        miniSiteTabJournal: Boolean(miniSiteTabJournal),
         landingCoverUrl:
           landingCoverUrl.trim() === "" ? null : landingCoverUrl.trim(),
         landingTitle:
@@ -1006,6 +1013,7 @@ export function EventCustomizationEditor({ mode = "live" }) {
         landingEnabled: Boolean(landingEnabled),
         miniSiteShowKeyStats: Boolean(miniSiteShowKeyStats),
         miniSiteTabResults: Boolean(miniSiteTabResults),
+        miniSiteTabJournal: Boolean(miniSiteTabJournal),
         landingCoverUrl: landingCoverUrl.trim(),
         landingTitle: landingTitle.trim(),
         landingDescription: landingDescription.trim(),
@@ -1953,27 +1961,54 @@ export function EventCustomizationEditor({ mode = "live" }) {
                     </h2>
                     <p style={{ ...fieldHintStyle, margin: "0 0 0.85rem" }}>
                       Accueil et Participer sont toujours disponibles. Activez
-                      l’onglet Résultats pour publier la restitution dédiée.
+                      Résultats et Journal selon vos besoins.
                     </p>
-                    <label
+                    <div
                       style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "0.5rem",
-                        fontSize: "0.85rem",
-                        color: "#334155",
-                        cursor: "pointer",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.55rem",
                       }}
                     >
-                      <input
-                        type="checkbox"
-                        checked={miniSiteTabResults}
-                        onChange={(e) =>
-                          setMiniSiteTabResults(e.target.checked)
-                        }
-                      />
-                      Afficher l’onglet Résultats
-                    </label>
+                      <label
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                          fontSize: "0.85rem",
+                          color: "#334155",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={miniSiteTabResults}
+                          onChange={(e) =>
+                            setMiniSiteTabResults(e.target.checked)
+                          }
+                        />
+                        Afficher l’onglet Résultats
+                      </label>
+                      <label
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                          fontSize: "0.85rem",
+                          color: "#334155",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={miniSiteTabJournal}
+                          onChange={(e) =>
+                            setMiniSiteTabJournal(e.target.checked)
+                          }
+                        />
+                        Afficher l’onglet Journal
+                      </label>
+                    </div>
                   </section>
 
                   {eventId ? (
