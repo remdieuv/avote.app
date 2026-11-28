@@ -517,7 +517,7 @@ function FeedResultCard({ result, accent }) {
         </h3>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           {options.map((opt) => {
-            const votes = Number(opt?.answers ?? opt?.votes || 0);
+            const votes = Number(opt?.answers ?? opt?.votes ?? 0);
             const pctRaw = Number(opt?.percent);
             const pct = Number.isFinite(pctRaw) ? pctRaw : 0;
             const barWidth = Math.min(100, Math.max(0, pct));
