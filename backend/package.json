@@ -45,6 +45,8 @@
     "load:plan": "node scripts/load-harness.mjs plan",
     "load:guard": "node scripts/load-harness.mjs guard",
     "load:run": "node scripts/load-harness.mjs run",
+    "load:init-staging": "node scripts/init-load-staging-1000.mjs",
+    "test:init-load-staging": "node scripts/test-init-load-staging-1000.mjs",
     "test:forms-l1": "node scripts/test-forms-l1-form-capture.mjs",
     "test:forms-l4": "node scripts/test-forms-l4-soft-lock.mjs",
     "test:forms-l5": "node scripts/test-forms-l5-rgpd.mjs",
